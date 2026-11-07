@@ -3,7 +3,7 @@ title: TypeScript reference
 description: SDK connections, images, resource handles, operations, and errors.
 ---
 
-Import `Beachside` and `Image` from `beachside`. The official provider factories are `daytona` from `@beachside/daytona` and `e2b` from `@beachside/e2b`. See the [generated export index](/docs/reference/generated-typescript/) for public names.
+Import `Beachside` and `Image` from `beachside`. Each `@beachside/<provider>` package exports its adapter definition as `<provider>Adapter` (for example `daytonaAdapter` from `@beachside/daytona`) and an optional factory named after the provider. See the [generated export index](/docs/reference/generated-typescript/) for public names.
 
 ## Consumer vocabulary and compatibility
 
@@ -17,24 +17,32 @@ For ordinary directory listings, use `listFiles`: it returns a complete bounded 
 
 ## Connect
 
+Every adapter connects the same way: pass its definition with credentials and config.
+
 ```ts
-const beachside = await Beachside.connect(e2b({ apiKey }));
+import { e2bAdapter } from "@beachside/e2b";
+
+const beachside = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey },
+  config: { network: "blocked" },
+});
 ```
 
-Factories package typed settings without provider IO. `Beachside.connect` validates the settings, verifies the native connection, and owns the session. Use the SDK in a server-side Node.js or Bun process.
-
-For a separately installed adapter:
+`Beachside.connect` validates config and credentials against the adapter's schemas, verifies the native connection, and owns the session. Use the SDK in a server-side Node.js or Bun process. The same shape works for any adapter built with `defineAdapter`, including third-party ones:
 
 ```ts
 const beachside = await Beachside.connect({
   adapter: acme,
-  config: { region: "us" },
   credentials: { token },
+  config: { region: "us" },
   onReference: async (reference) => {
     await persistReference(reference);
   },
 });
 ```
+
+Every first-party package also exports a factory named after the provider (`daytona`, `e2b`, `boxd`, `boat`, `runloop`, `modal`, `vercel`) that takes credentials and config in one object, as in `Beachside.connect(e2b({ apiKey }))`. It does no provider IO and builds the same setup; it helps when code picks a provider at run time, since every factory returns the same `BoundAdapter` type. Definitions are named `<provider>Adapter`.
 
 `acme` is the installed adapter definition; config and credentials follow its schemas. Ordinary capture results provide `snapshot.reference` for application persistence. The existing explicit connection `onReference` callback is a compatibility API for operation checkpoints: it is awaited before dispatch and when native tokens or pending observations change. See [Results and saved resources](/docs/guides/recovery/#existing-asynchronous-operations) and the [tested custom adapter example](/docs/guides/write-an-adapter/).
 

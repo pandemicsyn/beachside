@@ -3238,6 +3238,14 @@ export async function connectDirect<
   options: AdapterConnectOptions<C, K, S> | BoundAdapter,
   observability: ConnectOptions = {},
 ): Promise<BeachsideClient<true>> {
+  // JavaScript callers can pass a provider factory such as `vercel` where a definition belongs.
+  if (options instanceof Function || ("adapter" in options && options.adapter instanceof Function))
+    throw new BeachsideError(
+      "INVALID_ARGUMENT",
+      "Expected an adapter definition, got a function: pass the definition (`adapter: vercelAdapter`) or call the provider factory (`Beachside.connect(vercel({ ... }))`)",
+      "none",
+    );
+
   const cleanup = z
     .strictObject({ storage: z.enum(["require-durable", "allow-unconfirmed"]).optional() })
     .optional()

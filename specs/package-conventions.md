@@ -29,15 +29,21 @@ npm install beachside @beachside/daytona
 
 ```ts
 import { Beachside } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const beachside = await Beachside.connect(daytona({
-  apiKey: process.env.DAYTONA_API_KEY!,
-  target: "us",
-}));
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: "us" },
+});
 ```
 
-For E2B install `beachside @beachside/e2b` and import `e2b` from `@beachside/e2b`. Factories package typed settings and credentials without provider IO. `Beachside.connect` validates and verifies the binding and owns the session. Custom authors may use `bindAdapter` from `@beachside/adapter`, or the definition/config/credentials connection form directly.
+**Accepted user decision — November 7, 2026.** The split form, `Beachside.connect({ adapter, credentials, config })`, is the canonical setup shown in docs, examples, skills and the landing page, because every adapter supports it, including third-party ones. Every first-party package exports:
+
+- the definition as `<provider>Adapter` (`daytonaAdapter`, `e2bAdapter`, `boxdAdapter`, `boatAdapter`, `runloopAdapter`, `modalAdapter`, `vercelAdapter`), and
+- a factory named after the provider (`daytona`, `e2b`, `boxd`, `boat`, `runloop`, `modal`, `vercel`) that takes credentials and config in one object and returns a `BoundAdapter` through `bindAdapter`, with no provider IO.
+
+Factories are optional sugar; they are most useful when code picks a provider at run time, since every factory returns the same type. Third-party authors may ship a factory with `bindAdapter` from `@beachside/adapter`, but are not required to. `Beachside.connect` validates and verifies the binding and owns the session.
 
 The unpublished `beachside/daytona` and `beachside/e2b` subpaths are removed without aliases. Update imports and install the selected adapter. Provider IDs, configuration defaults, resource identity, references, recovery and execution semantics remain unchanged.
 

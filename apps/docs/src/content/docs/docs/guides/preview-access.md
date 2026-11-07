@@ -9,16 +9,17 @@ This example uses Daytona's default protected access. Replace `existing-server-s
 
 ```ts
 import { Beachside, Image } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const client = await Beachside.connect(
-  daytona({
-    apiKey: process.env.DAYTONA_API_KEY!,
+const client = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: {
     target: "us",
     network: "daytona-default",
     preview: { access: "protected" }, // default
-  }),
-);
+  },
+});
 try {
   const box = await client.sandboxes.create({
     environment: Image.prepared("existing-server-snapshot"),
@@ -64,15 +65,14 @@ Daytona public access reports `UNSUPPORTED`: the native setting would publish po
 E2B defaults to public preview access, matching E2B's native default. Setting it explicitly is equivalent:
 
 ```ts
-import { e2b } from "@beachside/e2b";
+import { e2bAdapter } from "@beachside/e2b";
 
-const setup = e2b({
-  apiKey: process.env.E2B_API_KEY!,
-  preview: { access: "public" },
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey: process.env.E2B_API_KEY! },
+  config: { preview: { access: "public" } },
 });
 ```
-
-Pass `setup` to `Beachside.connect()`.
 
 This setting exposes the sandbox's HTTP services to anyone who can reach their URLs. Exposure begins when a sandbox is created or restored, before you call `preview()`. Lookup requires confirmed public visibility, the native `e2b.app` domain and auto-resume disabled. Connecting alone does not change the visibility of existing sandboxes.
 

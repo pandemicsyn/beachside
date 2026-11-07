@@ -8,13 +8,17 @@ Create a sandbox, run a command, and clean up:
 
 ```ts
 import { Image, Beachside } from "beachside";
-import { e2b } from "@beachside/e2b";
+import { e2bAdapter } from "@beachside/e2b";
 
 const apiKey = process.env.E2B_API_KEY;
 
 if (!apiKey) throw new Error("Set E2B_API_KEY before running this example");
 
-const beachside = await Beachside.connect(e2b({ apiKey }));
+const beachside = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey },
+  config: {},
+});
 
 try {
   const box = await beachside.sandboxes.create({

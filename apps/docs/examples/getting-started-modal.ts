@@ -14,8 +14,8 @@ if (!tokenId || !tokenSecret || !appName || !imageId)
 
 const beachside = await Beachside.connect({
   adapter: modalAdapter,
-  config: { appName, environment: "main", timeoutSeconds: 300 },
   credentials: { tokenId, tokenSecret },
+  config: { appName, environment: "main", lifecycle: { lifetimeSeconds: 300 } },
 });
 
 try {

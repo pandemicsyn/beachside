@@ -28,6 +28,8 @@ try {
 
 Create an API key in the Boat dashboard. `connect` verifies it with `GET /me` and scopes everything to that account id. Sandboxes made by other members of a Boat organization are outside the scope: inspect, reopen and inventory reject or skip them.
 
+The package also exports `boat()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(boat({ apiKey, network: "internet" }))`. It is the same setup; use whichever reads better.
+
 ## Setup
 
 | Setting                     | Default        | Notes                                                                                                                                                                                                                         |

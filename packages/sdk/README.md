@@ -6,17 +6,25 @@ Install `beachside @beachside/daytona` (or `beachside @beachside/e2b`).
 
 ```ts
 import { Beachside } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const beachside = await Beachside.connect(daytona({ apiKey: process.env.DAYTONA_API_KEY!, target: "us" }));
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: "us" },
+});
 await beachside.close();
 ```
 
 ```ts
 import { Beachside, Image } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const beachside = await Beachside.connect(daytona({ apiKey: process.env.DAYTONA_API_KEY!, target: "us" }));
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: "us" },
+});
 try {
   const box = await beachside.sandboxes.create({ environment: Image.prepared("your-snapshot-id") });
   try {

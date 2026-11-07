@@ -15,14 +15,16 @@ Beachside is one TypeScript API over several sandbox providers. The application 
 
 ## Connect
 
-| Provider               | Package              | Connect with                                                                                                                  |
-| ---------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| E2B                    | `@beachside/e2b`     | `Beachside.connect(e2b({ apiKey }))`                                                                                          |
-| Daytona                | `@beachside/daytona` | `Beachside.connect(daytona({ apiKey, target: "us", environment: Image.prepared("<snapshot>"), network: "daytona-default" }))` |
-| boxd                   | `@beachside/boxd`    | `Beachside.connect({ adapter: boxdAdapter, credentials: { apiKey }, config: { org, network: "internet" } })`                  |
-| Boat                   | `@beachside/boat`    | `Beachside.connect({ adapter: boatAdapter, credentials: { apiKey }, config: { network: "internet" } })`                       |
-| Runloop (experimental) | `@beachside/runloop` | `Beachside.connect({ adapter: runloopAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                     |
-| Vercel                 | `@beachside/vercel`  | `Beachside.connect({ adapter: vercel, credentials: { token }, config: { teamId, projectId } })`                               |
+| Provider               | Package              | Connect with                                                                                                                                                               |
+| ---------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E2B                    | `@beachside/e2b`     | `Beachside.connect({ adapter: e2bAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                      |
+| Daytona                | `@beachside/daytona` | `Beachside.connect({ adapter: daytonaAdapter, credentials: { apiKey }, config: { target: "us", environment: Image.prepared("<snapshot>"), network: "daytona-default" } })` |
+| boxd                   | `@beachside/boxd`    | `Beachside.connect({ adapter: boxdAdapter, credentials: { apiKey }, config: { org, network: "internet" } })`                                                               |
+| Boat                   | `@beachside/boat`    | `Beachside.connect({ adapter: boatAdapter, credentials: { apiKey }, config: { network: "internet" } })`                                                                    |
+| Runloop (experimental) | `@beachside/runloop` | `Beachside.connect({ adapter: runloopAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                  |
+| Vercel                 | `@beachside/vercel`  | `Beachside.connect({ adapter: vercelAdapter, credentials: { token }, config: { teamId, projectId } })`                                                                     |
+
+Every adapter uses this same `{ adapter, credentials, config }` shape, including third-party ones. Each first-party package also exports a factory named after the provider that takes credentials and config in one object, such as `Beachside.connect(e2b({ apiKey }))`; prefer the split form unless the code picks a provider at run time. Older Vercel code imported the definition as `vercel`; it is now `vercelAdapter`, and `vercel` is the factory.
 
 `connect` verifies credentials with read-only calls and allocates nothing. Put provider choices (region, network policy, defaults) in this setup, not in every call.
 
@@ -32,9 +34,13 @@ Use `sandboxes.with()` when a sandbox is needed only for one task. It creates, r
 
 ```ts
 import { Beachside } from "beachside";
-import { e2b } from "@beachside/e2b";
+import { e2bAdapter } from "@beachside/e2b";
 
-const beachside = await Beachside.connect(e2b({ apiKey: process.env.E2B_API_KEY! }));
+const beachside = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey: process.env.E2B_API_KEY! },
+  config: { network: "blocked" },
+});
 
 try {
   const text = await beachside.sandboxes.with({}, async (box) => {

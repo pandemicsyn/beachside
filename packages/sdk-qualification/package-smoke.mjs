@@ -284,9 +284,9 @@ void flow;
   else if (mode === "vercel")
     source = `
 import { Beachside, Image } from "beachside";
-import { vercel } from "@beachside/vercel";
+import { vercelAdapter } from "@beachside/vercel";
 async function flow() {
-  const client = await Beachside.connect({ adapter: vercel, config: { teamId: "team", projectId: "project" }, credentials: { token: "fixture" } });
+  const client = await Beachside.connect({ adapter: vercelAdapter, config: { teamId: "team", projectId: "project" }, credentials: { token: "fixture" } });
   const box = await client.sandboxes.create();
   const reopened = await client.sandboxes.get(box.reference!);
   void reopened;
@@ -611,8 +611,8 @@ try {
 const vercelSource = `
 import assert from "node:assert/strict";
 import { Beachside, Image } from "beachside";
-import { createVercelAdapter, vercel } from "@beachside/vercel";
-assert.equal(vercel.name, "vercel");
+import { createVercelAdapter, vercelAdapter } from "@beachside/vercel";
+assert.equal(vercelAdapter.name, "vercel");
 let stopped = false, closed = 0, mutations = 0;
 const session = () => ({ id: "session_1", region: "iad1", vcpus: 2, timeout: 900000, startedAt: 1700000000000, status: stopped ? "stopped" : "running", networkPolicy: { mode: "deny-all" } });
 const adapter = createVercelAdapter(() => ({

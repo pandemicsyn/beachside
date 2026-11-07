@@ -28,6 +28,8 @@ try {
 
 Create an API key in the Runloop dashboard. `connect` verifies it with `GET /v1/accounts/me`, requires an enabled account, and scopes everything to that account id.
 
+The package also exports `runloop()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(runloop({ apiKey }))`. It is the same setup; use whichever reads better.
+
 ## Setup
 
 | Setting                     | Default           | Notes                                                                                                                                                                                                                                      |

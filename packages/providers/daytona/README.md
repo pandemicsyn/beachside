@@ -6,14 +6,17 @@
 
 ```ts
 import { Beachside, Image } from 'beachside';
-import { daytona } from '@beachside/daytona';
+import { daytonaAdapter } from '@beachside/daytona';
 
-const beachside = await Beachside.connect(daytona({
-  apiKey: process.env.DAYTONA_API_KEY!,
-  target: 'us',
-  lifecycle: { lifetimeSeconds: 900 },
-  network: 'blocked', // explicit opt-in; requires an eligible organization
-}));
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: {
+    target: 'us',
+    lifecycle: { lifetimeSeconds: 900 },
+    network: 'blocked', // explicit opt-in; requires an eligible organization
+  },
+});
 const sandbox = await beachside.sandboxes.create({ environment: Image.prepared('existing-active-snapshot-id'), network: 'blocked' });
 try {
   const result = await sandbox.exec({ command: { kind: 'shell', script: 'printf ready' } });
@@ -71,12 +74,11 @@ Sources inspected September 26–27, 2026: [Daytona TypeScript SDK reference](ht
 Tier 1 and Tier 2 accounts use Daytona's organization-managed default firewall, where essential services remain reachable. `daytona-default` is the connection default; omitted create policies use it:
 
 ```ts
-const beachside = await Beachside.connect(daytona({
-  apiKey: process.env.DAYTONA_API_KEY!,
-  target: 'us',
-  lifecycle: { lifetimeSeconds: 900 },
-  network: 'daytona-default',
-}));
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: 'us', lifecycle: { lifetimeSeconds: 900 }, network: 'daytona-default' },
+});
 const sandbox = await beachside.sandboxes.create({
   environment: Image.prepared('daytona-small'),
 });

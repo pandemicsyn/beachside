@@ -203,37 +203,18 @@ const sunBands = [
                   }
                 </div>
               </div>
-              <pre class="code" aria-label="Example: create a sandbox and run a command"><code><span data-factory-connect><span class="k">import</span> {"{"} Beachside<span data-image-import>, Image</span> {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
-<span class="k">import</span> {"{"} <span data-typed-plain>daytona</span> {"}"} <span class="k">from</span> <span class="s">"@beachside/<span data-typed-plain>daytona</span>"</span>
-
-<span class="k">const</span> client = <span class="k">await</span> Beachside.connect(
-  <span class="typed"><span data-typed>daytona</span><span class="caret" data-caret></span></span>({"{"}
-<span data-options>    apiKey: process.env.DAYTONA_API_KEY!,
-    target: "us",
-    environment: Image.prepared("daytona-small"),
-    networkPolicy: "daytona-default",</span>
-  {"}"}),
-)</span><span data-boxd-connect hidden><span class="k">import</span> {"{"} Beachside {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
-<span class="k">import</span> {"{"} boxdAdapter {"}"} <span class="k">from</span> <span class="s">"@beachside/boxd"</span>
+              <pre class="code" aria-label="Example: create a sandbox and run a command"><code><span class="k">import</span> {"{"} Beachside<span data-image-import>, Image</span> {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
+<span class="k">import</span> {"{"} <span data-typed-plain>daytonaAdapter</span> {"}"} <span class="k">from</span> <span class="s">"@beachside/<span data-module>daytona</span>"</span>
 
 <span class="k">const</span> client = <span class="k">await</span> Beachside.connect({"{"}
-  adapter: <span class="typed"><span data-typed>boxdAdapter</span><span class="caret" data-caret></span></span>,
-  credentials: {"{"} apiKey: process.env.BOXD_API_KEY! {"}"},
+  adapter: <span class="typed"><span data-typed>daytonaAdapter</span><span class="caret" data-caret></span></span>,
+  credentials: {"{"} <span data-credentials>apiKey: process.env.<span class="t">DAYTONA_API_KEY</span>!</span> {"}"},
   config: {"{"}
-    org: process.env.BOXD_ORG!,
-    networkPolicy: <span class="s">"internet"</span>,
+<span data-options>    target: <span class="s">"us"</span>,
+    environment: Image.prepared(<span class="s">"daytona-small"</span>),
+    network: <span class="s">"daytona-default"</span>,</span>
   {"}"},
-{"}"})</span><span data-vercel-connect hidden><span class="k">import</span> {"{"} Beachside {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
-<span class="k">import</span> {"{"} vercel {"}"} <span class="k">from</span> <span class="s">"@beachside/vercel"</span>
-
-<span class="k">const</span> client = <span class="k">await</span> Beachside.connect({"{"}
-  adapter: <span class="typed"><span data-typed>vercel</span><span class="caret" data-caret></span></span>,
-  credentials: {"{"} token: process.env.VERCEL_TOKEN! {"}"},
-  config: {"{"}
-    teamId: process.env.VERCEL_TEAM_ID!,
-    projectId: process.env.VERCEL_PROJECT_ID!,
-  {"}"},
-{"}"})</span>
+{"}"})
 <span class="k">await</span> client.sandboxes.with({"{}"}, <span class="k">async</span> (box) =&gt; {"{"}
   <span class="k">const</span> run = <span class="k">await</span> box.exec([<span class="s">"printf"</span>, <span class="s">"ready"</span>])
   console.log(run.stdoutText())
@@ -446,56 +427,98 @@ const sunBands = [
 
       let current = "daytona";
 
-      // Each provider factory's options: [key, env var] reads process.env, [key, , literal] is a string.
+      // Each provider's split-form setup. An option is [key, env var] (reads process.env) or [key, , literal].
       const optionsNode = document.querySelector<HTMLElement>("[data-options]");
 
-      const providerOptions = new Map<string, [string, string?, string?][]>([
+      const credentialsNode = document.querySelector<HTMLElement>("[data-credentials]");
+
+      const moduleNode = document.querySelector<HTMLElement>("[data-module]");
+
+      type Option = [string, string?, string?];
+
+      const providerSetup = new Map<string, { credentials: Option; config: Option[] }>([
         [
           "daytona",
-          [
-            ["apiKey", "DAYTONA_API_KEY"],
-            ["target", undefined, "us"],
-            ["environment", undefined, "daytona-small"],
-            ["networkPolicy", undefined, "daytona-default"],
-          ],
+          {
+            credentials: ["apiKey", "DAYTONA_API_KEY"],
+            config: [
+              ["target", undefined, "us"],
+              ["environment", undefined, "daytona-small"],
+              ["network", undefined, "daytona-default"],
+            ],
+          },
         ],
-        ["e2b", [["apiKey", "E2B_API_KEY"]]],
+        ["e2b", { credentials: ["apiKey", "E2B_API_KEY"], config: [["network", undefined, "blocked"]] }],
+        [
+          "boxd",
+          {
+            credentials: ["apiKey", "BOXD_API_KEY"],
+            config: [
+              ["org", "BOXD_ORG"],
+              ["network", undefined, "internet"],
+            ],
+          },
+        ],
+        [
+          "vercel",
+          {
+            credentials: ["token", "VERCEL_TOKEN"],
+            config: [
+              ["teamId", "VERCEL_TEAM_ID"],
+              ["projectId", "VERCEL_PROJECT_ID"],
+            ],
+          },
+        ],
       ]);
 
+      // Scoped styles only match elements carrying this page's Astro scope class.
+      const scope = [...(optionsNode?.classList ?? [])].find((name) => name.startsWith("astro-"));
+
+      function renderOption([key, env, literal]: Option, indent: string) {
+        const line = document.createElement("span");
+        const value = document.createElement("span");
+
+
+        if (env) {
+          value.className = scope ? `t ${scope}` : "t";
+          value.textContent = env;
+          line.append(`${indent}${key}: process.env.`, value, "!");
+        } else {
+          value.className = scope ? `s ${scope}` : "s";
+          value.textContent = `"${literal}"`;
+
+          if (key === "environment") line.append(`${indent}${key}: Image.prepared(`, value, ")");
+          else line.append(`${indent}${key}: `, value);
+        }
+
+        return line;
+      }
+
       function renderOptions(provider: string) {
-        if (!optionsNode) return;
-        document.querySelector<HTMLElement>("[data-factory-connect]")!.hidden = provider === "boxd" || provider === "vercel";
-        document.querySelector<HTMLElement>("[data-boxd-connect]")!.hidden = provider !== "boxd";
-        document.querySelector<HTMLElement>("[data-vercel-connect]")!.hidden = provider !== "vercel";
+        const setup = providerSetup.get(provider);
+
+        if (!optionsNode || !setup) return;
         document.querySelector<HTMLElement>("[data-image-import]")!.hidden = provider !== "daytona";
 
-        const lines = (providerOptions.get(provider) ?? []).map(([key, env, literal]) => {
-          const line = document.createElement("span");
-          const value = document.createElement("span");
+        if (moduleNode) moduleNode.textContent = provider;
 
-          if (env) {
-            value.className = "t";
-            value.textContent = env;
-            line.append(`    ${key}: process.env.`, value, "!,");
-          } else {
-            value.className = "s";
-            value.textContent = `"${literal}"`;
+        credentialsNode?.replaceChildren(renderOption(setup.credentials, ""));
 
-            if (key === "environment") line.append(`    ${key}: Image.prepared(`, value, "),");
-            else line.append(`    ${key}: `, value, ",");
-          }
+        const lines = setup.config.map((option) => {
+          const line = renderOption(option, "    ");
+          line.append(",");
 
           return line;
         });
 
         optionsNode.replaceChildren(...lines.flatMap((line, i) => (i ? ["\n", line] : [line])));
 
-        // Pad factory providers with fewer options so the code panel keeps one height across tabs.
-        const longest = Math.max(...[...providerOptions.values()].map((options) => options.length));
+        // Pad providers with fewer options so the code panel keeps one height across tabs.
+        const longest = Math.max(...[...providerSetup.values()].map(({ config }) => config.length));
 
         const pad = document.querySelector<HTMLElement>("[data-pad]");
 
-        const missing = providerOptions.has(provider) ? longest - lines.length : 0;
+        const missing = longest - lines.length;
 
         // A pre drops a trailing newline, so end the padding with a space to keep the last line.
         if (pad) pad.textContent = missing ? `${"\n".repeat(missing)} ` : "";
@@ -546,7 +569,7 @@ const sunBands = [
         setStatus("connecting…", "var(--sb-code-dim)", "");
 
         let t = 0;
-        const name = to === "boxd" ? "boxdAdapter" : to;
+        const name = `${to}Adapter`;
 
         if (motionOn()) {
           for (let i = from.length; i >= 0; i--) {

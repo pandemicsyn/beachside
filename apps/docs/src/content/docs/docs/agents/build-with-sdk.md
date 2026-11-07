@@ -22,10 +22,11 @@ Inspect the project and installed package versions before changing code.
 Install "beachside" and the selected adapter package from npm. Do not
 substitute the unrelated npm package named "beachside".
 
-Use Beachside and Image from "beachside", with e2b from
-"@beachside/e2b", daytona from "@beachside/daytona", boxdAdapter from
-"@beachside/boxd", or vercel from "@beachside/vercel". Use the selected
-provider guide's connection form; boxd and Vercel take definition/config/credentials.
+Use Beachside and Image from "beachside", and the adapter definition from
+the selected package: e2bAdapter from "@beachside/e2b", daytonaAdapter from
+"@beachside/daytona", boxdAdapter from "@beachside/boxd", or vercelAdapter
+from "@beachside/vercel". Connect with
+Beachside.connect({ adapter, credentials, config }) for every provider.
 Run the SDK on the server and read credentials from environment variables.
 
 Start from an existing prepared image. E2B can use the "base" template;

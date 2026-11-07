@@ -177,8 +177,10 @@ Import from `@beachside/modal`.
 | Export               | Kind      |
 | -------------------- | --------- |
 | `createModalAdapter` | re-export |
+| `modal`              | re-export |
 | `MODAL_ENDPOINT`     | re-export |
 | `modalAdapter`       | re-export |
+| `ModalOptions`       | type      |
 | `ModalTransport`     | type      |
 
 ## Adapter authoring

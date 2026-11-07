@@ -28,6 +28,8 @@ try {
 
 Use a member API key. `connect` checks that `org` is the key's authenticated default org (by ID or slug) and reads the cluster zone; everything is scoped to that org. Userless org keys and custom endpoints are not supported.
 
+The package also exports `boxd()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(boxd({ apiKey, org: "my-org", network: "internet" }))`. It is the same setup; use whichever reads better.
+
 ## Setup
 
 | Setting                         | Default                          | Notes                                                                                                                                                                               |

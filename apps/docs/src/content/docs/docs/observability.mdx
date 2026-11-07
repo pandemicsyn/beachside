@@ -21,14 +21,13 @@ Keep your existing OpenTelemetry setup. Beachside uses its provider and active c
 
 ```ts
 import { Beachside } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const client = await Beachside.connect(
-  daytona({
-    apiKey: process.env.DAYTONA_API_KEY!,
-    target: process.env.DAYTONA_TARGET ?? "us",
-  }),
-);
+const client = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: process.env.DAYTONA_TARGET ?? "us" },
+});
 // Use client inside your existing active request/job span.
 await client.close();
 ```
@@ -160,15 +159,14 @@ No option is needed to use the application's provider. `tracing: false` disables
 
 ```ts
 import { Beachside } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const client = await Beachside.connect(
-  daytona({
-    apiKey: process.env.DAYTONA_API_KEY!,
-    target: "us",
-  }),
-  { tracing: false },
-);
+const client = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: "us" },
+  tracing: false,
+});
 await client.close();
 ```
 

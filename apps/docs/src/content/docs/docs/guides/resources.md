@@ -142,9 +142,11 @@ Pass the returned `nextCursor` to read the next page; it is absent on the last p
 Every sandbox has a wall-clock lifetime, after which the provider removes it (Boat archives it instead). It is your backstop for a job that crashes or is cancelled before it can destroy its sandbox. Every adapter uses the same setting, `lifecycle.lifetimeSeconds` in adapter setup, and defaults to 900 seconds (15 minutes):
 
 ```ts
-const client = await Beachside.connect(
-  e2b({ apiKey: process.env.E2B_API_KEY!, lifecycle: { lifetimeSeconds: 1800 } }),
-);
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey: process.env.E2B_API_KEY! },
+  config: { lifecycle: { lifetimeSeconds: 1800 } },
+});
 
 const box = await client.sandboxes.create(); // 30 minutes, from setup.
 const long = await client.sandboxes.create({ lifecycle: { lifetimeSeconds: 7200 } }); // This one only.
