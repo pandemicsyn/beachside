@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { Sandbar } from "sandbar-sdk";
+import { Beachside } from "beachside";
 import { createRunloopAdapter } from "./adapter";
 import { runloopFixture } from "./fixture.test-support";
 
@@ -13,7 +13,7 @@ async function setup() {
   const fixture = runloopFixture();
   fixtures.push(fixture);
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createRunloopAdapter({ fetch: fixture.fetch, pollIntervalMs: 1, settleSeconds: 1 }),
     config: { network: "internet" },
     credentials: { apiKey: "fixture-main" },

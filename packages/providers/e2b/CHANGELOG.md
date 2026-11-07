@@ -1,4 +1,4 @@
-# @sandbar-sdk/e2b
+# @beachside/e2b
 
 ## 0.7.0
 

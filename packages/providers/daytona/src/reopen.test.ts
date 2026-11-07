@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
+import { Image, Beachside, type AdapterRecoveryReference } from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 function fixture() {
@@ -80,7 +80,7 @@ function fixture() {
     calls,
     creates: () => creates,
     connect: (key = "first-key", onReference?: (ref: AdapterRecoveryReference) => void) =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: {
           target: "us",
@@ -148,9 +148,9 @@ test("Daytona scoped reference reopens after credential rotation, observes state
     f.native.networkBlockAll = false;
     await expect(fresh.sandboxes.get(saved)).rejects.toMatchObject({ code: "CONFLICT" });
     f.native.networkBlockAll = true;
-    f.native.labels["sandbar.operation"] = "different";
+    f.native.labels["beachside.operation"] = "different";
     await expect(fresh.sandboxes.get(saved)).rejects.toMatchObject({ code: "CONFLICT" });
-    f.native.labels["sandbar.operation"] = JSON.parse(saved.receipt).operation;
+    f.native.labels["beachside.operation"] = JSON.parse(saved.receipt).operation;
     f.native.state = "destroyed";
     expect((await opened.inspect()).state).toBe("destroyed");
     await expect(fresh.sandboxes.get(saved)).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -204,7 +204,7 @@ test("Daytona reopened operations reject changed creation markers before dispatc
     });
 
     const box = await client.sandboxes.get(created.reference!);
-    f.native.labels["sandbar.operation"] = "changed";
+    f.native.labels["beachside.operation"] = "changed";
     const before = f.calls.length;
 
     for (const operation of [
@@ -227,7 +227,7 @@ test("Daytona destroy checks markers after its custody checkpoint", async () => 
 
   const client = await f.connect("fixture", (ref) => {
     if (ref.kind === "destroy" && ref.token !== undefined)
-      f.native.labels["sandbar.operation"] = "changed";
+      f.native.labels["beachside.operation"] = "changed";
   });
 
   try {
@@ -260,7 +260,7 @@ test("Daytona destroy recovery rejects a mismatched tombstone but accepts true a
     const reference = operation.reference;
     expect(reference).toBeDefined();
     f.native.state = "destroyed";
-    f.native.labels["sandbar.submission"] = "changed";
+    f.native.labels["beachside.submission"] = "changed";
     const recovered = await client.recover(reference);
     await expect(recovered.wait()).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
     f.status(404);

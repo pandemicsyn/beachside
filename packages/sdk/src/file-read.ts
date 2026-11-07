@@ -1,5 +1,5 @@
-import { AdapterError, type ReadContext } from "@sandbar-sdk/adapter";
-import { SandbarError, raceAbort, type ReadOptions } from "./resource";
+import { AdapterError, type ReadContext } from "@beachside/adapter";
+import { BeachsideError, raceAbort, type ReadOptions } from "./resource";
 
 function disposeReader(reader: ReadableStreamDefaultReader<Uint8Array>): void {
   try {
@@ -25,15 +25,15 @@ export async function readFileBytes(
   const controller = new AbortController();
 
   const cancel = () =>
-    controller.abort(new SandbarError("WAIT_ABORTED", "File read cancelled", "none"));
+    controller.abort(new BeachsideError("WAIT_ABORTED", "File read cancelled", "none"));
 
   const close = () =>
-    controller.abort(new SandbarError("CLIENT_CLOSED", "Client is closed", "none"));
+    controller.abort(new BeachsideError("CLIENT_CLOSED", "Client is closed", "none"));
 
   const deadline = Date.now() + 30_000;
 
   const timer = setTimeout(
-    () => controller.abort(new SandbarError("TIMEOUT", "File read timed out", "none")),
+    () => controller.abort(new BeachsideError("TIMEOUT", "File read timed out", "none")),
     30_000,
   );
 
@@ -66,7 +66,7 @@ export async function readFileBytes(
 
     if (value instanceof Uint8Array) {
       if (value.length > maxBytes)
-        throw new SandbarError("OUTPUT_CAPACITY", "File exceeds adapter limit", "unknown");
+        throw new BeachsideError("OUTPUT_CAPACITY", "File exceeds adapter limit", "unknown");
 
       return Uint8Array.from(value);
     }
@@ -82,7 +82,7 @@ export async function readFileBytes(
       if (part.done) break;
 
       if (!(part.value instanceof Uint8Array) || total + part.value.length > maxBytes)
-        throw new SandbarError("OUTPUT_CAPACITY", "File exceeds adapter limit", "unknown");
+        throw new BeachsideError("OUTPUT_CAPACITY", "File exceeds adapter limit", "unknown");
       chunks.push(Uint8Array.from(part.value));
       total += part.value.length;
     }
@@ -99,7 +99,7 @@ export async function readFileBytes(
   } catch (error) {
     if (signal.aborted) throw signal.reason;
 
-    if (error instanceof AdapterError) throw new SandbarError(error.code, error.message, "none");
+    if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message, "none");
     throw error;
   } finally {
     clearTimeout(timer);

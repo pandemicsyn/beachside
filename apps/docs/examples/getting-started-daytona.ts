@@ -1,11 +1,11 @@
-import { Image, Sandbar } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Image, Beachside } from "beachside";
+import { daytona } from "@beachside/daytona";
 
 const apiKey = process.env.DAYTONA_API_KEY;
 
 if (!apiKey) throw new Error("Set DAYTONA_API_KEY before running this example");
 
-const sandbar = await Sandbar.connect(
+const beachside = await Beachside.connect(
   daytona({
     apiKey,
     target: "us",
@@ -16,10 +16,10 @@ const sandbar = await Sandbar.connect(
 );
 
 try {
-  await sandbar.sandboxes.with({}, async (box) => {
-    const output = await box.exec(["printf", "Hello from Sandbar!\n"]);
+  await beachside.sandboxes.with({}, async (box) => {
+    const output = await box.exec(["printf", "Hello from Beachside!\n"]);
     console.log(output.stdoutText());
   });
 } finally {
-  await sandbar.close();
+  await beachside.close();
 }

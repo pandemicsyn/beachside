@@ -1,4 +1,4 @@
-import { SandbarError, type DirectSandboxHandle, type ProcessExit } from "sandbar-sdk";
+import { BeachsideError, type DirectSandboxHandle, type ProcessExit } from "beachside";
 
 /** Finite E2B text only. Native decoding does not preserve arbitrary bytes. */
 export async function textStreaming(sandbox: DirectSandboxHandle): Promise<ProcessExit> {
@@ -42,7 +42,7 @@ export async function terminateJob(sandbox: DirectSandboxHandle): Promise<Proces
       const request = await job.terminate({ signal: observation });
       console.log(request.status); // Acknowledgement, absence or previously confirmed exit.
     } catch (error) {
-      if (!(error instanceof SandbarError) || error.code !== "OUTCOME_UNKNOWN") throw error;
+      if (!(error instanceof BeachsideError) || error.code !== "OUTCOME_UNKNOWN") throw error;
       console.error("Termination acknowledgement is unknown", error);
     }
 

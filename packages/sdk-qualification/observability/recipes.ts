@@ -4,7 +4,7 @@ import { BatchSpanProcessor, TraceIdRatioBasedSampler } from "@opentelemetry/sdk
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { context } from "@opentelemetry/api";
-import { captureSandbarFailure } from "../../../apps/docs/examples/observability-sentry-capture";
+import { captureBeachsideFailure } from "../../../apps/docs/examples/observability-sentry-capture";
 import * as SentryNode from "@sentry/node";
 import * as SentryBun from "@sentry/bun";
 
@@ -79,7 +79,7 @@ export function startSentry(
     ...otel,
     // Capture once inside the caller's active request context. Never capture the raw error.
     capture(error: unknown) {
-      captureSandbarFailure(error, sentry);
+      captureBeachsideFailure(error, sentry);
     },
     captureUnrelated(error: Error) {
       sentry.captureException(error, { tags: { feature: "checkout" } });

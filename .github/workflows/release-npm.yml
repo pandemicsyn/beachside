@@ -137,16 +137,16 @@ jobs:
       - name: Pack qualified checkout
         env:
           NPM_TAG: ${{ needs.plan.outputs.npm_tag }}
-          RELEASE_ARTIFACTS: ${{ runner.temp }}/sandbar-qualified
+          RELEASE_ARTIFACTS: ${{ runner.temp }}/beachside-qualified
         run: bun scripts/release.mjs dry-run
       - name: Qualify npm, pnpm and Bun installers
         env:
-          RELEASE_ARTIFACTS: ${{ runner.temp }}/sandbar-qualified
+          RELEASE_ARTIFACTS: ${{ runner.temp }}/beachside-qualified
         run: bun scripts/check-installers.mjs
       - uses: actions/upload-artifact@v4
         with:
-          name: sandbar-qualified-release
-          path: ${{ runner.temp }}/sandbar-qualified
+          name: beachside-qualified-release
+          path: ${{ runner.temp }}/beachside-qualified
           if-no-files-found: error
   publish:
     if: needs.plan.outputs.release == 'true' && needs.plan.outputs.dry_run == 'false'
@@ -178,8 +178,8 @@ jobs:
         run: bun run build:packages
       - uses: actions/download-artifact@v4
         with:
-          name: sandbar-qualified-release
-          path: ${{ runner.temp }}/sandbar-qualified
+          name: beachside-qualified-release
+          path: ${{ runner.temp }}/beachside-qualified
       - name: Create release tag
         if: needs.plan.outputs.create_tag == 'true'
         env:
@@ -204,6 +204,6 @@ jobs:
           NPM_TAG: ${{ needs.plan.outputs.npm_tag }}
           RELEASE_APPROVED: "true"
           GH_TOKEN: ${{ github.token }}
-          RELEASE_ARTIFACTS: ${{ runner.temp }}/sandbar-publish
-          RELEASE_QUALIFIED_ARTIFACTS: ${{ runner.temp }}/sandbar-qualified
+          RELEASE_ARTIFACTS: ${{ runner.temp }}/beachside-publish
+          RELEASE_QUALIFIED_ARTIFACTS: ${{ runner.temp }}/beachside-qualified
         run: bun scripts/release.mjs publish

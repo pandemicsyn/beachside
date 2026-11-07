@@ -1,7 +1,7 @@
 import { expect, spyOn, test } from "bun:test";
-import { AdapterError, defineAdapter, type ReadContext } from "@sandbar-sdk/adapter";
+import { AdapterError, defineAdapter, type ReadContext } from "@beachside/adapter";
 import { z } from "zod";
-import { Image, Sandbar, type ReadOptions, type SandboxHandle } from "./index";
+import { Image, Beachside, type ReadOptions, type SandboxHandle } from "./index";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -48,7 +48,7 @@ async function fixture(
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   const box: SandboxHandle = await client.sandboxes.create({
     environment: Image.prepared("image"),
@@ -255,7 +255,7 @@ test("file read preserves the custom adapter method receiver", async () => {
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared("image") });

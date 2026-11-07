@@ -35,7 +35,7 @@ import {
   PreserveSchema,
   listedLabels,
   listedTime,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   boundedBody,
   VercelClient,
@@ -213,7 +213,7 @@ const execToken = z.strictObject({
   commandId: id.optional(),
   stdinPath: z
     .string()
-    .regex(/^\/tmp\/sandbar-stdin-[0-9a-f-]{36}$/)
+    .regex(/^\/tmp\/beachside-stdin-[0-9a-f-]{36}$/)
     .optional(),
   maxBytes: z.number().int().min(0).max(1048576),
   confirmedExit: z.strictObject({ exitCode: z.number().int() }).optional(),
@@ -457,10 +457,10 @@ export function createVercelAdapter(
       });
 
       const generation = (value: z.infer<typeof nativeBox>) => {
-        if (value.createdAt === undefined || !value.tags?.sandbarSubmission)
+        if (value.createdAt === undefined || !value.tags?.beachsideSubmission)
           throw new AdapterError("CONFLICT", "Persistent sandbox creation evidence is unavailable");
 
-        return JSON.stringify([value.createdAt, value.tags.sandbarSubmission]);
+        return JSON.stringify([value.createdAt, value.tags.beachsideSubmission]);
       };
 
       const checkNamed = (box: Sandbox, value: z.infer<typeof namedSchema>) => {
@@ -542,7 +542,7 @@ export function createVercelAdapter(
             .filter(
               (box) =>
                 !config.persistent ||
-                (box.createdAt !== undefined && box.tags?.sandbarSubmission !== undefined),
+                (box.createdAt !== undefined && box.tags?.beachsideSubmission !== undefined),
             )
             .map((box) => {
               const id = config.persistent ? box.name : box.currentSessionId;
@@ -556,8 +556,8 @@ export function createVercelAdapter(
                 reference: config.persistent
                   ? { ...reference(id), generation: generation(box) }
                   : reference(id),
-                // Create labels are Vercel tags beside the adapter's `sandbar` marker.
-                labels: listedLabels(box.tags, (key) => key.startsWith("sandbar")),
+                // Create labels are Vercel tags beside the adapter's `beachside` marker.
+                labels: listedLabels(box.tags, (key) => key.startsWith("beachside")),
                 createdAt: listedTime(box.createdAt),
               };
             }),
@@ -668,7 +668,7 @@ export function createVercelAdapter(
 
         if (records.length === 2) {
           const marker = z
-            .strictObject({ sandbarExit: z.literal(1), exitCode: z.number().int() })
+            .strictObject({ beachsideExit: z.literal(1), exitCode: z.number().int() })
             .safeParse(JSON.parse(records[1]!));
 
           if (!marker.success)
@@ -679,7 +679,7 @@ export function createVercelAdapter(
         if (
           !receiptPath ||
           records.length > 2 ||
-          !/^\/tmp\/sandbar-exec-[A-Za-z0-9]+\/receipt\.json$/.test(receiptPath)
+          !/^\/tmp\/beachside-exec-[A-Za-z0-9]+\/receipt\.json$/.test(receiptPath)
         )
           throw new AdapterError(
             "UNAVAILABLE",
@@ -842,7 +842,7 @@ export function createVercelAdapter(
 
         const stage = posix.join(
           posix.dirname(input.destination),
-          `.sandbar-${crypto.randomUUID()}`,
+          `.beachside-${crypto.randomUUID()}`,
         );
 
         if (op === "copy") ctx.retain?.({ temporaryPaths: [stage] });
@@ -889,7 +889,7 @@ export function createVercelAdapter(
         sessionId: string,
         attempt: { operationId: string; submissionId: string },
         sourceSnapshotId?: string,
-      ): import("@sandbar-sdk/adapter").OperationOutcome =>
+      ): import("@beachside/adapter").OperationOutcome =>
         sourceSnapshotId
           ? {
               kind: "snapshot_restore",
@@ -911,7 +911,7 @@ export function createVercelAdapter(
             };
 
       const creationName = (submissionId: string) =>
-        `sandbar-${createHash("sha256").update(submissionId).digest("hex")}`;
+        `beachside-${createHash("sha256").update(submissionId).digest("hex")}`;
 
       const makeCreation = (sourceSnapshotId?: string) => {
         const creation: Extract<
@@ -951,7 +951,7 @@ export function createVercelAdapter(
                 "Vercel supports at most four user labels",
               );
 
-            if (Object.keys(input.labels ?? {}).some((key) => key.startsWith("sandbar")))
+            if (Object.keys(input.labels ?? {}).some((key) => key.startsWith("beachside")))
               throw new AdapterError("INVALID_ARGUMENT", "Reserved correlation label");
 
             return input;
@@ -966,7 +966,7 @@ export function createVercelAdapter(
 
             const requestedName = config.persistent
               ? creationName(ctx.submissionId)
-              : `sandbar-${crypto.randomUUID()}`;
+              : `beachside-${crypto.randomUUID()}`;
 
             const retention: NativeRetention = {};
 
@@ -988,7 +988,7 @@ export function createVercelAdapter(
               ports: config.ports,
               failoverRegions: [],
               networkPolicy: { mode },
-              tags: { ...input.labels, sandbarSubmission: ctx.submissionId },
+              tags: { ...input.labels, beachsideSubmission: ctx.submissionId },
               // Native session defaults; every command inherits them unless its own env overrides.
               env: input.env && Object.keys(input.env).length ? input.env : undefined,
             };
@@ -1043,7 +1043,7 @@ export function createVercelAdapter(
               result.sandbox.persistent === config.persistent &&
               (!config.persistent ||
                 (result.sandbox.createdAt !== undefined &&
-                  result.sandbox.tags?.sandbarSubmission === ctx.submissionId)) &&
+                  result.sandbox.tags?.beachsideSubmission === ctx.submissionId)) &&
               result.sandbox.currentSessionId === result.session.id &&
               result.session.region === config.region &&
               result.session.vcpus === vcpus &&
@@ -1114,7 +1114,7 @@ export function createVercelAdapter(
 
               if (
                 value.sandbox.name !== name ||
-                value.sandbox.tags?.sandbarSubmission !== attempt.submissionId ||
+                value.sandbox.tags?.beachsideSubmission !== attempt.submissionId ||
                 !value.sandbox.persistent ||
                 value.sandbox.currentSessionId !== value.session.id ||
                 value.session.region !== config.region ||
@@ -1344,7 +1344,7 @@ export function createVercelAdapter(
         return result.snapshot;
       };
 
-      const processes: import("@sandbar-sdk/adapter").AdapterSession["processes"] =
+      const processes: import("@beachside/adapter").AdapterSession["processes"] =
         config.image === "vercel/sandbox/universal:latest"
           ? {
               supports: {
@@ -1358,8 +1358,8 @@ export function createVercelAdapter(
                 execCapture: "bytes" as const,
               },
               start: async (
-                input: import("@sandbar-sdk/adapter").ProcessStartInput,
-                ctx: import("@sandbar-sdk/adapter").ProcessStartContext,
+                input: import("@beachside/adapter").ProcessStartInput,
+                ctx: import("@beachside/adapter").ProcessStartContext,
               ) =>
                 startVercelProcess(
                   executeProcess(await pin(input.sandbox, readSignal(ctx))),
@@ -1367,8 +1367,8 @@ export function createVercelAdapter(
                   ctx,
                 ),
               reopen: async (
-                input: import("@sandbar-sdk/adapter").ProcessReopenInput,
-                ctx: import("@sandbar-sdk/adapter").ProcessStartContext,
+                input: import("@beachside/adapter").ProcessReopenInput,
+                ctx: import("@beachside/adapter").ProcessStartContext,
               ) =>
                 reopenVercelProcess(
                   executeProcess(await pin(input.sandbox, readSignal(ctx))),
@@ -2034,7 +2034,7 @@ export function createVercelAdapter(
                 "Vercel supports at most four user labels",
               );
 
-            if (labels.some((key) => key.startsWith("sandbar")))
+            if (labels.some((key) => key.startsWith("beachside")))
               throw new AdapterError("INVALID_ARGUMENT", "Reserved correlation label");
 
             if (
@@ -2336,11 +2336,9 @@ export function createVercelAdapter(
           const result = await listPage(input, ctx);
 
           return {
-            // Persistent bindings list only sandboxes tagged with a Sandbar submission; session
+            // Persistent bindings list only sandboxes tagged with a Beachside submission; session
             // bindings list every session-mode sandbox in the project and region.
-            coverage: config.persistent
-              ? ("sandbar-managed" as const)
-              : ("provider-scope" as const),
+            coverage: config.persistent ? ("managed" as const) : ("provider-scope" as const),
             items: result.items,
             nextCursor: result.nextCursor,
           };
@@ -2382,7 +2380,7 @@ export function createVercelAdapter(
             let stdinPath: string | undefined;
 
             if (input.stdin !== undefined) {
-              stdinPath = `/tmp/sandbar-stdin-${crypto.randomUUID()}`;
+              stdinPath = `/tmp/beachside-stdin-${crypto.randomUUID()}`;
               await ctx.checkpoint({
                 version: 1,
                 sessionId: input.sandbox.id,
@@ -2612,7 +2610,12 @@ export function createVercelAdapter(
             const signal = ctx.signal;
             await verifySession(input.sandbox.id, readSignal(ctx));
             const operation = () => ({ signal, deadline: Date.now() + 30000 });
-            const stage = posix.join(posix.dirname(input.path), `.sandbar-${crypto.randomUUID()}`);
+
+            const stage = posix.join(
+              posix.dirname(input.path),
+              `.beachside-${crypto.randomUUID()}`,
+            );
+
             let chunkPath: string | undefined;
             let stageOwned = false;
             let bytesWritten = 0;
@@ -2628,7 +2631,7 @@ export function createVercelAdapter(
                 for (let offset = 0; offset < bytes.length; offset += 65536) {
                   chunkPath = posix.join(
                     posix.dirname(input.path),
-                    `.sandbar-${crypto.randomUUID()}`,
+                    `.beachside-${crypto.randomUUID()}`,
                   );
                   ctx.retain?.({
                     temporaryPaths: [stage, chunkPath],
@@ -2738,7 +2741,7 @@ export function createVercelAdapter(
 
               const stage = posix.join(
                 posix.dirname(input.path),
-                `.sandbar-${crypto.randomUUID()}`,
+                `.beachside-${crypto.randomUUID()}`,
               );
 
               let stageOwned = false;

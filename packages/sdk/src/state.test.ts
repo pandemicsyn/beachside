@@ -5,10 +5,10 @@ import {
   defineAdapter,
   ResourceReference,
   type SnapshotProfile,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
-  Sandbar,
-  SandbarError,
+  Beachside,
+  BeachsideError,
   AdapterSnapshot,
   AdapterVolume,
   Image,
@@ -68,7 +68,7 @@ test("direct checks are read-only, required guarantees gate create, and minimal 
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   const input = {
     environment: Image.prepared("base"),
@@ -153,7 +153,7 @@ for (const status of ["unsupported", "unknown", "unavailable"] as const) {
       },
     });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -239,7 +239,7 @@ for (const mode of ["direct", "advanced"] as const) {
       },
     });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -333,7 +333,7 @@ test("create preflight observes caller abort and skips reads for pre-aborted cal
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const controller = new AbortController();
 
   const input = {
@@ -408,7 +408,7 @@ for (const mode of ["direct", "advanced"] as const) {
         },
       });
 
-      const client = await Sandbar.connect({
+      const client = await Beachside.connect({
         adapter,
         config: {},
         credentials: {},
@@ -566,7 +566,7 @@ for (const contradiction of [
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
     const box = await client.sandboxes.create({ environment: Image.prepared("base") });
     const operation = await box.submitSnapshot({ requirements: { preserve: "filesystem+memory" } });
 
@@ -645,7 +645,7 @@ for (const stalled of ["profiles", "inspect"] as const) {
       },
     });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -705,7 +705,7 @@ test("recovery and advanced observation reject foreign mounted volume scopes bef
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   try {
     const operation = await client.sandboxes.submitCreate({ environment: Image.prepared("base") });
@@ -781,7 +781,7 @@ test("create mount preflight enforces aggregate recovery capacity before provide
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -893,12 +893,12 @@ test("advanced capture observation forwards saved expectations on a fresh connec
     },
   });
 
-  const first = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const first = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const box = await first.sandboxes.create({ environment: Image.prepared("base") });
   const operation = await box.submitSnapshot();
   const saved = JSON.parse(JSON.stringify(operation.reference));
   await first.close();
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   try {
     const input = {
@@ -1005,7 +1005,7 @@ for (const mode of ["rejects", "hung"] as const) {
       },
     });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -1065,7 +1065,7 @@ for (const kind of ["snapshot", "volume"] as const) {
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
     const valid = ResourceReference.parse({
       version: 1,
@@ -1110,7 +1110,7 @@ for (const kind of ["snapshot", "volume"] as const) {
         ];
 
         for (const action of actions) {
-          await expect(action()).rejects.toBeInstanceOf(SandbarError);
+          await expect(action()).rejects.toBeInstanceOf(BeachsideError);
           await expect(action()).rejects.toMatchObject({ code, effect: "none" });
         }
       }

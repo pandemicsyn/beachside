@@ -7,5 +7,8 @@ for (const name of await readdir("dist")) {
   if (!name.endsWith(".d.ts")) continue;
   const path = `dist/${name}`;
   const source = await readFile(path, "utf8");
-  await writeFile(path, source.replaceAll('"@sandbar/provider-spi"', '"./internal-spi.js"'));
+  await writeFile(
+    path,
+    source.replaceAll('"@beachside-internal/provider-spi"', '"./internal-spi.js"'),
+  );
 }

@@ -16,8 +16,8 @@ import {
   type ProcessStartContext,
   type Scope,
   type ObserveContext,
-} from "@sandbar-sdk/adapter";
-import type { DriverResult } from "@sandbar/provider-spi";
+} from "@beachside/adapter";
+import type { DriverResult } from "@beachside-internal/provider-spi";
 import { fakeProvider } from "./client";
 import { FAKE_STARTER_IMAGE, type FakeImage } from "./protocol";
 

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { Sandbar, Image } from "sandbar-sdk";
-import { createFakeAdapter } from "@sandbar/provider-fake";
+import { Beachside, Image } from "beachside";
+import { createFakeAdapter } from "@beachside-internal/provider-fake";
 import { ProcessFixture } from "../../../packages/sdk-qualification/processes";
 
 test("direct quickstart uses the independent fake provider", async () => {
@@ -16,14 +16,14 @@ test("direct quickstart uses the independent fake provider", async () => {
       command: { command, exitCode: 0, stdoutBase64: Buffer.from("hello").toString("base64") },
     });
 
-    const sandbar = await Sandbar.connect({
+    const beachside = await Beachside.connect({
       adapter: createFakeAdapter({ url: fixture.fakeUrl!, token: fixture.fakeToken }),
       config: {},
       credentials: {},
     });
 
     try {
-      const box = await sandbar.sandboxes.create({ environment: Image.prepared("fake-starter") });
+      const box = await beachside.sandboxes.create({ environment: Image.prepared("fake-starter") });
 
       try {
         expect((await box.inspect()).state).toBe("running");
@@ -42,7 +42,7 @@ test("direct quickstart uses the independent fake provider", async () => {
         await box.destroy();
       }
     } finally {
-      await sandbar.close();
+      await beachside.close();
     }
   } finally {
     await fixture.close();

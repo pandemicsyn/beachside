@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { AdapterError, defineAdapter, type ReadContext } from "@sandbar-sdk/adapter";
+import { AdapterError, defineAdapter, type ReadContext } from "@beachside/adapter";
 import { z } from "zod";
-import { Image, Sandbar, type SandboxHandle } from "./index";
+import { Image, Beachside, type SandboxHandle } from "./index";
 
 async function fixture(
   options: {
@@ -60,7 +60,7 @@ async function fixture(
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   const box: SandboxHandle = await client.sandboxes.create({
     environment: Image.prepared("image"),

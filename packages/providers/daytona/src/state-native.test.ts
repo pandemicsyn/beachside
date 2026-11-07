@@ -8,17 +8,17 @@ import {
   sandboxReference,
   unknownSandboxFacts,
   Preserve,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
-  Sandbar,
+  Beachside,
   AdapterSnapshot,
   AdapterVolume,
-  SandbarError,
+  BeachsideError,
   Image,
   OutcomeUnknownError,
   WaitAbortedError,
   type AdapterRecoveryReference,
-} from "sandbar-sdk";
+} from "beachside";
 import { daytonaState } from "./state-native";
 
 interface FixtureStartHook {
@@ -51,11 +51,11 @@ function fixture(
     };
   }
 
-  const labels = { "sandbar.operation": "create-op", "sandbar.submission": "create-sub" };
+  const labels = { "beachside.operation": "create-op", "beachside.submission": "create-sub" };
 
   const reference = sandboxReference("daytona", scope, "source", {
-    operation: labels["sandbar.operation"],
-    submission: labels["sandbar.submission"],
+    operation: labels["beachside.operation"],
+    submission: labels["beachside.submission"],
   });
 
   let state = options.stopped ? "stopped" : "started";
@@ -322,7 +322,7 @@ function fixture(
       fetch: fetcher,
     });
 
-    return Sandbar.connect({
+    return Beachside.connect({
       adapter: defineAdapter({
         name: "daytona",
         config: z.strictObject({}),
@@ -691,9 +691,9 @@ test.each(["failed", "uncertain"] as const)(
       const source = await client.sandboxes.create({ environment: Image.prepared("base") });
       const operation = await source.submitSnapshot();
       const error = await operation.wait().catch((error) => error);
-      expect(error).toBeInstanceOf(SandbarError);
+      expect(error).toBeInstanceOf(BeachsideError);
 
-      if (!(error instanceof SandbarError)) throw error;
+      if (!(error instanceof BeachsideError)) throw error;
       expect(error.code).toBe(restart === "failed" ? "SOURCE_RESTART_FAILED" : "OUTCOME_UNKNOWN");
       expect(error.outcome).toMatchObject({
         kind: "snapshot_capture",
@@ -1224,7 +1224,7 @@ for (const mode of [
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
     try {
       const volume = await client.volumes.create({ name: "owned" });
@@ -1743,7 +1743,7 @@ test("Daytona cancelled volume-create checkpoint survives fresh recovery without
     } catch (error) {
       expect(
         error instanceof WaitAbortedError ||
-          (error instanceof SandbarError && error.effect === "none"),
+          (error instanceof BeachsideError && error.effect === "none"),
       ).toBe(true);
     }
 
@@ -2112,7 +2112,7 @@ test.each(["x".repeat(128), "🚀".repeat(64)])(
   async (submissionId) => {
     const f = fixture();
     const client = await f.connect();
-    let token: import("@sandbar-sdk/adapter").Json | undefined;
+    let token: import("@beachside/adapter").Json | undefined;
     let tokenVersion: number | undefined;
 
     try {
@@ -2142,7 +2142,7 @@ test.each(["x".repeat(128), "🚀".repeat(64)])(
 
       expect(result).toMatchObject({ kind: "completed" });
       expect(z.object({ name: z.string() }).parse(token).name).toMatch(
-        /^sandbar-capture-[a-f0-9]{64}$/,
+        /^beachside-capture-[a-f0-9]{64}$/,
       );
       const reopened = await f.connect(undefined, "rotated-key");
 
@@ -2178,7 +2178,7 @@ test("Daytona capture recovery accepts bounded legacy names", async () => {
     const operation = await source.submitSnapshot();
     const legacy = structuredClone(operation.reference);
     const token = z.record(z.string(), z.json()).parse(legacy.token);
-    const name = `sandbar-capture-${legacy.submissionId}`;
+    const name = `beachside-capture-${legacy.submissionId}`;
     token.name = name;
     legacy.token = token;
     f.renameSnapshot(name);
@@ -2210,7 +2210,7 @@ test("Daytona initial capture checkpoint cancellation persists no-dispatch rejec
     } catch (error) {
       expect(
         error instanceof WaitAbortedError ||
-          (error instanceof SandbarError && error.effect === "none"),
+          (error instanceof BeachsideError && error.effect === "none"),
       ).toBe(true);
     }
 
@@ -2355,7 +2355,8 @@ test("Daytona delayed acknowledged capture remains recoverable after source dele
     const error = await operation.wait().catch((error) => error);
     expect(error).toBeInstanceOf(OutcomeUnknownError);
 
-    if (!(error instanceof SandbarError) || error.outcome?.kind !== "snapshot_capture") throw error;
+    if (!(error instanceof BeachsideError) || error.outcome?.kind !== "snapshot_capture")
+      throw error;
     expect(error.outcome).toMatchObject({
       status: "partial",
       snapshot: { nativeId: "snapshot-one" },
@@ -2386,7 +2387,7 @@ test("Daytona a failed restart checkpoint retains confirmed capture without disp
   try {
     const source = await client.sandboxes.create({ environment: Image.prepared("base") });
     const error = await source.snapshot().catch((error: Error) => error);
-    expect(error).toBeInstanceOf(SandbarError);
+    expect(error).toBeInstanceOf(BeachsideError);
     expect(error).toMatchObject({
       code: "REFERENCE_SAVE_FAILED",
       outcome: {
@@ -2398,7 +2399,7 @@ test("Daytona a failed restart checkpoint retains confirmed capture without disp
       },
     });
 
-    if (!(error instanceof SandbarError) || error.reference?.mode !== "direct")
+    if (!(error instanceof BeachsideError) || error.reference?.mode !== "direct")
       throw new Error("Expected latest checkpoint reference");
     expect(error.reference.token).toMatchObject({
       stage: "restart",
@@ -2451,7 +2452,7 @@ test.each(["http", "network"] as const)(
         },
       });
 
-      if (!(error instanceof SandbarError) || error.outcome?.kind !== "snapshot_capture")
+      if (!(error instanceof BeachsideError) || error.outcome?.kind !== "snapshot_capture")
         throw error;
       const reopened = await f.connect(undefined, "rotated-key");
 
@@ -2527,7 +2528,7 @@ test.each([
         const error = await operation.wait().catch((error) => error);
         expect(error).toBeInstanceOf(OutcomeUnknownError);
 
-        if (!(error instanceof SandbarError) || error.outcome?.kind !== "snapshot_capture")
+        if (!(error instanceof BeachsideError) || error.outcome?.kind !== "snapshot_capture")
           throw error;
         expect(error.outcome).toMatchObject({
           kind: "snapshot_capture",
@@ -2566,7 +2567,7 @@ for (const recovery of [false, true]) {
       const box = await first.sandboxes.get(created.reference!);
       const operation = await box.submitSnapshot();
       const saved = JSON.parse(JSON.stringify(operation.reference));
-      f.labels["sandbar.operation"] = "different";
+      f.labels["beachside.operation"] = "different";
       f.modes.stopLost = false;
 
       if (recovery) {
@@ -2575,7 +2576,7 @@ for (const recovery of [false, true]) {
       }
 
       const continuing = recovery ? await client.recover(saved) : operation;
-      await expect(continuing.continue()).rejects.toBeInstanceOf(SandbarError);
+      await expect(continuing.continue()).rejects.toBeInstanceOf(BeachsideError);
       expect(f.calls).toMatchObject({ stop: 1, capture: 0, start: 0 });
     } finally {
       await client.close();
@@ -2595,7 +2596,7 @@ for (const stage of ["stop", "capture", "restart"] as const) {
         .safeParse(ref.token);
 
       if (ref.kind === "snapshot_capture" && checkpoint.success)
-        f.labels["sandbar.submission"] = "different";
+        f.labels["beachside.submission"] = "different";
     });
 
     try {

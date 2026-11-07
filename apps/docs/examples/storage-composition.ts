@@ -4,7 +4,7 @@ import {
   type AdapterVolume,
   type AdapterSandbox,
   type ResourceReference,
-} from "sandbar-sdk";
+} from "beachside";
 
 /** Create data explicitly first and keep its handle if compute creation fails. Uses the connection's network setup. */
 export function createWriter(client: AdapterDirectClient, data: AdapterVolume) {

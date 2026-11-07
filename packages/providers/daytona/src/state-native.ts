@@ -24,7 +24,7 @@ import {
   type CreateInput,
   type SnapshotProfile,
   type OperationOutcome,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 
 const CompactReference = ResourceReference.omit({ scope: true });
 
@@ -168,13 +168,13 @@ const DeleteIdentity = z.strictObject({
 });
 
 function captureName(submissionId: string): string {
-  return `sandbar-capture-${createHash("sha256").update(submissionId).digest("hex")}`;
+  return `beachside-capture-${createHash("sha256").update(submissionId).digest("hex")}`;
 }
 
 function matchesCaptureName(name: string, submissionId: string): boolean {
   return (
     name === captureName(submissionId) ||
-    (name.length <= 128 && name === `sandbar-capture-${submissionId}`)
+    (name.length <= 128 && name === `beachside-capture-${submissionId}`)
   );
 }
 
@@ -349,8 +349,8 @@ export function daytonaState(input: {
       throw new AdapterError("CONFLICT", "Sandbox scope differs");
 
     if (expected) {
-      const operation = value.labels?.["sandbar.operation"];
-      const submission = value.labels?.["sandbar.submission"];
+      const operation = value.labels?.["beachside.operation"];
+      const submission = value.labels?.["beachside.submission"];
 
       if (!operation || !submission)
         throw new AdapterError("CONFLICT", "Native sandbox creation correlation is missing");
@@ -994,7 +994,7 @@ export function daytonaState(input: {
 
   function matchesCaptureIntent(
     token: z.infer<typeof Token>,
-    accepted: import("@sandbar-sdk/adapter").RecoveryAttempt["capture"],
+    accepted: import("@beachside/adapter").RecoveryAttempt["capture"],
   ) {
     if (!accepted) return false;
     const profile = accepted.profile;

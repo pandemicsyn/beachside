@@ -4,8 +4,8 @@ import {
   sandboxReference,
   assertSandboxReference,
   unknownSandboxFacts,
-} from "@sandbar-sdk/adapter";
-import { Sandbar } from "sandbar-sdk";
+} from "@beachside/adapter";
+import { Beachside } from "beachside";
 import { defineProviderProfile } from "../profile";
 import { features, supportMetadataSchema } from "../support";
 
@@ -97,7 +97,7 @@ const adapter = defineAdapter({
 export default defineProviderProfile({
   id: "external.fixture",
   nativeVersion: "fixture 1",
-  credentialVariables: ["SANDBAR_EXTERNAL_FIXTURE_TOKEN"],
+  credentialVariables: ["BEACHSIDE_EXTERNAL_FIXTURE_TOKEN"],
   bounds: { nativeLifetimeSeconds: 300, exerciseMs: 5000, cleanupMs: 1000 },
   support: {
     id: "external.fixture",
@@ -119,10 +119,10 @@ export default defineProviderProfile({
     regionClass: "fixture",
   }),
   connection: (_routing, credentials) => (onReference, onDiagnostic) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: {},
-      credentials: { token: credentials.SANDBAR_EXTERNAL_FIXTURE_TOKEN },
+      credentials: { token: credentials.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN },
       onReference,
       onDiagnostic,
     }),

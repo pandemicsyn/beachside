@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar } from "sandbar-sdk";
+import { Image, Beachside } from "beachside";
 import { createE2BAdapter } from "./index";
 import type { E2BRecord, E2BTemplateSize, E2BTransport } from "./transport";
 
@@ -68,7 +68,7 @@ test("E2B resources size built templates and gate prepared ones before any effec
     close() {},
   };
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createE2BAdapter(() => transport),
     config: { resources: { vcpus: 1.5, memoryMiB: 3001 } },
     credentials: { apiKey: "private-key" },

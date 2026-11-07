@@ -9,10 +9,10 @@ import {
   sandboxReference,
   type CreateInput as NativeCreateInput,
   type ExecInput as NativeExecInput,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
-  Sandbar,
-  SandbarError,
+  Beachside,
+  BeachsideError,
   UnsupportedFeatureError,
   diagnosticContext,
   type RecoveryReference,
@@ -120,7 +120,7 @@ function fixture(options: { createEnv: boolean; pending?: boolean }) {
   const provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] });
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -191,7 +191,7 @@ test("create env reaches the native create, applies after reopen and yields to p
       .map((span) => ({ name: span.name, attributes: span.attributes, events: span.events })),
   );
 
-  expect(spans).toContain("sandbar.sandbox.submit_create");
+  expect(spans).toContain("beachside.sandbox.submit_create");
   expect(spans).not.toContain(SECRET);
 });
 
@@ -276,7 +276,7 @@ test("invalid env rejects with a bounded message that never echoes keys or value
       ]) {
         // SAFETY: JavaScript callers can pass malformed env values that the SDK must reject.
         const error = await call({ env: env as Record<string, string> }).catch((cause) => cause);
-        expect(error).toBeInstanceOf(SandbarError);
+        expect(error).toBeInstanceOf(BeachsideError);
         expect(error).toMatchObject({
           code: "INVALID_ARGUMENT",
           message: expect.stringContaining("Invalid create env"),

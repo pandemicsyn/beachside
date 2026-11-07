@@ -20,7 +20,7 @@ jobs:
     # Holds CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID; pull requests never receive them.
     environment:
       name: production
-      url: https://sandbarsdk.dev
+      url: https://beachside.run
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

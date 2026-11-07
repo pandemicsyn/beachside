@@ -7,7 +7,7 @@ import {
   type FileTransferContext,
   type DirectoryResult,
   type FileStat,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 import { type BoxdNativeClient, type CallContext } from "./transport";
 
@@ -202,7 +202,7 @@ export function filesystem(native: BoxdNativeClient, id: string) {
     return receipt.value;
   };
 
-  const staging = (path: string) => posix.join(posix.dirname(path), `.sandbar-${randomUUID()}`);
+  const staging = (path: string) => posix.join(posix.dirname(path), `.beachside-${randomUUID()}`);
 
   const write = async (
     path: string,

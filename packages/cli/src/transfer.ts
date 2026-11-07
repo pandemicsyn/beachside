@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, readdir, readlink } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
-import { NonzeroExitError, type ExecOutput, type SandboxHandle } from "sandbar-sdk";
+import { NonzeroExitError, type ExecOutput, type SandboxHandle } from "beachside";
 import { CliError } from "./output";
 import {
   archivePath,
@@ -40,7 +40,7 @@ export const defaultPushDir = '"${HOME:-}/work"';
 
 const requireTar = `command -v tar >/dev/null 2>&1 || { echo "tar is not installed in this sandbox" >&2; exit ${NoTar}; }`;
 
-const makeTemp = 'tmp=$(mktemp -d "${TMPDIR:-/tmp}/sandbar.XXXXXX")';
+const makeTemp = 'tmp=$(mktemp -d "${TMPDIR:-/tmp}/beachside.XXXXXX")';
 
 /** Shell scripts for each transfer step; exported so fixture tests can seed their results. */
 export const scripts = {
@@ -265,7 +265,8 @@ export async function localTree(
   const listed = gitignore ? await gitFiles(root) : null;
   const paths: string[] = [];
 
-  if (gitignore && !listed) note(`sandbar: ${root} is not in a git work tree; sending every file`);
+  if (gitignore && !listed)
+    note(`beachside: ${root} is not in a git work tree; sending every file`);
 
   if (listed) {
     const seen = new Set<string>();

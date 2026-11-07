@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { SandbarError, type AdapterVolume } from "sandbar-sdk";
+import { BeachsideError, type AdapterVolume } from "beachside";
 import { TestResources } from "./fixtures/resources";
 import { liveEnabled, setupLive, finishLive, featureSupported } from "./providers";
 
@@ -22,13 +22,13 @@ export async function volumePersistence(t: TestResources, volume: AdapterVolume,
   const mounts = caps.mounts;
 
   if (mounts?.status !== "supported")
-    throw new SandbarError(
+    throw new BeachsideError(
       mounts?.status === "unsupported" ? "UNSUPPORTED" : "UNAVAILABLE",
       "Mount eligibility unavailable",
     );
-  const path = `/mnt/sandbar-state/sandbar_${t.ledger.runId.replaceAll("-", "")}.bin`;
-  const bytes = new TextEncoder().encode(`Sandbar persistence ${t.ledger.runId}`);
-  const producer = await t.create("volume/producer", [volume.at("/mnt/sandbar-state")]);
+  const path = `/mnt/beachside-state/beachside_${t.ledger.runId.replaceAll("-", "")}.bin`;
+  const bytes = new TextEncoder().encode(`Beachside persistence ${t.ledger.runId}`);
+  const producer = await t.create("volume/producer", [volume.at("/mnt/beachside-state")]);
   await producer.writeFile(path, bytes, { overwrite: !borrowed, signal: t.signal });
   await t.exec(
     producer,
@@ -37,14 +37,14 @@ export async function volumePersistence(t: TestResources, volume: AdapterVolume,
   expect(await t.read(producer, path)).toEqual(bytes);
   await t.destroy("volume/producer");
   expect((await volume.inspect({ signal: t.signal })).state).toBe("ready");
-  const consumer = await t.create("volume/consumer", [volume.at("/mnt/sandbar-state")]);
+  const consumer = await t.create("volume/consumer", [volume.at("/mnt/beachside-state")]);
   expect(await t.read(consumer, path)).toEqual(bytes);
 
   if (mounts.value.access.includes("read-only")) {
     await t.destroy("volume/consumer");
 
     const reader = await t.create("volume/read-only", [
-      volume.at("/mnt/sandbar-state", { access: "read-only" }),
+      volume.at("/mnt/beachside-state", { access: "read-only" }),
     ]);
 
     const script = `import errno\ntry:\n f=open(${JSON.stringify(path)},"r+b")\n f.write(bytes([7]));f.close()\n print("WRITE_ACCEPTED")\nexcept OSError as e:\n if e.errno not in (errno.EACCES,errno.EPERM,errno.EROFS): raise\n print("READ_ONLY_REJECTED")`;
@@ -55,7 +55,7 @@ export async function volumePersistence(t: TestResources, volume: AdapterVolume,
 
 const enabled = liveEnabled && featureSupported("volumes");
 
-describe("Sandbar volumes", () => {
+describe("Beachside volumes", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   let volume: AdapterVolume;
   beforeAll(async () => {

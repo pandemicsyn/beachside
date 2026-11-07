@@ -1,4 +1,4 @@
-# @sandbar-sdk/vercel
+# @beachside/vercel
 
 ## 0.7.0
 

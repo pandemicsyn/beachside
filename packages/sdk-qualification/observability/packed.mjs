@@ -4,8 +4,8 @@ import { context, trace } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { Sandbar, Image, diagnosticContext } from "sandbar-sdk";
-import { acme, metrics } from "@acme/sandbar-adapter";
+import { Beachside, Image, diagnosticContext } from "beachside";
+import { acme, metrics } from "@acme/beachside-adapter";
 
 const manager = new AsyncLocalStorageContextManager().enable();
 
@@ -15,7 +15,7 @@ const provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcess
 
 provider.register({ contextManager: manager });
 
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter: acme,
   config: { region: "us" },
   credentials: { token: "fixture" },
@@ -42,15 +42,15 @@ await client.close();
 const spans = exporter.getFinishedSpans();
 
 const sdkVersion = JSON.parse(
-  readFileSync(new URL("../package.json", import.meta.resolve("sandbar-sdk")), "utf8"),
+  readFileSync(new URL("../package.json", import.meta.resolve("beachside")), "utf8"),
 ).version;
 
 for (const span of spans) {
-  if (span.instrumentationScope.name === "sandbar-sdk")
+  if (span.instrumentationScope.name === "beachside")
     assert.equal(span.instrumentationScope.version, sdkVersion);
 }
 
-const creates = spans.filter((s) => s.name === "sandbar.sandbox.create");
+const creates = spans.filter((s) => s.name === "beachside.sandbox.create");
 
 assert.equal(creates.length, 2);
 
@@ -59,7 +59,7 @@ assert.deepEqual(
   parents.map((s) => s.spanContext().spanId).sort(),
 );
 
-assert.equal(spans.filter((s) => s.name === "sandbar.sandbox.submit_create").length, 0);
+assert.equal(spans.filter((s) => s.name === "beachside.sandbox.submit_create").length, 0);
 
 assert(!JSON.stringify(spans.map((s) => s.attributes)).includes("CANARY"));
 

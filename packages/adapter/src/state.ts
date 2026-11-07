@@ -613,7 +613,7 @@ export type SandboxListItem = Omit<z.infer<typeof SandboxListItem>, "reference">
 export type SandboxListPage = {
   items: SandboxListItem[];
   nextCursor?: string;
-  coverage: "provider-scope" | "sandbar-managed";
+  coverage: "provider-scope" | "managed";
 };
 
 export const DestroyInput = z.strictObject({
@@ -672,13 +672,13 @@ export type StateCapabilities = {
     capture: Support<{ profiles: SnapshotProfile[]; defaultProfileId: string }>;
     restore: Support<RestoreCapabilities>;
     inspect: Support<{}>;
-    list: Support<{ coverage: "provider-scope" | "sandbar-managed" }>;
+    list: Support<{ coverage: "provider-scope" | "managed" }>;
     delete: Support<{}>;
   };
   /** Inspection, inventory and deletion of prepared images on this connection. */
   imageManagement: {
     inspect: Support<{}>;
-    list: Support<{ coverage: "provider-scope" | "sandbar-managed" }>;
+    list: Support<{ coverage: "provider-scope" | "managed" }>;
     delete: Support<{}>;
   };
   volumes: Support<VolumeCapabilities>;
@@ -1039,17 +1039,13 @@ export const DirectCapabilities = z.strictObject({
     capture: SnapshotSupport,
     restore: supportSchema(RestoreCapabilities),
     inspect: supportSchema(z.strictObject({})),
-    list: supportSchema(
-      z.strictObject({ coverage: z.enum(["provider-scope", "sandbar-managed"]) }),
-    ),
+    list: supportSchema(z.strictObject({ coverage: z.enum(["provider-scope", "managed"]) })),
     delete: supportSchema(z.strictObject({})),
   }),
   imageManagement: z
     .strictObject({
       inspect: supportSchema(z.strictObject({})),
-      list: supportSchema(
-        z.strictObject({ coverage: z.enum(["provider-scope", "sandbar-managed"]) }),
-      ),
+      list: supportSchema(z.strictObject({ coverage: z.enum(["provider-scope", "managed"]) })),
       delete: supportSchema(z.strictObject({})),
     })
     .optional(),

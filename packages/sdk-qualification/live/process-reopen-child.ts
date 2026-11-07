@@ -1,5 +1,5 @@
 import { expect } from "bun:test";
-import type { ProcessReference, SandboxReference } from "sandbar-sdk";
+import type { ProcessReference, SandboxReference } from "beachside";
 import type { RunLedger } from "../provider-qualification/ledger";
 import { configuredProvider } from "./providers";
 

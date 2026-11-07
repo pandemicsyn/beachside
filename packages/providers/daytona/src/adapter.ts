@@ -21,7 +21,7 @@ import {
   DEFAULT_LIFETIME_SECONDS,
   type SandboxInfo,
   type SandboxReference,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 import { directoryEntries, GuestStat } from "./filesystem";
 import { daytonaState } from "./state-native";
@@ -29,7 +29,7 @@ import { reopenDaytonaProcess, startDaytonaProcess } from "./process-native";
 import {
   MountDurability as importMountDurability,
   type ResourceReference,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   AdapterError,
   AdapterFilesystemError,
@@ -38,8 +38,8 @@ import {
   defineAdapter,
   type AttemptContext,
   type ObserveContext,
-} from "@sandbar-sdk/adapter";
-import type { DriverResult } from "@sandbar/provider-spi";
+} from "@beachside/adapter";
+import type { DriverResult } from "@beachside-internal/provider-spi";
 import {
   boundedBytes,
   daytonaProvider,
@@ -289,7 +289,7 @@ function requireDestroyTokenCapacity(token: z.infer<typeof DestroyToken>): void 
     throw new AdapterError("CAPACITY", "Daytona destroy custody exceeds recovery token bound");
 }
 
-const states = new Map<string, import("@sandbar-sdk/adapter").SandboxState>([
+const states = new Map<string, import("@beachside/adapter").SandboxState>([
   ["started", "running"],
   ["stopped", "stopped"],
   ["archived", "suspended"],
@@ -303,7 +303,11 @@ const states = new Map<string, import("@sandbar-sdk/adapter").SandboxState>([
 ]);
 
 /** Labels the adapter writes on every sandbox it creates; listings leave them out. */
-const MARKER_LABELS = new Set(["sandbar.submission", "sandbar.operation", "sandbar.imageSnapshot"]);
+const MARKER_LABELS = new Set([
+  "beachside.submission",
+  "beachside.operation",
+  "beachside.imageSnapshot",
+]);
 
 // Retained labels are summaries; mountDurability preserves the full scoped native identity.
 function retainedVolumeLabel(nativeId: string): string {
@@ -554,7 +558,7 @@ export function createDaytonaAdapter(
       const inspection = async (
         id: string,
         expected?: SandboxReference,
-        ctx?: import("@sandbar-sdk/adapter").ReadContext,
+        ctx?: import("@beachside/adapter").ReadContext,
       ): Promise<SandboxInfo> => {
         let value;
 
@@ -573,8 +577,8 @@ export function createDaytonaAdapter(
 
         if (value.networkBlockAll !== (config.networkPolicy === "blocked") || value.public)
           throw new AdapterError("CONFLICT", "Daytona native network/visibility policy differs");
-        const operation = value.labels?.["sandbar.operation"];
-        const submission = value.labels?.["sandbar.submission"];
+        const operation = value.labels?.["beachside.operation"];
+        const submission = value.labels?.["beachside.submission"];
 
         const reference =
           operation && submission
@@ -617,8 +621,8 @@ export function createDaytonaAdapter(
       };
 
       const lifecycleSource = async (
-        box: import("@sandbar-sdk/adapter").Sandbox,
-        ctx: import("@sandbar-sdk/adapter").ReadContext,
+        box: import("@beachside/adapter").Sandbox,
+        ctx: import("@beachside/adapter").ReadContext,
       ) => {
         if (!box.reference)
           throw new AdapterError("UNSUPPORTED", "Verified sandbox identity required");
@@ -686,8 +690,8 @@ export function createDaytonaAdapter(
         if (nativeDetail) {
           if (
             nativeDetail.id !== id ||
-            nativeDetail.labels?.["sandbar.operation"] !== operation ||
-            nativeDetail.labels?.["sandbar.submission"] !== submission
+            nativeDetail.labels?.["beachside.operation"] !== operation ||
+            nativeDetail.labels?.["beachside.submission"] !== submission
           )
             return null;
 
@@ -750,7 +754,7 @@ export function createDaytonaAdapter(
 
       const restoreUnknown = (
         result: Awaited<ReturnType<typeof driver.create>>,
-        mounts: import("@sandbar-sdk/adapter").MountSpec[],
+        mounts: import("@beachside/adapter").MountSpec[],
         ctx: AttemptContext | ObserveContext,
       ) => {
         const detail = result.acknowledgedSandbox ?? result.nativeSandbox;
@@ -762,8 +766,8 @@ export function createDaytonaAdapter(
             status: "unknown",
             sandbox: detail
               ? sandboxReference("daytona", resourceBinding, detail.id, {
-                  operation: detail.labels!["sandbar.operation"]!,
-                  submission: detail.labels!["sandbar.submission"]!,
+                  operation: detail.labels!["beachside.operation"]!,
+                  submission: detail.labels!["beachside.submission"]!,
                 })
               : undefined,
             mounts,
@@ -772,12 +776,12 @@ export function createDaytonaAdapter(
       };
 
       // Daytona documents volumes for containers; mounted Linux VM restore is not mapped.
-      const mountedRestore = (info: import("@sandbar-sdk/adapter").SnapshotInfo) =>
+      const mountedRestore = (info: import("@beachside/adapter").SnapshotInfo) =>
         info.source?.class !== "linux-vm";
 
       const validateRestore = async (
-        input: import("@sandbar-sdk/adapter").SnapshotRestoreInput,
-        ctx: import("@sandbar-sdk/adapter").ReadContext,
+        input: import("@beachside/adapter").SnapshotRestoreInput,
+        ctx: import("@beachside/adapter").ReadContext,
       ) => {
         const info = await resourceState.inspectSnapshot(input.snapshot, ctx);
 
@@ -846,10 +850,10 @@ export function createDaytonaAdapter(
         },
         recovery: { version: 1, token: RestoreToken },
         async prepare(
-          input: import("@sandbar-sdk/adapter").SnapshotRestoreInput,
-          ctx: import("@sandbar-sdk/adapter").ReadContext,
+          input: import("@beachside/adapter").SnapshotRestoreInput,
+          ctx: import("@beachside/adapter").ReadContext,
         ) {
-          if ("sandbar.imageSnapshot" in (input.request.labels ?? {}))
+          if ("beachside.imageSnapshot" in (input.request.labels ?? {}))
             throw new AdapterError("INVALID_ARGUMENT", "Reserved Daytona snapshot label");
           await validateRestore(input, ctx);
 
@@ -865,7 +869,7 @@ export function createDaytonaAdapter(
           return input;
         },
         async submit(
-          input: import("@sandbar-sdk/adapter").SnapshotRestoreInput,
+          input: import("@beachside/adapter").SnapshotRestoreInput,
           ctx: AttemptContext,
         ) {
           try {
@@ -916,10 +920,7 @@ export function createDaytonaAdapter(
 
           return "id" in value ? { ...value, mounts: input.request.mounts } : value;
         },
-        async observe(
-          attempt: import("@sandbar-sdk/adapter").RecoveryAttempt,
-          ctx: ObserveContext,
-        ) {
+        async observe(attempt: import("@beachside/adapter").RecoveryAttempt, ctx: ObserveContext) {
           if (!attempt.resource || attempt.resource.kind !== "snapshot")
             return ctx.unknown("Missing restore snapshot identity");
 
@@ -930,8 +931,8 @@ export function createDaytonaAdapter(
               ? {
                   id: saved.data.sandboxId,
                   labels: {
-                    "sandbar.operation": attempt.operationId,
-                    "sandbar.submission": attempt.submissionId,
+                    "beachside.operation": attempt.operationId,
+                    "beachside.submission": attempt.submissionId,
                   },
                 }
               : undefined;
@@ -1041,7 +1042,7 @@ export function createDaytonaAdapter(
         snapshotRestore: createMutation,
         async snapshotInspect(
           ref: ResourceReference,
-          ctx: import("@sandbar-sdk/adapter").ReadContext,
+          ctx: import("@beachside/adapter").ReadContext,
         ) {
           const info = await resourceState.inspectSnapshot(ref, ctx);
           info.restore.networkPolicies = [...caps.networkPolicies];
@@ -1051,9 +1052,9 @@ export function createDaytonaAdapter(
         },
         async snapshotList(
           page: Parameters<
-            NonNullable<import("@sandbar-sdk/adapter").AdapterSession["snapshotList"]>
+            NonNullable<import("@beachside/adapter").AdapterSession["snapshotList"]>
           >[0],
-          ctx: import("@sandbar-sdk/adapter").ReadContext,
+          ctx: import("@beachside/adapter").ReadContext,
         ) {
           const result = await resourceState.fields.snapshotList!(page, ctx);
 
@@ -1197,7 +1198,7 @@ export function createDaytonaAdapter(
         create: {
           recovery: { version: 1, token: Token },
           async prepare(input) {
-            if ("sandbar.imageSnapshot" in (input.labels ?? {}))
+            if ("beachside.imageSnapshot" in (input.labels ?? {}))
               throw new AdapterError("INVALID_ARGUMENT", "Reserved Daytona snapshot label");
 
             const result = await driver.prepare({
@@ -2151,8 +2152,8 @@ export function createDaytonaAdapter(
           const page = await driver.listing({ scope, cursor: input.cursor, limit: input.limit });
 
           return {
-            // Only sandboxes carrying verified Sandbar submission labels are listed.
-            coverage: "sandbar-managed" as const,
+            // Only sandboxes carrying verified Beachside submission labels are listed.
+            coverage: "managed" as const,
             items: page.items.map((item) => ({
               id: item.observation.ref.nativeId,
               state: states.get(item.nativeState) ?? "unknown",
@@ -2426,7 +2427,7 @@ export function createDaytonaAdapter(
             });
           },
           async copy(input, ctx) {
-            const stagingDirectory = `${input.destination.slice(0, input.destination.lastIndexOf("/") + 1)}.sandbar-copy-${crypto.randomUUID()}`;
+            const stagingDirectory = `${input.destination.slice(0, input.destination.lastIndexOf("/") + 1)}.beachside-copy-${crypto.randomUUID()}`;
             ctx.retain?.({ temporaryPaths: [stagingDirectory] });
 
             try {

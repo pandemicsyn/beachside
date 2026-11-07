@@ -1,4 +1,4 @@
-# @sandbar-sdk/boxd
+# @beachside/boxd
 
 ## 0.7.0
 

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { Sandbar, Image } from "sandbar-sdk";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { Beachside, Image } from "beachside";
+import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
 import { finiteStdinEcho } from "./finite-stdin";
 
@@ -38,7 +38,7 @@ test("finite stdin recipe forwards UTF-8 and exact bytes through public exec", a
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared("base") });

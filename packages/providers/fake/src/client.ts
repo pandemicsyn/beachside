@@ -7,8 +7,8 @@ import {
   type ProviderDriver,
   type SandboxRef,
   type InvocationIdentity,
-} from "@sandbar/provider-spi";
-import type { ExecCommand } from "@sandbar-sdk/adapter/portable";
+} from "@beachside-internal/provider-spi";
+import type { ExecCommand } from "@beachside/adapter/portable";
 import { z } from "zod";
 import {
   FAKE_STARTER_IMAGE,

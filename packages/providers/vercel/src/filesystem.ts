@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  AdapterError,
-  AdapterFilesystemError,
-  type FileStat,
-  type Json,
-} from "@sandbar-sdk/adapter";
+import { AdapterError, AdapterFilesystemError, type FileStat, type Json } from "@beachside/adapter";
 
 // Managed Node image helper. Arguments are JSON data; replies never contain file contents.
 export const filesystemHelper = String.raw`

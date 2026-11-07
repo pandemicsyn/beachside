@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Json } from "@sandbar-sdk/adapter";
+import type { Json } from "@beachside/adapter";
 import { z } from "zod";
 
 /**
@@ -154,7 +154,7 @@ export function boatFixture() {
   const calls: Call[] = [];
   const effects = { create: 0, destroy: 0, release: 0, save: 0, snapshotDelete: 0 };
   const commands: string[] = [];
-  const workdir = mkdtempSync(join(tmpdir(), "sandbar-boat-fixture-"));
+  const workdir = mkdtempSync(join(tmpdir(), "beachside-boat-fixture-"));
   let sequence = 0;
   let loseNextCreate = false;
   let holdNextCreate = false;
@@ -278,7 +278,7 @@ export function boatFixture() {
 
       const from = body.from === undefined ? undefined : snapshots.get(body.from);
 
-      if (body.from?.startsWith("sandbar-snapshot-") && (!from || from.status !== "ready"))
+      if (body.from?.startsWith("beachside-snapshot-") && (!from || from.status !== "ready"))
         return error(404, "snapshot_not_found");
 
       if (!box) {
@@ -448,7 +448,7 @@ export function boatFixture() {
       box.files.set(body.path, new Uint8Array(bytes));
 
       // Stdin files are read by the locally executed wrapper.
-      if (body.path.startsWith("/tmp/sandbar-stdin-")) writeFileSync(body.path, bytes);
+      if (body.path.startsWith("/tmp/beachside-stdin-")) writeFileSync(body.path, bytes);
 
       return json(200, {
         ok: true,
@@ -596,7 +596,7 @@ export function boatFixture() {
     loseNextSaveResponse() {
       loseNextSave = true;
     },
-    /** Save a name again outside Sandbar: its artifact changes. */
+    /** Save a name again outside Beachside: its artifact changes. */
     resaveSnapshot(name: string) {
       const snapshot = snapshots.get(name);
 

@@ -2,15 +2,15 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 // The skill ships inside the CLI so an installed copy always matches this version's commands.
-import bundled from "../../../skills/sandbar-cli/SKILL.md" with { type: "text" };
+import bundled from "../../../skills/beachside-cli/SKILL.md" with { type: "text" };
 import type { Flags } from "./commands";
 import { CliError, usage } from "./output";
 import type { Session } from "./session";
 
-export const skillName = "sandbar-cli";
+export const skillName = "beachside-cli";
 
 /** Marks a copy this command wrote, so a later install may replace it and nothing else. */
-const marker = "<!-- Installed by `sandbar skill install`; rerun it to update this file. -->";
+const marker = "<!-- Installed by `beachside skill install`; rerun it to update this file. -->";
 
 type InstallResult = {
   path: string;
@@ -56,7 +56,7 @@ async function installAt(root: string, content: string): Promise<InstallResult> 
     return {
       path,
       result: "skipped",
-      reason: "a copy installed another way is already there; remove it to let sandbar manage it",
+      reason: "a copy installed another way is already there; remove it to let beachside manage it",
     };
 
   await mkdir(dirname(path), { recursive: true });
@@ -70,10 +70,10 @@ export async function skillCommand(session: Session, flags: Flags): Promise<numb
   const { out, env, cwd } = session.ctx;
 
   if (extra.length || (action !== undefined && action !== "install"))
-    throw usage("Usage: sandbar skill [install [--project]]");
+    throw usage("Usage: beachside skill [install [--project]]");
 
   if (action === undefined) {
-    if (flags.bool("project")) throw usage("--project only applies to `sandbar skill install`");
+    if (flags.bool("project")) throw usage("--project only applies to `beachside skill install`");
 
     if (out.json) out.success({ name: skillName, content: bundled }, "");
     else out.streams.stdout(bundled);

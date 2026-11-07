@@ -1,8 +1,8 @@
-import { Sandbar } from "sandbar-sdk";
-import { boatAdapter } from "@sandbar-sdk/boat";
+import { Beachside } from "beachside";
+import { boatAdapter } from "@beachside/boat";
 
 export async function boatExample(apiKey: string) {
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: boatAdapter,
     credentials: { apiKey },
     config: { network: "internet" },

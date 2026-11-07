@@ -1,15 +1,15 @@
-# Sandbar architecture
+# Beachside architecture
 
 Current implementation · October 10, 2026
 
-Sandbar is a server-side TypeScript SDK. Callers connect an installed adapter in Node.js or Bun. Provider credentials and application-owned persistence remain in the caller’s process.
+Beachside is a server-side TypeScript SDK. Callers connect an installed adapter in Node.js or Bun. Provider credentials and application-owned persistence remain in the caller’s process.
 
 ## Execution paths
 
 ```mermaid
 flowchart TD
-  Direct[Direct TypeScript caller] --> SDK[sandbar-sdk]
-  SDK --> Adapter[Public @sandbar-sdk/adapter contract]
+  Direct[Direct TypeScript caller] --> SDK[beachside]
+  SDK --> Adapter[Public @beachside/adapter contract]
   Adapter --> Provider[Configured provider transport]
 ```
 

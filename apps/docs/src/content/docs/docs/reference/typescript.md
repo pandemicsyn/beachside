@@ -3,30 +3,30 @@ title: TypeScript reference
 description: SDK connections, images, resource handles, operations, and errors.
 ---
 
-Import `Sandbar` and `Image` from `sandbar-sdk`. The official provider factories are `daytona` from `@sandbar-sdk/daytona` and `e2b` from `@sandbar-sdk/e2b`. See the [generated export index](/docs/reference/generated-typescript/) for public names.
+Import `Beachside` and `Image` from `beachside`. The official provider factories are `daytona` from `@beachside/daytona` and `e2b` from `@beachside/e2b`. See the [generated export index](/docs/reference/generated-typescript/) for public names.
 
 ## Consumer vocabulary and compatibility
 
-Use `SandbarClient`, `SandboxHandle`, `SnapshotHandle`, `VolumeHandle`, `ImageHandle`, `OperationHandle<T>`, `RecoveryReference`, `ConnectOptions` and `CloseOptions` in application annotations. Adapter-author contracts remain in `@sandbar-sdk/adapter`.
+Use `BeachsideClient`, `SandboxHandle`, `SnapshotHandle`, `VolumeHandle`, `ImageHandle`, `OperationHandle<T>`, `RecoveryReference`, `ConnectOptions` and `CloseOptions` in application annotations. Adapter-author contracts remain in `@beachside/adapter`.
 
-Factory results preserve the complete advanced API and existing runtime identity. During this compatibility stage their declarations use `SandbarClient<true>` and `SandboxHandle<true>`; `true` is a type parameter, not a runtime setting. Default annotations retain the previous structural views, which applications may implement or mock. Concrete operation results provide their kind type parameter, preserving `kind` narrowing and `continue()`, while `OperationHandle<T>` alone keeps the original minimal observation/wait interface.
+Factory results preserve the complete advanced API and existing runtime identity. During this compatibility stage their declarations use `BeachsideClient<true>` and `SandboxHandle<true>`; `true` is a type parameter, not a runtime setting. Default annotations retain the previous structural views, which applications may implement or mock. Concrete operation results provide their kind type parameter, preserving `kind` narrowing and `continue()`, while `OperationHandle<T>` alone keeps the original minimal observation/wait interface.
 
-Existing `AdapterDirectClient`, `AdapterSandbox`, `AdapterSnapshot`, `AdapterVolume`, `AdapterOperation`, `AdapterRecoveryReference`, `AdapterConnectOptions`, `DirectConnectOptions`, `DirectSandbarClient` and `DirectSandboxHandle` exports remain supported. Runtime constructors and `instanceof` checks still use the same classes. Migrate annotations incrementally; no wrapper or identity conversion is needed. Inferred complete clients retain advanced compatibility access to `session`, `telemetry` and `scope`, with deprecation guidance. Ordinary `SandbarClient` annotations omit this machinery; prefer documented operations and resource references. Exported advanced methods and prepare/submit/recover capabilities remain available.
+Existing `AdapterDirectClient`, `AdapterSandbox`, `AdapterSnapshot`, `AdapterVolume`, `AdapterOperation`, `AdapterRecoveryReference`, `AdapterConnectOptions`, `DirectConnectOptions`, `DirectBeachsideClient` and `DirectSandboxHandle` exports remain supported. Runtime constructors and `instanceof` checks still use the same classes. Migrate annotations incrementally; no wrapper or identity conversion is needed. Inferred complete clients retain advanced compatibility access to `session`, `telemetry` and `scope`, with deprecation guidance. Ordinary `BeachsideClient` annotations omit this machinery; prefer documented operations and resource references. Exported advanced methods and prepare/submit/recover capabilities remain available.
 
 For ordinary directory listings, use `listFiles`: it returns a complete bounded array or rejects. Use `readDirectory` when completeness and observation metadata matter. Both APIs remain available with their distinct semantics.
 
 ## Connect
 
 ```ts
-const sandbar = await Sandbar.connect(e2b({ apiKey }));
+const beachside = await Beachside.connect(e2b({ apiKey }));
 ```
 
-Factories package typed settings without provider IO. `Sandbar.connect` validates the settings, verifies the native connection, and owns the session. Use the SDK in a server-side Node.js or Bun process.
+Factories package typed settings without provider IO. `Beachside.connect` validates the settings, verifies the native connection, and owns the session. Use the SDK in a server-side Node.js or Bun process.
 
 For a separately installed adapter:
 
 ```ts
-const sandbar = await Sandbar.connect({
+const beachside = await Beachside.connect({
   adapter: acme,
   config: { region: "us" },
   credentials: { token },
@@ -40,16 +40,16 @@ const sandbar = await Sandbar.connect({
 
 ## Images
 
-| API                                                   | Behavior                                                                    |
-| ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| `Image.prepared(value)`                               | Select an existing image ID/name or scoped `PreparedImage` result.          |
-| `Image.oci(reference)`                                | Describe an OCI source supported by the adapter.                            |
-| `sandbar.images.build({ source }, { signal? })`       | Build and wait for a scoped prepared image plus retained-resource metadata. |
-| `sandbar.images.submitBuild(input, options?)`         | Submit a build and return an operation handle.                              |
-| `sandbar.images.get(reference)`                       | Reopen a scoped image reference as an `ImageHandle`.                        |
-| `sandbar.images.list({ limit, cursor? })`             | Read scoped image inventory and coverage.                                   |
-| `image.inspect()`                                     | Read state, visibility, source and known native dependencies.               |
-| `image.delete()` / `sandbar.images.delete(reference)` | Delete an eligible image; `submitDelete` returns an operation handle.       |
+| API                                                     | Behavior                                                                    |
+| ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `Image.prepared(value)`                                 | Select an existing image ID/name or scoped `PreparedImage` result.          |
+| `Image.oci(reference)`                                  | Describe an OCI source supported by the adapter.                            |
+| `beachside.images.build({ source }, { signal? })`       | Build and wait for a scoped prepared image plus retained-resource metadata. |
+| `beachside.images.submitBuild(input, options?)`         | Submit a build and return an operation handle.                              |
+| `beachside.images.get(reference)`                       | Reopen a scoped image reference as an `ImageHandle`.                        |
+| `beachside.images.list({ limit, cursor? })`             | Read scoped image inventory and coverage.                                   |
+| `image.inspect()`                                       | Read state, visibility, source and known native dependencies.               |
+| `image.delete()` / `beachside.images.delete(reference)` | Delete an eligible image; `submitDelete` returns an operation handle.       |
 
 Build results contain `prepared`, `retainedResources` and `reference`, an image resource reference whose ownership is `verified-created` only when the adapter proved the build created it. A prepared handle is bound to its verified provider scope. Destroying a sandbox does not delete a built image. See [Images and networking](/docs/guides/images-and-networking/).
 
@@ -57,12 +57,12 @@ Build results contain `prepared`, `retainedResources` and `reference`, an image 
 
 | API                                                                  | Behavior                                                                          |
 | -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `sandbar.sandboxes.create(input?, { signal? })`                      | Submit creation and wait for a sandbox handle.                                    |
-| `sandbar.sandboxes.submitCreate(input?, options?)`                   | Submit creation and return an operation handle.                                   |
-| `sandbar.sandboxes.get(reference, { signal?, pollMs? })`             | Reopen the same verified sandbox without resuming or renewing it.                 |
-| `sandbar.sandboxes.list({ limit?, cursor? })`                        | Page scoped sandboxes with state, labels, creation time, coverage and references. |
-| `sandbar.sandboxes.checkCreate(input?)`                              | Read-only evaluation of environment and snapshot requirements.                    |
-| `sandbar.capabilities()` / `box.capabilities()`                      | Observe supported profiles and current eligibility.                               |
+| `beachside.sandboxes.create(input?, { signal? })`                    | Submit creation and wait for a sandbox handle.                                    |
+| `beachside.sandboxes.submitCreate(input?, options?)`                 | Submit creation and return an operation handle.                                   |
+| `beachside.sandboxes.get(reference, { signal?, pollMs? })`           | Reopen the same verified sandbox without resuming or renewing it.                 |
+| `beachside.sandboxes.list({ limit?, cursor? })`                      | Page scoped sandboxes with state, labels, creation time, coverage and references. |
+| `beachside.sandboxes.checkCreate(input?)`                            | Read-only evaluation of environment and snapshot requirements.                    |
+| `beachside.capabilities()` / `box.capabilities()`                    | Observe supported profiles and current eligibility.                               |
 | `box.reference`                                                      | Verified `SandboxReference`, or `null` for adapters without identity support.     |
 | `box.id`                                                             | Sandbox identifier.                                                               |
 | `box.preview(port, { signal? })`                                     | Resolve ephemeral native HTTP access; availability is not readiness.              |
@@ -86,30 +86,30 @@ Build results contain `prepared`, `retainedResources` and `reference`, an image 
 | `box.walkFiles(path, { maxDepth?, maxEntries?, exclude?, signal? })` | Bounded depth-first traversal with exact subtree exclusions.                      |
 | `box.readTextLines(path, { maxLineBytes?, ...transferOptions })`     | Incremental UTF-8 lines; delimiters removed and line bytes bounded.               |
 | `box.destroy({ signal?, storage? })`                                 | Wait for confirmed compute termination.                                           |
-| `sandbar.close()`                                                    | Release client resources; does not destroy sandboxes.                             |
+| `beachside.close()`                                                  | Release client resources; does not destroy sandboxes.                             |
 
 Creation input accepts `environment`, `network` (deprecated alias `networkPolicy`), `region`, `labels`, `env` (sandbox-wide variables; see [environment variables](/docs/guides/images-and-networking/#set-environment-variables)), `mounts: MountSpec[]` and `requirements: { snapshot: SnapshotRequest }`. Omitted input resolves the adapter's configured environment. Optional operations reject with `UNSUPPORTED` when their hooks or requested guarantees are absent; current access/state can instead be unavailable or unknown.
 
 ## Lifecycle and saved storage
 
-| API                                                   | Behavior                                                                |
-| ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| `box.renew({ forSeconds }?, { signal?, pollMs? })`    | Reset the native lifetime window; omission uses the connection default. |
-| `box.suspend({ signal?, pollMs? })`                   | Preserve eligible inactive compute using the adapter's native profile.  |
-| `box.resume({ signal?, pollMs? })`                    | Reactivate the same resource; execution continuity can remain unknown.  |
-| `box.checkSnapshot(request?)`                         | Read-only evaluation of configured capture guarantees.                  |
-| `box.snapshot(request?, { signal?, pollMs? })`        | Return `{ snapshot, capture, source }`.                                 |
-| `sandbar.snapshots.get(reference)`                    | Reopen a verified snapshot with a native inspection.                    |
-| `sandbar.snapshots.list({ limit, cursor? })`          | Read scoped snapshot inventory and coverage.                            |
-| `snapshot.inspect({ signal?, pollMs? })`              | Observe preservation, identity and restore facts.                       |
-| `snapshot.restore(request, { signal?, pollMs? })`     | Create independent compute under an explicit network policy.            |
-| `snapshot.delete({ signal?, pollMs? })`               | Delete an eligible retained artifact, separately from compute.          |
-| `sandbar.volumes.create(input, { signal?, pollMs? })` | Create retained storage and return its handle.                          |
-| `sandbar.volumes.get(reference)`                      | Reopen a verified volume with a native inspection.                      |
-| `sandbar.volumes.list({ limit, cursor? })`            | Read scoped volume inventory and coverage.                              |
-| `volume.inspect({ signal?, pollMs? })`                | Observe volume readiness and storage facts.                             |
-| `volume.at(path, { access?, subpath? })`              | Create a mount descriptor; default access is read-write.                |
-| `volume.delete({ signal?, pollMs? })`                 | Explicitly delete eligible retained storage.                            |
+| API                                                     | Behavior                                                                |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `box.renew({ forSeconds }?, { signal?, pollMs? })`      | Reset the native lifetime window; omission uses the connection default. |
+| `box.suspend({ signal?, pollMs? })`                     | Preserve eligible inactive compute using the adapter's native profile.  |
+| `box.resume({ signal?, pollMs? })`                      | Reactivate the same resource; execution continuity can remain unknown.  |
+| `box.checkSnapshot(request?)`                           | Read-only evaluation of configured capture guarantees.                  |
+| `box.snapshot(request?, { signal?, pollMs? })`          | Return `{ snapshot, capture, source }`.                                 |
+| `beachside.snapshots.get(reference)`                    | Reopen a verified snapshot with a native inspection.                    |
+| `beachside.snapshots.list({ limit, cursor? })`          | Read scoped snapshot inventory and coverage.                            |
+| `snapshot.inspect({ signal?, pollMs? })`                | Observe preservation, identity and restore facts.                       |
+| `snapshot.restore(request, { signal?, pollMs? })`       | Create independent compute under an explicit network policy.            |
+| `snapshot.delete({ signal?, pollMs? })`                 | Delete an eligible retained artifact, separately from compute.          |
+| `beachside.volumes.create(input, { signal?, pollMs? })` | Create retained storage and return its handle.                          |
+| `beachside.volumes.get(reference)`                      | Reopen a verified volume with a native inspection.                      |
+| `beachside.volumes.list({ limit, cursor? })`            | Read scoped volume inventory and coverage.                              |
+| `volume.inspect({ signal?, pollMs? })`                  | Observe volume readiness and storage facts.                             |
+| `volume.at(path, { access?, subpath? })`                | Create a mount descriptor; default access is read-write.                |
+| `volume.delete({ signal?, pollMs? })`                   | Explicitly delete eligible retained storage.                            |
 
 Lifecycle, capture, restore, volume creation and artifact deletion also expose `submit…` forms returning operation handles. Managers additionally expose `snapshots.delete(reference, options?)` and `volumes.delete(reference, options?)`. Snapshot and volume handles expose `provider`, `id` and `reference`; persist the complete reference. Restore accepts `mounts` descriptors, optional `resources`, and `requireIndependentLifecycle` (default true); unsupported combinations reject before allocation.
 
@@ -135,18 +135,18 @@ Use the object form for `cwd`, `env`, finite `stdin` (UTF-8 string or exact byte
 
 An SDK operation exposes `reference`, `durability: "process"`, `observe()`, and `wait({ signal?, pollMs? })`. Observation returns `null` while completion is unknown. Poll intervals are between 50 and 60,000 milliseconds; adapter delays can set a later earliest poll.
 
-`sandbar.recover(reference)` imports a saved reference in the same verified scope and returns an operation handle. It never resubmits. `observe()` and `wait()` read existing evidence; advanced `continue({ signal? })` may dispatch a proven never-submitted next stage and must be serialized by the application. Aborting a wait stops local waiting, not provider compute.
+`beachside.recover(reference)` imports a saved reference in the same verified scope and returns an operation handle. It never resubmits. `observe()` and `wait()` read existing evidence; advanced `continue({ signal? })` may dispatch a proven never-submitted next stage and must be serialized by the application. Aborting a wait stops local waiting, not provider compute.
 
-`SandbarError` exposes `code` and `effect`. `OutcomeUnknownError` and `WaitAbortedError` carry recovery references. `NonzeroExitError` carries a completed command's output; `NoExitCodeError` means its exit code is unconfirmed. See [Errors and recovery](/docs/guides/recovery/).
+`BeachsideError` exposes `code` and `effect`. `OutcomeUnknownError` and `WaitAbortedError` carry recovery references. `NonzeroExitError` carries a completed command's output; `NoExitCodeError` means its exit code is unconfirmed. See [Errors and recovery](/docs/guides/recovery/).
 
 ## Advanced lifecycle
 
-`sandbar.operations.inventory({ limit, cursor? })` reads scoped `{ id, state }` inventory where supported; `sandboxes.list()` adds references. `operations.prepare(kind, input)` returns a single-use prepared attempt; its `submit(identity, { beforeSubmit })` hook lets an application commit a durable submission marker before native IO. Returning false or throwing in the hook prevents dispatch.
+`beachside.operations.inventory({ limit, cursor? })` reads scoped `{ id, state }` inventory where supported; `sandboxes.list()` adds references. `operations.prepare(kind, input)` returns a single-use prepared attempt; its `submit(identity, { beforeSubmit })` hook lets an application commit a durable submission marker before native IO. Returning false or throwing in the hook prevents dispatch.
 
 Persist accepted pending tokens with their versions. `operations.observe(...)` reads prior evidence without preparing or submitting again. These lower-level calls use adapter input shapes and require application-owned persistence. See [Asynchronous adapter recovery](/docs/guides/adapter-recovery/).
 
 ## Adapter authoring
 
-`@sandbar-sdk/adapter` exports `defineAdapter`, `AdapterError`, operation result helpers, and scoped operation types. `@sandbar-sdk/adapter/testing` exports `adapterSuite`. An adapter with no host policy does not expose `withPolicy`; policy-bearing definitions validate and clone host policy synchronously. Start with [Write an adapter](/docs/guides/write-an-adapter/).
+`@beachside/adapter` exports `defineAdapter`, `AdapterError`, operation result helpers, and scoped operation types. `@beachside/adapter/testing` exports `adapterSuite`. An adapter with no host policy does not expose `withPolicy`; policy-bearing definitions validate and clone host policy synchronously. Start with [Write an adapter](/docs/guides/write-an-adapter/).
 
 Creation input may be omitted when the adapter supplies a default environment. E2B uses its configured `templateId` (default `base`); Daytona accepts an `environment` setup option. Explicit per-call environments win. `checkCreate()` and `submitCreate()` resolve the same defaults without relaxing native create inputs. Missing defaults reject with `INVALID_ARGUMENT` before creation.

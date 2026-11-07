@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { Sandbar } from "sandbar-sdk";
+import { Beachside } from "beachside";
 import { createE2BAdapter } from "./index";
 
 const original = globalThis.fetch;
@@ -34,7 +34,7 @@ function nativeCreate(response: () => Response) {
 }
 
 const connect = () =>
-  Sandbar.connect({
+  Beachside.connect({
     adapter: createE2BAdapter(),
     config: {},
     credentials: { apiKey: "fixture-key" },

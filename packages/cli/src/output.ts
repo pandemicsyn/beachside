@@ -1,10 +1,10 @@
 import {
   OutcomeUnknownError,
-  SandbarError,
+  BeachsideError,
   type RecoveryReference,
   type ResourceReference,
   type SandboxReference,
-} from "sandbar-sdk";
+} from "beachside";
 
 /** A failure the CLI detected itself, before or around provider calls. */
 export class CliError extends Error {
@@ -44,14 +44,14 @@ export function usage(message: string, hint?: string): CliError {
 
 export type Known = {
   sandbox?: string;
-  /** The image record an uncertain `sandbar image build` keeps. */
+  /** The image record an uncertain `beachside image build` keeps. */
   image?: string;
-  /** The snapshot record an uncertain `sandbar snapshot create` or `rm` keeps. */
+  /** The snapshot record an uncertain `beachside snapshot create` or `rm` keeps. */
   snapshot?: string;
   /** The snapshot a capture made when recording it failed. */
   snapshotReference?: ResourceReference;
   reference?: SandboxReference | null;
-  /** The SDK's operation reference for an uncertain create; `sandbar rm` uses it to recover. */
+  /** The SDK's operation reference for an uncertain create; `beachside rm` uses it to recover. */
   recovery?: RecoveryReference;
   /** The command's captured result when a later step (cleanup, exit status) failed. */
   exec?: ExecSummary;
@@ -86,7 +86,7 @@ export function describeError(cause: unknown): ErrorReport {
       details: cause.details,
     };
 
-  if (cause instanceof SandbarError) {
+  if (cause instanceof BeachsideError) {
     const partial = cause.outcome?.status === "partial";
 
     let known: Known | undefined;
@@ -189,13 +189,13 @@ export class Output {
       return;
     }
 
-    this.streams.stderr(`sandbar: ${report.message}\n`);
+    this.streams.stderr(`beachside: ${report.message}\n`);
 
     if (report.hint) this.streams.stderr(`hint: ${report.hint}\n`);
 
     if (report.outcome === "unknown" && report.code !== "INTERNAL")
       this.streams.stderr(
-        "The operation may have taken effect; inspect before retrying (sandbar ls, sandbar inspect).\n",
+        "The operation may have taken effect; inspect before retrying (beachside ls, beachside inspect).\n",
       );
 
     if (report.known?.reference)

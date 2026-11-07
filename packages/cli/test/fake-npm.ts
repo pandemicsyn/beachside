@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// A stand-in for npm in `sandbar adapter` tests: it never reaches a registry. Each installed
+// A stand-in for npm in `beachside adapter` tests: it never reaches a registry. Each installed
 // package re-exports the test fixture under every official adapter export name.
 import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";

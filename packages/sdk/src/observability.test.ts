@@ -1,7 +1,7 @@
 /* oxlint-disable anti-slop/no-chained-type-assertions -- Fault-injection objects intentionally violate the OTel interface to prove that broken application providers cannot change SDK behavior. */
 import { afterAll, expect, test } from "bun:test";
 import type { AdapterRecoveryReference } from "./index";
-import { defineAdapter, type SnapshotProfile } from "@sandbar-sdk/adapter";
+import { defineAdapter, type SnapshotProfile } from "@beachside/adapter";
 import { z } from "zod";
 import {
   context,
@@ -18,7 +18,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { Sandbar, Image, SandbarError, diagnosticContext, OutcomeUnknownError } from "./index";
+import { Beachside, Image, BeachsideError, diagnosticContext, OutcomeUnknownError } from "./index";
 import { Telemetry, parseTraceParent } from "./observability";
 import { fixtureAdapter } from "../../sdk-qualification/observability/adapter";
 
@@ -64,7 +64,7 @@ test("per-call parents, convenience phases, nonzero exits, privacy and applicati
   const { exporter, provider } = setup();
   const fixture = fixtureAdapter();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     ...fixture,
     config: {},
     credentials: {},
@@ -94,35 +94,35 @@ test("per-call parents, convenience phases, nonzero exits, privacy and applicati
   parents.forEach((p) => p.end());
   await client.close();
   const spans = safeSpans(exporter);
-  const creates = spans.filter((s) => s.name === "sandbar.sandbox.create");
+  const creates = spans.filter((s) => s.name === "beachside.sandbox.create");
   expect(creates).toHaveLength(2);
   expect(creates.map((s) => s.parentSpanContext?.spanId).sort()).toEqual(
     parents.map((s) => s.spanContext().spanId).sort(),
   );
-  expect(spans.filter((s) => s.name === "sandbar.sandbox.submit_create")).toHaveLength(0);
-  expect(spans.filter((s) => s.name === "sandbar.operation.wait")).toHaveLength(0);
-  expect(spans.filter((s) => s.name === "sandbar.wait")).toHaveLength(8);
+  expect(spans.filter((s) => s.name === "beachside.sandbox.submit_create")).toHaveLength(0);
+  expect(spans.filter((s) => s.name === "beachside.operation.wait")).toHaveLength(0);
+  expect(spans.filter((s) => s.name === "beachside.wait")).toHaveLength(8);
 
-  for (const span of spans.filter((s) => s.name !== "sandbar.wait")) {
-    expect(span.attributes["sandbar.wait.poll_count"]).toBeUndefined();
-    expect(span.attributes["sandbar.events.dropped"]).toBeUndefined();
+  for (const span of spans.filter((s) => s.name !== "beachside.wait")) {
+    expect(span.attributes["beachside.wait.poll_count"]).toBeUndefined();
+    expect(span.attributes["beachside.events.dropped"]).toBeUndefined();
   }
 
   expect(
     spans
-      .filter((s) => s.name === "sandbar.wait")
+      .filter((s) => s.name === "beachside.wait")
       .every(
         (s) =>
-          s.attributes["sandbar.wait.poll_count"] === 1 &&
-          s.events.at(-1)?.attributes?.["sandbar.operation.state"] === "completed",
+          s.attributes["beachside.wait.poll_count"] === 1 &&
+          s.events.at(-1)?.attributes?.["beachside.operation.state"] === "completed",
       ),
   ).toBe(true);
   expect(
     spans
-      .filter((s) => s.name === "sandbar.exec")
+      .filter((s) => s.name === "beachside.exec")
       .every(
         (s) =>
-          s.status.code === SpanStatusCode.ERROR && s.attributes["sandbar.exec.exit_code"] === 7,
+          s.status.code === SpanStatusCode.ERROR && s.attributes["beachside.exec.exit_code"] === 7,
       ),
   ).toBe(true);
   expect(fixture.counts).toEqual({
@@ -144,7 +144,7 @@ test("text file helpers reuse one byte-operation span and one native call", asyn
   const { exporter, provider } = setup();
   const fixture = fixtureAdapter();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     ...fixture,
     config: {},
     credentials: {},
@@ -156,11 +156,11 @@ test("text file helpers reuse one byte-operation span and one native call", asyn
     await box.writeTextFile("/CANARY_FILE", "CANARY_TEXT");
     expect(await box.readTextFile("/CANARY_FILE")).toBe("CANARY_FILE_CONTENT");
     const spans = safeSpans(exporter);
-    expect(spans.filter((s) => s.name === "sandbar.file.read")).toHaveLength(1);
-    expect(spans.filter((s) => s.name === "sandbar.file.write")).toHaveLength(1);
-    expect(spans.filter((s) => s.name === "sandbar.prepare")).toHaveLength(2);
-    expect(spans.filter((s) => s.name === "sandbar.submit")).toHaveLength(2);
-    expect(spans.filter((s) => s.name === "sandbar.wait")).toHaveLength(2);
+    expect(spans.filter((s) => s.name === "beachside.file.read")).toHaveLength(1);
+    expect(spans.filter((s) => s.name === "beachside.file.write")).toHaveLength(1);
+    expect(spans.filter((s) => s.name === "beachside.prepare")).toHaveLength(2);
+    expect(spans.filter((s) => s.name === "beachside.submit")).toHaveLength(2);
+    expect(spans.filter((s) => s.name === "beachside.wait")).toHaveLength(2);
     expect(fixture.counts.read).toBe(1);
     expect(fixture.counts.write).toBe(1);
   } finally {
@@ -174,7 +174,7 @@ test("disablement and unsampled tracing retain operational recovery without tele
     const { provider, exporter } = setup(true);
     const fixture = fixtureAdapter({ lost: true });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: fixture.adapter,
       config: {},
       credentials: {},
@@ -211,7 +211,7 @@ test("standalone advanced observation retains safe mutation correlation", async 
   const { provider, exporter } = setup();
   const fixture = fixtureAdapter({ pending: true });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: fixture.adapter,
     config: {},
     credentials: {},
@@ -240,20 +240,20 @@ test("standalone advanced observation retains safe mutation correlation", async 
   parent.end();
   await client.close();
   const spans = safeSpans(exporter);
-  const observation = spans.find((span) => span.name === "sandbar.observe")!;
-  const submission = spans.find((span) => span.name === "sandbar.sandbox.submit_create")!;
+  const observation = spans.find((span) => span.name === "beachside.observe")!;
+  const submission = spans.find((span) => span.name === "beachside.sandbox.submit_create")!;
   expect(observation.parentSpanContext?.spanId).toBe(parent.spanContext().spanId);
   expect(observation.attributes).toMatchObject({
-    "sandbar.operation.type": "create",
-    "sandbar.operation.id": reference.operationId,
-    "sandbar.submission.id": reference.submissionId,
-    "sandbar.operation.state": "pending",
+    "beachside.operation.type": "create",
+    "beachside.operation.id": reference.operationId,
+    "beachside.submission.id": reference.submissionId,
+    "beachside.operation.state": "pending",
   });
-  expect(observation.attributes["sandbar.operation.id"]).toBe(
-    submission.attributes["sandbar.operation.id"],
+  expect(observation.attributes["beachside.operation.id"]).toBe(
+    submission.attributes["beachside.operation.id"],
   );
-  expect(observation.attributes["sandbar.submission.id"]).toBe(
-    submission.attributes["sandbar.submission.id"],
+  expect(observation.attributes["beachside.submission.id"]).toBe(
+    submission.attributes["beachside.submission.id"],
   );
   expect(fixture.counts.create).toBe(1);
   expect(fixture.counts.observe).toBe(1);
@@ -264,7 +264,7 @@ test("pre-submission rejection, bounded polling and post-submission abort", asyn
   const { provider, exporter } = setup();
   const fixture = fixtureAdapter({ pending: true });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: fixture.adapter,
     config: {},
     credentials: {},
@@ -275,7 +275,7 @@ test("pre-submission rejection, bounded polling and post-submission abort", asyn
     client.sandboxes.create({ environment: Image.prepared("x"), networkPolicy: "allow_all" }),
   ).rejects.toMatchObject({ code: "UNSUPPORTED" });
   expect(fixture.counts.create).toBe(0);
-  expect(exporter.getFinishedSpans().filter((s) => s.name === "sandbar.submit")).toHaveLength(0);
+  expect(exporter.getFinishedSpans().filter((s) => s.name === "beachside.submit")).toHaveLength(0);
   const op = await client.sandboxes.submitCreate({ environment: Image.prepared("CANARY_IMAGE") });
   const abort = new AbortController();
   setTimeout(() => abort.abort(new Error("CANARY_ABORT")), 240);
@@ -285,12 +285,12 @@ test("pre-submission rejection, bounded polling and post-submission abort", asyn
   });
   await client.close();
   const spans = safeSpans(exporter);
-  const wait = spans.find((s) => s.name === "sandbar.operation.wait")!;
-  expect(wait.attributes["sandbar.call.outcome"]).toBe("cancelled");
+  const wait = spans.find((s) => s.name === "beachside.operation.wait")!;
+  expect(wait.attributes["beachside.call.outcome"]).toBe("cancelled");
   expect(wait.status.code).not.toBe(SpanStatusCode.ERROR);
-  expect(Number(wait.attributes["sandbar.wait.poll_count"])).toBeGreaterThan(1);
+  expect(Number(wait.attributes["beachside.wait.poll_count"])).toBeGreaterThan(1);
   expect(wait.events.length).toBeLessThanOrEqual(8);
-  expect(spans.filter((s) => s.name === "sandbar.operation.observe")).toHaveLength(0);
+  expect(spans.filter((s) => s.name === "beachside.operation.observe")).toHaveLength(0);
   await provider.shutdown();
 });
 
@@ -303,7 +303,7 @@ test("wait counts failed observations and records the unknown transition", async
       observeFailure: observeFailure === "invalid_token" ? undefined : observeFailure,
     });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: fixture.adapter,
       config: {},
       credentials: {},
@@ -329,16 +329,16 @@ test("wait counts failed observations and records the unknown transition", async
 
     await client.close();
 
-    const wait = safeSpans(exporter).find((span) => span.name === "sandbar.operation.wait")!;
-    expect(wait.attributes["sandbar.wait.poll_count"]).toBe(
+    const wait = safeSpans(exporter).find((span) => span.name === "beachside.operation.wait")!;
+    expect(wait.attributes["beachside.wait.poll_count"]).toBe(
       observeFailure === "invalid_token" ? 1 : 2,
     );
-    expect(wait.events.map((event) => event.attributes?.["sandbar.operation.state"])).toEqual(
+    expect(wait.events.map((event) => event.attributes?.["beachside.operation.state"])).toEqual(
       observeFailure === "invalid_token" ? ["unknown"] : ["pending", "unknown"],
     );
 
     if (observeFailure !== "invalid_token")
-      expect(wait.attributes["sandbar.operation.state"]).toBe("unknown");
+      expect(wait.attributes["beachside.operation.state"]).toBe("unknown");
     expect(wait.status.code).toBe(SpanStatusCode.ERROR);
     expect(fixture.counts.create).toBe(1);
     expect(fixture.counts.observe).toBe(observeFailure === "invalid_token" ? 0 : 1);
@@ -357,7 +357,7 @@ test("throwing tracer methods/context hooks cannot replay work, replace errors o
     },
   } as TracerProvider;
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: fixture.adapter,
     config: {},
     credentials: {},
@@ -390,10 +390,10 @@ test("throwing tracer methods/context hooks cannot replay work, replace errors o
   // SAFETY: This deliberately incomplete tracer tests failure isolation; only the named throwing methods are invoked.
   const bad = { getTracer: () => ({ startSpan: () => span }) } as unknown as TracerProvider;
   const telemetry = new Telemetry({ tracing: { tracerProvider: bad } });
-  const original = new SandbarError("TIMEOUT", "CANARY_ERROR");
+  const original = new BeachsideError("TIMEOUT", "CANARY_ERROR");
   let calls = 0;
   await expect(
-    telemetry.run("sandbar.exec", async () => {
+    telemetry.run("beachside.exec", async () => {
       calls++;
       throw original;
     }),
@@ -402,7 +402,7 @@ test("throwing tracer methods/context hooks cannot replay work, replace errors o
 });
 
 test("diagnostics drop native IDs, payloads, arbitrary codes, causes and malicious getters", () => {
-  expect(diagnosticContext(new SandbarError("CANARY_CODE", "CANARY_MESSAGE"))).toEqual({
+  expect(diagnosticContext(new BeachsideError("CANARY_CODE", "CANARY_MESSAGE"))).toEqual({
     errorCode: "INTERNAL",
     effect: "none",
     recoveryAvailable: false,
@@ -445,7 +445,7 @@ test("diagnostics drop native IDs, payloads, arbitrary codes, causes and malicio
     submissionId: undefined,
   });
   expect(accessorCalls).toBe(0);
-  const accessorError = new SandbarError("OUTCOME_UNKNOWN", "CANARY");
+  const accessorError = new BeachsideError("OUTCOME_UNKNOWN", "CANARY");
 
   for (const key of ["code", "effect"])
     Object.defineProperty(accessorError, key, {
@@ -480,7 +480,7 @@ test("late native completion cannot mutate or keep a local submission span open"
 
   const fixture = fixtureAdapter({ delay });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: fixture.adapter,
     config: {},
     credentials: {},
@@ -498,7 +498,7 @@ test("late native completion cannot mutate or keep a local submission span open"
   abort.abort(new Error("CANARY_ABORT"));
   await expect(call).rejects.toMatchObject({ effect: "possible" });
   const before = safeSpans(exporter);
-  expect(before.filter((s) => s.name === "sandbar.submit")).toHaveLength(1);
+  expect(before.filter((s) => s.name === "beachside.submit")).toHaveLength(1);
 
   const serialized = JSON.stringify(
     before.map((s) => ({ name: s.name, attributes: s.attributes, events: s.events })),
@@ -520,13 +520,13 @@ test("late native completion cannot mutate or keep a local submission span open"
 test("long transition streams are bounded and dropped events are counted", async () => {
   const { provider, exporter } = setup();
   const telemetry = new Telemetry({ tracing: { tracerProvider: provider } });
-  await telemetry.run("sandbar.operation.wait", async () => {
+  await telemetry.run("beachside.operation.wait", async () => {
     for (let i = 0; i < 1000; i++) telemetry.poll(i % 2 ? "pending" : "completed");
   });
   const span = exporter.getFinishedSpans()[0]!;
   expect(span.events).toHaveLength(8);
-  expect(span.attributes["sandbar.events.dropped"]).toBe(992);
-  expect(span.attributes["sandbar.wait.poll_count"]).toBe(1000);
+  expect(span.attributes["beachside.events.dropped"]).toBe(992);
+  expect(span.attributes["beachside.wait.poll_count"]).toBe(1000);
   await provider.shutdown();
 });
 
@@ -535,7 +535,7 @@ test("callback-initiated public submissions are distinct calls rather than conve
   const fixture = fixtureAdapter();
   let nested = false;
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: fixture.adapter,
     config: {},
     credentials: {},
@@ -550,8 +550,8 @@ test("callback-initiated public submissions are distinct calls rather than conve
   await client.sandboxes.create({ environment: Image.prepared("outer") });
   await client.close();
   const spans = exporter.getFinishedSpans();
-  expect(spans.filter((s) => s.name === "sandbar.sandbox.create")).toHaveLength(1);
-  expect(spans.filter((s) => s.name === "sandbar.sandbox.submit_create")).toHaveLength(1);
+  expect(spans.filter((s) => s.name === "beachside.sandbox.create")).toHaveLength(1);
+  expect(spans.filter((s) => s.name === "beachside.sandbox.submit_create")).toHaveLength(1);
   expect(fixture.counts.create).toBe(2);
   await provider.shutdown();
 });
@@ -562,7 +562,7 @@ test("throwing Context.setValue preserves SDK work, original errors and ended sp
     const fixture = fixtureAdapter();
 
     // Create real recording spans without asking the SDK provider to process the broken context.
-    // This isolates Sandbar's subsequent span/owner context updates from provider startSpan failures.
+    // This isolates Beachside's subsequent span/owner context updates from provider startSpan failures.
     const faultProvider: TracerProvider = {
       getTracer(name, version) {
         const tracer = provider.getTracer(name, version);
@@ -602,12 +602,12 @@ test("throwing Context.setValue preserves SDK work, original errors and ended sp
           };
 
     const telemetry = new Telemetry({ tracing: { tracerProvider: faultProvider } });
-    const original = new SandbarError("TIMEOUT", "CANARY_ORIGINAL");
+    const original = new BeachsideError("TIMEOUT", "CANARY_ORIGINAL");
     let calls = 0;
 
     try {
       await context.with(parent, async () => {
-        const client = await Sandbar.connect({
+        const client = await Beachside.connect({
           adapter: fixture.adapter,
           config: {},
           credentials: {},
@@ -618,7 +618,7 @@ test("throwing Context.setValue preserves SDK work, original errors and ended sp
           const box = await client.sandboxes.create({ environment: Image.prepared("fixture") });
           await box.destroy();
           await expect(
-            telemetry.run("sandbar.exec", async () => {
+            telemetry.run("beachside.exec", async () => {
               calls++;
               expect(context.active()).toBe(parent);
               throw original;
@@ -627,7 +627,7 @@ test("throwing Context.setValue preserves SDK work, original errors and ended sp
           const value = { completed: true };
           expect(
             await telemetry.run(
-              "sandbar.wait",
+              "beachside.wait",
               async () => {
                 calls++;
                 expect(context.active()).toBe(parent);
@@ -647,9 +647,9 @@ test("throwing Context.setValue preserves SDK work, original errors and ended sp
       expect(fixture.counts.destroy).toBe(1);
       expect(fixture.counts.close).toBe(1);
       const spans = safeSpans(exporter);
-      expect(spans.filter((span) => span.name === "sandbar.sandbox.create")).toHaveLength(1);
-      expect(spans.filter((span) => span.name === "sandbar.exec")).toHaveLength(1);
-      expect(spans.filter((span) => span.name === "sandbar.wait")).toHaveLength(3);
+      expect(spans.filter((span) => span.name === "beachside.sandbox.create")).toHaveLength(1);
+      expect(spans.filter((span) => span.name === "beachside.exec")).toHaveLength(1);
+      expect(spans.filter((span) => span.name === "beachside.wait")).toHaveLength(3);
     } finally {
       await provider.shutdown();
     }
@@ -663,7 +663,7 @@ test("an AbortError from a pre-submission callback with a live caller signal is 
   const original = new Error("CANARY_INTERNAL_TIMEOUT");
   original.name = "AbortError";
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: fixture.adapter,
     config: {},
     credentials: {},
@@ -684,9 +684,9 @@ test("an AbortError from a pre-submission callback with a live caller signal is 
     ).rejects.toBe(original);
     expect(controller.signal.aborted).toBe(false);
     expect(fixture.counts.create).toBe(0);
-    const span = safeSpans(exporter).find((span) => span.name === "sandbar.sandbox.create")!;
-    expect(span.attributes["sandbar.call.outcome"]).toBe("error");
-    expect(span.attributes["sandbar.effect"]).toBe("none");
+    const span = safeSpans(exporter).find((span) => span.name === "beachside.sandbox.create")!;
+    expect(span.attributes["beachside.call.outcome"]).toBe("error");
+    expect(span.attributes["beachside.effect"]).toBe("none");
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
   } finally {
     await client.close();
@@ -697,11 +697,11 @@ test("an AbortError from a pre-submission callback with a live caller signal is 
 test("provider throttling keeps its safe diagnostic and span classification", async () => {
   const { provider, exporter } = setup();
   const telemetry = new Telemetry({ tracing: { tracerProvider: provider } });
-  const error = new SandbarError("RATE_LIMIT", "CANARY_PROVIDER_MESSAGE");
+  const error = new BeachsideError("RATE_LIMIT", "CANARY_PROVIDER_MESSAGE");
   expect(diagnosticContext(error).errorCode).toBe("RATE_LIMIT");
   await expect(
     telemetry.run(
-      "sandbar.submit",
+      "beachside.submit",
       async () => {
         throw error;
       },
@@ -709,9 +709,9 @@ test("provider throttling keeps its safe diagnostic and span classification", as
     ),
   ).rejects.toBe(error);
   const span = safeSpans(exporter)[0]!;
-  expect(span.attributes["sandbar.error.code"]).toBe("RATE_LIMIT");
+  expect(span.attributes["beachside.error.code"]).toBe("RATE_LIMIT");
   expect(span.status.code).toBe(SpanStatusCode.ERROR);
-  expect(span.attributes["sandbar.wait.poll_count"]).toBeUndefined();
+  expect(span.attributes["beachside.wait.poll_count"]).toBeUndefined();
   await provider.shutdown();
 });
 
@@ -720,7 +720,7 @@ test("pending waits finalize completed state for convenience and explicit calls"
     const { provider, exporter } = setup();
     const fixture = fixtureAdapter({ pending: true, completeAfterPolls: 2 });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: fixture.adapter,
       config: {},
       credentials: {},
@@ -737,12 +737,12 @@ test("pending waits finalize completed state for convenience and explicit calls"
     }
 
     await client.close();
-    const name = convenience ? "sandbar.wait" : "sandbar.operation.wait";
+    const name = convenience ? "beachside.wait" : "beachside.operation.wait";
     const wait = safeSpans(exporter).find((span) => span.name === name)!;
-    expect(wait.attributes["sandbar.operation.state"]).toBe("completed");
-    expect(wait.attributes["sandbar.effect"]).toBe("applied");
-    expect(wait.attributes["sandbar.call.outcome"]).toBe("success");
-    expect(wait.events.at(-1)?.attributes?.["sandbar.operation.state"]).toBe("completed");
+    expect(wait.attributes["beachside.operation.state"]).toBe("completed");
+    expect(wait.attributes["beachside.effect"]).toBe("applied");
+    expect(wait.attributes["beachside.call.outcome"]).toBe("success");
+    expect(wait.events.at(-1)?.attributes?.["beachside.operation.state"]).toBe("completed");
     expect(fixture.counts.create).toBe(1);
     expect(fixture.counts.observe).toBe(2);
     await provider.shutdown();
@@ -796,7 +796,7 @@ test("pending image builds and destroys retain bounded counts after decoding and
 
     let destroyReference: AdapterRecoveryReference | undefined;
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -828,18 +828,18 @@ test("pending image builds and destroys retain bounded counts after decoding and
     await client.close();
 
     const waits = safeSpans(exporter).filter(
-      (span) => span.name === "sandbar.wait" || span.name === "sandbar.operation.wait",
+      (span) => span.name === "beachside.wait" || span.name === "beachside.operation.wait",
     );
 
     expect(
       waits
-        .filter((span) => span.attributes["sandbar.operation.type"] === "image_build")
-        .map((span) => span.attributes["sandbar.retained_resource.count"]),
+        .filter((span) => span.attributes["beachside.operation.type"] === "image_build")
+        .map((span) => span.attributes["beachside.retained_resource.count"]),
     ).toEqual(convenience ? [100] : [100, 100]);
     expect(
       waits
-        .filter((span) => span.attributes["sandbar.operation.type"] === "destroy")
-        .map((span) => span.attributes["sandbar.retained_resource.count"]),
+        .filter((span) => span.attributes["beachside.operation.type"] === "destroy")
+        .map((span) => span.attributes["beachside.retained_resource.count"]),
     ).toEqual(convenience ? [1] : [1, 1, 1]);
     await provider.shutdown();
   }
@@ -849,7 +849,7 @@ test("pending handle observation preserves recovery availability", async () => {
   const { provider, exporter } = setup();
   const fixture = fixtureAdapter({ pending: true });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     ...fixture,
     config: {},
     credentials: {},
@@ -865,15 +865,15 @@ test("pending handle observation preserves recovery availability", async () => {
   await client.close();
 
   const observations = safeSpans(exporter).filter(
-    (span) => span.name === "sandbar.operation.observe",
+    (span) => span.name === "beachside.operation.observe",
   );
 
   expect(observations).toHaveLength(2);
 
   for (const span of observations) {
-    expect(span.attributes["sandbar.recovery.available"]).toBe(true);
-    expect(span.attributes["sandbar.operation.state"]).toBe("pending");
-    expect(span.attributes["sandbar.effect"]).toBe("possible");
+    expect(span.attributes["beachside.recovery.available"]).toBe(true);
+    expect(span.attributes["beachside.operation.state"]).toBe("pending");
+    expect(span.attributes["beachside.effect"]).toBe("possible");
   }
 
   await provider.shutdown();
@@ -881,7 +881,13 @@ test("pending handle observation preserves recovery availability", async () => {
 
 test("direct diagnostics require the complete recovery shape without traversing getters", async () => {
   const fixture = fixtureAdapter({ pending: true });
-  const client = await Sandbar.connect({ ...fixture, config: {}, credentials: {}, tracing: false });
+
+  const client = await Beachside.connect({
+    ...fixture,
+    config: {},
+    credentials: {},
+    tracing: false,
+  });
 
   const operation = await client.sandboxes.submitCreate({
     environment: Image.prepared("CANARY_IMAGE"),
@@ -958,7 +964,7 @@ test("disabled client polls do not contaminate another client's active wait", as
   const { provider, exporter } = setup();
   const fixture = fixtureAdapter({ pending: true, completeAfterPolls: 2 });
 
-  const disabledClient = await Sandbar.connect({
+  const disabledClient = await Beachside.connect({
     ...fixture,
     config: {},
     credentials: {},
@@ -967,15 +973,15 @@ test("disabled client polls do not contaminate another client's active wait", as
 
   const enabled = new Telemetry({ tracing: { tracerProvider: provider } });
 
-  await enabled.run("sandbar.operation.wait", async () => {
+  await enabled.run("beachside.operation.wait", async () => {
     await disabledClient.sandboxes.create({ environment: Image.prepared("CANARY_IMAGE") });
     enabled.poll("completed");
   });
   await disabledClient.close();
   const spans = safeSpans(exporter);
   expect(spans).toHaveLength(1);
-  expect(spans[0]!.attributes["sandbar.wait.poll_count"]).toBe(1);
-  expect(spans[0]!.events.map((event) => event.attributes?.["sandbar.operation.state"])).toEqual([
+  expect(spans[0]!.attributes["beachside.wait.poll_count"]).toBe(1);
+  expect(spans[0]!.events.map((event) => event.attributes?.["beachside.operation.state"])).toEqual([
     "completed",
   ]);
   expect(fixture.counts.create).toBe(1);
@@ -989,7 +995,7 @@ test("enabled clients keep advanced submission effects separate in pre-submissio
   const firstFixture = fixtureAdapter();
   const original = new Error("CANARY_CALLBACK_FAILURE");
 
-  const other = await Sandbar.connect({
+  const other = await Beachside.connect({
     ...otherFixture,
     config: {},
     credentials: {},
@@ -1001,7 +1007,7 @@ test("enabled clients keep advanced submission effects separate in pre-submissio
     networkPolicy: "blocked",
   });
 
-  const first = await Sandbar.connect({
+  const first = await Beachside.connect({
     ...firstFixture,
     config: {},
     credentials: {},
@@ -1024,9 +1030,9 @@ test("enabled clients keep advanced submission effects separate in pre-submissio
   ).rejects.toBe(original);
   await first.close();
   await other.close();
-  const create = safeSpans(exporter).find((span) => span.name === "sandbar.sandbox.create")!;
-  expect(create.attributes["sandbar.effect"]).toBe("none");
-  expect(create.attributes["sandbar.call.outcome"]).toBe("error");
+  const create = safeSpans(exporter).find((span) => span.name === "beachside.sandbox.create")!;
+  expect(create.attributes["beachside.effect"]).toBe("none");
+  expect(create.attributes["beachside.call.outcome"]).toBe("error");
   expect(firstFixture.counts.create).toBe(0);
   expect(otherFixture.counts.create).toBe(1);
   await provider.shutdown();
@@ -1034,7 +1040,13 @@ test("enabled clients keep advanced submission effects separate in pre-submissio
 
 test("diagnostics stop traversing oversized property collections before late getters", async () => {
   const fixture = fixtureAdapter();
-  const client = await Sandbar.connect({ ...fixture, config: {}, credentials: {}, tracing: false });
+
+  const client = await Beachside.connect({
+    ...fixture,
+    config: {},
+    credentials: {},
+    tracing: false,
+  });
 
   const operation = await client.sandboxes.submitCreate({
     environment: Image.prepared("CANARY_IMAGE"),
@@ -1107,7 +1119,7 @@ test("completed exec failures finalize pending and recovered observation/wait sp
         },
       });
 
-      const client = await Sandbar.connect({
+      const client = await Beachside.connect({
         adapter,
         config: {},
         credentials: {},
@@ -1142,27 +1154,27 @@ test("completed exec failures finalize pending and recovered observation/wait sp
       await client.close();
 
       const name = {
-        convenience: "sandbar.wait",
-        wait: "sandbar.operation.wait",
-        observe: "sandbar.operation.observe",
-        recover: "sandbar.operation.wait",
+        convenience: "beachside.wait",
+        wait: "beachside.operation.wait",
+        observe: "beachside.operation.observe",
+        recover: "beachside.operation.wait",
       }[mode];
 
       const span = safeSpans(exporter)
         .filter((item) => item.name === name)
         .at(-1)!;
 
-      expect(span.attributes["sandbar.operation.state"]).toBe("completed");
-      expect(span.attributes["sandbar.effect"]).toBe("applied");
-      expect(span.attributes["sandbar.recovery.available"]).toBe(true);
+      expect(span.attributes["beachside.operation.state"]).toBe("completed");
+      expect(span.attributes["beachside.effect"]).toBe("applied");
+      expect(span.attributes["beachside.recovery.available"]).toBe(true);
       expect(span.status.code).toBe(SpanStatusCode.ERROR);
 
       if (mode === "convenience") {
         const publicExec = exporter
           .getFinishedSpans()
-          .find((item) => item.name === "sandbar.exec")!;
+          .find((item) => item.name === "beachside.exec")!;
 
-        expect(publicExec.attributes["sandbar.operation.state"]).toBe("completed");
+        expect(publicExec.attributes["beachside.operation.state"]).toBe("completed");
       }
 
       expect(submissions).toBe(1);
@@ -1232,7 +1244,7 @@ test("certified direct recovery tokens are immutable through nested JSON contain
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {}, tracing: false });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {}, tracing: false });
 
   const operation = await client.sandboxes.submitCreate({
     environment: Image.prepared("CANARY_IMAGE"),
@@ -1298,7 +1310,7 @@ test("state recovery remains certified and bounded after telemetry composition",
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -1327,7 +1339,7 @@ test("state recovery remains certified and bounded after telemetry composition",
     expect(diagnosticContext(recovered).recoveryAvailable).toBe(true);
     const spans = exporter.getFinishedSpans();
     expect(
-      spans.some((span) => span.attributes["sandbar.operation.type"] === "snapshot_capture"),
+      spans.some((span) => span.attributes["beachside.operation.type"] === "snapshot_capture"),
     ).toBe(true);
     const serialized = JSON.stringify(spans.map((span) => span.attributes));
 

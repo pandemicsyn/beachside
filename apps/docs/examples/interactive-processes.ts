@@ -4,7 +4,7 @@ import {
   type AdapterSandbox,
   type ProcessExit,
   type ProcessOutput,
-} from "sandbar-sdk";
+} from "beachside";
 
 export type OutputSink = (chunk: ProcessOutput) => void | Promise<void>;
 

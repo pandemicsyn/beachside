@@ -2,14 +2,14 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createFakeAdapter } from "@sandbar/provider-fake";
-import { startFakeProviderServer } from "@sandbar/provider-fake/server";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { createFakeAdapter } from "@beachside-internal/provider-fake";
+import { startFakeProviderServer } from "@beachside-internal/provider-fake/server";
+import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
-import { Image, Sandbar, UnsupportedFeatureError } from "./index";
+import { Image, Beachside, UnsupportedFeatureError } from "./index";
 
 test("fake snapshots capture sandbox files, restore them fresh and delete once", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-fake-snapshots-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-fake-snapshots-"));
   const token = "long-fake-snapshot-token";
 
   const server = await startFakeProviderServer({
@@ -20,7 +20,7 @@ test("fake snapshots capture sandbox files, restore them fresh and delete once",
     testMode: true,
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createFakeAdapter({ url: `http://127.0.0.1:${server.port}`, token, snapshots: true }),
     config: {},
     credentials: {},
@@ -58,7 +58,7 @@ test("fake snapshots capture sandbox files, restore them fresh and delete once",
 });
 
 test("restore applies env, labels and lifetime where the adapter declares them, else rejects first", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-fake-restore-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-fake-restore-"));
   const token = "long-fake-restore-token";
   const secret = "CANARY-restore-env-value";
 
@@ -107,8 +107,8 @@ test("restore applies env, labels and lifetime where the adapter declares them, 
     return FakeState.parse(await response.json()).resources;
   };
 
-  const client = await Sandbar.connect({ adapter: fake, config: {}, credentials: {} });
-  const limited = await Sandbar.connect({ adapter: plain, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter: fake, config: {}, credentials: {} });
+  const limited = await Beachside.connect({ adapter: plain, config: {}, credentials: {} });
 
   try {
     expect((await client.capabilities()).snapshots.restore).toMatchObject({

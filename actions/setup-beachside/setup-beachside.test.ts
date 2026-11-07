@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// A stand-in npm: `install --prefix <dir>` writes a sandbar bin that logs its arguments.
+// A stand-in npm: `install --prefix <dir>` writes a beachside bin that logs its arguments.
 const fakeNpm = `#!/bin/sh
 echo "npm $*" >> "$FAKE_LOG"
 prefix=""
@@ -12,20 +12,20 @@ while [ $# -gt 0 ]; do
   shift
 done
 mkdir -p "$prefix/bin"
-cat > "$prefix/bin/sandbar" <<'BIN'
+cat > "$prefix/bin/beachside" <<'BIN'
 #!/bin/sh
-echo "sandbar $* state=$SANDBAR_STATE_DIR" >> "$FAKE_LOG"
+echo "beachside $* state=$BEACHSIDE_STATE_DIR" >> "$FAKE_LOG"
 if [ "$1" = "--version" ]; then echo "0.7.0"; fi
 if [ "$1" = "rm" ] && [ -n "$FAKE_RM_FAIL" ]; then exit 8; fi
 exit 0
 BIN
-chmod +x "$prefix/bin/sandbar"
+chmod +x "$prefix/bin/beachside"
 `;
 
 let root: string;
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "setup-sandbar-"));
+  root = await mkdtemp(join(tmpdir(), "setup-beachside-"));
   await mkdir(join(root, "stub"));
   await writeFile(join(root, "stub", "npm"), fakeNpm);
   await chmod(join(root, "stub", "npm"), 0o755);
@@ -75,7 +75,7 @@ async function savedState(): Promise<Record<string, string>> {
   );
 }
 
-describe("setup-sandbar", () => {
+describe("setup-beachside", () => {
   test("installs the pinned CLI and adapters and exports the job's state folder", async () => {
     const result = await step("main.mjs", {
       INPUT_VERSION: "0.7.0",
@@ -84,14 +84,14 @@ describe("setup-sandbar", () => {
     });
 
     expect(result.code).toBe(0);
-    const stateDir = join(root, "temp", "sandbar", "state");
+    const stateDir = join(root, "temp", "beachside", "state");
     const log = (await read("log")).trim().split("\n");
 
     expect(log[0]).toContain("install --global --prefix");
-    expect(log[0]).toContain("@sandbar-sdk/cli@0.7.0");
-    expect(log[1]).toBe(`sandbar adapter add e2b daytona state=${stateDir}`);
-    expect(await read("path")).toBe(`${join(root, "temp", "sandbar-cli", "bin")}\n`);
-    expect(await read("env")).toBe(`SANDBAR_STATE_DIR=${stateDir}\nSANDBAR_PROVIDER=e2b\n`);
+    expect(log[0]).toContain("@beachside/cli@0.7.0");
+    expect(log[1]).toBe(`beachside adapter add e2b daytona state=${stateDir}`);
+    expect(await read("path")).toBe(`${join(root, "temp", "beachside-cli", "bin")}\n`);
+    expect(await read("env")).toBe(`BEACHSIDE_STATE_DIR=${stateDir}\nBEACHSIDE_PROVIDER=e2b\n`);
     expect(await read("output")).toBe(`version=0.7.0\nstate-dir=${stateDir}\n`);
     expect(await savedState()).toMatchObject({ STATE_stateDir: stateDir, STATE_cleanup: "true" });
   });
@@ -112,7 +112,7 @@ describe("setup-sandbar", () => {
     const result = await step("post.mjs", state);
 
     expect(result.code).toBe(0);
-    expect(await read("log")).toContain(`sandbar rm --all state=${state.STATE_stateDir}`);
+    expect(await read("log")).toContain(`beachside rm --all state=${state.STATE_stateDir}`);
   });
 
   test("a failed cleanup warns without failing the job", async () => {
@@ -123,7 +123,7 @@ describe("setup-sandbar", () => {
     const result = await step("post.mjs", { ...state, FAKE_RM_FAIL: "1" });
 
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("::warning::Sandbar cleanup did not finish");
+    expect(result.stdout).toContain("::warning::Beachside cleanup did not finish");
   });
 
   test("cleanup: false and an empty store skip the post step's rm", async () => {
@@ -136,7 +136,7 @@ describe("setup-sandbar", () => {
     await step("main.mjs", {});
     const empty = await step("post.mjs", await savedState());
 
-    expect(empty.stdout).toContain("No Sandbar sandboxes recorded");
-    expect(await read("log")).not.toContain("sandbar rm");
+    expect(empty.stdout).toContain("No Beachside sandboxes recorded");
+    expect(await read("log")).not.toContain("beachside rm");
   });
 });

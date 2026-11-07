@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { Sandbar, Image } from "sandbar-sdk";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { Beachside, Image } from "beachside";
+import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
 import { buildWithProgress, interactiveWorker, serverWorkspace } from "./interactive-processes.js";
 
@@ -118,7 +118,7 @@ const adapter = defineAdapter({
   },
 });
 
-const connect = () => Sandbar.connect({ adapter, config: {}, credentials: {} });
+const connect = () => Beachside.connect({ adapter, config: {}, credentials: {} });
 
 const client = await connect();
 

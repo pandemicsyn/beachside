@@ -26,22 +26,22 @@ const selected = new Map(
 );
 
 for (const name of [
-  "@sandbar-sdk/adapter",
-  "sandbar-sdk",
-  "@sandbar-sdk/daytona",
-  "@sandbar-sdk/e2b",
-  "@sandbar-sdk/vercel",
-  "@sandbar-sdk/boxd",
-  "@sandbar-sdk/boat",
-  "@sandbar-sdk/runloop",
-  "@sandbar-sdk/modal",
-  "@sandbar-sdk/cli",
+  "@beachside/adapter",
+  "beachside",
+  "@beachside/daytona",
+  "@beachside/e2b",
+  "@beachside/vercel",
+  "@beachside/boxd",
+  "@beachside/boat",
+  "@beachside/runloop",
+  "@beachside/modal",
+  "@beachside/cli",
 ])
   if (!selected.has(name)) throw new Error(`Release graph lacks ${name}`);
 
-const sdkName = selected.get("sandbar-sdk").manifest.name;
+const sdkName = selected.get("beachside").manifest.name;
 
-const adapterName = selected.get("@sandbar-sdk/adapter").manifest.name;
+const adapterName = selected.get("@beachside/adapter").manifest.name;
 
 const cases = [
   {
@@ -67,16 +67,16 @@ void [definition, suite];
     packageName: sdkName,
     overrides: [adapterName],
     runtime: `
-import { Sandbar, Image } from ${JSON.stringify(sdkName)};
+import { Beachside, Image } from ${JSON.stringify(sdkName)};
 
-if (typeof Sandbar.connect !== "function" ||
+if (typeof Beachside.connect !== "function" ||
     Image.prepared("fixture").kind !== "prepared")
   throw new Error("Packed SDK import failed");
 `,
     types: `
-import { Sandbar, Image } from ${JSON.stringify(sdkName)};
+import { Beachside, Image } from ${JSON.stringify(sdkName)};
 
-const direct: typeof Sandbar.connect = Sandbar.connect;
+const direct: typeof Beachside.connect = Beachside.connect;
 
 const image = Image.prepared("fixture");
 void [direct, image];
@@ -90,70 +90,70 @@ for (const provider of ["daytona", "e2b"]) {
 
   cases.push({
     name: provider,
-    packageName: `@sandbar-sdk/${provider}`,
+    packageName: `@beachside/${provider}`,
     overrides: [adapterName],
-    runtime: `import { ${provider} } from "@sandbar-sdk/${provider}"; if (!${provider}(${JSON.stringify(options)}).bound) throw Error("Unbound factory");`,
-    types: `import { ${provider} } from "@sandbar-sdk/${provider}"; const bound = ${provider}(${JSON.stringify(options)}); void bound;`,
+    runtime: `import { ${provider} } from "@beachside/${provider}"; if (!${provider}(${JSON.stringify(options)}).bound) throw Error("Unbound factory");`,
+    types: `import { ${provider} } from "@beachside/${provider}"; const bound = ${provider}(${JSON.stringify(options)}); void bound;`,
   });
 }
 
 cases.push({
   name: "vercel",
-  packageName: "@sandbar-sdk/vercel",
+  packageName: "@beachside/vercel",
   overrides: [adapterName],
-  runtime: `import { vercel, createVercelAdapter } from "@sandbar-sdk/vercel";
+  runtime: `import { vercel, createVercelAdapter } from "@beachside/vercel";
 if (vercel.name !== "vercel" || createVercelAdapter().name !== "vercel") throw Error("Invalid Vercel definition");
 vercel.config.parse({ teamId: "team", projectId: "project" });`,
-  types: `import { vercel, createVercelAdapter } from "@sandbar-sdk/vercel";
+  types: `import { vercel, createVercelAdapter } from "@beachside/vercel";
 const definition: typeof vercel = createVercelAdapter(); void definition;`,
 });
 
 cases.push({
   name: "boxd",
-  packageName: "@sandbar-sdk/boxd",
+  packageName: "@beachside/boxd",
   overrides: [adapterName],
-  runtime: `import { boxdAdapter } from "@sandbar-sdk/boxd"; if (boxdAdapter.name !== "boxd") throw Error("Unexpected adapter");`,
-  types: `import { boxdAdapter } from "@sandbar-sdk/boxd"; const name: string = boxdAdapter.name; void name;`,
+  runtime: `import { boxdAdapter } from "@beachside/boxd"; if (boxdAdapter.name !== "boxd") throw Error("Unexpected adapter");`,
+  types: `import { boxdAdapter } from "@beachside/boxd"; const name: string = boxdAdapter.name; void name;`,
 });
 
 cases.push({
   name: "boat",
-  packageName: "@sandbar-sdk/boat",
+  packageName: "@beachside/boat",
   overrides: [adapterName],
-  runtime: `import { boatAdapter } from "@sandbar-sdk/boat"; if (boatAdapter.name !== "boat") throw Error("Unexpected adapter");`,
-  types: `import { boatAdapter } from "@sandbar-sdk/boat"; const name: string = boatAdapter.name; void name;`,
+  runtime: `import { boatAdapter } from "@beachside/boat"; if (boatAdapter.name !== "boat") throw Error("Unexpected adapter");`,
+  types: `import { boatAdapter } from "@beachside/boat"; const name: string = boatAdapter.name; void name;`,
 });
 
 cases.push({
   name: "runloop",
-  packageName: "@sandbar-sdk/runloop",
+  packageName: "@beachside/runloop",
   overrides: [adapterName],
-  runtime: `import { runloopAdapter } from "@sandbar-sdk/runloop"; if (runloopAdapter.name !== "runloop") throw Error("Unexpected adapter");`,
-  types: `import { runloopAdapter } from "@sandbar-sdk/runloop"; const name: string = runloopAdapter.name; void name;`,
+  runtime: `import { runloopAdapter } from "@beachside/runloop"; if (runloopAdapter.name !== "runloop") throw Error("Unexpected adapter");`,
+  types: `import { runloopAdapter } from "@beachside/runloop"; const name: string = runloopAdapter.name; void name;`,
 });
 
 cases.push({
   name: "modal",
-  packageName: "@sandbar-sdk/modal",
+  packageName: "@beachside/modal",
   overrides: [adapterName],
-  runtime: `import { modalAdapter } from "@sandbar-sdk/modal"; if (modalAdapter.name !== "modal") throw Error("Unexpected adapter");`,
-  types: `import { modalAdapter } from "@sandbar-sdk/modal"; const name: string = modalAdapter.name; void name;`,
+  runtime: `import { modalAdapter } from "@beachside/modal"; if (modalAdapter.name !== "modal") throw Error("Unexpected adapter");`,
+  types: `import { modalAdapter } from "@beachside/modal"; const name: string = modalAdapter.name; void name;`,
 });
 
-const cliVersion = selected.get("@sandbar-sdk/cli").manifest.version;
+const cliVersion = selected.get("@beachside/cli").manifest.version;
 
-// The CLI is a binary, not a library: each installer must link `sandbar` and run it.
+// The CLI is a binary, not a library: each installer must link `beachside` and run it.
 cases.push({
   name: "cli",
-  packageName: "@sandbar-sdk/cli",
+  packageName: "@beachside/cli",
   overrides: [adapterName, sdkName],
   runtime: `import { execFileSync } from "node:child_process";
-const output = execFileSync("node_modules/.bin/sandbar", ["--version"], { encoding: "utf8" });
+const output = execFileSync("node_modules/.bin/beachside", ["--version"], { encoding: "utf8" });
 if (output.trim() !== ${JSON.stringify(cliVersion)}) throw Error(\`Unexpected CLI version \${output}\`);`,
   types: "export {};",
 });
 
-const temporary = mkdtempSync(join(tmpdir(), "sandbar-installers-"));
+const temporary = mkdtempSync(join(tmpdir(), "beachside-installers-"));
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -183,7 +183,7 @@ try {
       );
 
       const packageFile = {
-        name: `sandbar-installer-${installer}-${scenario.name}`,
+        name: `beachside-installer-${installer}-${scenario.name}`,
         private: true,
         type: "module",
         dependencies: { [scenario.packageName]: selected.get(scenario.packageName).tarball },

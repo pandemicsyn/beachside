@@ -1,5 +1,5 @@
 import { freezeReference } from "./freeze-reference";
-import { CreateEnv } from "@sandbar-sdk/adapter/portable";
+import { CreateEnv } from "@beachside/adapter/portable";
 import { z } from "zod";
 import {
   ResourceReference,
@@ -18,9 +18,9 @@ import {
   type ArtifactDeletionResult,
   type OperationKind,
   type SnapshotCaptureValue,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
-  SandbarError,
+  BeachsideError,
   UnsupportedFeatureError,
   OutcomeUnknownError,
   raceAbort,
@@ -43,7 +43,7 @@ import {
 
 async function resourceRead<T>(
   client: AdapterDirectClient,
-  work: (ctx: import("@sandbar-sdk/adapter").ReadContext) => Promise<T>,
+  work: (ctx: import("@beachside/adapter").ReadContext) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> {
   client.ensureOpen();
@@ -51,7 +51,7 @@ async function resourceRead<T>(
   const combined = AbortSignal.any([client.signal, controller.signal, ...(signal ? [signal] : [])]);
 
   const timer = setTimeout(
-    () => controller.abort(new SandbarError("TIMEOUT", "Resource read deadline exceeded")),
+    () => controller.abort(new BeachsideError("TIMEOUT", "Resource read deadline exceeded")),
     30000,
   );
 
@@ -98,15 +98,15 @@ export function checkedResource(
   client.ensureOpen();
   const parsed = ResourceReference.safeParse(ref);
 
-  if (!parsed.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid resource reference");
+  if (!parsed.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid resource reference");
   const checked = parsed.data;
 
-  if (checked.kind !== kind) throw new SandbarError("INVALID_ARGUMENT", "Wrong resource kind");
+  if (checked.kind !== kind) throw new BeachsideError("INVALID_ARGUMENT", "Wrong resource kind");
 
   try {
     assertResourceScope(checked, { provider: client.provider, scope: client.scope });
   } catch (error) {
-    if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+    if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
     throw error;
   }
 
@@ -133,7 +133,7 @@ export class AdapterSnapshot {
     const ref = checkedResource(this.client, this.reference, "snapshot");
 
     if (!this.client.session.snapshotInspect)
-      throw new SandbarError("UNSUPPORTED", "Snapshot inspection is unsupported");
+      throw new BeachsideError("UNSUPPORTED", "Snapshot inspection is unsupported");
 
     const info = SnapshotInfo.parse(
       await resourceRead(
@@ -160,7 +160,7 @@ export class AdapterSnapshot {
 
     if (legacy.success) {
       if (Object.keys(legacy.data).length)
-        throw new SandbarError(
+        throw new BeachsideError(
           "INVALID_ARGUMENT",
           "Restore mounts now use MountSpec[]; replace legacy share/replace/omit maps with volume.at(path) descriptors",
         );
@@ -171,12 +171,12 @@ export class AdapterSnapshot {
       .looseObject({ network: z.string().min(1).max(128).optional() })
       .safeParse(normalized);
 
-    if (!selection.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid restore request");
+    if (!selection.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid restore request");
     const { network, lifecycle, ...rest } = selection.data;
 
     // Report only the bounds; environment keys and values never enter a message.
     if (rest.env !== undefined && !CreateEnv.safeParse(rest.env).success)
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_ARGUMENT",
         "Invalid restore env: use at most 128 names matching [A-Za-z_][A-Za-z0-9_]* with string values without NUL, 64 KiB in total",
       );
@@ -186,7 +186,8 @@ export class AdapterSnapshot {
       .optional()
       .safeParse(lifecycle);
 
-    if (!lifetime.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid restore lifecycle");
+    if (!lifetime.success)
+      throw new BeachsideError("INVALID_ARGUMENT", "Invalid restore lifecycle");
 
     if (lifetime.data?.lifetimeSeconds !== undefined)
       rest.lifetimeSeconds = lifetime.data.lifetimeSeconds;
@@ -230,7 +231,7 @@ export class AdapterSnapshot {
     const info = await this.inspect(options);
 
     if (info.state !== "ready" || info.preserve === null)
-      throw new SandbarError("UNAVAILABLE", "Snapshot provenance or readiness is unknown");
+      throw new BeachsideError("UNAVAILABLE", "Snapshot provenance or readiness is unknown");
 
     const unmet: string[] = [];
 
@@ -379,7 +380,7 @@ export class AdapterVolume {
     const ref = checkedResource(this.client, this.reference, "volume");
 
     if (!this.client.session.volumeInspect)
-      throw new SandbarError("UNSUPPORTED", "Volume inspection is unsupported");
+      throw new BeachsideError("UNSUPPORTED", "Volume inspection is unsupported");
 
     const info = VolumeInfo.parse(
       await resourceRead(
@@ -448,7 +449,7 @@ export function resourceManagers(client: AdapterDirectClient) {
       const reference = checkedResource(client, ref, "snapshot");
 
       if (!client.session.snapshotInspect)
-        throw new SandbarError("UNSUPPORTED", "Snapshot inspection is unsupported");
+        throw new BeachsideError("UNSUPPORTED", "Snapshot inspection is unsupported");
 
       const info = SnapshotInfo.parse(
         await resourceRead(client, (ctx) => client.session.snapshotInspect!(reference, ctx)),
@@ -460,7 +461,7 @@ export function resourceManagers(client: AdapterDirectClient) {
         info.reference.nativeId !== reference.nativeId ||
         (reference.generation !== undefined && info.reference.generation !== reference.generation)
       )
-        throw new SandbarError("CONFLICT", "Snapshot identity or generation differs");
+        throw new BeachsideError("CONFLICT", "Snapshot identity or generation differs");
 
       return new AdapterSnapshot(client, info.reference);
     },
@@ -470,7 +471,7 @@ export function resourceManagers(client: AdapterDirectClient) {
       const request = validateResourceInput(PageInput, input, "Invalid snapshot inventory request");
 
       if (!client.session.snapshotList)
-        throw new SandbarError("UNSUPPORTED", "Snapshot inventory is unsupported");
+        throw new BeachsideError("UNSUPPORTED", "Snapshot inventory is unsupported");
 
       const page = await resourceRead(client, (ctx) => client.session.snapshotList!(request, ctx));
 
@@ -480,7 +481,7 @@ export function resourceManagers(client: AdapterDirectClient) {
         .strictObject({
           items: z.array(SnapshotInfo).max(request.limit),
           nextCursor: z.string().max(4096).optional(),
-          coverage: z.enum(["provider-scope", "sandbar-managed"]),
+          coverage: z.enum(["provider-scope", "managed"]),
         })
         .parse(page);
 
@@ -525,7 +526,7 @@ export function resourceManagers(client: AdapterDirectClient) {
       const request = validateResourceInput(PageInput, input, "Invalid volume inventory request");
 
       if (!client.session.volumeList)
-        throw new SandbarError("UNSUPPORTED", "Volume inventory is unsupported");
+        throw new BeachsideError("UNSUPPORTED", "Volume inventory is unsupported");
 
       const page = await resourceRead(client, (ctx) => client.session.volumeList!(request, ctx));
 
@@ -535,7 +536,7 @@ export function resourceManagers(client: AdapterDirectClient) {
         .strictObject({
           items: z.array(VolumeInfo).max(request.limit),
           nextCursor: z.string().max(4096).optional(),
-          coverage: z.enum(["provider-scope", "sandbar-managed"]),
+          coverage: z.enum(["provider-scope", "managed"]),
         })
         .parse(page);
 
@@ -574,7 +575,7 @@ export function resourceManagers(client: AdapterDirectClient) {
         .strictObject({
           items: z.array(ImageInfo).max(request.limit),
           nextCursor: z.string().max(4096).optional(),
-          coverage: z.enum(["provider-scope", "sandbar-managed"]),
+          coverage: z.enum(["provider-scope", "managed"]),
         })
         .parse(page);
 
@@ -611,23 +612,23 @@ export type SandboxListInput = { cursor?: string; limit?: number };
  */
 export type SandboxListEntry = {
   id: string;
-  state: import("@sandbar-sdk/adapter").SandboxState;
-  reference: import("@sandbar-sdk/adapter").SandboxReference | null;
+  state: import("@beachside/adapter").SandboxState;
+  reference: import("@beachside/adapter").SandboxReference | null;
   labels: Record<string, string> | null;
   createdAt: string | null;
 };
 
-/** A bounded page of sandboxes and whether it covers the provider scope or only Sandbar-created ones. */
+/** A bounded page of sandboxes and whether it covers the provider scope or only Beachside-created ones. */
 export type SandboxList = {
   items: SandboxListEntry[];
   nextCursor?: string;
-  coverage: "provider-scope" | "sandbar-managed";
+  coverage: "provider-scope" | "managed";
 };
 
 const SandboxListPage = z.strictObject({
   items: z.array(SandboxListItem).max(100),
   nextCursor: z.string().max(4096).optional(),
-  coverage: z.enum(["provider-scope", "sandbar-managed"]),
+  coverage: z.enum(["provider-scope", "managed"]),
 });
 
 export async function listSandboxes(
@@ -644,14 +645,14 @@ export async function listSandboxes(
 
   const list = client.session.sandboxList?.bind(client.session);
 
-  if (!list) throw new SandbarError("UNSUPPORTED", "Sandbox listing is unsupported");
+  if (!list) throw new BeachsideError("UNSUPPORTED", "Sandbox listing is unsupported");
 
   let page: Awaited<ReturnType<typeof list>>;
 
   try {
     page = await resourceRead(client, (ctx) => list(request, ctx));
   } catch (error) {
-    if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+    if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
     throw error;
   }
 
@@ -659,13 +660,13 @@ export async function listSandboxes(
   const parsed = SandboxListPage.safeParse(page);
 
   if (!parsed.success || parsed.data.items.length > request.limit)
-    throw new SandbarError("INVALID_RESPONSE", "Provider returned an invalid sandbox list");
+    throw new BeachsideError("INVALID_RESPONSE", "Provider returned an invalid sandbox list");
 
   for (const item of parsed.data.items) {
     if (!item.reference) continue;
 
     if (item.reference.nativeId !== item.id || item.reference.history !== undefined)
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_RESPONSE",
         "Provider listed an inconsistent sandbox reference",
       );
@@ -674,7 +675,10 @@ export async function listSandboxes(
       assertResourceScope(item.reference, { provider: client.provider, scope: client.scope });
     } catch (error) {
       if (error instanceof AdapterError)
-        throw new SandbarError("INVALID_RESPONSE", "Provider listed a sandbox outside this scope");
+        throw new BeachsideError(
+          "INVALID_RESPONSE",
+          "Provider listed a sandbox outside this scope",
+        );
       throw error;
     }
   }
@@ -724,7 +728,7 @@ export function decodeCapture(
 
 export function decodeResourceResult(
   client: AdapterDirectClient,
-  result: import("@sandbar-sdk/adapter").RuntimeResult,
+  result: import("@beachside/adapter").RuntimeResult,
   ref: AdapterRecoveryReference,
 ) {
   if (result.kind !== "completed") throw new OutcomeUnknownError(ref);

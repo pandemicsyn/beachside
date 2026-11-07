@@ -25,20 +25,20 @@ for (const fixture of ["qualify", "http", "benchmark", "faults"]) {
 for (const runtime of ["node", "bun"]) {
   for (const recipe of ["otel", "sentry", "datadog"]) {
     for (const sampling of ["on", "off"])
-      run(runtime === "node" ? (process.env.SANDBAR_NODE_BINARY ?? "node") : runtime, [
+      run(runtime === "node" ? (process.env.BEACHSIDE_NODE_BINARY ?? "node") : runtime, [
         "packages/sdk-qualification/dist/observability-qualify.mjs",
         recipe,
         sampling,
       ]);
   }
 
-  run(runtime === "node" ? (process.env.SANDBAR_NODE_BINARY ?? "node") : runtime, [
+  run(runtime === "node" ? (process.env.BEACHSIDE_NODE_BINARY ?? "node") : runtime, [
     "packages/sdk-qualification/dist/observability-http.mjs",
   ]);
-  run(runtime === "node" ? (process.env.SANDBAR_NODE_BINARY ?? "node") : runtime, [
+  run(runtime === "node" ? (process.env.BEACHSIDE_NODE_BINARY ?? "node") : runtime, [
     "packages/sdk-qualification/dist/observability-benchmark.mjs",
   ]);
-  run(runtime === "node" ? (process.env.SANDBAR_NODE_BINARY ?? "node") : runtime, [
+  run(runtime === "node" ? (process.env.BEACHSIDE_NODE_BINARY ?? "node") : runtime, [
     "packages/sdk-qualification/dist/observability-faults.mjs",
   ]);
 }

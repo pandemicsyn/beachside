@@ -1,6 +1,6 @@
-import { Sandbar, Image, type SandboxReference } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
-import { e2b } from "@sandbar-sdk/e2b";
+import { Beachside, Image, type SandboxReference } from "beachside";
+import { daytona } from "@beachside/daytona";
+import { e2b } from "@beachside/e2b";
 
 // Provider changes stay in setup. Memory preservation also meets a filesystem minimum.
 export const daytonaSetup = (apiKey: string) =>
@@ -23,7 +23,7 @@ export async function saveWorkspace(
   preparedImage: string,
   save: (reference: SandboxReference) => Promise<void>,
 ) {
-  const client = await Sandbar.connect(adapter);
+  const client = await Beachside.connect(adapter);
 
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared(preparedImage) });
@@ -49,7 +49,7 @@ export async function finishWorkspace(
   adapter: ReturnType<typeof daytona>,
   saved: SandboxReference,
 ) {
-  const client = await Sandbar.connect(adapter);
+  const client = await Beachside.connect(adapter);
 
   try {
     const box = await client.sandboxes.get(saved); // Inactive compute stays inactive.

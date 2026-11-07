@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { adapterSuite, snapshotSuite } from "@sandbar-sdk/adapter/testing";
-import { Image, NonzeroExitError, OutcomeUnknownError, Preserve, Sandbar } from "sandbar-sdk";
+import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
+import { Image, NonzeroExitError, OutcomeUnknownError, Preserve, Beachside } from "beachside";
 import type { z } from "zod";
 import { createRunloopAdapter, uuidv7 } from "./adapter";
 import { runloopFixture } from "./fixture.test-support";
@@ -24,7 +24,7 @@ function setup() {
   });
 
   const connect = (config: z.input<typeof adapter.config> = internet) =>
-    Sandbar.connect({ adapter, config, credentials: { apiKey: "fixture-main" } });
+    Beachside.connect({ adapter, config, credentials: { apiKey: "fixture-main" } });
 
   return { fixture, adapter, connect };
 }
@@ -68,10 +68,10 @@ test("setup verifies an enabled account and rejects unsupported inputs before an
   const { fixture, adapter, connect } = setup();
 
   await expect(
-    Sandbar.connect({ adapter, config: {}, credentials: { apiKey: "fixture-disabled" } }),
+    Beachside.connect({ adapter, config: {}, credentials: { apiKey: "fixture-disabled" } }),
   ).rejects.toMatchObject({ code: "FORBIDDEN" });
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { lifecycle: { lifetimeSeconds: 600, idleSeconds: 300 } },
       credentials: { apiKey: "fixture-main" },
@@ -97,7 +97,7 @@ test("setup verifies an enabled account and rejects unsupported inputs before an
 test("blocked egress finds or creates one deny-all policy and attaches it", async () => {
   const { fixture, connect } = setup();
   // A policy with the right name but open egress is never used for blocked.
-  const open = fixture.addPolicy("sandbar-blocked", true);
+  const open = fixture.addPolicy("beachside-blocked", true);
   const client = await connect({});
 
   try {
@@ -162,8 +162,8 @@ test("create records the attempt, sets lifetime, tunnel and env, and resolves bl
       tunnel: { auth_mode: "authenticated" },
       environment_variables: { TOKEN: "secret value" },
       metadata: {
-        sandbar_operation: expect.any(String),
-        sandbar_submission: expect.any(String),
+        beachside_operation: expect.any(String),
+        beachside_submission: expect.any(String),
       },
     });
     expect(body).not.toHaveProperty("blueprint_id");
@@ -191,7 +191,7 @@ test("create records the attempt, sets lifetime, tunnel and env, and resolves bl
 test("resources pick the smallest Runloop size; idle windows replace the lifetime", async () => {
   const { fixture, adapter } = setup();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { ...internet, resources: { vcpus: 3 }, lifecycle: { idleSeconds: 600 } },
     credentials: { apiKey: "fixture-main" },
@@ -221,7 +221,7 @@ test("resources pick the smallest Runloop size; idle windows replace the lifetim
     await client.close();
   }
 
-  const custom = await Sandbar.connect({
+  const custom = await Beachside.connect({
     adapter,
     config: { ...internet, resources: { vcpus: 12, memoryMiB: 40000 } },
     credentials: { apiKey: "fixture-main" },
@@ -246,7 +246,7 @@ test("resources pick the smallest Runloop size; idle windows replace the lifetim
 
   const before = fixture.calls.length;
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { ...internet, resources: { vcpus: 32 } },
       credentials: { apiKey: "fixture-main" },
@@ -399,8 +399,10 @@ test("large output is downloaded as bytes and its guest directory removed", asyn
     expect(result.stderr).toEqual(result.stdout);
     expect(result.truncated).toBe(false);
     expect(fixture.count("POST", /\/download_file$/)).toBe(2);
-    expect(fixture.commands.at(-1)).toMatch(/^rm -rf -- '\/tmp\/sandbar-exec\.[A-Za-z0-9]{8}'$/);
-    expect(fixture.commands.filter((command) => command.startsWith("sandbar_d="))).toHaveLength(1);
+    expect(fixture.commands.at(-1)).toMatch(/^rm -rf -- '\/tmp\/beachside-exec\.[A-Za-z0-9]{8}'$/);
+    expect(fixture.commands.filter((command) => command.startsWith("beachside_d="))).toHaveLength(
+      1,
+    );
   } finally {
     await client.close();
   }
@@ -493,7 +495,7 @@ test("exec refusals before running reject; lost, truncated or imitated results a
     // User output that imitates the record cannot become a result.
     fixture.overrideCommands(() => ({
       exitCode: 0,
-      stdout: "SANDBAR-EXEC-1 inline 0 1 0\nQQ==\n\nextra",
+      stdout: "BEACHSIDE-EXEC-1 inline 0 1 0\nQQ==\n\nextra",
       stderr: "",
     }));
     await expect(box.exec({ command })).rejects.toBeInstanceOf(OutcomeUnknownError);
@@ -598,7 +600,7 @@ test("snapshots capture, list, inspect, restore and delete with exact identities
     const { snapshot } = await source.snapshot();
     expect(snapshot.reference.ownership).toBe("verified-created");
     expect(structuredClone(fixture.snapshots.get(snapshot.id)?.metadata)).toMatchObject({
-      sandbar_submission: expect.any(String),
+      beachside_submission: expect.any(String),
     });
     expect((await source.inspect()).state).toBe("running");
 
@@ -633,7 +635,7 @@ test("Runloop passes the shared snapshot suite", async () => {
   try {
     await snapshotSuite({
       client,
-      path: "/home/user/sandbar-suite.bin",
+      path: "/home/user/beachside-suite.bin",
       preserve: Preserve.FILESYSTEM,
     });
   } finally {
@@ -690,13 +692,13 @@ test("preview builds the tunnel URL with its header, or an open URL when configu
 test("inventory and listing are account-scoped; another account cannot reopen a reference", async () => {
   const { fixture, adapter } = setup();
 
-  const main = await Sandbar.connect({
+  const main = await Beachside.connect({
     adapter,
     config: internet,
     credentials: { apiKey: "fixture-main" },
   });
 
-  const alt = await Sandbar.connect({
+  const alt = await Beachside.connect({
     adapter,
     config: internet,
     credentials: { apiKey: "fixture-alt" },
@@ -711,7 +713,7 @@ test("inventory and listing are account-scoped; another account cannot reopen a 
     const page = await main.sandboxes.list();
     expect(page.items.map((item) => item.id)).toEqual([mine.id]);
     expect(page.items[0]?.reference?.ownership).toBe("unknown");
-    // Runloop keeps no Sandbar labels; the creation time is native.
+    // Runloop keeps no Beachside labels; the creation time is native.
     expect(page.items[0]).toMatchObject({
       labels: null,
       createdAt: new Date(1_800_000_000_000).toISOString(),
@@ -732,7 +734,7 @@ test("API keys never appear in errors", async () => {
       new Response(JSON.stringify({ message: "key secret-key-123 is invalid" }), { status: 401 }),
   });
 
-  const error = await Sandbar.connect({
+  const error = await Beachside.connect({
     adapter,
     config: internet,
     credentials: { apiKey: "secret-key-123" },

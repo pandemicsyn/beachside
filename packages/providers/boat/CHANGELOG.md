@@ -1,4 +1,4 @@
-# @sandbar-sdk/boat
+# @beachside/boat
 
 ## 0.7.0
 

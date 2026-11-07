@@ -69,6 +69,6 @@ export function binDir(prefix) {
   return windows ? prefix : `${prefix}/bin`;
 }
 
-export function sandbarBin(prefix) {
-  return windows ? `${prefix}\\sandbar.cmd` : `${prefix}/bin/sandbar`;
+export function beachsideBin(prefix) {
+  return windows ? `${prefix}\\beachside.cmd` : `${prefix}/bin/beachside`;
 }

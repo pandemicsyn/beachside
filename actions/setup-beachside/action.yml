@@ -1,18 +1,18 @@
-name: Setup Sandbar
-description: Install the Sandbar CLI and provider adapters, and remove this job's sandboxes when it ends.
-author: Sandbar
+name: Setup Beachside
+description: Install the Beachside CLI and provider adapters, and remove this job's sandboxes when it ends.
+author: Beachside
 branding:
   icon: box
   color: blue
 inputs:
   version:
-    description: CLI version to install, e.g. 0.7.0. Pin it so adapters and the CLI stay in step.
+    description: CLI version to install, e.g. 0.8.0. Pin it so adapters and the CLI stay in step.
     default: latest
   adapters:
     description: Provider ids to install, separated by spaces, commas or new lines (e.g. "e2b daytona").
     default: ""
   provider:
-    description: Provider to use when no profile is configured; sets SANDBAR_PROVIDER for later steps.
+    description: Provider to use when no profile is configured; sets BEACHSIDE_PROVIDER for later steps.
     default: ""
   state-dir:
     description: Where the CLI records sandboxes, images and snapshots. Defaults to a folder under the job's temp directory.
@@ -24,7 +24,7 @@ outputs:
   version:
     description: The installed CLI version.
   state-dir:
-    description: The state folder later steps use (also exported as SANDBAR_STATE_DIR).
+    description: The state folder later steps use (also exported as BEACHSIDE_STATE_DIR).
 runs:
   using: node24
   main: main.mjs

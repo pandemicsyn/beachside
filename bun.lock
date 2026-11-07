@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "sandbar",
+      "name": "beachside",
       "devDependencies": {
         "@changesets/changelog-github": "1.0.0",
         "@changesets/cli": "3.0.0",
@@ -25,22 +25,22 @@
       },
     },
     "apps/docs": {
-      "name": "@sandbar/docs",
+      "name": "@beachside-internal/docs",
       "dependencies": {
         "@astrojs/starlight": "0.42.4",
         "astro": "7.3.5",
       },
       "devDependencies": {
         "@astrojs/check": "0.9.6",
-        "@sandbar-sdk/adapter": "workspace:*",
-        "@sandbar-sdk/boat": "workspace:*",
-        "@sandbar-sdk/boxd": "workspace:*",
-        "@sandbar-sdk/daytona": "workspace:*",
-        "@sandbar-sdk/e2b": "workspace:*",
-        "@sandbar-sdk/modal": "workspace:*",
-        "@sandbar-sdk/runloop": "workspace:*",
-        "@sandbar/provider-fake": "workspace:*",
-        "sandbar-sdk": "workspace:*",
+        "@beachside-internal/provider-fake": "workspace:*",
+        "@beachside/adapter": "workspace:*",
+        "@beachside/boat": "workspace:*",
+        "@beachside/boxd": "workspace:*",
+        "@beachside/daytona": "workspace:*",
+        "@beachside/e2b": "workspace:*",
+        "@beachside/modal": "workspace:*",
+        "@beachside/runloop": "workspace:*",
+        "beachside": "workspace:*",
         "satteri": "0.10.5",
         "typescript": "5.9.3",
         "wrangler": "4.141.0",
@@ -48,175 +48,175 @@
       },
     },
     "examples": {
-      "name": "@sandbar/agent-examples",
+      "name": "@beachside-internal/agent-examples",
       "dependencies": {
-        "@sandbar-sdk/daytona": "workspace:*",
-        "@sandbar-sdk/e2b": "workspace:*",
-        "sandbar-sdk": "workspace:*",
+        "@beachside/daytona": "workspace:*",
+        "@beachside/e2b": "workspace:*",
+        "beachside": "workspace:*",
       },
     },
     "packages/adapter": {
-      "name": "@sandbar-sdk/adapter",
+      "name": "@beachside/adapter",
       "version": "0.7.0",
       "dependencies": {
         "zod": "4.6.5",
       },
     },
     "packages/cli": {
-      "name": "@sandbar-sdk/cli",
+      "name": "@beachside/cli",
       "version": "0.7.0",
       "bin": {
-        "sandbar": "./dist/main.js",
+        "beachside": "./dist/main.js",
       },
       "dependencies": {
-        "@sandbar-sdk/adapter": "workspace:*",
-        "sandbar-sdk": "workspace:*",
+        "@beachside/adapter": "workspace:*",
+        "beachside": "workspace:*",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "@sandbar-sdk/boat": "workspace:*",
-        "@sandbar-sdk/boxd": "workspace:*",
-        "@sandbar-sdk/daytona": "workspace:*",
-        "@sandbar-sdk/e2b": "workspace:*",
-        "@sandbar-sdk/modal": "workspace:*",
-        "@sandbar-sdk/runloop": "workspace:*",
-        "@sandbar-sdk/vercel": "workspace:*",
-        "@sandbar/provider-fake": "workspace:*",
+        "@beachside-internal/provider-fake": "workspace:*",
+        "@beachside/boat": "workspace:*",
+        "@beachside/boxd": "workspace:*",
+        "@beachside/daytona": "workspace:*",
+        "@beachside/e2b": "workspace:*",
+        "@beachside/modal": "workspace:*",
+        "@beachside/runloop": "workspace:*",
+        "@beachside/vercel": "workspace:*",
       },
     },
     "packages/provider-spi": {
-      "name": "@sandbar/provider-spi",
+      "name": "@beachside-internal/provider-spi",
       "version": "0.0.0",
       "dependencies": {
-        "@sandbar-sdk/adapter": "workspace:*",
+        "@beachside/adapter": "workspace:*",
         "zod": "4.6.5",
       },
     },
     "packages/providers/boat": {
-      "name": "@sandbar-sdk/boat",
+      "name": "@beachside/boat",
       "version": "0.7.0",
       "dependencies": {
+        "@beachside/adapter": "workspace:*",
         "@boatdev/sdk": "1.9.9",
-        "@sandbar-sdk/adapter": "workspace:*",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "sandbar-sdk": "workspace:*",
+        "beachside": "workspace:*",
       },
     },
     "packages/providers/boxd": {
-      "name": "@sandbar-sdk/boxd",
+      "name": "@beachside/boxd",
       "version": "0.7.0",
       "dependencies": {
+        "@beachside/adapter": "workspace:*",
         "@boxd-sh/sdk": "0.2.15",
         "@grpc/grpc-js": "1.14.5",
-        "@sandbar-sdk/adapter": "workspace:*",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "sandbar-sdk": "workspace:*",
+        "beachside": "workspace:*",
       },
     },
     "packages/providers/daytona": {
-      "name": "@sandbar-sdk/daytona",
+      "name": "@beachside/daytona",
       "version": "0.7.0",
       "dependencies": {
-        "@sandbar-sdk/adapter": "workspace:*",
+        "@beachside/adapter": "workspace:*",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "@sandbar/provider-spi": "workspace:*",
-        "sandbar-sdk": "workspace:*",
+        "@beachside-internal/provider-spi": "workspace:*",
+        "beachside": "workspace:*",
       },
     },
     "packages/providers/e2b": {
-      "name": "@sandbar-sdk/e2b",
+      "name": "@beachside/e2b",
       "version": "0.7.0",
       "dependencies": {
-        "@sandbar-sdk/adapter": "workspace:*",
+        "@beachside/adapter": "workspace:*",
         "e2b": "2.51.0",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "sandbar-sdk": "workspace:*",
+        "beachside": "workspace:*",
       },
     },
     "packages/providers/fake": {
-      "name": "@sandbar/provider-fake",
+      "name": "@beachside-internal/provider-fake",
       "version": "0.0.0",
       "dependencies": {
-        "@sandbar-sdk/adapter": "workspace:*",
-        "@sandbar/provider-spi": "workspace:*",
+        "@beachside-internal/provider-spi": "workspace:*",
+        "@beachside/adapter": "workspace:*",
         "zod": "4.6.5",
       },
     },
     "packages/providers/modal": {
-      "name": "@sandbar-sdk/modal",
+      "name": "@beachside/modal",
       "version": "0.7.0",
       "dependencies": {
+        "@beachside/adapter": "workspace:*",
         "@bufbuild/protobuf": "2.0.0",
         "@grpc/grpc-js": "1.14.5",
-        "@sandbar-sdk/adapter": "workspace:*",
         "modal": "0.10.1",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "sandbar-sdk": "workspace:*",
+        "beachside": "workspace:*",
       },
     },
     "packages/providers/runloop": {
-      "name": "@sandbar-sdk/runloop",
+      "name": "@beachside/runloop",
       "version": "0.7.0",
       "dependencies": {
-        "@sandbar-sdk/adapter": "workspace:*",
+        "@beachside/adapter": "workspace:*",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "sandbar-sdk": "workspace:*",
+        "beachside": "workspace:*",
       },
     },
     "packages/providers/vercel": {
-      "name": "@sandbar-sdk/vercel",
+      "name": "@beachside/vercel",
       "version": "0.7.0",
       "dependencies": {
-        "@sandbar-sdk/adapter": "workspace:*",
+        "@beachside/adapter": "workspace:*",
         "tar-stream": "3.2.2",
         "zod": "4.6.5",
       },
       "devDependencies": {
         "@types/tar-stream": "3.1.5",
-        "sandbar-sdk": "workspace:*",
+        "beachside": "workspace:*",
       },
     },
     "packages/sdk": {
-      "name": "sandbar-sdk",
+      "name": "beachside",
       "version": "0.7.0",
       "dependencies": {
+        "@beachside/adapter": "workspace:*",
         "@opentelemetry/api": "1.9.1",
-        "@sandbar-sdk/adapter": "workspace:*",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "@sandbar-sdk/daytona": "workspace:*",
-        "@sandbar-sdk/e2b": "workspace:*",
-        "@sandbar/provider-fake": "workspace:*",
+        "@beachside-internal/provider-fake": "workspace:*",
+        "@beachside/daytona": "workspace:*",
+        "@beachside/e2b": "workspace:*",
       },
     },
     "packages/sdk-qualification": {
-      "name": "sandbar-sdk-qualification",
+      "name": "beachside-qualification",
       "dependencies": {
-        "@sandbar-sdk/adapter": "workspace:*",
-        "@sandbar/provider-fake": "workspace:*",
-        "sandbar-sdk": "workspace:*",
+        "@beachside-internal/provider-fake": "workspace:*",
+        "@beachside/adapter": "workspace:*",
+        "beachside": "workspace:*",
         "zod": "4.6.5",
       },
       "devDependencies": {
-        "@sandbar-sdk/boat": "workspace:*",
-        "@sandbar-sdk/boxd": "workspace:*",
-        "@sandbar-sdk/daytona": "workspace:*",
-        "@sandbar-sdk/e2b": "workspace:*",
-        "@sandbar-sdk/runloop": "workspace:*",
-        "@sandbar-sdk/vercel": "workspace:*",
+        "@beachside/boat": "workspace:*",
+        "@beachside/boxd": "workspace:*",
+        "@beachside/daytona": "workspace:*",
+        "@beachside/e2b": "workspace:*",
+        "@beachside/runloop": "workspace:*",
+        "@beachside/vercel": "workspace:*",
       },
     },
   },
@@ -274,6 +274,32 @@
     "@babel/parser": ["@babel/parser@7.29.9", "", { "dependencies": { "@babel/types": "^7.29.8" }, "bin": "./bin/babel-parser.js" }, "sha512-CjXrNHTnvqBVqHgdBysY3vk2T8tpJHb5/RMeHJBTyVa9xgugCB0CJTx/3oO8RV2QRQP391RWpB7D6hLjm8V9uA=="],
 
     "@babel/types": ["@babel/types@7.29.8", "", { "dependencies": { "@babel/helper-string-parser": "^7.29.7", "@babel/helper-validator-identifier": "^7.29.7" } }, "sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg=="],
+
+    "@beachside-internal/agent-examples": ["@beachside-internal/agent-examples@workspace:examples"],
+
+    "@beachside-internal/docs": ["@beachside-internal/docs@workspace:apps/docs"],
+
+    "@beachside-internal/provider-fake": ["@beachside-internal/provider-fake@workspace:packages/providers/fake"],
+
+    "@beachside-internal/provider-spi": ["@beachside-internal/provider-spi@workspace:packages/provider-spi"],
+
+    "@beachside/adapter": ["@beachside/adapter@workspace:packages/adapter"],
+
+    "@beachside/boat": ["@beachside/boat@workspace:packages/providers/boat"],
+
+    "@beachside/boxd": ["@beachside/boxd@workspace:packages/providers/boxd"],
+
+    "@beachside/cli": ["@beachside/cli@workspace:packages/cli"],
+
+    "@beachside/daytona": ["@beachside/daytona@workspace:packages/providers/daytona"],
+
+    "@beachside/e2b": ["@beachside/e2b@workspace:packages/providers/e2b"],
+
+    "@beachside/modal": ["@beachside/modal@workspace:packages/providers/modal"],
+
+    "@beachside/runloop": ["@beachside/runloop@workspace:packages/providers/runloop"],
+
+    "@beachside/vercel": ["@beachside/vercel@workspace:packages/providers/vercel"],
 
     "@boatdev/sdk": ["@boatdev/sdk@1.9.9", "", {}, "sha512-VsemzYh6sfLA+XFH5To22rGfwL+rXVy6TlXZ0Zi2bAheh6Iw8c1vdNWdmQxOHV/lSd5eVia3iDx+Cve4Lmlf6Q=="],
 
@@ -775,32 +801,6 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@sandbar-sdk/adapter": ["@sandbar-sdk/adapter@workspace:packages/adapter"],
-
-    "@sandbar-sdk/boat": ["@sandbar-sdk/boat@workspace:packages/providers/boat"],
-
-    "@sandbar-sdk/boxd": ["@sandbar-sdk/boxd@workspace:packages/providers/boxd"],
-
-    "@sandbar-sdk/cli": ["@sandbar-sdk/cli@workspace:packages/cli"],
-
-    "@sandbar-sdk/daytona": ["@sandbar-sdk/daytona@workspace:packages/providers/daytona"],
-
-    "@sandbar-sdk/e2b": ["@sandbar-sdk/e2b@workspace:packages/providers/e2b"],
-
-    "@sandbar-sdk/modal": ["@sandbar-sdk/modal@workspace:packages/providers/modal"],
-
-    "@sandbar-sdk/runloop": ["@sandbar-sdk/runloop@workspace:packages/providers/runloop"],
-
-    "@sandbar-sdk/vercel": ["@sandbar-sdk/vercel@workspace:packages/providers/vercel"],
-
-    "@sandbar/agent-examples": ["@sandbar/agent-examples@workspace:examples"],
-
-    "@sandbar/docs": ["@sandbar/docs@workspace:apps/docs"],
-
-    "@sandbar/provider-fake": ["@sandbar/provider-fake@workspace:packages/providers/fake"],
-
-    "@sandbar/provider-spi": ["@sandbar/provider-spi@workspace:packages/provider-spi"],
-
     "@sentry/bun": ["@sentry/bun@11.1.0", "", { "dependencies": { "@sentry/conventions": "^0.24.0", "@sentry/core": "11.1.0", "@sentry/node": "11.1.0", "@sentry/server-utils": "11.1.0" } }, "sha512-9PNgI56DPBnxcjxlLQPp1Nwd8eKkEzjsw30O5mwrZR07F85NG+A3PevbB7SJVndiVnNKLcZ+LnEigdp//kPr1w=="],
 
     "@sentry/bundler-plugins": ["@sentry/bundler-plugins@11.1.0", "", { "dependencies": { "@sentry/core": "11.1.0", "dotenv": "^17.4.2", "glob": "^13.0.6", "magic-string": "~0.30.8", "oxc-parser": "^0.143.0", "sentry": "^0.44.0", "supports-color": "^8.1.1" }, "peerDependencies": { "@babel/core": "^7.18.5", "rollup": ">=3.2.0", "webpack": ">=5.1.0" }, "optionalPeers": ["@babel/core", "rollup", "webpack"] }, "sha512-0p22SeSdyCnr7PaFkSHZnOzc8lpPlkiA+rsjye9JACR9Hd/n7e9Ssvanw19R7LdqS05foYQSViJIsrVbk45Y3w=="],
@@ -930,6 +930,10 @@
     "bcp-47": ["bcp-47@2.1.1", "", { "dependencies": { "is-alphabetical": "^2.0.0", "is-alphanumerical": "^2.0.0", "is-decimal": "^2.0.0" } }, "sha512-KLw+H/gd2p4zly1X7Yh/qziuyae5/w/QFnvTng9eZL5fvszL7Whl3MBoWF8yxL7ksUjBfOD+OxkytiqbBpG+Fw=="],
 
     "bcp-47-match": ["bcp-47-match@2.0.3", "", {}, "sha512-JtTezzbAibu8G0R9op9zb3vcWZd9JF6M0xOYGPn0fNCd7wOpRB1mU2mH9T8gaBGbAAyIIVgB2G7xG0GP98zMAQ=="],
+
+    "beachside": ["beachside@workspace:packages/sdk"],
+
+    "beachside-qualification": ["beachside-qualification@workspace:packages/sdk-qualification"],
 
     "blake3-wasm": ["blake3-wasm@2.1.5", "", {}, "sha512-F1+K8EbfOZE49dtoPtmxUQrpXaBIl3ICvasLh+nJta0xkz+9kF/7uet9fLnwKqhDrmj6g+6K3Tw9yQPUg2ka5g=="],
 
@@ -1408,10 +1412,6 @@
     "retext-smartypants": ["retext-smartypants@6.2.0", "", { "dependencies": { "@types/nlcst": "^2.0.0", "nlcst-to-string": "^4.0.0", "unist-util-visit": "^5.0.0" } }, "sha512-kk0jOU7+zGv//kfjXEBjdIryL1Acl4i9XNkHxtM7Tm5lFiCog576fjNC9hjoR7LTKQ0DsPWy09JummSsH1uqfQ=="],
 
     "rolldown": ["rolldown@1.2.11", "", { "dependencies": { "@oxc-project/types": "=0.151.0", "@rolldown/pluginutils": "^1.0.0" }, "optionalDependencies": { "@rolldown/binding-android-arm-eabi": "1.2.11", "@rolldown/binding-android-arm64": "1.2.11", "@rolldown/binding-darwin-arm64": "1.2.11", "@rolldown/binding-darwin-x64": "1.2.11", "@rolldown/binding-freebsd-x64": "1.2.11", "@rolldown/binding-linux-arm-gnueabihf": "1.2.11", "@rolldown/binding-linux-arm64-gnu": "1.2.11", "@rolldown/binding-linux-arm64-musl": "1.2.11", "@rolldown/binding-linux-ppc64-gnu": "1.2.11", "@rolldown/binding-linux-s390x-gnu": "1.2.11", "@rolldown/binding-linux-x64-gnu": "1.2.11", "@rolldown/binding-linux-x64-musl": "1.2.11", "@rolldown/binding-openharmony-arm64": "1.2.11", "@rolldown/binding-win32-arm64-msvc": "1.2.11", "@rolldown/binding-win32-x64-msvc": "1.2.11" }, "bin": { "rolldown": "./bin/cli.mjs" } }, "sha512-qpSwIyz0jHQq5qXBTNxFmE6664rJ7O+4TvPFOiOaBSrz8IOHc1koKKSqTM2H6u1UG1+TveuC6vaDHKXFOvb1Kw=="],
-
-    "sandbar-sdk": ["sandbar-sdk@workspace:packages/sdk"],
-
-    "sandbar-sdk-qualification": ["sandbar-sdk-qualification@workspace:packages/sdk-qualification"],
 
     "satteri": ["satteri@0.10.5", "", { "dependencies": { "@types/estree-jsx": "^1.0.5", "@types/hast": "^3.0.5", "@types/mdast": "^4.0.4", "@types/unist": "^3.0.3" }, "optionalDependencies": { "@bruits/satteri-darwin-arm64": "0.10.5", "@bruits/satteri-darwin-x64": "0.10.5", "@bruits/satteri-linux-arm64-gnu": "0.10.5", "@bruits/satteri-linux-arm64-musl": "0.10.5", "@bruits/satteri-linux-x64-gnu": "0.10.5", "@bruits/satteri-linux-x64-musl": "0.10.5", "@bruits/satteri-wasm32-wasi": "0.10.5", "@bruits/satteri-win32-arm64-msvc": "0.10.5", "@bruits/satteri-win32-x64-msvc": "0.10.5" } }, "sha512-Ao1LKpAEa9Wdg0otgbVKViZHEq9ebdXe4DMrp3s9vQAU0HNIuHnFEuMuOcm0ZIXyV0Yzxj91NvhLpvXZJO/5ZQ=="],
 

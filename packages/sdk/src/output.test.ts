@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
 import { runInNewContext } from "node:vm";
-import { defineAdapter } from "@sandbar-sdk/adapter";
-import { Image, Sandbar, outputText, NonzeroExitError, NoExitCodeError } from "./index";
+import { defineAdapter } from "@beachside/adapter";
+import { Image, Beachside, outputText, NonzeroExitError, NoExitCodeError } from "./index";
 import { execOutput } from "./resource";
 
 const encode = (text: string) => new TextEncoder().encode(text);
@@ -214,8 +214,8 @@ test.each([0, 7, null])(
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
-    const fresh = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
+    const fresh = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
     try {
       const box = await client.sandboxes.create({ environment: Image.prepared("base") });

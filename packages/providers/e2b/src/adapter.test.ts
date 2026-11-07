@@ -14,8 +14,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Sandbox, Template } from "e2b";
-import { adapterSuite } from "@sandbar-sdk/adapter/testing";
-import { Image, Sandbar } from "sandbar-sdk";
+import { adapterSuite } from "@beachside/adapter/testing";
+import { Image, Beachside } from "beachside";
 import {
   connectAdapter,
   observeOperation,
@@ -23,7 +23,7 @@ import {
   prepareOperation,
   submitOperation,
   type Json,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { createE2BAdapter } from "./index";
 import {
   assertFiniteStdinWorkflow,
@@ -56,7 +56,7 @@ test("E2B team and template verification is authenticated and scope-specific", a
           templateID: "template_1",
           buildID: "build_1",
           buildStatus: "ready",
-          names: ["team-slug/sandbar-abc:default"],
+          names: ["team-slug/beachside-abc:default"],
         },
       ]);
     },
@@ -66,7 +66,7 @@ test("E2B team and template verification is authenticated and scope-specific", a
   const transport = createSdkTransport("private-key", fetcher);
   await transport.verifyTeam("team_one");
   await transport.verifyTemplate("team_one", "template_1");
-  expect(await transport.findBuild("team_one", "sandbar-abc")).toEqual({
+  expect(await transport.findBuild("team_one", "beachside-abc")).toEqual({
     templateId: "template_1",
     buildId: "build_1",
     status: "ready",
@@ -121,7 +121,7 @@ test("pinned E2B template build submission has one outbound attempt", async () =
 
   try {
     await expect(
-      Template.build(Template().fromImage("node:24"), "sandbar-fixture", {
+      Template.build(Template().fromImage("node:24"), "beachside-fixture", {
         apiKey: "e2b_test_key",
         apiUrl: `http://127.0.0.1:${server.port}`,
         retries: 0,
@@ -317,9 +317,9 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
         finalRuns++;
         finalScripts.push(script);
         finalRunOptions.push(options);
-        const stdoutPath = script.match(/\/tmp\/\.sandbar-[A-Za-z0-9_-]+\.stdout/)?.[0];
-        const stderrPath = script.match(/\/tmp\/\.sandbar-[A-Za-z0-9_-]+\.stderr/)?.[0];
-        const statusPath = script.match(/\/tmp\/\.sandbar-[A-Za-z0-9_-]+\.status/)?.[0];
+        const stdoutPath = script.match(/\/tmp\/\.beachside-[A-Za-z0-9_-]+\.stdout/)?.[0];
+        const stderrPath = script.match(/\/tmp\/\.beachside-[A-Za-z0-9_-]+\.stderr/)?.[0];
+        const statusPath = script.match(/\/tmp\/\.beachside-[A-Za-z0-9_-]+\.status/)?.[0];
 
         if (!stdoutPath || !stderrPath || !statusPath)
           throw new Error("Exec receipt paths missing");
@@ -362,7 +362,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
     close() {},
   };
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createE2BAdapter(() => transport),
     config: { teamId: "team_one", templateId: "template_1" },
     credentials: { apiKey: "private-key" },
@@ -376,7 +376,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
 
     await assertFiniteStdinWorkflow(box, () => stagedInput);
     expect(stagedInput).toEqual(new TextEncoder().encode(finiteStdinInput));
-    expect(stagedPath).toMatch(/^\/tmp\/.sandbar-[A-Za-z0-9_-]+\.stdin\/payload$/);
+    expect(stagedPath).toMatch(/^\/tmp\/.beachside-[A-Za-z0-9_-]+\.stdin\/payload$/);
     expect(scripts[0]).toStartWith("mkdir -m 700 -- ");
     expect(finalScript).toContain(` < '${stagedPath}'`);
     expect(finalScript).toContain("trap 'rm -rf -- \"$stdin_dir\"' EXIT");
@@ -407,7 +407,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
     expect(finalScripts.at(-1)).toContain("< /dev/null");
 
     for (const [index, expectedStatus] of [7, 0, 0].entries()) {
-      const localRoot = await mkdtemp(join(tmpdir(), "sandbar-e2b-stdin-local-"));
+      const localRoot = await mkdtemp(join(tmpdir(), "beachside-e2b-stdin-local-"));
 
       try {
         let localScript = finalScripts[index]!;
@@ -425,7 +425,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
 
         for (const extension of ["stdout", "stderr", "status"]) {
           const remote = localScript.match(
-            new RegExp(`/tmp/\\.sandbar-[A-Za-z0-9_-]+\\.${extension}`),
+            new RegExp(`/tmp/\\.beachside-[A-Za-z0-9_-]+\\.${extension}`),
           )?.[0];
 
           if (!remote) throw new Error(`Missing local ${extension} receipt path`);
@@ -521,7 +521,7 @@ test("GNU ln -T creates only an absent exact target and survives stage cleanup",
 
   if (probe.exitCode !== 0) throw new Error("E2B no-clobber fixture requires GNU ln");
 
-  const root = await mkdtemp(join(tmpdir(), "sandbar-e2b-link-"));
+  const root = await mkdtemp(join(tmpdir(), "beachside-e2b-link-"));
   const stage = join(root, "stage");
   const directory = join(root, "directory");
   const directoryLink = join(root, "directory-link");
@@ -588,10 +588,10 @@ test.each([
       id: "sandbox_1",
       templateId: "template_1",
       metadata: {
-        sandbar_scope: "team_one:template_1",
-        sandbar_template: "template_1",
-        sandbar_submission: "sub_seed",
-        sandbar_operation: "op_seed",
+        beachside_scope: "team_one:template_1",
+        beachside_template: "template_1",
+        beachside_submission: "sub_seed",
+        beachside_operation: "op_seed",
       },
       state: "running",
     };
@@ -626,10 +626,10 @@ test.each([
         scripts.push(script);
 
         if (script.includes(".status")) {
-          files.set("/tmp/.sandbar-sub_exec.stdout", binary);
-          files.set("/tmp/.sandbar-sub_exec.stderr", Uint8Array.from([0, 254]));
+          files.set("/tmp/.beachside-sub_exec.stdout", binary);
+          files.set("/tmp/.beachside-sub_exec.stderr", Uint8Array.from([0, 254]));
           files.set(
-            "/tmp/.sandbar-sub_exec.status",
+            "/tmp/.beachside-sub_exec.status",
             new TextEncoder().encode(mode === "complete" || mode === "stderr-failure" ? "7" : "0"),
           );
 
@@ -750,7 +750,7 @@ test.each([
 
       expect(written).toEqual({ kind: "completed", value: { bytesWritten: 4 } });
       expect(scripts[1]).toContain("ln -T --");
-      expect(files.has("/tmp/.sandbar-write-sub_write")).toBe(false);
+      expect(files.has("/tmp/.beachside-write-sub_write")).toBe(false);
 
       files.set("/tmp/file.bin", Uint8Array.of(42));
       linkAnswer = "EXISTS";
@@ -767,7 +767,7 @@ test.each([
 
       expect(conflict.kind).toBe("rejected");
       expect(files.get("/tmp/file.bin")).toEqual(Uint8Array.of(42));
-      expect(files.has("/tmp/.sandbar-write-sub_conflict")).toBe(false);
+      expect(files.has("/tmp/.beachside-write-sub_conflict")).toBe(false);
     } finally {
       await connection.close();
     }
@@ -869,7 +869,7 @@ test("OCI create builds a correlated E2B template inside submit and reports it a
         reference: { kind: "sandbox", provider: "e2b" },
       },
     });
-    expect(buildName).toMatch(/^sandbar-[a-f0-9]{40}$/);
+    expect(buildName).toMatch(/^beachside-[a-f0-9]{40}$/);
     expect(creates).toBe(1);
 
     const deletion = await prepareOperation(
@@ -1081,7 +1081,7 @@ test("shared image build returns a scoped prepared handle for one native create"
     close() {},
   }));
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { teamId: "team_one", templateId: "template_1" },
     credentials: { apiKey: "secret" },
@@ -1182,7 +1182,7 @@ test("SDK abort settles a stalled E2B build and late outcomes never create a san
       close() {},
     }));
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: { teamId: "team_one", templateId: "template_1" },
       credentials: { apiKey: "secret" },
@@ -1294,7 +1294,7 @@ test.each(["stalled", "output-failure"] as const)(
       close() {},
     }));
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: { teamId: "team_one", templateId: "template_1" },
       credentials: { apiKey: "secret" },
@@ -1363,11 +1363,11 @@ test("uncertain writes and destroy reconcile after reconnect without replay", as
     id: "sandbox_1",
     templateId: "built_template",
     metadata: {
-      sandbar_scope: "team_one:template_1",
-      sandbar_template: "built_template",
-      sandbar_submission: "sub_seed",
-      sandbar_operation: "op_seed",
-      sandbar_build: "sandbar-build",
+      beachside_scope: "team_one:template_1",
+      beachside_template: "built_template",
+      beachside_submission: "sub_seed",
+      beachside_operation: "op_seed",
+      beachside_build: "beachside-build",
     },
     state: "running",
     volumeMounts: [{ name: "kept-volume", path: "/data" }],
@@ -1406,12 +1406,12 @@ test("uncertain writes and destroy reconcile after reconnect without replay", as
     async run(_id, script) {
       if (script.includes("ln -T --")) {
         links++;
-        files.set("/tmp/no.bin", files.get("/tmp/.sandbar-write-sub_no")!);
+        files.set("/tmp/no.bin", files.get("/tmp/.beachside-write-sub_no")!);
         throw new Error("link response lost after effect");
       }
 
       if (script.includes(" -ef "))
-        return files.get("/tmp/no.bin") === files.get("/tmp/.sandbar-write-sub_no")
+        return files.get("/tmp/no.bin") === files.get("/tmp/.beachside-write-sub_no")
           ? "SAME"
           : "DIFFERENT";
 
@@ -1484,7 +1484,7 @@ test("uncertain writes and destroy reconcile after reconnect without replay", as
 
     expect(writes).toBe(2);
     expect(links).toBe(1);
-    expect(files.has("/tmp/.sandbar-write-sub_no")).toBe(true);
+    expect(files.has("/tmp/.beachside-write-sub_no")).toBe(true);
 
     const identity = {
       operationId: "op_destroy",
@@ -1616,11 +1616,11 @@ for (const barrier of ["reject-before", "abort-before", "reject-after"] as const
       templateId: "built_template",
       state: "running",
       metadata: {
-        sandbar_scope: "team_one:template_1",
-        sandbar_build: "owned-build",
-        sandbar_template: "built_template",
-        sandbar_submission: "seed-sub",
-        sandbar_operation: "seed-op",
+        beachside_scope: "team_one:template_1",
+        beachside_build: "owned-build",
+        beachside_template: "built_template",
+        beachside_submission: "seed-sub",
+        beachside_operation: "seed-op",
       },
       volumeMounts: [{ name: "retained-name", path: "/data" }],
     };
@@ -1767,11 +1767,11 @@ test.each(["prepare", "submit"] as const)(
       templateId: "built_template",
       state: "running",
       metadata: {
-        sandbar_scope: "team_one:template_1",
-        sandbar_build: "owned-build",
-        sandbar_template: "built_template",
-        sandbar_submission: "seed-sub",
-        sandbar_operation: "seed-op",
+        beachside_scope: "team_one:template_1",
+        beachside_build: "owned-build",
+        beachside_template: "built_template",
+        beachside_submission: "seed-sub",
+        beachside_operation: "seed-op",
       },
       volumeMounts:
         stage === "prepare"

@@ -765,7 +765,7 @@ export async function boxdFixture() {
     failNextSnapshot() {
       snapshotFailure = "fail";
     },
-    /** Save the snapshot under its own name again, outside Sandbar. */
+    /** Save the snapshot under its own name again, outside Beachside. */
     resaveSnapshot(id: string) {
       const record = snapshots.get(id);
 

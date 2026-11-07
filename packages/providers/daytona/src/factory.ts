@@ -1,6 +1,6 @@
 import { createDaytonaAdapter } from "./index";
-import type { ImageInput, Preserve, ResourceMinimums } from "@sandbar-sdk/adapter";
-import { bindAdapter, type BoundAdapter } from "@sandbar-sdk/adapter";
+import type { ImageInput, Preserve, ResourceMinimums } from "@beachside/adapter";
+import { bindAdapter, type BoundAdapter } from "@beachside/adapter";
 
 /** First-party Daytona adapter. Configure `network` once here; omitted create calls use it. Defaults to provider-managed daytona-default egress. */
 export function daytona(options: {

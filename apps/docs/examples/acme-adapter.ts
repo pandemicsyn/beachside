@@ -5,7 +5,7 @@ import {
   ResourceMinimums,
   smallestSize,
   type SandboxResources,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { AcmeClient } from "./acme-native";
 
 /** Acme sizes, smallest first. */
@@ -90,7 +90,7 @@ export const acmeAdapter = defineAdapter({
 
 export type AcmeOptions = z.input<typeof Config> & z.input<typeof Credentials>;
 
-/** Packages settings for `Sandbar.connect`; performs no provider IO. */
+/** Packages settings for `Beachside.connect`; performs no provider IO. */
 export function acme({ token, ...config }: AcmeOptions) {
   return bindAdapter(acmeAdapter, config, { token });
 }

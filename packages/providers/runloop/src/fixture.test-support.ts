@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Json } from "@sandbar-sdk/adapter";
+import type { Json } from "@beachside/adapter";
 import { z } from "zod";
 
 /**
@@ -137,7 +137,7 @@ export function runloopFixture() {
   const calls: Call[] = [];
   const effects = { create: 0, destroy: 0, release: 0 };
   const commands: string[] = [];
-  const workdir = mkdtempSync(join(tmpdir(), "sandbar-runloop-fixture-"));
+  const workdir = mkdtempSync(join(tmpdir(), "beachside-runloop-fixture-"));
   let sequence = 0;
   let loseNextCreate = false;
   let holdNextCreate = false;
@@ -360,14 +360,14 @@ export function runloopFixture() {
 
     if (method === "GET" && path === "/v1/devboxes/disk_snapshots") {
       const devbox = url.searchParams.get("devbox_id");
-      const submission = url.searchParams.get("metadata[sandbar_submission]");
+      const submission = url.searchParams.get("metadata[beachside_submission]");
 
       const listed = [...snapshots.values()].filter(
         (snapshot) =>
           snapshot.account === account.id &&
           snapshot.status !== "deleted" &&
           (!devbox || snapshot.source === devbox) &&
-          (!submission || snapshot.metadata.sandbar_submission === submission),
+          (!submission || snapshot.metadata.beachside_submission === submission),
       );
 
       return json(200, { snapshots: listed.map(snapshotView), has_more: false });

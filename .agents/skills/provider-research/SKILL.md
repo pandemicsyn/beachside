@@ -1,9 +1,9 @@
 ---
 name: provider-research
-description: Research a sandbox provider and draft or update a GitHub issue that maps native APIs and guarantees to a Sandbar adapter implementation brief. Use before implementing a provider or investigating gaps in an existing adapter.
+description: Research a sandbox provider and draft or update a GitHub issue that maps native APIs and guarantees to a Beachside adapter implementation brief. Use before implementing a provider or investigating gaps in an existing adapter.
 ---
 
-# Research a Sandbar provider
+# Research a Beachside provider
 
 Use the [issue template](../../../.github/ISSUE_TEMPLATE/provider-research.md) to produce a concise, source-backed implementation brief. Keep the issue as the research record; do not create a duplicate provider dossier in specs. The goal is to let an implementer identify the useful scope, decisions and next tasks quickly.
 
@@ -19,11 +19,11 @@ Read the [issue conventions](../../../.github/provider-research-conventions.md) 
 
 Read supplied issues/discussion, preserve user decisions, and search the selected repository for prior research before proposing a duplicate. If instructed not to consult earlier research, state that limitation rather than claiming none exists.
 
-Read current `packages/adapter/src/index.ts`, the [capability guide](../../../apps/docs/src/content/docs/docs/guides/adapter-capabilities.md), [package conventions](../../../specs/package-conventions.md), and [add-provider](../add-provider/SKILL.md). For state features, consult the relevant [state portability](../../../specs/provider-state-portability.md) sections and implemented types; [recovery DX](../../../specs/sdk-recovery-dx.md) is planned direction. Record the Sandbar revision. Native support, current exports and proposals are separate facts.
+Read current `packages/adapter/src/index.ts`, the [capability guide](../../../apps/docs/src/content/docs/docs/guides/adapter-capabilities.md), [package conventions](../../../specs/package-conventions.md), and [add-provider](../add-provider/SKILL.md). For state features, consult the relevant [state portability](../../../specs/provider-state-portability.md) sections and implemented types; [recovery DX](../../../specs/sdk-recovery-dx.md) is planned direction. Record the Beachside revision. Native support, current exports and proposals are separate facts.
 
 ## Research to the needed depth
 
-Browse official docs, API references, changelogs and the exact SDK/source version. Pin source evidence where it matters for identities, hidden retries, automatic effects and deletion. Cite consequential claims with version/date; distinguish documented support, source inspection and authorized live evidence. Missing or conflicting evidence stays unknown, not unsupported. Native support never implies a Sandbar implementation or live pass. Distinguish the exact published SDK artifact from upstream source, even when their version strings match; identify unreleased capabilities and do not use them as evidence that an installed dependency supports an operation.
+Browse official docs, API references, changelogs and the exact SDK/source version. Pin source evidence where it matters for identities, hidden retries, automatic effects and deletion. Cite consequential claims with version/date; distinguish documented support, source inspection and authorized live evidence. Missing or conflicting evidence stays unknown, not unsupported. Native support never implies a Beachside implementation or live pass. Distinguish the exact published SDK artifact from upstream source, even when their version strings match; identify unreleased capabilities and do not use them as evidence that an installed dependency supports an operation.
 
 Classify all 11 capabilities in the single matrix. State important missing subfeatures even when the baseline is supported. Investigate the selected scope deeply enough for concrete native call sequences, completion evidence, authenticated identity/scope, retry behavior, bytes/bounds, network enforcement and recovery/cleanup. For deferred features, record native support, material constraints, sources and future questions briefly; do not design their implementations or qualification campaigns.
 
@@ -35,14 +35,14 @@ Give each fact one primary home:
 
 - Opening brief: roughly 200 words on the recommendation, useful user workflow, scope/defaults and next step. Reference decision IDs for blockers.
 - Provider/target: identity, versions, environment and packaging/transport rationale.
-- One capability matrix: short native status/evidence and Sandbar mapping, with links to detail.
+- One capability matrix: short native status/evidence and Beachside mapping, with links to detail.
 - One decision table: material choices, contract conflicts and open work, with evidence, alternatives, next action and affected operation/stage.
 - Initial recipes: concrete mechanics only for selected operations; shared recovery/cleanup once.
 - Delivery/validation: ordered tasks and provider-specific proof, referencing decisions and recipes. Use [qualify-provider](../qualify-provider/SKILL.md) for standard acceptance rules rather than copying them.
 
 Classify open items as **product decision**, **feasibility investigation**, **implementation task**, or **validation gate**. Ordinary schema mapping, response validation, fixtures and small adapter-owned helpers belong to implementation unless evidence exposes a deeper problem. Distinguish missing native endpoints from missing achievable guarantees: encoding bytes before a text transport, safe argv mapping and lifecycle orchestration can bridge native differences without changing the public SDK. Keep the capability matrix honest about native support, and describe the proposed adapter mechanism separately. For an uncertain mechanism, name the focused experiment and acceptance evidence needed; do not treat a missing one-to-one native API as a blanket implementation blocker. Follow the boundaries in [add-provider](../add-provider/SKILL.md#bridge-native-differences-inside-the-adapter). A test required before release does not itself block starting work. Research can be complete while a feasibility issue remains; optional absent capabilities need not block the useful slice. Highlight a product decision if essential execution or cleanup is omitted instead of silently shrinking the promised workflow.
 
-Check proposed defaults and guarantees against Sandbar contracts, including orchestration beyond the native endpoint. Put a conflict and proposed resolution in the decision table, not a separate compatibility inventory. Do not weaken contracts, invent authority or treat a risk caveat as a fix. Examples must be labeled proposed/uncompiled unless validated; include concrete inputs such as an image selector where useful.
+Check proposed defaults and guarantees against Beachside contracts, including orchestration beyond the native endpoint. Put a conflict and proposed resolution in the decision table, not a separate compatibility inventory. Do not weaken contracts, invent authority or treat a risk caveat as a fix. Examples must be labeled proposed/uncompiled unless validated; include concrete inputs such as an image selector where useful.
 
 Avoid repeated API inventories and warnings across tables, prose, recipes and tests. Cross-reference a decision ID or recipe instead. Use a collapsed evidence appendix only when substantial supporting detail is necessary; remove duplicates rather than hide them. Stop broad research once the requested scope has evidence or specific actionable unknowns; do not expand it to resolve every deferred feature.
 

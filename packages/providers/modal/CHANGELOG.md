@@ -1,4 +1,4 @@
-# @sandbar-sdk/modal
+# @beachside/modal
 
 ## 0.7.0
 

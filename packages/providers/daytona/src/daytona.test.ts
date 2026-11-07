@@ -12,10 +12,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import type { ExecCommand } from "@sandbar-sdk/adapter/portable";
+import type { ExecCommand } from "@beachside/adapter/portable";
 import { daytonaProvider, daytonaRegistration, createDaytonaAdapter, DaytonaDriver } from "./index";
-import { NonzeroExitError, Sandbar } from "sandbar-sdk";
-import { ProviderReadError } from "@sandbar/provider-spi";
+import { NonzeroExitError, Beachside } from "beachside";
+import { ProviderReadError } from "@beachside-internal/provider-spi";
 import {
   assertFiniteStdinWorkflow,
   finiteStdinInput,
@@ -74,7 +74,7 @@ const identity = (submissionId: string) => ({
   submissionId,
 });
 
-type NativeLabels = { "sandbar.submission"?: string; "sandbar.operation"?: string };
+type NativeLabels = { "beachside.submission"?: string; "beachside.operation"?: string };
 
 type FixtureJson =
   | null
@@ -507,7 +507,7 @@ test("verified direct scope, read-only preparation, one create, exact binary exe
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
 
-      if (command.startsWith("mkdir -m 700 -- ") && !command.includes("SANDBAR-EXEC-V1"))
+      if (command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1"))
         return Response.json({ exitCode: 0, result: "" });
 
       if (command.startsWith("cat ")) {
@@ -522,7 +522,7 @@ test("verified direct scope, read-only preparation, one create, exact binary exe
 
       return json({
         exitCode: 0,
-        result: "SANDBAR-EXEC-V1\n7\n2\n1\n 00 ff\nSANDBAR-STDERR\n 7f\nSANDBAR-END\n",
+        result: "BEACHSIDE-EXEC-V1\n7\n2\n1\n 00 ff\nBEACHSIDE-STDERR\n 7f\nBEACHSIDE-END\n",
       });
     }
 
@@ -558,7 +558,7 @@ test("verified direct scope, read-only preparation, one create, exact binary exe
   expect(provider.scope.accountId).toBe("org-1");
   expect(provider.scope.endpoint).toBe(apiUrl);
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createDaytonaAdapter(fetchImpl),
     config: { target: "us", networkPolicy: "blocked" },
     credentials: { apiKey: "private-key" },
@@ -645,7 +645,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
 
       if (
         request.command.startsWith("mkdir -m 700 -- ") &&
-        !request.command.includes("SANDBAR-EXEC-V1")
+        !request.command.includes("BEACHSIDE-EXEC-V1")
       ) {
         if (reservationBehavior === "lost") throw new Error("Reservation response lost");
 
@@ -667,7 +667,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
 
       return json({
         exitCode: 0,
-        result: `SANDBAR-EXEC-V1\n${exitCode}\n${stdout.length}\n${first ? 3 : 0}\n${stdoutHex}\nSANDBAR-STDERR\n${stderrBytes}\nSANDBAR-END\n`,
+        result: `BEACHSIDE-EXEC-V1\n${exitCode}\n${stdout.length}\n${first ? 3 : 0}\n${stdoutHex}\nBEACHSIDE-STDERR\n${stderrBytes}\nBEACHSIDE-END\n`,
       });
     }
 
@@ -699,7 +699,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
     throw new Error(`Unexpected ${url.pathname}`);
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createDaytonaAdapter(fetchImpl),
     config: { target: "us", networkPolicy: "blocked" },
     credentials: { apiKey: "private-key" },
@@ -712,13 +712,13 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
 
     await assertFiniteStdinWorkflow(box, () => submittedInput);
     expect(submittedInput).toEqual(new TextEncoder().encode(finiteStdinInput));
-    expect(stagedPath).toMatch(/^\/tmp\/.sandbar-exec-stdin-[a-f0-9]+\/payload$/);
+    expect(stagedPath).toMatch(/^\/tmp\/.beachside-exec-stdin-[a-f0-9]+\/payload$/);
     expect(finalCwd).toBe("/tmp");
     expect(finalCommand).toContain("FINITE_STDIN_FIXTURE='selected'; export FINITE_STDIN_FIXTURE;");
     expect(finalCommand).toContain("cat; printf out; printf err >&2; exit 7");
     expect(finalCommand).toContain('trap \'rm -rf "$d" "$stdin_dir"\' EXIT');
     expect(finalCommand).toContain(` < '${stagedPath}'`);
-    expect(finalCommand).toContain("SANDBAR-END");
+    expect(finalCommand).toContain("BEACHSIDE-END");
 
     const empty = await box.exec({
       command: { kind: "shell", script: "cat >/dev/null; exit 0" },
@@ -742,7 +742,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
     expect(finalCommand).toContain("< /dev/null");
 
     for (const [index, expectedStatus] of [7, 0, 0].entries()) {
-      const localRoot = mkdtempSync(join(tmpdir(), "sandbar-daytona-stdin-local-"));
+      const localRoot = mkdtempSync(join(tmpdir(), "beachside-daytona-stdin-local-"));
 
       try {
         let localScript = finalCommands[index]!;
@@ -770,12 +770,12 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
 
         expect(execution.error).toBeUndefined();
         expect(execution.status).toBe(0);
-        expect(execution.stdout).toContain(`SANDBAR-EXEC-V1\n${expectedStatus}\n`);
-        expect(execution.stdout).toContain("SANDBAR-END\n");
+        expect(execution.stdout).toContain(`BEACHSIDE-EXEC-V1\n${expectedStatus}\n`);
+        expect(execution.stdout).toContain("BEACHSIDE-END\n");
         expect(execution.stderr).toBe("");
 
         if (index === 0) {
-          const outputFrame = /SANDBAR-EXEC-V1\n7\n\d+\n3\n([\da-f\s]*)SANDBAR-STDERR/.exec(
+          const outputFrame = /BEACHSIDE-EXEC-V1\n7\n\d+\n3\n([\da-f\s]*)BEACHSIDE-STDERR/.exec(
             execution.stdout,
           );
 
@@ -786,8 +786,8 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
               ...new TextEncoder().encode("out"),
             ]),
           );
-          expect(execution.stdout).toMatch(/SANDBAR-STDERR\n\s+65\s+72\s+72/);
-        } else expect(execution.stdout).toContain(`SANDBAR-EXEC-V1\n0\n0\n0\nSANDBAR-STDERR`);
+          expect(execution.stdout).toMatch(/BEACHSIDE-STDERR\n\s+65\s+72\s+72/);
+        } else expect(execution.stdout).toContain(`BEACHSIDE-EXEC-V1\n0\n0\n0\nBEACHSIDE-STDERR`);
 
         if (localStage) expect(existsSync(localStage)).toBe(false);
         expect(existsSync(join(localReceiptDirectory, "receipt"))).toBe(true);
@@ -841,7 +841,7 @@ test("unexpected public create response remains unknown without replay", async (
     if (url.pathname === "/api/sandbox" && init?.method === "POST") {
       creates++;
 
-      return Response.json({ ...native("sandbar-public-create"), public: true });
+      return Response.json({ ...native("beachside-public-create"), public: true });
     }
 
     throw new Error(`Unexpected ${url.pathname}`);
@@ -870,11 +870,11 @@ test.each(["stopped", "paused", "archived"])(
   "existing %s sandbox completes create and recovery with unknown readiness",
   async (state) => {
     let creates = 0;
-    const name = "sandbar-settled-create";
+    const name = "beachside-settled-create";
 
     const labels = {
-      "sandbar.submission": "settled-create",
-      "sandbar.operation": "op_settled-create",
+      "beachside.submission": "settled-create",
+      "beachside.operation": "op_settled-create",
     };
 
     const fetchImpl = fixtureFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1023,8 +1023,8 @@ test("lost create response is observed by stable name without replay; scope rota
   let detailLabels: NativeLabels | null = null;
 
   let labels: NativeLabels = {
-    "sandbar.submission": "submit-1",
-    "sandbar.operation": "op_submit-1",
+    "beachside.submission": "submit-1",
+    "beachside.operation": "op_submit-1",
   };
 
   const fetchImpl = fixtureFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1085,7 +1085,7 @@ test("lost create response is observed by stable name without replay; scope rota
       operationId: "wrong-operation",
     }),
   ).toBeNull();
-  labels = { "sandbar.submission": "submit-1" };
+  labels = { "beachside.submission": "submit-1" };
   expect(
     await provider.driver.observe({
       scope: provider.scope,
@@ -1093,7 +1093,7 @@ test("lost create response is observed by stable name without replay; scope rota
       operationId: "op_submit-1",
     }),
   ).toBeNull();
-  labels = { "sandbar.submission": "forged-submission", "sandbar.operation": "op_submit-1" };
+  labels = { "beachside.submission": "forged-submission", "beachside.operation": "op_submit-1" };
   expect(
     await provider.driver.observe({
       scope: provider.scope,
@@ -1101,7 +1101,7 @@ test("lost create response is observed by stable name without replay; scope rota
       operationId: "op_submit-1",
     }),
   ).toBeNull();
-  labels = { "sandbar.operation": "op_submit-1" };
+  labels = { "beachside.operation": "op_submit-1" };
   expect(
     await provider.driver.observe({
       scope: provider.scope,
@@ -1109,7 +1109,7 @@ test("lost create response is observed by stable name without replay; scope rota
       operationId: "op_submit-1",
     }),
   ).toBeNull();
-  labels = { "sandbar.submission": "submit-1", "sandbar.operation": "op_submit-1" };
+  labels = { "beachside.submission": "submit-1", "beachside.operation": "op_submit-1" };
 
   detailPolicy = false;
   expect(
@@ -1146,7 +1146,7 @@ test("lost create response is observed by stable name without replay; scope rota
     }),
   ).toBeNull();
   detailAccount = "org-1";
-  detailLabels = { "sandbar.submission": "forged", "sandbar.operation": "op_submit-1" };
+  detailLabels = { "beachside.submission": "forged", "beachside.operation": "op_submit-1" };
   expect(
     await provider.driver.observe({
       scope: provider.scope,
@@ -1207,7 +1207,7 @@ test("mutable OCI tags reject before mutation", async () => {
     ).supported,
   ).toBe(false);
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createDaytonaAdapter(fetchImpl),
     config: { target: "us", networkPolicy: "blocked" },
     credentials: { apiKey: "key" },
@@ -1239,7 +1239,7 @@ test.each(["container", "windows", undefined] as const)(
 
       if (url.pathname === "/api/regions") return Response.json([region()]);
 
-      if (url.pathname === "/api/snapshots/sandbar-image-oci-1")
+      if (url.pathname === "/api/snapshots/beachside-image-oci-1")
         return new Response(null, { status: 404 });
 
       if (url.pathname === "/api/snapshots" && init?.method === "POST") {
@@ -1300,7 +1300,7 @@ test.each(["container", "windows", undefined] as const)(
     expect(mutations[0]).toEqual({
       path: "/api/snapshots",
       body: {
-        name: "sandbar-image-oci-1",
+        name: "beachside-image-oci-1",
         imageName: "alpine:3.21",
         regionId: "us",
         sandboxClass: "container",
@@ -1323,11 +1323,11 @@ test("lost OCI build response remains unknown with no sandbox submission", async
 
     if (path === "/api/regions") return Response.json([region()]);
 
-    if (path === "/api/snapshots/sandbar-image-oci-lost")
+    if (path === "/api/snapshots/beachside-image-oci-lost")
       return built
         ? Response.json({
             id: "built-lost",
-            name: "sandbar-image-oci-lost",
+            name: "beachside-image-oci-lost",
             imageName: "alpine:3.21",
             organizationId: "org-1",
             state: "active",
@@ -1459,7 +1459,7 @@ test.each(["absent", "file", "directory", "symlink", "missing-exit"] as const)(
           .object({ command: z.string() })
           .parse(JSON.parse(String(init?.body))).command;
 
-        if (command.startsWith("mkdir -m 700 -- ") && !command.includes("SANDBAR-EXEC-V1"))
+        if (command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1"))
           return Response.json({ exitCode: 0, result: "" });
         links++;
 
@@ -1560,7 +1560,7 @@ test("lost staging upload response is read back and committed without another up
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
 
-      if (command.startsWith("mkdir -m 700 -- ") && !command.includes("SANDBAR-EXEC-V1"))
+      if (command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1"))
         return Response.json({ exitCode: 0, result: "" });
       commits++;
 
@@ -1608,14 +1608,15 @@ test("lost exec and upload responses remain unknown after one submission each", 
 
     if (url.pathname === "/api/regions") return Response.json([region()]);
 
-    if (url.pathname === "/api/sandbox/native-1") return Response.json(native("sandbar-existing"));
+    if (url.pathname === "/api/sandbox/native-1")
+      return Response.json(native("beachside-existing"));
 
     if (url.pathname.endsWith("/process/execute")) {
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
 
-      if (command.startsWith("mkdir -m 700 -- ") && !command.includes("SANDBAR-EXEC-V1"))
+      if (command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1"))
         return Response.json({ exitCode: 0, result: "" });
       executes++;
       throw new Error("response lost");
@@ -1742,7 +1743,7 @@ test("cross-wired sandbox identity and malformed execution output never complete
 
     if (url.pathname === "/api/sandbox/native-1")
       return Response.json({
-        ...native("sandbar-existing"),
+        ...native("beachside-existing"),
         id: wrongId ? "native-other" : "native-1",
       });
 
@@ -1798,7 +1799,8 @@ test("POSIX capture wrapper drains a noisy command while retaining only bounded 
 
     if (url.pathname === "/api/regions") return Response.json([region()]);
 
-    if (url.pathname === "/api/sandbox/native-1") return Response.json(native("sandbar-existing"));
+    if (url.pathname === "/api/sandbox/native-1")
+      return Response.json(native("beachside-existing"));
 
     if (url.pathname.endsWith("/process/execute")) {
       const script = z
@@ -1856,7 +1858,8 @@ test("generated capture wrapper isolates utilities from requested PATH and prese
 
     if (url.pathname === "/api/regions") return Response.json([region()]);
 
-    if (url.pathname === "/api/sandbox/native-1") return Response.json(native("sandbar-existing"));
+    if (url.pathname === "/api/sandbox/native-1")
+      return Response.json(native("beachside-existing"));
 
     if (url.pathname.endsWith("/process/execute")) {
       posts++;
@@ -1955,43 +1958,49 @@ test("generated capture wrapper isolates utilities from requested PATH and prese
 test.each([
   [
     "odd hex token",
-    "SANDBAR-EXEC-V1\n0\n1\n0\na\nSANDBAR-STDERR\nSANDBAR-END\n",
+    "BEACHSIDE-EXEC-V1\n0\n1\n0\na\nBEACHSIDE-STDERR\nBEACHSIDE-END\n",
     2,
     "unknown",
     false,
   ],
   [
     "missing captured byte",
-    "SANDBAR-EXEC-V1\n0\n1\n0\nSANDBAR-STDERR\nSANDBAR-END\n",
+    "BEACHSIDE-EXEC-V1\n0\n1\n0\nBEACHSIDE-STDERR\nBEACHSIDE-END\n",
     2,
     "unknown",
     false,
   ],
   [
     "short captured payload",
-    "SANDBAR-EXEC-V1\n0\n2\n0\n00\nSANDBAR-STDERR\nSANDBAR-END\n",
+    "BEACHSIDE-EXEC-V1\n0\n2\n0\n00\nBEACHSIDE-STDERR\nBEACHSIDE-END\n",
     2,
     "unknown",
     false,
   ],
   [
     "wrong stderr allocation",
-    "SANDBAR-EXEC-V1\n0\n2\n1\n00\nSANDBAR-STDERR\nff\nSANDBAR-END\n",
+    "BEACHSIDE-EXEC-V1\n0\n2\n1\n00\nBEACHSIDE-STDERR\nff\nBEACHSIDE-END\n",
     1,
     "unknown",
     false,
   ],
-  ["zero bytes", "SANDBAR-EXEC-V1\n0\n0\n0\nSANDBAR-STDERR\nSANDBAR-END\n", 2, "completed", false],
+  [
+    "zero bytes",
+    "BEACHSIDE-EXEC-V1\n0\n0\n0\nBEACHSIDE-STDERR\nBEACHSIDE-END\n",
+    2,
+    "completed",
+    false,
+  ],
   [
     "full binary bytes",
-    "SANDBAR-EXEC-V1\n0\n2\n0\n00 ff\nSANDBAR-STDERR\nSANDBAR-END\n",
+    "BEACHSIDE-EXEC-V1\n0\n2\n0\n00 ff\nBEACHSIDE-STDERR\nBEACHSIDE-END\n",
     2,
     "completed",
     false,
   ],
   [
     "legitimate truncation",
-    "SANDBAR-EXEC-V1\n0\n2\n1\n00\nSANDBAR-STDERR\nSANDBAR-END\n",
+    "BEACHSIDE-EXEC-V1\n0\n2\n1\n00\nBEACHSIDE-STDERR\nBEACHSIDE-END\n",
     1,
     "completed",
     true,
@@ -2010,7 +2019,7 @@ test.each([
       if (url.pathname === "/api/regions") return Response.json([region()]);
 
       if (url.pathname === "/api/sandbox/native-1")
-        return Response.json(native("sandbar-existing"));
+        return Response.json(native("beachside-existing"));
 
       if (url.pathname.endsWith("/process/execute")) {
         posts++;
@@ -2060,7 +2069,8 @@ test("local capture utility failure leaves an incomplete frame that stays unknow
 
     if (url.pathname === "/api/regions") return Response.json([region()]);
 
-    if (url.pathname === "/api/sandbox/native-1") return Response.json(native("sandbar-existing"));
+    if (url.pathname === "/api/sandbox/native-1")
+      return Response.json(native("beachside-existing"));
 
     if (url.pathname.endsWith("/process/execute")) {
       posts++;
@@ -2116,7 +2126,7 @@ test("local capture utility failure leaves an incomplete frame that stays unknow
 });
 
 test("write receipt is atomically published before recovery from a lost response", async () => {
-  const directory = mkdtempSync("/tmp/sandbar-write-receipt-");
+  const directory = mkdtempSync("/tmp/beachside-write-receipt-");
   const target = `${directory}/target`;
   let receiptPath = "";
   let commits = 0;
@@ -2156,7 +2166,7 @@ test("write receipt is atomically published before recovery from a lost response
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
 
-      if (command.startsWith("mkdir -m 700 -- ") && !command.includes("SANDBAR-EXEC-V1")) {
+      if (command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1")) {
         const reserved = spawnSync("sh", ["-c", command], { encoding: "utf8" });
 
         return Response.json({ exitCode: reserved.status, result: reserved.stdout });
@@ -2236,7 +2246,10 @@ test("immediate destroyed response preserves the snapshot label read before DELE
         return Response.json(native("box", "destroyed"));
       }
 
-      return Response.json({ ...native("box"), labels: { "sandbar.imageSnapshot": "retained-1" } });
+      return Response.json({
+        ...native("box"),
+        labels: { "beachside.imageSnapshot": "retained-1" },
+      });
     }
 
     throw new Error(`Unexpected fixture route ${path}`);
@@ -2346,7 +2359,7 @@ test("native destroy preflight read failure is effect-free", async () => {
 test.each(["file", "directory", "lost-reservation"] as const)(
   "private staging preserves caller data and never replays reservation: %s",
   async (mode) => {
-    const directory = mkdtempSync("/tmp/sandbar-stage-collision-");
+    const directory = mkdtempSync("/tmp/beachside-stage-collision-");
     let stage = "";
     let reservations = 0;
     let uploads = 0;
@@ -2434,7 +2447,7 @@ test.each(["exec", "write"] as const)(
   "private %s receipt reservations preserve caller files and symlinks",
   async (kind) => {
     for (const collision of ["file", "directory", "symlink"] as const) {
-      const directory = mkdtempSync("/tmp/sandbar-receipt-collision-");
+      const directory = mkdtempSync("/tmp/beachside-receipt-collision-");
       const victim = `${directory}/caller-owned`;
       writeFileSync(victim, "caller-owned");
       let receiptDirectory = "";
@@ -2463,7 +2476,7 @@ test.each(["exec", "write"] as const)(
             .object({ command: z.string() })
             .parse(JSON.parse(String(init?.body))).command;
 
-          const match = /mkdir -m 700 -- '(\/tmp\/\.sandbar-(?:exec|write)-[^']+)'/.exec(command);
+          const match = /mkdir -m 700 -- '(\/tmp\/\.beachside-(?:exec|write)-[^']+)'/.exec(command);
           expect(match).not.toBeNull();
           receiptDirectory = match![1]!;
 
@@ -2608,7 +2621,7 @@ test.each([{ public: true }, { networkBlockAll: false }])(
         return Response.json({
           ...native("box", state),
           ...drift,
-          labels: { "sandbar.imageSnapshot": "snap-retained" },
+          labels: { "beachside.imageSnapshot": "snap-retained" },
         });
       }
 
@@ -2698,7 +2711,7 @@ test.each(["name", "imageName", "lost-read", "failed-read"] as const)(
 
         return Response.json({
           id: "possible-retained",
-          name: missing === "name" ? undefined : "sandbar-image-incomplete-create",
+          name: missing === "name" ? undefined : "beachside-image-incomplete-create",
           imageName: missing === "imageName" ? undefined : "alpine:3.21",
           organizationId: "org-1",
           state: "building",
@@ -2750,7 +2763,7 @@ test.each([
   "private-tmp",
   "prefix",
 ] as const)("mounted writes preserve private staging and honest effects: %s", async (mode) => {
-  const directory = mkdtempSync("/tmp/sandbar-mounted-write-");
+  const directory = mkdtempSync("/tmp/beachside-mounted-write-");
   const mountPath = `${directory}/mount`;
   const targetDirectory = mode === "prefix" ? `${directory}/mount2` : mountPath;
   mkdirSync(targetDirectory);
@@ -2818,7 +2831,7 @@ test.each([
 
         if (stage.startsWith(mountPath + "/"))
           return Response.json({ exitCode: 126, result: "chmod is unsupported" });
-        expect(stage.startsWith("/tmp/.sandbar-")).toBe(true);
+        expect(stage.startsWith("/tmp/.beachside-")).toBe(true);
         const reserved = spawnSync("sh", ["-c", command], { encoding: "utf8" });
         expect(reserved.status).toBe(0);
 
@@ -2899,10 +2912,10 @@ test.each([
   } finally {
     rmSync(directory, { recursive: true, force: true });
 
-    if (stage && stage.startsWith("/tmp/.sandbar-"))
+    if (stage && stage.startsWith("/tmp/.beachside-"))
       rmSync(stage, { recursive: true, force: true });
 
-    if (receipt && receipt.startsWith("/tmp/.sandbar-write-"))
+    if (receipt && receipt.startsWith("/tmp/.beachside-write-"))
       rmSync(receipt, { recursive: true, force: true });
   }
 });
@@ -3019,7 +3032,7 @@ test("REST 0.218 exec timeout is separate from HTTP observation and original rec
 
       if (!receiptAvailable) return new Response(null, { status: 503 });
 
-      return new Response("SANDBAR-EXEC-V1\n0\n1\n0\n61\nSANDBAR-STDERR\nSANDBAR-END\n");
+      return new Response("BEACHSIDE-EXEC-V1\n0\n1\n0\n61\nBEACHSIDE-STDERR\nBEACHSIDE-END\n");
     }
 
     throw new Error(`Unexpected timeout fixture ${url.pathname}`);

@@ -17,7 +17,7 @@ Keep this opening to roughly 200 words: recommendation and target, minimum usefu
 ## Provider and target
 
 - Official product name, stable provider key, homepage and docs:
-- Research date, Sandbar revision, native API/SDK version and source revision:
+- Research date, Beachside revision, native API/SDK version and source revision:
 - Official TypeScript SDK package/repository; or evidence of absence/unknown availability:
 - Researched configuration: account tier, region, image/runtime class, hosted/self-hosted:
 - Distribution (official separately installed package / third-party package / unknown), support status, and proposed transport:
@@ -26,27 +26,27 @@ Keep this opening to roughly 200 words: recommendation and target, minimum usefu
 
 ## Capability matrix
 
-Keep every row. Native status is `supported`, `unsupported`, `conditional`, or `unknown`; absent documentation means unknown. Use short cells with sources and references to recipes/decisions for detail. Sandbar mapping is `fits current API`, `contract extension needed`, or `out of scope`. Native support does not establish Sandbar implementation or live qualification.
+Keep every row. Native status is `supported`, `unsupported`, `conditional`, or `unknown`; absent documentation means unknown. Use short cells with sources and references to recipes/decisions for detail. Beachside mapping is `fits current API`, `contract extension needed`, or `out of scope`. Native support does not establish Beachside implementation or live qualification.
 
-| Capability       | Native status | Native API / key guarantee or limitation / source | Sandbar mapping; recipe or decision |
-| ---------------- | ------------- | ------------------------------------------------- | ----------------------------------- |
-| `lifecycle`      | unknown       | Not researched                                    |                                     |
-| `exec`           | unknown       | Not researched                                    |                                     |
-| `files`          | unknown       | Not researched                                    |                                     |
-| `snapshots`      | unknown       | Not researched                                    |                                     |
-| `volumes`        | unknown       | Not researched                                    |                                     |
-| `egress`         | unknown       | Not researched                                    |                                     |
-| `ingress`        | unknown       | Not researched                                    |                                     |
-| `suspend-resume` | unknown       | Not researched                                    |                                     |
-| `recovery`       | unknown       | Not researched                                    |                                     |
-| `typescript-sdk` | unknown       | Not researched                                    |                                     |
-| `observability`  | unknown       | Not researched                                    |                                     |
+| Capability       | Native status | Native API / key guarantee or limitation / source | Beachside mapping; recipe or decision |
+| ---------------- | ------------- | ------------------------------------------------- | ------------------------------------- |
+| `lifecycle`      | unknown       | Not researched                                    |                                       |
+| `exec`           | unknown       | Not researched                                    |                                       |
+| `files`          | unknown       | Not researched                                    |                                       |
+| `snapshots`      | unknown       | Not researched                                    |                                       |
+| `volumes`        | unknown       | Not researched                                    |                                       |
+| `egress`         | unknown       | Not researched                                    |                                       |
+| `ingress`        | unknown       | Not researched                                    |                                       |
+| `suspend-resume` | unknown       | Not researched                                    |                                       |
+| `recovery`       | unknown       | Not researched                                    |                                       |
+| `typescript-sdk` | unknown       | Not researched                                    |                                       |
+| `observability`  | unknown       | Not researched                                    |                                       |
 
 For deferred features, this row or a short linked note should cover native support, constraints, sources and the next question. Do not develop future implementation recipes or test budgets unless requested.
 
 ## Decisions and open work
 
-Classify each open item as **product decision**, **feasibility investigation**, **implementation task**, or **validation gate**. Include only material choices/gaps; no placeholder decision per capability. Put contract conflicts here with the exact Sandbar contract/revision, the proposed resolution and the affected operation. Ordinary response validation, schema mapping and tests are implementation work unless specific evidence exposes a feasibility or contract problem.
+Classify each open item as **product decision**, **feasibility investigation**, **implementation task**, or **validation gate**. Include only material choices/gaps; no placeholder decision per capability. Put contract conflicts here with the exact Beachside contract/revision, the proposed resolution and the affected operation. Ordinary response validation, schema mapping and tests are implementation work unless specific evidence exposes a feasibility or contract problem.
 
 | ID / class | Question or decision; evidence / relevant contract | Recommendation / alternatives | Next action | Blocks what, and when? |
 | ---------- | -------------------------------------------------- | ----------------------------- | ----------- | ---------------------- |

@@ -1,11 +1,11 @@
-# Run OpenCode with Sandbar
+# Run OpenCode with Beachside
 
 Two small TypeScript applications run OpenCode inside a disposable Daytona or E2B sandbox:
 
 - `hello` asks **“What is 2 + 2?”** and prints captured stdout/stderr. It does not create an answer file.
-- `edit` uploads [message.txt](agent-edit-file/message.txt), asks OpenCode to replace `NAME` with `Sandbar`, then reads and displays the changed remote file. The local fixture stays unchanged.
+- `edit` uploads [message.txt](agent-edit-file/message.txt), asks OpenCode to replace `NAME` with `Beachside`, then reads and displays the changed remote file. The local fixture stays unchanged.
 
-Both use Sandbar's public SDK. Provider selection changes setup; the workflows use the same execution and file calls.
+Both use Beachside's public SDK. Provider selection changes setup; the workflows use the same execution and file calls.
 
 ## Setup
 
@@ -24,7 +24,7 @@ Edit `examples/.env.local` with the credentials for your selected sandbox provid
 | Daytona | `DAYTONA_API_KEY`, `DAYTONA_TARGET`, `DAYTONA_SNAPSHOT` | An active Linux snapshot in your target region. `daytona-default` is selected on the connection; your organization's policy must permit GitHub release downloads and model endpoints. |
 | E2B | `E2B_API_KEY`; optional `E2B_TEMPLATE_ID` (default `base`) | A ready Linux template. Creation explicitly requests `internet`. |
 
-The guest image needs glibc-based Linux on x64 or arm64, `curl`, `tar`, `sha256sum`, `/bin/sh`, Python 3 and the adapter's standard shell/file utilities; see the [Daytona](../apps/docs/src/content/docs/docs/providers/daytona.md#image-requirements) and [E2B](../apps/docs/src/content/docs/docs/providers/e2b.md#files-and-commands) guides. The guest working directory is `/tmp/sandbar-agent-example`. OpenCode is installed under its `opencode/` subdirectory. Installation downloads the pinned standalone binary from GitHub releases (the x64 baseline build avoids an AVX2 requirement) and verifies its pinned SHA-256 digest before extraction. It requires outbound GitHub access; model execution needs access to the selected model service.
+The guest image needs glibc-based Linux on x64 or arm64, `curl`, `tar`, `sha256sum`, `/bin/sh`, Python 3 and the adapter's standard shell/file utilities; see the [Daytona](../apps/docs/src/content/docs/docs/providers/daytona.md#image-requirements) and [E2B](../apps/docs/src/content/docs/docs/providers/e2b.md#files-and-commands) guides. The guest working directory is `/tmp/beachside-agent-example`. OpenCode is installed under its `opencode/` subdirectory. Installation downloads the pinned standalone binary from GitHub releases (the x64 baseline build avoids an AVX2 requirement) and verifies its pinned SHA-256 digest before extraction. It requires outbound GitHub access; model execution needs access to the selected model service.
 
 ## Model selection
 
@@ -62,10 +62,10 @@ bun run --cwd examples edit --provider e2b
 Each invocation creates one new sandbox. `hello` prints the agent's answer, normally containing `4`; model wording and CLI decoration can vary. `edit` prints agent output followed by the exact file contents:
 
 ```text
-Hello, Sandbar!
+Hello, Beachside!
 ```
 
-The file example fails if the returned file differs from `Hello, Sandbar!\n`. Captured agent stdout and stderr are forwarded to the corresponding local streams. Installation has a 16 KiB output bound; agent output has a 64 KiB bound, and truncated output fails the example.
+The file example fails if the returned file differs from `Hello, Beachside!\n`. Captured agent stdout and stderr are forwarded to the corresponding local streams. Installation has a 16 KiB output bound; agent output has a 64 KiB bound, and truncated output fails the example.
 
 ## Lifecycle and validation
 
@@ -77,8 +77,8 @@ Live acceptance passed on October 10, 2026 at source revision `1446cf0a013a6a2b4
 
 | Provider | Passing configuration | Verified results |
 | --- | --- | --- |
-| Daytona | Existing `daytona-small` snapshot, `us` target, `daytona-default` network | Answer contained `4`; remote file was exactly `Hello, Sandbar!\n`. |
-| E2B | Existing `base` template, `internet` network | Answer contained `4`; remote file was exactly `Hello, Sandbar!\n`. |
+| Daytona | Existing `daytona-small` snapshot, `us` target, `daytona-default` network | Answer contained `4`; remote file was exactly `Hello, Beachside!\n`. |
+| E2B | Existing `base` template, `internet` network | Answer contained `4`; remote file was exactly `Hello, Beachside!\n`. |
 
 The live harness imported the actual `hello`, `edit`, installation, provider setup and cleanup functions and ran both workflows sequentially in one owned sandbox per provider. It did not rerun all four standalone CLI invocations above. Initial attempts using npm failed because Daytona lacked npm and E2B's npm install exited 137; the corrected standalone installer passed. All four allocated sandboxes, including those initial attempts, were independently confirmed deleted by provider GET responses returning 404. These results qualify these workflows and configurations at that revision. Offline fixtures cover SDK wiring and failure cleanup; future live sandbox runs require separate authorization.
 

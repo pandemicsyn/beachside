@@ -26,13 +26,13 @@ Allow `client.sandboxes.create()` and `create({ labels: ... })` when the adapter
 Implemented setup, using existing E2B terminology and one additional Daytona option:
 
 ```ts
-const e2bClient = await Sandbar.connect(e2b({
+const e2bClient = await Beachside.connect(e2b({
   apiKey: process.env.E2B_API_KEY!,
   templateId: "base", // existing option; also supplies create()'s default
   networkPolicy: "internet",
 }));
 
-const daytonaClient = await Sandbar.connect(daytona({
+const daytonaClient = await Beachside.connect(daytona({
   apiKey: process.env.DAYTONA_API_KEY!,
   target: "us",
   networkPolicy: "daytona-default",

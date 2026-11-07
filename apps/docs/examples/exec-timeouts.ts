@@ -1,4 +1,4 @@
-import type { SandboxHandle } from "sandbar-sdk";
+import type { SandboxHandle } from "beachside";
 
 /** Caller wait and provider command limits are separate; local abort does not kill compute. */
 export async function runWithWaitBudget(box: SandboxHandle) {

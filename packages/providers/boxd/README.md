@@ -1,12 +1,12 @@
-# @sandbar-sdk/boxd
+# @beachside/boxd
 
-Experimental external boxd adapter for Sandbar. Implementation, offline fixtures and a live baseline are available; Install with `npm install sandbar-sdk @sandbar-sdk/boxd`. Requires Node 20+ or Bun and a boxd **member API key** fenced to your default organization. Native SDK pinned to `@boxd-sh/sdk@0.2.15`.
+Experimental external boxd adapter for Beachside. Implementation, offline fixtures and a live baseline are available; Install with `npm install beachside @beachside/boxd`. Requires Node 20+ or Bun and a boxd **member API key** fenced to your default organization. Native SDK pinned to `@boxd-sh/sdk@0.2.15`.
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { boxdAdapter } from "@sandbar-sdk/boxd";
+import { Beachside } from "beachside";
+import { boxdAdapter } from "@beachside/boxd";
 
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter: boxdAdapter,
   credentials: { apiKey: process.env.BOXD_API_KEY! },
   config: { org: "my-org", network: "internet" },
@@ -50,7 +50,7 @@ Create uses peer/metadata isolation, with **internet egress allowed**. `isolated
 | Previews | Default public setup, existing pinned route and running scoped compute with browser protection disabled. Read-only lookup. Protected access unsupported. |
 | Strict network policy / builds | Unsupported. OCI images boot directly; there is no image-build artifact. |
 
-Native snapshots capture private disk plus RAM, briefly pause the source (which keeps running) and restore running memory into a new machine. A boxd snapshot name holds only its latest version, so each capture uses a fresh `sandbar-snapshot-<hash>` name derived from the attempt, checkpointed before the native call so a lost response is found by name rather than captured again. The reference's `generation` is the captured version: inspect, restore and delete fail with `CONFLICT` without effects if the name was saved again outside Sandbar. boxd restores by name or id and always boots the latest version, so a restore checks the version first and reports an unknown outcome, with the new machine's identity, if the machine it booted names another version. Restores replay the captured size and network, cannot attach disks and keep `internet` policy; the configured expiry, preview routes and browser-protection setting are applied as on create. Sources with mounted disks are rejected because boxd does not document what capture keeps of them. Connection fate during the pause and snapshot retention are undocumented and reported as unknown; there is no scheduled deletion. Memory exclusion, no-pause capture and fork are not offered.
+Native snapshots capture private disk plus RAM, briefly pause the source (which keeps running) and restore running memory into a new machine. A boxd snapshot name holds only its latest version, so each capture uses a fresh `beachside-snapshot-<hash>` name derived from the attempt, checkpointed before the native call so a lost response is found by name rather than captured again. The reference's `generation` is the captured version: inspect, restore and delete fail with `CONFLICT` without effects if the name was saved again outside Beachside. boxd restores by name or id and always boots the latest version, so a restore checks the version first and reports an unknown outcome, with the new machine's identity, if the machine it booted names another version. Restores replay the captured size and network, cannot attach disks and keep `internet` policy; the configured expiry, preview routes and browser-protection setting are applied as on create. Sources with mounted disks are rejected because boxd does not document what capture keeps of them. Connection fate during the pause and snapshot retention are undocumented and reported as unknown; there is no scheduled deletion. Memory exclusion, no-pause capture and fork are not offered.
 
 ## Disks and cleanup
 
@@ -63,7 +63,7 @@ await box.destroy({ storage: "allow-unconfirmed" });
 await volume.delete();
 ```
 
-You can choose `cleanup: { storage: "allow-unconfirmed" }` when connecting and retain per-call overrides. Compute destruction never deletes independent disks. Returned cleanup details retain actual disk UUIDs and mount paths. Native disks are host-local and exclusive; multi-disk placement can fail even if each disk is individually ready. Flush application writes before teardown; Sandbar does not certify durability, locking or rename semantics. Explicit caller-selected volume deletion checks scope, identity and native attachments, including after a fresh connection.
+You can choose `cleanup: { storage: "allow-unconfirmed" }` when connecting and retain per-call overrides. Compute destruction never deletes independent disks. Returned cleanup details retain actual disk UUIDs and mount paths. Native disks are host-local and exclusive; multi-disk placement can fail even if each disk is individually ready. Flush application writes before teardown; Beachside does not certify durability, locking or rename semantics. Explicit caller-selected volume deletion checks scope, identity and native attachments, including after a fresh connection.
 
 ## Failures and cancellation
 
@@ -81,7 +81,7 @@ Deterministic tests use a local gRPC server and the pinned SDK's public protobuf
 
 Native overwrite/read/readDirectory and finite stdin require no installed helper. Expanded filesystem operations require Python 3 in the selected Linux image. No-clobber writes use `O_EXCL`; stream/copy publication uses same-directory staging and hard links. No-clobber move requires Linux `renameat2`; cross-filesystem rename rejects without a copy/delete fallback. These guarantees target the private filesystem; mounted storage must provide the corresponding filesystem primitives and remains unqualified. Buffered transfers retain the 1 MiB bound; larger files use ordinary `writeFileStream`/`readFileStream`. Streams have bounded application memory and no default whole-file ceiling. Each finite helper is bounded to 30 seconds; SDK transfer inactivity/overall cancellation also applies. Reads observe a changing file, not an immutable snapshot.
 
-Paths are arguments, never interpolated programs. Recursive removal does not walk final symlinks; stat defaults to lstat and exists includes dangling links. Copies accept regular files; destination parents must exist. Interrupted or rejected streamed publication can retain a `.sandbar-<uuid>` file beside the destination. Transfer errors retain its path, byte count and any confirmed destination effect. Inspect and explicitly remove that correlated artifact or destroy owned compute; no mutation is replayed and caller files are never incidental cleanup targets. Buffered exclusive creation has no hidden staging file; an unconfirmed write can leave partial bytes at the requested path. Cancellation of a filesystem helper cancels its native exec group; ordinary user exec still drains locally abandoned observation until its execution deadline.
+Paths are arguments, never interpolated programs. Recursive removal does not walk final symlinks; stat defaults to lstat and exists includes dangling links. Copies accept regular files; destination parents must exist. Interrupted or rejected streamed publication can retain a `.beachside-<uuid>` file beside the destination. Transfer errors retain its path, byte count and any confirmed destination effect. Inspect and explicitly remove that correlated artifact or destroy owned compute; no mutation is replayed and caller files are never incidental cleanup targets. Buffered exclusive creation has no hidden staging file; an unconfirmed write can leave partial bytes at the requested path. Cancellation of a filesystem helper cancels its native exec group; ordinary user exec still drains locally abandoned observation until its execution deadline.
 
 ```ts
 // Public exposure on port 3000 is the default; choose other ports when connecting:
@@ -90,6 +90,6 @@ Paths are arguments, never interpolated programs. Recursive removal does not wal
 const preview = await box.preview(3000); // read-only; requires this configured pinned route
 ```
 
-Public setup disables native browser protection after initial expiry installation. A lost acknowledgement retains the ordinary partial-create reference; observation never repeats that setting. Lookup does not disable protection, pin ports, wake machines or prove listener readiness. Native HTTPS/SSH ingress exists independently of Sandbar preview setup; the `protected` lookup setting does not privatize it. Native inbound traffic may wake sleeping compute.
+Public setup disables native browser protection after initial expiry installation. A lost acknowledgement retains the ordinary partial-create reference; observation never repeats that setting. Lookup does not disable protection, pin ports, wake machines or prove listener readiness. Native HTTPS/SSH ingress exists independently of Beachside preview setup; the `protected` lookup setting does not privatize it. Native inbound traffic may wake sleeping compute.
 
 The new helpers, finite stdin, public preview and size option have deterministic/offline coverage only. The recorded `fcb59d4` live baseline continues to cover only lifecycle, captured execution, native binary overwrite/read and reopening, including its then-unsupported no-clobber assertion. It does not qualify these additions. See [implementation audit and bounded live proposal](qualification/implementation.md).

@@ -1,12 +1,12 @@
-import type { OperationOutcome } from "@sandbar-sdk/adapter";
-import { SnapshotRequest, MountSpec } from "@sandbar-sdk/adapter";
+import type { OperationOutcome } from "@beachside/adapter";
+import { SnapshotRequest, MountSpec } from "@beachside/adapter";
 import type {
   AdapterDirectClient,
   AdapterSandbox,
   AdapterOperation,
   AdapterRecoveryReference,
 } from "./adapter-direct";
-import type { OperationKind, RetainedArtifact, Scope } from "@sandbar-sdk/adapter";
+import type { OperationKind, RetainedArtifact, Scope } from "@beachside/adapter";
 import { z } from "zod";
 import type { AdapterImage, AdapterSnapshot, AdapterVolume } from "./resources";
 import {
@@ -17,7 +17,7 @@ import {
   MAX_EXEC_STDIN_BYTES,
   FilePath,
   type SafeError,
-} from "@sandbar-sdk/adapter/portable";
+} from "@beachside/adapter/portable";
 
 export type PreparedImage = {
   kind: "prepared";
@@ -33,12 +33,12 @@ export type ImageBuildResult = {
    * The built image as a scoped reference for `images.get()` and `images.delete()`. Ownership is
    * `verified-created` only when the adapter proved this build created it; otherwise `unknown`.
    */
-  reference: import("@sandbar-sdk/adapter").ResourceReference<"image">;
+  reference: import("@beachside/adapter").ResourceReference<"image">;
 };
 
-export type { OciImage, ImageInput } from "@sandbar-sdk/adapter";
+export type { OciImage, ImageInput } from "@beachside/adapter";
 
-import type { ImageInput, OciImage } from "@sandbar-sdk/adapter";
+import type { ImageInput, OciImage } from "@beachside/adapter";
 
 export const Image = {
   prepared(value: string | PreparedImage): ImageInput {
@@ -141,8 +141,8 @@ export type OperationHandle<T, K extends OperationKind | undefined = undefined> 
       wait(options?: { signal?: AbortSignal; pollMs?: number }): Promise<T>;
     };
 
-/** @deprecated Use SandbarClient for the complete SDK connection surface. */
-export type DirectSandbarClient = Pick<
+/** @deprecated Use BeachsideClient for the complete SDK connection surface. */
+export type DirectBeachsideClient = Pick<
   AdapterDirectClient,
   | "provider"
   | "capabilities"
@@ -164,9 +164,9 @@ export type SandboxHandle<Advanced extends boolean = false> = Advanced extends t
   : DirectSandboxHandle;
 
 /** Public SDK connection. */
-export type SandbarClient<Advanced extends boolean = false> = Advanced extends true
+export type BeachsideClient<Advanced extends boolean = false> = Advanced extends true
   ? AdapterDirectClient
-  : DirectSandbarClient;
+  : DirectBeachsideClient;
 
 /** A retained snapshot, with independent restore and deletion operations. */
 export type SnapshotHandle = AdapterSnapshot;
@@ -177,7 +177,7 @@ export type ImageHandle = AdapterImage;
 /** Retained storage, with explicit mount descriptors and deletion. */
 export type VolumeHandle = AdapterVolume;
 
-export class SandbarError extends Error {
+export class BeachsideError extends Error {
   constructor(
     readonly code: string,
     message: string,
@@ -186,11 +186,11 @@ export class SandbarError extends Error {
     readonly reference?: RecoveryReference,
   ) {
     super(message);
-    this.name = "SandbarError";
+    this.name = "BeachsideError";
   }
 }
 
-export class UnsupportedFeatureError extends SandbarError {
+export class UnsupportedFeatureError extends BeachsideError {
   constructor(
     readonly feature: string,
     readonly unmetRequirements: readonly string[],
@@ -202,7 +202,7 @@ export class UnsupportedFeatureError extends SandbarError {
 
 export class OutcomeUnknownError<
   R extends RecoveryReference = RecoveryReference,
-> extends SandbarError {
+> extends BeachsideError {
   constructor(
     readonly reference: R,
     message = "Outcome unknown; investigate without blindly resubmitting",
@@ -215,7 +215,7 @@ export class OutcomeUnknownError<
 
 export class WaitAbortedError<
   R extends RecoveryReference = RecoveryReference,
-> extends SandbarError {
+> extends BeachsideError {
   readonly cause: unknown;
   constructor(
     readonly reference: R,
@@ -233,14 +233,14 @@ export class WaitAbortedError<
   }
 }
 
-export class NonzeroExitError extends SandbarError {
+export class NonzeroExitError extends BeachsideError {
   constructor(readonly result: ExecOutput) {
     super("NONZERO_EXIT", `Command exited with code ${result.exitCode}`, "applied");
     this.name = "NonzeroExitError";
   }
 }
 
-export class NoExitCodeError extends SandbarError {
+export class NoExitCodeError extends BeachsideError {
   constructor(readonly result: ExecOutput) {
     super("EXIT_STATUS_UNKNOWN", "Execution completed without an exit code", "applied");
     this.name = "NoExitCodeError";
@@ -313,7 +313,7 @@ function previewOutput(bytes: Uint8Array, options?: { maxBytes?: number }): Outp
 
 export function validateFilePath(path: string): string {
   if (!FilePath.safeParse(path).success)
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid absolute file path");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid absolute file path");
 
   return path;
 }
@@ -352,7 +352,7 @@ export function resolveNetworkPolicy(
   aliases: Readonly<Record<string, string>> = {},
 ): string {
   if (network !== undefined && networkPolicy !== undefined && network !== networkPolicy)
-    throw new SandbarError(
+    throw new BeachsideError(
       "INVALID_ARGUMENT",
       "Pass either network or the deprecated networkPolicy, not both",
     );
@@ -413,19 +413,19 @@ export function validateCreate(
       input.env !== undefined &&
       !CreateEnv.safeParse(input.env).success
     )
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_ARGUMENT",
         "Invalid create env: use at most 128 names matching [A-Za-z_][A-Za-z0-9_]* with string values without NUL, 64 KiB in total",
       );
 
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid create request");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid create request");
   }
 
   const env = parsed.data.env && Object.keys(parsed.data.env).length ? parsed.data.env : undefined;
 
   if (parsed.data.environment === undefined) {
     if (defaultEnvironment === undefined)
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_ARGUMENT",
         "Configure an adapter environment (daytona({ environment: ... })) or pass create({ environment: ... })",
       );
@@ -448,7 +448,7 @@ export function validateCreate(
   );
 
   if (!parsed.data.environment.value.trim())
-    throw new SandbarError("INVALID_ARGUMENT", "A prepared or OCI image is required");
+    throw new BeachsideError("INVALID_ARGUMENT", "A prepared or OCI image is required");
 
   const contract = CreateSandboxInput.safeParse({
     environment:
@@ -461,7 +461,7 @@ export function validateCreate(
     labels: parsed.data.labels,
   });
 
-  if (!contract.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid create request");
+  if (!contract.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid create request");
 
   const resolved: Omit<CreateInput, "network"> & {
     environment: ImageInput;
@@ -486,7 +486,7 @@ export function validateExec(
     : input;
 
   if (options.allowStdin === false && !isArgumentArray(input) && request?.stdin !== undefined)
-    throw new SandbarError("INVALID_ARGUMENT", "stdin is available only for finite exec input");
+    throw new BeachsideError("INVALID_ARGUMENT", "stdin is available only for finite exec input");
 
   let stdin: Uint8Array | undefined;
 
@@ -494,7 +494,7 @@ export function validateExec(
     const parsedInput = ExecStdinInput.safeParse(request.stdin);
 
     if (!parsedInput.success)
-      throw new SandbarError("INVALID_ARGUMENT", "Invalid or oversized execution stdin");
+      throw new BeachsideError("INVALID_ARGUMENT", "Invalid or oversized execution stdin");
 
     stdin =
       parsedInput.data.kind === "text"
@@ -502,7 +502,7 @@ export function validateExec(
         : new Uint8Array(parsedInput.data.value);
 
     if (stdin.byteLength > MAX_EXEC_STDIN_BYTES)
-      throw new SandbarError("INVALID_ARGUMENT", "Execution stdin exceeds the byte bound");
+      throw new BeachsideError("INVALID_ARGUMENT", "Execution stdin exceeds the byte bound");
   }
 
   const parsed = ExecRequest.safeParse({
@@ -514,7 +514,7 @@ export function validateExec(
     output: { capture: "bounded", maxBytes: request?.maxOutputBytes ?? 1_048_576 },
   });
 
-  if (!parsed.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid execution request");
+  if (!parsed.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid execution request");
 
   return {
     command: parsed.data.command,
@@ -584,7 +584,7 @@ export function validateResourceInput<S extends z.ZodType>(
 ): z.output<S> {
   const parsed = schema.safeParse(value);
 
-  if (!parsed.success) throw new SandbarError("INVALID_ARGUMENT", message);
+  if (!parsed.success) throw new BeachsideError("INVALID_ARGUMENT", message);
 
   return parsed.data;
 }

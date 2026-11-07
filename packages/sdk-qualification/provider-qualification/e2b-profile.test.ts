@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { E2BTransport } from "@sandbar-sdk/e2b";
+import type { E2BTransport } from "@beachside/e2b";
 import { e2bConfiguration, e2bConnection } from "./e2b-profile";
 import { LedgerStore, requirePrivateDirectory } from "./ledger";
 import { TestResources } from "../live/fixtures/resources";
@@ -27,7 +27,7 @@ async function fixture(
     failReadAfterNoClobber?: boolean;
   } = {},
 ) {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-e2b-qualification-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-e2b-qualification-"));
   directories.push(directory);
   const ledger = new LedgerStore(directory, crypto.randomUUID());
   await ledger.initialize("e2b", { kind: "borrowed-prepared", class: "prepared" }, config);
@@ -254,7 +254,7 @@ test("E2B profile refuses excessive native lifetime", () => {
 });
 
 test("operator preflight refuses a permissive ledger directory before credentials", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-permissions-fixture-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-permissions-fixture-"));
   directories.push(directory);
   await chmod(directory, 0o755);
   await expect(requirePrivateDirectory(directory)).rejects.toThrow(

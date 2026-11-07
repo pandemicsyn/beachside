@@ -15,10 +15,10 @@ import {
   type TracerProvider,
   type Attributes,
 } from "@opentelemetry/api";
-import { SandbarError, NonzeroExitError, NoExitCodeError } from "./resource";
+import { BeachsideError, NonzeroExitError, NoExitCodeError } from "./resource";
 
 export interface ObservabilityOptions {
-  /** Omission uses the application provider. Sandbar never owns provider shutdown. */
+  /** Omission uses the application provider. Beachside never owns provider shutdown. */
   tracing?: false | { tracerProvider?: TracerProvider };
 }
 
@@ -82,7 +82,7 @@ const codes = new Set([
   "INTERNAL",
 ]);
 
-// Only Sandbar-generated identities, never native locators, are eligible for telemetry.
+// Only Beachside-generated identities, never native locators, are eligible for telemetry.
 export function safeIdentity(value: unknown): string | undefined {
   return typeof value === "string" && /^(sdk|op|sub)_[0-9a-f]{32}$/.test(value) ? value : undefined;
 }
@@ -92,7 +92,7 @@ export function diagnosticContext(value: unknown): Readonly<DiagnosticContext> {
   const record: DiagnosticContext = { recoveryAvailable: false };
 
   try {
-    if (value instanceof SandbarError) {
+    if (value instanceof BeachsideError) {
       const code = Object.getOwnPropertyDescriptor(value, "code")?.value;
       const effect = Object.getOwnPropertyDescriptor(value, "effect")?.value;
 
@@ -147,21 +147,21 @@ function diagnosticAttributes(value: unknown): Attributes {
   const d = diagnosticContext(value);
   const attrs: Attributes = {};
 
-  if (d.errorCode) attrs["sandbar.error.code"] = d.errorCode;
+  if (d.errorCode) attrs["beachside.error.code"] = d.errorCode;
 
-  if (d.effect) attrs["sandbar.effect"] = d.effect;
+  if (d.effect) attrs["beachside.effect"] = d.effect;
 
-  if (d.operationId) attrs["sandbar.operation.id"] = d.operationId;
+  if (d.operationId) attrs["beachside.operation.id"] = d.operationId;
 
-  if (d.submissionId) attrs["sandbar.submission.id"] = d.submissionId;
+  if (d.submissionId) attrs["beachside.submission.id"] = d.submissionId;
 
-  if (d.operationState) attrs["sandbar.operation.state"] = d.operationState;
-  attrs["sandbar.recovery.available"] = d.recoveryAvailable;
+  if (d.operationState) attrs["beachside.operation.state"] = d.operationState;
+  attrs["beachside.recovery.available"] = d.recoveryAvailable;
 
   if (value && typeof value === "object") {
     const retained = retainedCounts.get(value);
 
-    if (retained !== undefined) attrs["sandbar.retained_resource.count"] = retained;
+    if (retained !== undefined) attrs["beachside.retained_resource.count"] = retained;
   }
 
   return attrs;
@@ -232,24 +232,25 @@ function identityKind(value: unknown): string | undefined {
 function callType(name: string): string | undefined {
   if (
     [
-      "sandbar.sandbox.create",
-      "sandbar.sandbox.submit_create",
-      "sandbar.sandbox.check_create",
+      "beachside.sandbox.create",
+      "beachside.sandbox.submit_create",
+      "beachside.sandbox.check_create",
     ].includes(name)
   )
     return "create";
 
-  if (["sandbar.exec", "sandbar.exec.submit"].includes(name)) return "exec";
+  if (["beachside.exec", "beachside.exec.submit"].includes(name)) return "exec";
 
-  if (["sandbar.image.build", "sandbar.image.submit_build"].includes(name)) return "image_build";
+  if (["beachside.image.build", "beachside.image.submit_build"].includes(name))
+    return "image_build";
 
-  if (name === "sandbar.file.write") return "file_write";
+  if (name === "beachside.file.write") return "file_write";
 
-  if (name === "sandbar.file.mkdir") return "file_mkdir";
+  if (name === "beachside.file.mkdir") return "file_mkdir";
 
-  if (name === "sandbar.file.remove") return "file_remove";
+  if (name === "beachside.file.remove") return "file_remove";
 
-  if (name === "sandbar.sandbox.destroy") return "destroy";
+  if (name === "beachside.sandbox.destroy") return "destroy";
 
   return undefined;
 }
@@ -267,7 +268,7 @@ interface CallState {
 
 /** Internal direct SDK instrumentation; never configures OTel globals. */
 export class Telemetry {
-  private readonly owner = Symbol("sandbar.call");
+  private readonly owner = Symbol("beachside.call");
   constructor(
     options: ObservabilityOptions = {},
     private readonly mode: "direct" = "direct",
@@ -310,7 +311,9 @@ export class Telemetry {
       call.last = state;
 
       if (call.transitions++ < 8)
-        attempt(() => call.span.addEvent("sandbar.state", { "sandbar.operation.state": state }));
+        attempt(() =>
+          call.span.addEvent("beachside.state", { "beachside.operation.state": state }),
+        );
       else call.dropped++;
     });
   }
@@ -328,7 +331,7 @@ export class Telemetry {
     });
 
     const span = this.run(name, () => completion, { signal });
-    const cancelled = () => failed(new SandbarError("WAIT_ABORTED", "File stream cancelled"));
+    const cancelled = () => failed(new BeachsideError("WAIT_ABORTED", "File stream cancelled"));
 
     signal?.addEventListener("abort", cancelled, { once: true });
 
@@ -356,7 +359,7 @@ export class Telemetry {
       signal?.removeEventListener("abort", cancelled);
 
       if (!ended) {
-        failed(new SandbarError("WAIT_ABORTED", "File stream consumption ended"));
+        failed(new BeachsideError("WAIT_ABORTED", "File stream consumption ended"));
         await span.catch(() => undefined);
       }
     }
@@ -388,7 +391,7 @@ export class Telemetry {
       enclosing?.operationType;
 
     const provider = this.options.tracing && this.options.tracing.tracerProvider;
-    const scope = "sandbar-sdk";
+    const scope = "beachside";
 
     const span = attempt(() => {
       const tracer = provider
@@ -398,14 +401,14 @@ export class Telemetry {
       const origin = parseTraceParent(options.origin);
 
       const attributes: Attributes = {
-        "sandbar.mode": this.mode,
-        "sandbar.provider": ["daytona", "e2b", "modal", "fake"].includes(this.provider)
+        "beachside.mode": this.mode,
+        "beachside.provider": ["daytona", "e2b", "modal", "fake"].includes(this.provider)
           ? this.provider
           : "custom",
-        "sandbar.operation.type": operationType ?? name.replace(/^sandbar\./, ""),
+        "beachside.operation.type": operationType ?? name.replace(/^beachside\./, ""),
       };
 
-      if (options.phase) attributes["sandbar.phase"] = name.slice(8);
+      if (options.phase) attributes["beachside.phase"] = name.slice(8);
 
       if (options.identity) Object.assign(attributes, diagnosticAttributes(options.identity));
 
@@ -435,7 +438,7 @@ export class Telemetry {
 
     let active = attempt(() => trace.setSpan(parent, span)) ?? parent;
 
-    if (!options.phase || name === "sandbar.wait")
+    if (!options.phase || name === "beachside.wait")
       active = attempt(() => active.setValue(this.owner, state)) ?? parent;
     // Call work once even if a custom context manager throws before/after invoking it.
     let promise: Promise<T> | undefined;
@@ -462,29 +465,29 @@ export class Telemetry {
       if (recording)
         attempt(() => {
           span.setAttributes({
-            "sandbar.call.outcome": "success",
-            "sandbar.effect": options.effect ?? "none",
+            "beachside.call.outcome": "success",
+            "beachside.effect": options.effect ?? "none",
             ...diagnosticAttributes(result),
           });
 
           if (
-            name.startsWith("sandbar.file.") &&
+            name.startsWith("beachside.file.") &&
             typeof result === "number" &&
             Number.isSafeInteger(result)
           )
-            span.setAttribute("sandbar.file.bytes", result);
+            span.setAttribute("beachside.file.bytes", result);
 
-          if (name === "sandbar.wait" || name === "sandbar.operation.wait")
+          if (name === "beachside.wait" || name === "beachside.operation.wait")
             span.setAttributes({
               ...diagnosticAttributes(options.identity),
-              "sandbar.operation.state": "completed",
+              "beachside.operation.state": "completed",
             });
 
-          if (name === "sandbar.operation.observe")
+          if (name === "beachside.operation.observe")
             span.setAttributes({
               ...diagnosticAttributes(options.identity),
-              "sandbar.operation.state": result === null ? "pending" : "completed",
-              "sandbar.effect": result === null ? "possible" : "applied",
+              "beachside.operation.state": result === null ? "pending" : "completed",
+              "beachside.effect": result === null ? "possible" : "applied",
             });
 
           if (
@@ -495,7 +498,7 @@ export class Telemetry {
           ) {
             const facts = diagnosticContext(result);
 
-            if (!facts.operationState) span.setAttribute("sandbar.effect", "possible");
+            if (!facts.operationState) span.setAttribute("beachside.effect", "possible");
           }
 
           if (
@@ -504,31 +507,31 @@ export class Telemetry {
             "exitCode" in result &&
             Number.isSafeInteger(result.exitCode)
           )
-            span.setAttribute("sandbar.exec.exit_code", Number(result.exitCode));
+            span.setAttribute("beachside.exec.exit_code", Number(result.exitCode));
 
           if (result && typeof result === "object" && "kind" in result) {
             if (result.kind === "unknown")
               span.setAttributes({
-                "sandbar.operation.state": "unknown",
-                "sandbar.effect": "possible",
+                "beachside.operation.state": "unknown",
+                "beachside.effect": "possible",
               });
 
             if (result.kind === "pending")
               span.setAttributes({
-                "sandbar.operation.state": "pending",
-                "sandbar.effect": "possible",
+                "beachside.operation.state": "pending",
+                "beachside.effect": "possible",
               });
 
             if (result.kind === "rejected")
               span.setAttributes({
-                "sandbar.effect": "none",
-                "sandbar.operation.state": "rejected",
+                "beachside.effect": "none",
+                "beachside.operation.state": "rejected",
               });
 
             if (result.kind === "completed") {
               span.setAttributes({
-                "sandbar.operation.state": "completed",
-                "sandbar.effect": "applied",
+                "beachside.operation.state": "completed",
+                "beachside.effect": "applied",
               });
 
               if (
@@ -539,7 +542,7 @@ export class Telemetry {
                 Array.isArray(result.value.retainedResources)
               )
                 span.setAttribute(
-                  "sandbar.retained_resource.count",
+                  "beachside.retained_resource.count",
                   Math.min(result.value.retainedResources.length, 100),
                 );
             }
@@ -553,46 +556,46 @@ export class Telemetry {
           const attrs = diagnosticAttributes(error);
 
           const cancelled =
-            options.signal?.aborted || attrs["sandbar.error.code"] === "WAIT_ABORTED";
+            options.signal?.aborted || attrs["beachside.error.code"] === "WAIT_ABORTED";
 
           const identityAttrs: Attributes =
-            name === "sandbar.wait" ||
-            name === "sandbar.operation.wait" ||
-            name === "sandbar.operation.observe"
+            name === "beachside.wait" ||
+            name === "beachside.operation.wait" ||
+            name === "beachside.operation.observe"
               ? diagnosticAttributes(options.identity)
               : {};
 
           span.setAttributes({
             ...identityAttrs,
-            "sandbar.call.outcome": cancelled ? "cancelled" : "error",
-            "sandbar.effect": state.effect,
+            "beachside.call.outcome": cancelled ? "cancelled" : "error",
+            "beachside.effect": state.effect,
             ...attrs,
           });
 
-          if (identityAttrs["sandbar.recovery.available"])
-            span.setAttribute("sandbar.recovery.available", true);
+          if (identityAttrs["beachside.recovery.available"])
+            span.setAttribute("beachside.recovery.available", true);
 
           if (!cancelled)
-            span.setStatus({ code: SpanStatusCode.ERROR, message: "Sandbar call failed" });
+            span.setStatus({ code: SpanStatusCode.ERROR, message: "Beachside call failed" });
 
           if (!options.phase)
             span.recordException({
-              name: "SandbarError",
-              message: String(attrs["sandbar.error.code"] ?? "INTERNAL"),
+              name: "BeachsideError",
+              message: String(attrs["beachside.error.code"] ?? "INTERNAL"),
             });
 
           if (error instanceof NonzeroExitError || error instanceof NoExitCodeError) {
             if (error.result.exitCode !== null)
-              span.setAttribute("sandbar.exec.exit_code", error.result.exitCode);
+              span.setAttribute("beachside.exec.exit_code", error.result.exitCode);
           }
         });
       throw error;
     } finally {
-      if (recording && (name === "sandbar.wait" || name === "sandbar.operation.wait"))
+      if (recording && (name === "beachside.wait" || name === "beachside.operation.wait"))
         attempt(() =>
           span.setAttributes({
-            "sandbar.wait.poll_count": state.polls,
-            "sandbar.events.dropped": state.dropped,
+            "beachside.wait.poll_count": state.polls,
+            "beachside.events.dropped": state.dropped,
           }),
         );
       attempt(() => span.end());
@@ -620,7 +623,7 @@ export function instrument<T extends object, K extends keyof T>(
     try {
       const result = await original.apply(target, args);
 
-      if (name === "sandbar.operation.observe" || name === "sandbar.operation.wait") {
+      if (name === "beachside.operation.observe" || name === "beachside.operation.wait") {
         noteOperation(
           target,
           result === null ? "pending" : "completed",
@@ -631,8 +634,8 @@ export function instrument<T extends object, K extends keyof T>(
       return result;
     } catch (error) {
       if (
-        (name === "sandbar.operation.observe" || name === "sandbar.operation.wait") &&
-        error instanceof SandbarError
+        (name === "beachside.operation.observe" || name === "beachside.operation.wait") &&
+        error instanceof BeachsideError
       ) {
         if (error.code === "OUTCOME_UNKNOWN") noteOperation(target, "unknown", "possible");
 
@@ -645,15 +648,15 @@ export function instrument<T extends object, K extends keyof T>(
 
   const wrapped = (...args: unknown[]) => {
     const identity =
-      name === "sandbar.operation.recover" || name === "sandbar.observe"
+      name === "beachside.operation.recover" || name === "beachside.observe"
         ? { reference: args[0] }
         : options.identity;
 
-    const operationType = name === "sandbar.prepare" ? operationKind(args[0]) : undefined;
+    const operationType = name === "beachside.prepare" ? operationKind(args[0]) : undefined;
 
     // SAFETY: The operation.wait wrapper retains its typed first options argument.
     const signal =
-      name === "sandbar.operation.wait"
+      name === "beachside.operation.wait"
         ? attempt(() => (args[0] as { signal?: AbortSignal } | undefined)?.signal)
         : undefined;
 
@@ -683,7 +686,7 @@ export function waitFor<T>(
   operation: { wait(options?: { signal?: AbortSignal; pollMs?: number }): Promise<T> },
   options: { signal?: AbortSignal; pollMs?: number } = {},
 ): Promise<T> {
-  return telemetry.run("sandbar.wait", () => internalMethod(operation.wait)(options), {
+  return telemetry.run("beachside.wait", () => internalMethod(operation.wait)(options), {
     phase: true,
     identity: operation,
     effect: "applied",

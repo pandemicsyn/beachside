@@ -6,9 +6,9 @@ Audited October 11, 2026 against the published `@vercel/sandbox@3.6.1` archive, 
 - Integrity: `sha512-U6dwyadp2SmW/M96W2Bb3UjIql6TOOYwu9McUIwob209pj0A3ks/wKrMv7lCE7INx50J5zOpqLhMOnFa+Yodlg==`
 - Inspected emitted `api-client/api-client.js`, `validators.js`, `base-client.js`, `with-retry.js` and `utils/network-policy.js`.
 - Upstream reference: https://github.com/vercel/sandbox/tree/31244aa3280dc3fdca0680933f85971570d73d2d
-- Implementation brief: https://github.com/pandemicsyn/sandbar/issues/28
+- Implementation brief: https://github.com/pandemicsyn/beachside/issues/28
 
-`@sandbar-sdk/vercel` implements the public `@sandbar-sdk/adapter` API and owns HTTP construction; it does not import SDK internals or install the native SDK. Every request uses the fixed `https://vercel.com/api` origin, explicit team routing, redirects disabled and one fetch dispatch. Injectable transports are trusted host code and must not retry mutations.
+`@beachside/vercel` implements the public `@beachside/adapter` API and owns HTTP construction; it does not import SDK internals or install the native SDK. Every request uses the fixed `https://vercel.com/api` origin, explicit team routing, redirects disabled and one fetch dispatch. Injectable transports are trusted host code and must not retry mutations.
 
 Creation uses `/v3/sandboxes`; session detail/stop, command detail/logs and binary filesystem routes use `/v2/sandboxes/sessions/{id}`. Project ownership reads use `/v2/teams/{teamId}` and `/v2/projects/{projectId}`. Collection queries use `project`, rather than uniformly substituting `projectId`. Reopened IDs are checked against the project's session collection. Persistent mode uses named GET with explicit `resume=false` for reads and a single `resume=true` GET only for explicit resume. Named DELETE is preceded by original-session stop and generation validation; it never cascades orphan snapshots. Creation generation combines returned native createdAt and the acknowledged submission tag. Named mutations have no atomic generation condition; callers serialize lifecycle changes, including external controllers. Renewal uses the immutable-session extend-timeout endpoint. Snapshot deletion uses only the immutable snapshot-ID endpoint.
 

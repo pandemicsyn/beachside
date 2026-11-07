@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar } from "sandbar-sdk";
+import { Image, Beachside } from "beachside";
 import { createModalAdapter } from "./adapter";
 import { ModalCreateRejected, type ModalTransport } from "./transport";
 
@@ -48,7 +48,7 @@ function fixture(failure: Error) {
   };
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createModalAdapter(() => transport),
       config: { appName: "existing", environment: "main" },
       credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },

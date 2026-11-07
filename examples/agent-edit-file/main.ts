@@ -1,4 +1,4 @@
-import { Sandbar, type SandboxHandle } from "sandbar-sdk";
+import { Beachside, type SandboxHandle } from "beachside";
 import {
   agentEnvironment,
   installOpenCode,
@@ -26,7 +26,7 @@ export async function edit(
           OPENCODE,
           "run",
           "--pure",
-          "Edit message.txt: replace NAME with Sandbar. Leave the rest of the file unchanged.",
+          "Edit message.txt: replace NAME with Beachside. Leave the rest of the file unchanged.",
         ],
       },
       cwd: WORKDIR,
@@ -41,7 +41,7 @@ export async function edit(
   const changed = await box.readTextFile(path, { signal, maxBytes: 1024 });
   process.stdout.write(changed);
 
-  if (changed !== "Hello, Sandbar!\n")
+  if (changed !== "Hello, Beachside!\n")
     throw new Error("Agent did not produce the expected message.txt contents");
 
   return changed;
@@ -55,7 +55,7 @@ async function main() {
     await Bun.file(new URL("./message.txt", import.meta.url)).arrayBuffer(),
   );
 
-  const client = await Sandbar.connect(setup.adapter);
+  const client = await Beachside.connect(setup.adapter);
   const run = cancellation();
   let failed = false;
 

@@ -1,5 +1,5 @@
-import { Image, Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Image, Beachside, type AdapterRecoveryReference } from "beachside";
+import { daytona } from "@beachside/daytona";
 import { z } from "zod";
 
 export const daytonaConfiguration = z.strictObject({
@@ -29,7 +29,7 @@ export function daytonaConnection(configuration: DaytonaConfiguration, apiKey: s
     // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Public SDK cleanup errors enter the field-only diagnostic redactor.
     onDiagnostic?: (error: unknown) => void,
   ) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: daytona({
         apiKey,
         target: config.target,

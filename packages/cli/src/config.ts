@@ -8,7 +8,7 @@ export type Env = Readonly<Record<string, string | undefined>>;
 
 export const ProfileConfig = z
   .strictObject({
-    /** An official provider id; its adapter package is `@sandbar-sdk/<provider>`. */
+    /** An official provider id; its adapter package is `@beachside/<provider>`. */
     provider: z
       .string()
       .regex(/^[a-z0-9-]{1,64}$/)
@@ -49,20 +49,20 @@ export type LoadedConfig = {
 };
 
 export function configHome(env: Env): string {
-  return join(env.XDG_CONFIG_HOME || join(env.HOME || homedir(), ".config"), "sandbar");
+  return join(env.XDG_CONFIG_HOME || join(env.HOME || homedir(), ".config"), "beachside");
 }
 
 export function expandHome(path: string, env: Env): string {
   return path === "~" || path.startsWith("~/") ? join(env.HOME || homedir(), path.slice(1)) : path;
 }
 
-/** Read `sandbar.json`; a missing default file is an empty configuration. */
+/** Read `beachside.json`; a missing default file is an empty configuration. */
 export async function loadConfig(
   explicitPath: string | undefined,
   env: Env,
 ): Promise<LoadedConfig> {
-  const chosen = explicitPath ?? env.SANDBAR_CONFIG;
-  const path = resolve(expandHome(chosen ?? join(configHome(env), "sandbar.json"), env));
+  const chosen = explicitPath ?? env.BEACHSIDE_CONFIG;
+  const path = resolve(expandHome(chosen ?? join(configHome(env), "beachside.json"), env));
   let text: string;
 
   try {
@@ -99,7 +99,7 @@ export function stateDir(
   env: Env,
   cwd: string,
 ): string {
-  const given = flag ?? env.SANDBAR_STATE_DIR;
+  const given = flag ?? env.BEACHSIDE_STATE_DIR;
 
   if (given) return resolve(cwd, expandHome(given, env));
   const configured = config.value.state?.dir;
@@ -111,7 +111,7 @@ export function stateDir(
 
 /** Whether adapters may come from the project's node_modules; opt-in, since they receive credentials. */
 export function searchProjectAdapters(config: LoadedConfig, env: Env): boolean {
-  const fromEnv = env.SANDBAR_PROJECT_ADAPTERS;
+  const fromEnv = env.BEACHSIDE_PROJECT_ADAPTERS;
 
   if (fromEnv !== undefined && fromEnv !== "") return fromEnv === "1" || fromEnv === "true";
 
@@ -119,12 +119,12 @@ export function searchProjectAdapters(config: LoadedConfig, env: Env): boolean {
 }
 
 export function maxSandboxes(config: LoadedConfig, env: Env): number | null {
-  const fromEnv = env.SANDBAR_MAX_SANDBOXES;
+  const fromEnv = env.BEACHSIDE_MAX_SANDBOXES;
 
   if (fromEnv !== undefined && fromEnv !== "") {
     const parsed = z.coerce.number().int().positive().safeParse(fromEnv);
 
-    if (!parsed.success) throw usage("SANDBAR_MAX_SANDBOXES must be a positive integer");
+    if (!parsed.success) throw usage("BEACHSIDE_MAX_SANDBOXES must be a positive integer");
 
     return parsed.data;
   }

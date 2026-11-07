@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { Sandbar, Image } from "./index";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Beachside, Image } from "./index";
+import { daytona } from "@beachside/daytona";
 
 test("public Daytona factory forwards bounded TTL without provider IO during construction", async () => {
   const originalFetch = globalThis.fetch;
@@ -67,12 +67,12 @@ test("public Daytona factory forwards bounded TTL without provider IO during con
     });
 
     expect(reads).toBe(0);
-    const first = await Sandbar.connect(bounded);
+    const first = await Beachside.connect(bounded);
     expect((await first.sandboxes.checkCreate()).status).toBe("supported");
     expect(ttl).toHaveLength(0);
     await first.sandboxes.create({ labels: { job: "report" } });
     await first.close();
-    const fallback = await Sandbar.connect(daytona({ apiKey: "fixture", target: "us" }));
+    const fallback = await Beachside.connect(daytona({ apiKey: "fixture", target: "us" }));
     await expect(fallback.sandboxes.create()).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     await fallback.sandboxes.create({ environment: Image.prepared("snap-1") });
     await fallback.close();
@@ -80,7 +80,7 @@ test("public Daytona factory forwards bounded TTL without provider IO during con
     expect(snapshots).toEqual(["snap-1", "snap-1"]);
     const before = reads;
     await expect(
-      Sandbar.connect(daytona({ apiKey: "fixture", target: "us", ttlMinutes: 0 })),
+      Beachside.connect(daytona({ apiKey: "fixture", target: "us", ttlMinutes: 0 })),
     ).rejects.toThrow();
     expect(reads).toBe(before);
   } finally {

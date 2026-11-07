@@ -1,4 +1,4 @@
-import { Sandbar, type SandboxHandle } from "sandbar-sdk";
+import { Beachside, type SandboxHandle } from "beachside";
 import {
   agentEnvironment,
   installOpenCode,
@@ -33,7 +33,7 @@ export async function hello(
 async function main() {
   const setup = providerSetup();
   const env = agentEnvironment();
-  const client = await Sandbar.connect(setup.adapter);
+  const client = await Beachside.connect(setup.adapter);
   const run = cancellation();
   let failed = false;
 

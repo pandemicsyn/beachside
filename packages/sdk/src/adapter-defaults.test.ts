@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
-import { Sandbar } from "./index";
+import { Beachside } from "./index";
 
 function definition(defaultNetworkPolicy?: string) {
   const observed: string[] = [];
@@ -39,7 +39,12 @@ function definition(defaultNetworkPolicy?: string) {
 test("explicit adapter policy applies to omitted create input; caller overrides and existing blocked defaults survive", async () => {
   for (const policy of [undefined, "internet"]) {
     const fixture = definition(policy);
-    const client = await Sandbar.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
+
+    const client = await Beachside.connect({
+      adapter: fixture.adapter,
+      config: {},
+      credentials: {},
+    });
 
     try {
       expect((await client.checkCreate()).status).toBe("supported");
@@ -55,7 +60,7 @@ test("explicit adapter policy applies to omitted create input; caller overrides 
 test("an invalid adapter default fails connection and releases owned resources", async () => {
   const fixture = definition("");
   await expect(
-    Sandbar.connect({ adapter: fixture.adapter, config: {}, credentials: {} }),
+    Beachside.connect({ adapter: fixture.adapter, config: {}, credentials: {} }),
   ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   expect(fixture.observed).toEqual([]);
   expect(fixture.releases()).toBe(1);
@@ -63,7 +68,7 @@ test("an invalid adapter default fails connection and releases owned resources",
 
 test("unsupported configured default leaves read-only connection available without fallback", async () => {
   const fixture = definition("unsupported-policy");
-  const client = await Sandbar.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
 
   try {
     expect((await client.sandboxes.checkCreate()).status).toBe("unsupported");

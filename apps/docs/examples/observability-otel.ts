@@ -2,8 +2,8 @@ import { trace } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { BatchSpanProcessor, ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
-import { Sandbar, Image } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Beachside, Image } from "beachside";
+import { daytona } from "@beachside/daytona";
 
 const manager = new AsyncLocalStorageContextManager().enable();
 
@@ -14,7 +14,7 @@ const provider = new NodeTracerProvider({
 provider.register({ contextManager: manager });
 
 try {
-  const client = await Sandbar.connect(
+  const client = await Beachside.connect(
     daytona({
       apiKey: process.env.DAYTONA_API_KEY!,
       target: process.env.DAYTONA_TARGET ?? "us",
@@ -24,7 +24,7 @@ try {
   );
 
   try {
-    await trace.getTracer("my-application").startActiveSpan("sandbar-demo", async (span) => {
+    await trace.getTracer("my-application").startActiveSpan("beachside-demo", async (span) => {
       try {
         const box = await client.sandboxes.create({
           environment: Image.prepared("daytona-small"),

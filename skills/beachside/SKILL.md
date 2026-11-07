@@ -1,28 +1,28 @@
 ---
-name: sandbar
-description: Build application code that creates and drives cloud sandboxes with the Sandbar TypeScript SDK (sandbar-sdk) on Daytona, E2B, boxd, Boat, Runloop or Vercel. Use when writing or changing code that imports sandbar-sdk or an @sandbar-sdk/<provider> adapter, or when asked to run untrusted or generated code in a sandbox from a Node.js or Bun service.
+name: beachside
+description: Build application code that creates and drives cloud sandboxes with the Beachside TypeScript SDK (beachside) on Daytona, E2B, boxd, Boat, Runloop or Vercel. Use when writing or changing code that imports beachside or an @beachside/<provider> adapter, or when asked to run untrusted or generated code in a sandbox from a Node.js or Bun service.
 ---
 
-# Build with the Sandbar SDK
+# Build with the Beachside SDK
 
-Sandbar is one TypeScript API over several sandbox providers. The application talks to `sandbar-sdk`; a separately installed adapter (`@sandbar-sdk/<provider>`) handles the provider. Switching providers should only change adapter setup.
+Beachside is one TypeScript API over several sandbox providers. The application talks to `beachside`; a separately installed adapter (`@beachside/<provider>`) handles the provider. Switching providers should only change adapter setup.
 
 ## Before writing code
 
-1. Check installed versions (`package.json`, lockfile). Install `sandbar-sdk` and one adapter at `0.1.0` or later. The npm package named `sandbar` is unrelated; never install it.
-2. Pick the provider the user named, then read its setup page: https://sandbarsdk.dev/docs/providers/support/
+1. Check installed versions (`package.json`, lockfile). Install `beachside` and one adapter at `0.1.0` or later. The npm package named `beachside` is unrelated; never install it.
+2. Pick the provider the user named, then read its setup page: https://beachside.run/docs/providers/support/
 3. The SDK runs server-side only (Node.js or Bun). Read credentials from environment variables; never hard-code, log or send them to a browser.
 
 ## Connect
 
-| Provider               | Package                | Connect with                                                                                                                |
-| ---------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| E2B                    | `@sandbar-sdk/e2b`     | `Sandbar.connect(e2b({ apiKey }))`                                                                                          |
-| Daytona                | `@sandbar-sdk/daytona` | `Sandbar.connect(daytona({ apiKey, target: "us", environment: Image.prepared("<snapshot>"), network: "daytona-default" }))` |
-| boxd                   | `@sandbar-sdk/boxd`    | `Sandbar.connect({ adapter: boxdAdapter, credentials: { apiKey }, config: { org, network: "internet" } })`                  |
-| Boat                   | `@sandbar-sdk/boat`    | `Sandbar.connect({ adapter: boatAdapter, credentials: { apiKey }, config: { network: "internet" } })`                       |
-| Runloop (experimental) | `@sandbar-sdk/runloop` | `Sandbar.connect({ adapter: runloopAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                     |
-| Vercel                 | `@sandbar-sdk/vercel`  | `Sandbar.connect({ adapter: vercel, credentials: { token }, config: { teamId, projectId } })`                               |
+| Provider               | Package              | Connect with                                                                                                                  |
+| ---------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| E2B                    | `@beachside/e2b`     | `Beachside.connect(e2b({ apiKey }))`                                                                                          |
+| Daytona                | `@beachside/daytona` | `Beachside.connect(daytona({ apiKey, target: "us", environment: Image.prepared("<snapshot>"), network: "daytona-default" }))` |
+| boxd                   | `@beachside/boxd`    | `Beachside.connect({ adapter: boxdAdapter, credentials: { apiKey }, config: { org, network: "internet" } })`                  |
+| Boat                   | `@beachside/boat`    | `Beachside.connect({ adapter: boatAdapter, credentials: { apiKey }, config: { network: "internet" } })`                       |
+| Runloop (experimental) | `@beachside/runloop` | `Beachside.connect({ adapter: runloopAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                     |
+| Vercel                 | `@beachside/vercel`  | `Beachside.connect({ adapter: vercel, credentials: { token }, config: { teamId, projectId } })`                               |
 
 `connect` verifies credentials with read-only calls and allocates nothing. Put provider choices (region, network policy, defaults) in this setup, not in every call.
 
@@ -31,28 +31,28 @@ Sandbar is one TypeScript API over several sandbox providers. The application ta
 Use `sandboxes.with()` when a sandbox is needed only for one task. It creates, runs the callback, and destroys, even on errors:
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { e2b } from "@sandbar-sdk/e2b";
+import { Beachside } from "beachside";
+import { e2b } from "@beachside/e2b";
 
-const sandbar = await Sandbar.connect(e2b({ apiKey: process.env.E2B_API_KEY! }));
+const beachside = await Beachside.connect(e2b({ apiKey: process.env.E2B_API_KEY! }));
 
 try {
-  const text = await sandbar.sandboxes.with({}, async (box) => {
+  const text = await beachside.sandboxes.with({}, async (box) => {
     await box.writeFile("/home/user/main.py", new TextEncoder().encode("print(2 + 2)\n"));
     return (await box.exec(["python3", "/home/user/main.py"])).stdoutText();
   });
   console.log(text);
 } finally {
-  await sandbar.close();
+  await beachside.close();
 }
 ```
 
 When the sandbox must outlive one call, use `create()` and `destroy()` yourself:
 
 ```ts
-import { Image } from "sandbar-sdk";
+import { Image } from "beachside";
 
-const box = await sandbar.sandboxes.create({ environment: Image.prepared("base") }); // an E2B template
+const box = await beachside.sandboxes.create({ environment: Image.prepared("base") }); // an E2B template
 try {
   // work
 } finally {
@@ -79,7 +79,7 @@ Every sandbox has a wall-clock lifetime after which the provider removes it: `li
 
 ## Errors and uncertain outcomes
 
-Every failure is a `SandbarError` with `code` and `effect`. The rule that matters most:
+Every failure is a `BeachsideError` with `code` and `effect`. The rule that matters most:
 
 - **`effect: "none"`**: nothing happened. Safe to fix and retry.
 - **Anything else** (effect `possible`, `unknown`, `partial` or `applied`): the work may have happened. **Never blindly retry a create or exec.**
@@ -108,7 +108,7 @@ Never build a reference by hand from a sandbox id. `get()` never creates or resu
 - **E2B:** the `base` template works out of the box; use `/home/user`.
 - **boxd:** needs `network: "internet"` and an org; files are capped at 1 MiB and need `overwrite: true`.
 - **Boat:** needs `network: "internet"`; files live under `/home/user` or `/tmp`, are capped at 5 MiB and need `overwrite: true`. Sandboxes get none of the Boat account's secrets unless `environment` names one. `suspend()` archives the disk; `resume()` starts a fresh machine.
-- **Runloop (experimental; sign-ups are invite-only):** egress is blocked by default (the adapter manages a deny-all `sandbar-blocked` network policy); pass `network: "internet"` to allow it. Files need `overwrite: true`. `suspend()` keeps the disk only; `snapshot()` captures the disk, and restores start fresh processes. `preview(port)` returns a URL plus an auth header unless `preview.access` is `"public"`.
+- **Runloop (experimental; sign-ups are invite-only):** egress is blocked by default (the adapter manages a deny-all `beachside-blocked` network policy); pass `network: "internet"` to allow it. Files need `overwrite: true`. `suspend()` keeps the disk only; `snapshot()` captures the disk, and restores start fresh processes. `preview(port)` returns a URL plus an auth header unless `preview.access` is `"public"`.
 - **Vercel:** disposable Node 24 sandboxes with blocked networking by default; no stdin, process streams, snapshots or volumes; files need `overwrite: true`.
 
 Check `await client.sandboxes.checkCreate(input)` before an unusual create; it is read-only and reports `supported`, `unsupported`, `unavailable` or `unknown`.
@@ -119,9 +119,9 @@ Write tests against deterministic fixtures, not live providers. Live sandboxes c
 
 ## Read more
 
-- Getting started: https://sandbarsdk.dev/docs/direct-quickstart/
-- Sandboxes and execution: https://sandbarsdk.dev/docs/guides/resources/
-- Errors and recovery: https://sandbarsdk.dev/docs/guides/recovery/
-- Files and output: https://sandbarsdk.dev/docs/guides/files-and-output/
-- TypeScript reference: https://sandbarsdk.dev/docs/reference/typescript/
-- Troubleshooting: https://sandbarsdk.dev/docs/guides/troubleshooting/
+- Getting started: https://beachside.run/docs/direct-quickstart/
+- Sandboxes and execution: https://beachside.run/docs/guides/resources/
+- Errors and recovery: https://beachside.run/docs/guides/recovery/
+- Files and output: https://beachside.run/docs/guides/files-and-output/
+- TypeScript reference: https://beachside.run/docs/reference/typescript/
+- Troubleshooting: https://beachside.run/docs/guides/troubleshooting/

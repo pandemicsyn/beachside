@@ -1,5 +1,5 @@
 {
-  "name": "sandbar",
+  "name": "beachside",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
@@ -28,7 +28,7 @@
     "release:fixture": "bun scripts/release-fixture.mjs",
     "release:bootstrap": "bun scripts/npm-bootstrap.mjs",
     "observability:check": "bun run --cwd packages/sdk-qualification check && bun packages/sdk-qualification/observability/run.mjs",
-    "check:built": "bun run --filter '@sandbar/*' check && bun run --cwd packages/adapter check && bun run --cwd packages/sdk check && bun run --cwd packages/providers/daytona check && bun run --cwd packages/providers/e2b check && bun run --cwd packages/providers/boxd check && bun run --cwd packages/providers/boat check && bun run --cwd packages/providers/runloop check && bun run --cwd packages/providers/vercel check && bun run --cwd packages/cli check",
+    "check:built": "bun run --filter '@beachside-internal/*' check && bun run --cwd packages/adapter check && bun run --cwd packages/sdk check && bun run --cwd packages/providers/daytona check && bun run --cwd packages/providers/e2b check && bun run --cwd packages/providers/boxd check && bun run --cwd packages/providers/boat check && bun run --cwd packages/providers/runloop check && bun run --cwd packages/providers/vercel check && bun run --cwd packages/cli check",
     "test:built": "bun test",
     "docs:check:built": "bun run --cwd apps/docs check && bun run --cwd apps/docs build && bun run --cwd apps/docs examples:test",
     "package:smoke:built": "bun packages/sdk-qualification/package-smoke.mjs",

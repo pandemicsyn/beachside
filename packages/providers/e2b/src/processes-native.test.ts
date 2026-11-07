@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { afterEach, expect, test } from "bun:test";
-import { Sandbar } from "sandbar-sdk";
-import { sandboxReference, type NativeProcess } from "@sandbar-sdk/adapter";
+import { Beachside } from "beachside";
+import { sandboxReference, type NativeProcess } from "@beachside/adapter";
 import { createE2BAdapter } from "./index";
 import { createSdkTransport } from "./transport";
 
@@ -56,10 +56,10 @@ async function fixture(
     templateID: "template_one",
     state: "running",
     metadata: {
-      sandbar_scope: "team_one:base",
-      sandbar_operation: "operation_one",
-      sandbar_submission: "submission_one",
-      sandbar_template: "template_one",
+      beachside_scope: "team_one:base",
+      beachside_operation: "operation_one",
+      beachside_submission: "submission_one",
+      beachside_template: "template_one",
     },
     envdVersion: options.modern ? "0.5.2" : "0.5.0",
     envdAccessToken: "guest-secret",
@@ -174,7 +174,7 @@ async function fixture(
   globalThis.fetch = fetcher;
   const transport = createSdkTransport("control-secret", fetcher);
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createE2BAdapter(() => ({
       ...transport,
       async startText(id, command, startOptions, ctx) {
@@ -432,7 +432,7 @@ test.each(["ack", "not-found", "lost"])(
     const requests = f.calls.slice(before).filter((c) => c.path.endsWith("/SendSignal"));
     expect(requests).toHaveLength(1);
     expect(requests[0]!.body).toEqual({
-      process: { tag: expect.stringMatching(/^sandbar-/) },
+      process: { tag: expect.stringMatching(/^beachside-/) },
       signal: "SIGNAL_SIGKILL",
     });
     expect(
@@ -454,14 +454,14 @@ test.each(["ack", "not-found", "lost"])(
 test("tag selector does not target an unrelated reused PID", async () => {
   const f = await fixture();
   const p = await f.box.processes.start(input);
-  // Reusing PID 9 does not give a successor the random Sandbar tag.
+  // Reusing PID 9 does not give a successor the random Beachside tag.
   // Duplicating the tag remains possible for external sandbox actors.
   f.reusePid();
   expect(await p.terminate()).toEqual({ status: "requested" });
   expect(f.signaled).toBe("original");
   const request = f.calls.find((c) => c.path.endsWith("/SendSignal"));
   expect(request!.body).toEqual({
-    process: { tag: expect.stringMatching(/^sandbar-/) },
+    process: { tag: expect.stringMatching(/^beachside-/) },
     signal: "SIGNAL_SIGKILL",
   });
   await p.detach();
@@ -510,8 +510,8 @@ test("sustained exact byte input, EOF, live status and final output after exit",
   await p.closeStdin();
   await p.closeStdin();
   expect(f.calls.filter((c) => c.path.endsWith("/SendInput")).map((c) => c.body)).toEqual([
-    { process: { tag: expect.stringMatching(/^sandbar-/) }, input: { stdin: "AP+ACg==" } },
-    { process: { tag: expect.stringMatching(/^sandbar-/) }, input: { stdin: "aGVsbG8=" } },
+    { process: { tag: expect.stringMatching(/^beachside-/) }, input: { stdin: "AP+ACg==" } },
+    { process: { tag: expect.stringMatching(/^beachside-/) }, input: { stdin: "aGVsbG8=" } },
   ]);
   expect(f.calls.filter((c) => c.path.endsWith("/CloseStdin"))).toHaveLength(1);
   expect(await p.status()).toMatchObject({ state: "running" });
@@ -833,7 +833,7 @@ test("public E2B disconnect parks pipe input and reopen reports the live-only ga
   const reopened = await f.box.processes.reopen(reference);
   expect(reopened.outputGap).toBe(true);
   const connect = f.calls.find((call) => call.path.endsWith("/Connect"));
-  expect(connect!.body).toEqual({ process: { tag: expect.stringMatching(/^sandbar-/) } });
+  expect(connect!.body).toEqual({ process: { tag: expect.stringMatching(/^beachside-/) } });
   await reopened.write(new Uint8Array([0, 255]));
   const output = reopened.output()[Symbol.asyncIterator]();
   f.data("stdout", new Uint8Array([128, 0]));
@@ -856,7 +856,7 @@ test("public E2B terminal exposes combined bytes, selected signals, resize and r
   expect(f.calls.find((call) => call.path.endsWith("/Start"))!.body).toMatchObject({
     process: {
       cmd: "/bin/bash",
-      args: ["-l", "-c", `exec /bin/bash -c 'exec "$@"' sandbar 'printf' 'hello'`],
+      args: ["-l", "-c", `exec /bin/bash -c 'exec "$@"' beachside 'printf' 'hello'`],
     },
     pty: { size: { cols: 120, rows: 40 } },
   });
@@ -866,7 +866,7 @@ test("public E2B terminal exposes combined bytes, selected signals, resize and r
   await first.resize({ columns: 90, rows: 30 });
   await first.signal("SIGTERM");
   expect(f.calls.find((call) => call.path.endsWith("/SendSignal"))!.body).toEqual({
-    process: { tag: expect.stringMatching(/^sandbar-/) },
+    process: { tag: expect.stringMatching(/^beachside-/) },
     signal: "SIGNAL_SIGTERM",
   });
   const reference = first.reference();

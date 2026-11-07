@@ -7,17 +7,17 @@ import {
   prepareOperation,
   submitOperation,
   type Json,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
-  Sandbar,
-  SandbarError,
+  Beachside,
+  BeachsideError,
   Image,
   OutcomeUnknownError,
   Preserve,
   WaitAbortedError,
   type AdapterRecoveryReference,
-} from "sandbar-sdk";
-import { snapshotSuite } from "@sandbar-sdk/adapter/testing";
+} from "beachside";
+import { snapshotSuite } from "@beachside/adapter/testing";
 import { createE2BAdapter } from "./index";
 import {
   E2BVolumeCreateRejected,
@@ -108,7 +108,7 @@ function fixture() {
           : Object.entries(input.volumeMounts ?? {}).map(([path, name]) => ({ path, name })),
       });
 
-      if (modes.loseRestore && input.metadata.sandbar_snapshot)
+      if (modes.loseRestore && input.metadata.beachside_snapshot)
         throw new Error("Restore acknowledgement lost");
 
       return id;
@@ -133,7 +133,7 @@ function fixture() {
       if (createObservation)
         return {
           ...box,
-          metadata: { ...box.metadata, ["sandbar_" + createObservation]: "foreign" },
+          metadata: { ...box.metadata, ["beachside_" + createObservation]: "foreign" },
         };
 
       return box;
@@ -280,7 +280,7 @@ function fixture() {
 
     if (snapshots) config.snapshots = snapshots;
 
-    return Sandbar.connect({
+    return Beachside.connect({
       adapter: createE2BAdapter(() => transport),
       config,
       credentials: { apiKey },
@@ -355,7 +355,7 @@ test("E2B captures, restores the saved UUID after source deletion, and rejects a
     expect((await snapshot.inspect()).mountHandling).toBe("none");
     expect((await reopened.capabilities()).snapshots.restore.status).toBe("supported");
     const restored = await snapshot.restore({ networkPolicy: "blocked" });
-    expect(f.boxes.get(restored.id)?.metadata.sandbar_snapshot).toBe(
+    expect(f.boxes.get(restored.id)?.metadata.beachside_snapshot).toBe(
       `snap_one:${saved.generation}`,
     );
     await restored.destroy();
@@ -1487,7 +1487,7 @@ for (const kind of ["snapshot_capture", "snapshot_restore", "volume_create"] as 
       } catch (error) {
         expect(
           error instanceof WaitAbortedError ||
-            (error instanceof SandbarError && error.effect === "none"),
+            (error instanceof BeachsideError && error.effect === "none"),
         ).toBe(true);
       }
 

@@ -1,5 +1,5 @@
 {
-  "name": "@sandbar-sdk/boxd",
+  "name": "@beachside/boxd",
   "version": "0.7.0",
   "private": false,
   "files": [
@@ -16,26 +16,26 @@
   },
   "scripts": {
     "check": "tsc -p tsconfig.json",
-    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --outdir dist --external @sandbar-sdk/adapter --external @boxd-sh/sdk --external @grpc/grpc-js --external zod && tsc -p tsconfig.build.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../../scripts/rewrite-declarations.mjs"
+    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --outdir dist --external @beachside/adapter --external @boxd-sh/sdk --external @grpc/grpc-js --external zod && tsc -p tsconfig.build.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../../scripts/rewrite-declarations.mjs"
   },
   "dependencies": {
     "@boxd-sh/sdk": "0.2.15",
     "@grpc/grpc-js": "1.14.5",
     "zod": "4.6.5",
-    "@sandbar-sdk/adapter": "workspace:*"
+    "@beachside/adapter": "workspace:*"
   },
   "devDependencies": {
-    "sandbar-sdk": "workspace:*"
+    "beachside": "workspace:*"
   },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pandemicsyn/sandbar.git",
+    "url": "git+https://github.com/pandemicsyn/beachside.git",
     "directory": "packages/providers/boxd"
   },
-  "description": "boxd microVM provider adapter for Sandbar.",
+  "description": "boxd microVM provider adapter for Beachside.",
   "bugs": {
-    "url": "https://github.com/pandemicsyn/sandbar/issues"
+    "url": "https://github.com/pandemicsyn/beachside/issues"
   },
   "publishConfig": {
     "access": "public"

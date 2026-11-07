@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Install Sandbar and run your first sandbox command.
+description: Install Beachside and run your first sandbox command.
 ---
 
 import { Code, Tabs, TabItem } from "@astrojs/starlight/components";
@@ -18,14 +18,14 @@ In your project, install the SDK and the adapter for your provider:
   <TabItem label="Daytona">
 
 ```sh
-npm install sandbar-sdk @sandbar-sdk/daytona
+npm install beachside @beachside/daytona
 ```
 
   </TabItem>
   <TabItem label="E2B">
 
 ```sh
-npm install sandbar-sdk @sandbar-sdk/e2b
+npm install beachside @beachside/e2b
 ```
 
   </TabItem>
@@ -34,8 +34,8 @@ npm install sandbar-sdk @sandbar-sdk/e2b
 The Modal adapter is not published to npm. Run it from a source checkout with **Bun 1.3.14**:
 
 ```sh
-git clone https://github.com/pandemicsyn/sandbar.git
-cd sandbar
+git clone https://github.com/pandemicsyn/beachside.git
+cd beachside
 bun install --frozen-lockfile
 bun run build:packages
 ```
@@ -130,7 +130,7 @@ bun --env-file=.env.local run apps/docs/examples/getting-started-modal.ts
   </TabItem>
 </Tabs>
 
-You should see `Hello from Sandbar!`. The Daytona and E2B examples use `sandboxes.with()` to clean up the sandbox after the callback succeeds or throws. An outer `finally` closes the client. The experimental Modal example shows manual sandbox cleanup. `close()` alone does **not** destroy compute. If creation or cleanup has an uncertain outcome, follow [Errors and recovery](/docs/guides/recovery/) before retrying.
+You should see `Hello from Beachside!`. The Daytona and E2B examples use `sandboxes.with()` to clean up the sandbox after the callback succeeds or throws. An outer `finally` closes the client. The experimental Modal example shows manual sandbox cleanup. `close()` alone does **not** destroy compute. If creation or cleanup has an uncertain outcome, follow [Errors and recovery](/docs/guides/recovery/) before retrying.
 
 For temporary work, prefer [scoped sandbox cleanup](/docs/guides/resources/#create-and-clean-up). The scope retains snapshots and volumes, and cleanup failures preserve the callback result or error plus recovery information. Use manual `create()` when the sandbox should outlive the callback.
 
@@ -138,14 +138,14 @@ For temporary work, prefer [scoped sandbox cleanup](/docs/guides/resources/#crea
 
 - [Run OpenCode inside a sandbox](/docs/guides/runnable-agent-examples/) to capture a response or edit a remote file.
 
-- [Give your agent a Sandbar prompt](/docs/agents/build-with-sdk/) to start building an application.
+- [Give your agent a Beachside prompt](/docs/agents/build-with-sdk/) to start building an application.
 - [Read and write files](/docs/guides/files-and-output/) or [configure execution](/docs/guides/resources/).
 - [Capture and restore state or mount retained storage](/docs/guides/snapshots-and-volumes/).
 - [Check tested provider support](/docs/providers/support/) for live-tested workflows and limits.
 
 ## Bound connection waits
 
-`Sandbar.connect(adapter, { signal, timeoutMs: 30_000 })` accepts `ConnectOptions`.
+`Beachside.connect(adapter, { signal, timeoutMs: 30_000 })` accepts `ConnectOptions`.
 The advanced definition/config/credentials form accepts the same controls in its options object.
 `await client.close({ signal: cleanupSignal, timeoutMs: 5_000 })` accepts `CloseOptions`.
 Only positive finite safe-integer budgets are accepted; longer budgets are allowed.

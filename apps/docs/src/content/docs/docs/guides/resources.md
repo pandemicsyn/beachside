@@ -3,7 +3,7 @@ title: Sandboxes and execution
 description: Create sandboxes, run commands, inspect state, and release compute.
 ---
 
-A sandbox is a remote environment where you can run commands and work with files. The examples below use a Sandbar client named `sandbar`, created with your chosen adapter as shown in [Getting started](/docs/direct-quickstart/).
+A sandbox is a remote environment where you can run commands and work with files. The examples below use a Beachside client named `beachside`, created with your chosen adapter as shown in [Getting started](/docs/direct-quickstart/).
 
 Adapter setup supplies the defaults for sandbox creation. Available operations and lifecycle behavior depend on the adapter; provider differences are called out below.
 
@@ -13,7 +13,7 @@ Use `sandboxes.with()` for a task that needs a sandbox only while it runs:
 
 ```ts
 try {
-  const text = await sandbar.sandboxes.with(
+  const text = await beachside.sandboxes.with(
     {}, // Uses the configured adapter defaults.
     async (box) => {
       console.log(box.id, (await box.inspect()).state);
@@ -22,7 +22,7 @@ try {
   );
   console.log(text); // Returned after sandbox cleanup is confirmed.
 } finally {
-  await sandbar.close();
+  await beachside.close();
 }
 ```
 
@@ -37,7 +37,7 @@ Use `sandboxes.create()` and `box.destroy()` when you need to manage the sandbox
 Set `resources` in adapter setup to ask for at least a number of vCPUs and MiB of memory. The adapter picks the smallest native size that meets both, so you may get more than you asked for, never less:
 
 ```ts
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter: boxdAdapter,
   credentials: { apiKey: process.env.BOXD_API_KEY! },
   config: { org: "my-org", network: "internet", resources: { vcpus: 2, memoryMiB: 4096 } },
@@ -46,7 +46,7 @@ const box = await client.sandboxes.create();
 console.log((await box.inspect()).resources); // { status: "known", value: { vcpus: 2, memoryMiB: 8192 } }
 ```
 
-When no native size is big enough, `Sandbar.connect` rejects with `UNSUPPORTED` before contacting the provider, and the message names the provider's largest size. `inspect().resources` reports the size the sandbox actually has, or `unknown` when the provider does not say.
+When no native size is big enough, `Beachside.connect` rejects with `UNSUPPORTED` before contacting the provider, and the message names the provider's largest size. `inspect().resources` reports the size the sandbox actually has, or `unknown` when the provider does not say.
 
 | Adapter | How `resources` is applied                                                                                    |
 | ------- | ------------------------------------------------------------------------------------------------------------- |
@@ -98,7 +98,7 @@ if (info.expires.status === "known") console.log(info.expires.at, info.expires.s
 
 A missing or deleted sandbox returns `NOT_FOUND`. Other problems, such as denied access or a scope mismatch, have their own errors. A saved reference cannot move a sandbox to another provider.
 
-`box.reference` can be `null`, including when an adapter cannot verify identity during creation. Try `inspect()` and check its returned `reference`; do not construct one from `box.id`. For E2B credential rotation, configure the verified `teamId` when establishing the original connection. See the [reopening example](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/sandbox-reopen.ts).
+`box.reference` can be `null`, including when an adapter cannot verify identity during creation. Try `inspect()` and check its returned `reference`; do not construct one from `box.id`. For E2B credential rotation, configure the verified `teamId` when establishing the original connection. See the [reopening example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/sandbox-reopen.ts).
 
 Inspection reports state, provider state, observation time, expiry, idle-stop policy, retention policy, and execution identity when known. Unknown expiry does not mean unlimited lifetime. A past expiry time alone does not prove that the sandbox was deleted.
 
@@ -109,31 +109,31 @@ Inspection reports state, provider state, observation time, expiry, idle-stop po
 ```ts
 let cursor: string | undefined;
 do {
-  const page = await sandbar.sandboxes.list({ cursor }); // limit: 1-100, default 50
+  const page = await beachside.sandboxes.list({ cursor }); // limit: 1-100, default 50
   for (const item of page.items)
     if (item.state === "running" && item.reference)
-      console.log(item.id, (await sandbar.sandboxes.get(item.reference)).id);
+      console.log(item.id, (await beachside.sandboxes.get(item.reference)).id);
   cursor = page.nextCursor;
 } while (cursor);
 ```
 
 Pass the returned `nextCursor` to read the next page; it is absent on the last page. A page can hold fewer items than `limit` when the adapter filters native results. `coverage` reports what the listing includes, using the same values as `snapshots.list()` and `volumes.list()`:
 
-- `"provider-scope"`: every sandbox the connection's account and scope can see, including ones not created through Sandbar.
-- `"sandbar-managed"`: only sandboxes carrying verifiable Sandbar creation markers.
+- `"provider-scope"`: every sandbox the connection's account and scope can see, including ones not created through Beachside.
+- `"managed"`: only sandboxes carrying verifiable Beachside creation markers.
 
-`reference` is `null` when the adapter cannot rebuild a verified identity for that sandbox, for example when creation markers are missing or the adapter cannot reopen sandboxes. The sandbox is still listed. Listed references never claim more than the provider shows: `ownership` is `"verified-created"` only when native creation markers prove that Sandbar created it, and is otherwise `"unknown"`. A listing does not prove that your application created a sandbox, so do not use it alone to decide what to clean up. Destroyed sandboxes can still appear with `state: "destroyed"`; `get()` reports `NOT_FOUND` for them.
+`reference` is `null` when the adapter cannot rebuild a verified identity for that sandbox, for example when creation markers are missing or the adapter cannot reopen sandboxes. The sandbox is still listed. Listed references never claim more than the provider shows: `ownership` is `"verified-created"` only when native creation markers prove that Beachside created it, and is otherwise `"unknown"`. A listing does not prove that your application created a sandbox, so do not use it alone to decide what to clean up. Destroyed sandboxes can still appear with `state: "destroyed"`; `get()` reports `NOT_FOUND` for them.
 
-`labels` holds the labels you passed to `create()` or `restore()`, without the adapter's own markers. It is `null` on providers that keep no labels. `createdAt` is an ISO time the provider reported, or `null` when it reports none. Labels you set per job, such as `{ run: "42" }`, are the reliable way to find a crashed job's sandboxes later; the CLI's [`sandbar gc`](/docs/cli/#cleaning-up-after-killed-jobs) does exactly that.
+`labels` holds the labels you passed to `create()` or `restore()`, without the adapter's own markers. It is `null` on providers that keep no labels. `createdAt` is an ISO time the provider reported, or `null` when it reports none. Labels you set per job, such as `{ run: "42" }`, are the reliable way to find a crashed job's sandboxes later; the CLI's [`beachside gc`](/docs/cli/#cleaning-up-after-killed-jobs) does exactly that.
 
-| Adapter                                                  | Coverage                                                  | Listed references                                                                                                        | Labels and `createdAt`                      |
-| -------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| [Daytona](/docs/providers/daytona/)                      | `sandbar-managed` (organization and target)               | `verified-created` from Sandbar labels; `null` when a creation label is missing. One detail read per labelled candidate. | Labels; creation time.                      |
-| [E2B](/docs/providers/e2b/)                              | `sandbar-managed` (team or API key, and template)         | `verified-created` from Sandbar metadata. Paused sandboxes list as `suspended`.                                          | Labels; start time.                         |
-| [boxd (experimental)](/docs/providers/boxd/)             | `provider-scope` (verified org)                           | `unknown` ownership; `null` for machines without a UUID.                                                                 | No labels (`null`); creation time.          |
-| [Vercel Sandbox (experimental)](/docs/providers/vercel/) | Sessions: `provider-scope`; persistent: `sandbar-managed` | `unknown` ownership with no creation receipt. Persistent references keep the native generation used to reopen by name.   | Labels; creation time of the named sandbox. |
-| [Runloop (experimental)](/docs/providers/runloop/)       | `provider-scope` (verified account)                       | `unknown` ownership.                                                                                                     | No labels (`null`); creation time.          |
-| Modal (experimental)                                     | `provider-scope` (verified App)                           | Always `null`: the Modal adapter cannot reopen sandboxes.                                                                | Labels; no creation time (`null`).          |
+| Adapter                                                  | Coverage                                          | Listed references                                                                                                          | Labels and `createdAt`                      |
+| -------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| [Daytona](/docs/providers/daytona/)                      | `managed` (organization and target)               | `verified-created` from Beachside labels; `null` when a creation label is missing. One detail read per labelled candidate. | Labels; creation time.                      |
+| [E2B](/docs/providers/e2b/)                              | `managed` (team or API key, and template)         | `verified-created` from Beachside metadata. Paused sandboxes list as `suspended`.                                          | Labels; start time.                         |
+| [boxd (experimental)](/docs/providers/boxd/)             | `provider-scope` (verified org)                   | `unknown` ownership; `null` for machines without a UUID.                                                                   | No labels (`null`); creation time.          |
+| [Vercel Sandbox (experimental)](/docs/providers/vercel/) | Sessions: `provider-scope`; persistent: `managed` | `unknown` ownership with no creation receipt. Persistent references keep the native generation used to reopen by name.     | Labels; creation time of the named sandbox. |
+| [Runloop (experimental)](/docs/providers/runloop/)       | `provider-scope` (verified account)               | `unknown` ownership.                                                                                                       | No labels (`null`); creation time.          |
+| Modal (experimental)                                     | `provider-scope` (verified App)                   | Always `null`: the Modal adapter cannot reopen sandboxes.                                                                  | Labels; no creation time (`null`).          |
 
 `operations.inventory()` remains available and returns only `id` and `state`.
 
@@ -142,7 +142,7 @@ Pass the returned `nextCursor` to read the next page; it is absent on the last p
 Every sandbox has a wall-clock lifetime, after which the provider removes it (Boat archives it instead). It is your backstop for a job that crashes or is cancelled before it can destroy its sandbox. Every adapter uses the same setting, `lifecycle.lifetimeSeconds` in adapter setup, and defaults to 900 seconds (15 minutes):
 
 ```ts
-const client = await Sandbar.connect(
+const client = await Beachside.connect(
   e2b({ apiKey: process.env.E2B_API_KEY!, lifecycle: { lifetimeSeconds: 1800 } }),
 );
 
@@ -162,7 +162,7 @@ A per-create lifetime replaces the setup value for that sandbox. An adapter neve
 | [Runloop (experimental)](/docs/providers/runloop/)       | 60 seconds to 48 hours | Not when `lifecycle.idleSeconds` is set.        |
 | [Boat (experimental)](/docs/providers/boat/)             | 60 seconds to 30 days  |                                                 |
 
-Older adapter-specific names still work for one minor release and reject when set together with `lifecycle.lifetimeSeconds`: E2B, Vercel and Modal `timeoutSeconds`, Daytona `ttlMinutes`, and boxd's top-level `lifetimeSeconds`. From the command line, `sandbar create --ttl 30m` and `sandbar run --ttl 2h` set a per-create lifetime.
+Older adapter-specific names still work for one minor release and reject when set together with `lifecycle.lifetimeSeconds`: E2B, Vercel and Modal `timeoutSeconds`, Daytona `ttlMinutes`, and boxd's top-level `lifetimeSeconds`. From the command line, `beachside create --ttl 30m` and `beachside run --ttl 2h` set a per-create lifetime.
 
 ### Renew lifetime
 
@@ -185,7 +185,7 @@ Renewal sets a new expiry window from when the provider processes the request. I
 
 Provider account limits can be tighter. `renewed.requested.forSeconds` reports the resolved setting. `acknowledged: true` means the provider accepted the request, even if the follow-up read failed and `observation` is `null`. If the acknowledgement is lost, recover the operation instead of automatically renewing again.
 
-The experimental [boxd adapter](/docs/providers/boxd/) also supports renewal. [Vercel Sandbox](/docs/providers/vercel/#lifetime-cleanup-and-reopening) renewal instead **adds** 1–86,400 seconds per request to the running session; Vercel caps total session time by plan. See the [renewal example](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/sandbox-renew.ts) for saving and reopening a sandbox before renewal.
+The experimental [boxd adapter](/docs/providers/boxd/) also supports renewal. [Vercel Sandbox](/docs/providers/vercel/#lifetime-cleanup-and-reopening) renewal instead **adds** 1–86,400 seconds per request to the running session; Vercel caps total session time by plan. See the [renewal example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/sandbox-renew.ts) for saving and reopening a sandbox before renewal.
 
 ### Suspend and resume
 
@@ -201,12 +201,12 @@ console.log(resumed.execution);
 
 What survives suspension depends on the provider:
 
-| Adapter                                                               | What to expect                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Daytona](/docs/providers/daytona/#lifetime-idle-stop-and-suspension) | Containers stop: private files are kept and processes end; resume starts fresh processes under the same sandbox ID. Linux VMs pause: files, memory and processes are kept and resume continues them. Requires no mounts and deletion after stopping disabled. The sandbox's expiry clock keeps running while inactive; resume does not reset it.            |
-| [E2B](/docs/providers/e2b/#lifetime-pause-and-snapshots)              | Preserves private files and memory, and drops connections. Requires a verified kill-on-timeout policy with automatic resume disabled; known native mounts are unsupported. Resume uses the current connection's configured lifetime. `execution: "unknown"` means Sandbar cannot verify that the original processes survived intervening lifecycle changes. |
-| [boxd (experimental)](/docs/providers/boxd/)                          | Maps native pause and wake with memory, processes, and sockets preserved. Inbound traffic can also wake sleeping machines. This lifecycle mapping has not been live-qualified.                                                                                                                                                                              |
-| [Vercel Sandbox (experimental)](/docs/providers/vercel/)              | Suspension and resumption are unsupported.                                                                                                                                                                                                                                                                                                                  |
+| Adapter                                                               | What to expect                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Daytona](/docs/providers/daytona/#lifetime-idle-stop-and-suspension) | Containers stop: private files are kept and processes end; resume starts fresh processes under the same sandbox ID. Linux VMs pause: files, memory and processes are kept and resume continues them. Requires no mounts and deletion after stopping disabled. The sandbox's expiry clock keeps running while inactive; resume does not reset it.              |
+| [E2B](/docs/providers/e2b/#lifetime-pause-and-snapshots)              | Preserves private files and memory, and drops connections. Requires a verified kill-on-timeout policy with automatic resume disabled; known native mounts are unsupported. Resume uses the current connection's configured lifetime. `execution: "unknown"` means Beachside cannot verify that the original processes survived intervening lifecycle changes. |
+| [boxd (experimental)](/docs/providers/boxd/)                          | Maps native pause and wake with memory, processes, and sockets preserved. Inbound traffic can also wake sleeping machines. This lifecycle mapping has not been live-qualified.                                                                                                                                                                                |
+| [Vercel Sandbox (experimental)](/docs/providers/vercel/)              | Suspension and resumption are unsupported.                                                                                                                                                                                                                                                                                                                    |
 
 E2B's paused state has no active-session expiry and needs explicit cleanup. It is saved compute, not a reusable snapshot. Neither E2B nor Daytona promises external-storage durability or connection continuity through suspension.
 
@@ -214,7 +214,7 @@ For E2B and Daytona, configure `lifecycle: { suspension: { preserve: "filesystem
 
 On E2B and Daytona, suspending an already inactive sandbox or resuming a running one returns `CONFLICT`. Avoid concurrent lifecycle changes from your application or other controllers. Recover uncertain operations using their saved references; cancellation does not undo a submitted change. Destroy the sandbox when you no longer need its saved state.
 
-`submitSuspend()`, `submitResume()`, and `submitRenew()` let you separate submission from waiting. See the [suspend/resume example](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/sandbox-suspend-resume.ts).
+`submitSuspend()`, `submitResume()`, and `submitRenew()` let you separate submission from waiting. See the [suspend/resume example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/sandbox-suspend-resume.ts).
 
 ## Pass arguments literally
 
@@ -257,13 +257,13 @@ const result = await box.exec(
 
 The signal stops local waiting after 15 seconds. It does not kill remote compute. The 10-second command deadline has the adapter-specific behavior below. If the result is uncertain, [recover the original execution](/docs/guides/recovery/) rather than automatically running the command again.
 
-| Adapter                                                  | How the command deadline is used                                                                                                                                                                                                                       |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [E2B](/docs/providers/e2b/#commands-and-files)           | Sets the native command RPC and initial connection timeout. A timeout does not confirm remote termination. Later polling and output reads can take longer than the deadline.                                                                           |
-| [Daytona](/docs/providers/daytona/#limits)               | Sets the native command timeout, plus separate local request and result-observation windows. Daytona documents command termination, but Sandbar has not live-verified cleanup of its command wrapper or child processes at timeout.                    |
-| [boxd (experimental)](/docs/providers/boxd/)             | Sets a deadline for the buffered execution transport. Local cancellation is not confirmation that the guest command stopped.                                                                                                                           |
-| [Vercel Sandbox (experimental)](/docs/providers/vercel/) | A guest Node helper attempts to kill the command's process group at the deadline. Separate request timeouts cover launch and observation. This behavior has fixture coverage but no live verification.                                                 |
-| Modal (experimental)                                     | Sets the native command timeout. Initial lookup and result observation share a local window of the deadline plus 5 seconds. Modal documents a process runtime limit; Sandbar has not live-verified the private transport or child-process termination. |
+| Adapter                                                  | How the command deadline is used                                                                                                                                                                                                                         |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [E2B](/docs/providers/e2b/#commands-and-files)           | Sets the native command RPC and initial connection timeout. A timeout does not confirm remote termination. Later polling and output reads can take longer than the deadline.                                                                             |
+| [Daytona](/docs/providers/daytona/#limits)               | Sets the native command timeout, plus separate local request and result-observation windows. Daytona documents command termination, but Beachside has not live-verified cleanup of its command wrapper or child processes at timeout.                    |
+| [boxd (experimental)](/docs/providers/boxd/)             | Sets a deadline for the buffered execution transport. Local cancellation is not confirmation that the guest command stopped.                                                                                                                             |
+| [Vercel Sandbox (experimental)](/docs/providers/vercel/) | A guest Node helper attempts to kill the command's process group at the deadline. Separate request timeouts cover launch and observation. This behavior has fixture coverage but no live verification.                                                   |
+| Modal (experimental)                                     | Sets the native command timeout. Initial lookup and result observation share a local window of the deadline plus 5 seconds. Modal documents a process runtime limit; Beachside has not live-verified the private transport or child-process termination. |
 
 These mappings describe implementation and provider documentation, not a guarantee that every remote process has stopped. The [E2B client artifact](https://unpkg.com/e2b@2.51.0/dist/index.mjs), [Daytona process reference](https://www.daytona.io/docs/en/typescript-sdk/process/), and [Modal command guide](https://modal.com/docs/guide/sandbox-spawn) describe the underlying timers. Modal's separate sandbox lifetime is described in its [sandbox guide](https://modal.com/docs/guide/sandboxes).
 
@@ -287,7 +287,7 @@ Avoid inserting untrusted text into shell scripts. Use argument arrays when you 
 `exec()` returns output when the command exits with code zero. A confirmed nonzero exit throws `NonzeroExitError`, which includes the command's result:
 
 ```ts
-import { NonzeroExitError } from "sandbar-sdk";
+import { NonzeroExitError } from "beachside";
 
 try {
   await box.exec(["sh", "-c", "exit 1"]);
@@ -306,7 +306,7 @@ try {
 
 Most code can use `exec()` and `create()`, which submit the operation and wait for the result.
 
-Use `box.submitExec(input)` or `sandbar.sandboxes.submitCreate(input)` when you need to save a recovery reference or control waiting yourself. They return a handle with `reference`, `observe()`, and `wait()`.
+Use `box.submitExec(input)` or `beachside.sandboxes.submitCreate(input)` when you need to save a recovery reference or control waiting yourself. They return a handle with `reference`, `observe()`, and `wait()`.
 
 Cancelling `wait({ signal })` stops local waiting. It does not terminate the command or undo creation. Save the reference and recover the submitted operation before deciding whether to retry.
 

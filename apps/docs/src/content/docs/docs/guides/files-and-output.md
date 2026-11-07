@@ -8,10 +8,10 @@ description: Read and write sandbox files, transfer large files, and use command
 Use `writeTextFile` and `readTextFile` to work with UTF-8 text. This example connects with E2B; use your chosen adapter and a writable directory in its sandbox:
 
 ```ts
-import { Image, Sandbar } from "sandbar-sdk";
-import { e2b } from "@sandbar-sdk/e2b";
+import { Image, Beachside } from "beachside";
+import { e2b } from "@beachside/e2b";
 
-const client = await Sandbar.connect(e2b({ apiKey: process.env.E2B_API_KEY! }));
+const client = await Beachside.connect(e2b({ apiKey: process.env.E2B_API_KEY! }));
 try {
   const box = await client.sandboxes.create({ environment: Image.prepared("base") });
   try {
@@ -37,7 +37,7 @@ Text files use the same limits, cancellation and error handling as the byte meth
 Use `writeFile` and `readFile` for binary data. Paths must be absolute paths inside the sandbox. This example uses E2B's `/home/user` workspace:
 
 ```ts
-const path = "/home/user/sandbar-example.bin";
+const path = "/home/user/beachside-example.bin";
 await box.writeFile(path, Uint8Array.of(0, 255, 129));
 const bytes = await box.readFile(path);
 console.log(bytes);
@@ -51,7 +51,7 @@ const bytes = await box.readFile(path, { signal: AbortSignal.timeout(5000) });
 
 A buffered read has a fixed **30-second deadline** for the provider response and all file data. An abort signal rejects with `WAIT_ABORTED`; the deadline rejects with `TIMEOUT`; closing the client rejects with `CLIENT_CLOSED`. Reads do not change the file, so these failures have no mutation to recover. Provider read errors keep their error code.
 
-Sandbar stops local waiting promptly and asks the adapter to cancel the request. Provider cancellation is best effort: earlier checks may still finish. Cancelling a read does not terminate commands or change the sandbox lifetime.
+Beachside stops local waiting promptly and asks the adapter to cancel the request. Provider cancellation is best effort: earlier checks may still finish. Cancelling a read does not terminate commands or change the sandbox lifetime.
 
 Buffered reads and writes default to a **1 MiB** limit. Pass `maxBytes` to choose a limit up to **16 MiB**; your adapter may enforce a lower limit. Use the streaming methods below for larger files. The parent directory must already exist and be writable by the provider's file operations.
 
@@ -82,7 +82,7 @@ await box.removeFile("/home/user/job", { recursive: true });
 
 `readDirectory` lists the immediate children, sorted by name using JavaScript string order. Each entry has `{ name, type }`, where `type` is `file`, `directory`, `symlink` or `unknown`. The result also includes an `observedAt` timestamp and `completeness`, which is `"complete"` or `"unknown"`. Unknown entry types remain in the list. A complete list is still an observation of a directory that may change while it is being read. Authentication, permission and connection errors reject the read.
 
-`listFiles` returns only the entries and requires the adapter to provide a complete list. Neither method searches subdirectories or fetches additional pages. Both reject more than **1,024 entries** or **65,536 UTF-8 bytes across all entry names** with `OUTPUT_CAPACITY`. Invalid or duplicate entries reject with `INVALID_RESPONSE`. Sandbar does not silently shorten a list.
+`listFiles` returns only the entries and requires the adapter to provide a complete list. Neither method searches subdirectories or fetches additional pages. Both reject more than **1,024 entries** or **65,536 UTF-8 bytes across all entry names** with `OUTPUT_CAPACITY`. Invalid or duplicate entries reject with `INVALID_RESPONSE`. Beachside does not silently shorten a list.
 
 `statFile` returns the entry type and any available `sizeBytes`, `modifiedAt` and `mode`. Missing fields are omitted. If the path ends in a symlink, it inspects the link by default, even if the target is missing. Pass `{ followSymlinks: true }` to inspect the target. Symlinks in parent directories are followed.
 
@@ -90,7 +90,7 @@ await box.removeFile("/home/user/job", { recursive: true });
 
 `makeDirectory` succeeds if the directory already exists. Pass `{ recursive: true }` to create missing parents. `removeFile` succeeds if the entry is already missing and can remove files, symlinks and empty directories. Removing a nonempty directory requires `{ recursive: true }`. Recursive removal removes symlinks themselves without walking their targets.
 
-Directory methods normalize repeated and trailing slashes. Sandbar refuses to remove `/`. These methods do not keep access inside a particular directory: paths can still pass through symlinks in parent directories.
+Directory methods normalize repeated and trailing slashes. Beachside refuses to remove `/`. These methods do not keep access inside a particular directory: paths can still pass through symlinks in parent directories.
 
 `copyFile` copies regular files. `moveFile` renames a file or directory within the same filesystem; it does not fall back to copying and deleting across filesystems. Both require existing parents, reject identical source and destination paths, and protect existing destinations by default. Pass `{ overwrite: true }` to replace a compatible destination.
 
@@ -110,7 +110,7 @@ for await (const chunk of box.readFileStream("/home/user/archive.bin", { signal 
 }
 ```
 
-Streaming methods have no default total-file size limit; pass `maxBytes` to set one. Sandbar splits large chunks into pieces of at most **64 KiB** and limits how much data waits in memory. Reads reject incomplete delivery. A successful write returns the confirmed byte count. Empty files and binary data are supported. Time spent processing a downloaded chunk does not count as network inactivity.
+Streaming methods have no default total-file size limit; pass `maxBytes` to set one. Beachside splits large chunks into pieces of at most **64 KiB** and limits how much data waits in memory. Reads reject incomplete delivery. A successful write returns the confirmed byte count. Empty files and binary data are supported. Time spent processing a downloaded chunk does not count as network inactivity.
 
 Streaming has three timeout settings:
 
@@ -126,7 +126,7 @@ Daytona and E2B streaming writes and copies use a temporary file in the destinat
 
 A lost response does not prove that a write failed. Errors retain known changes and related temporary paths. Once publication is confirmed, a later inspection or cleanup failure keeps `effect: "applied"`; remaining temporary paths show what still needs cleanup. Do not automatically retry an uncertain write.
 
-See the complete [artifact recipe](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/directory-files.ts) and [tested provider support](/docs/providers/support/) for the images and storage paths covered by live tests.
+See the complete [artifact recipe](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/directory-files.ts) and [tested provider support](/docs/providers/support/) for the images and storage paths covered by live tests.
 
 ## Traversal and text lines
 
@@ -217,7 +217,7 @@ console.log(result.stdoutText());
 
 Strings are encoded as UTF-8. `Uint8Array` input keeps its exact bytes, including NUL and binary data. The input limit is **1 MiB**; larger input rejects before contacting the provider. Empty or omitted input still closes stdin. Output and exit status use the same result format and capture limit as other executions.
 
-An adapter may supply this input through a temporary file rather than a pipe. For ongoing input, use [`processes.start({ command, stdin: "pipe", output: { mode: "stream" } })`](/docs/guides/text-streaming/), then call `write()` and `closeStdin()`. Process stdin defaults to closed. See the complete [finite-input example](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/finite-stdin.ts) and [tested provider support](/docs/providers/support/) for provider limits and live test coverage.
+An adapter may supply this input through a temporary file rather than a pipe. For ongoing input, use [`processes.start({ command, stdin: "pipe", output: { mode: "stream" } })`](/docs/guides/text-streaming/), then call `write()` and `closeStdin()`. Process stdin defaults to closed. See the complete [finite-input example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/finite-stdin.ts) and [tested provider support](/docs/providers/support/) for provider limits and live test coverage.
 
 ## Recover an uncertain write
 

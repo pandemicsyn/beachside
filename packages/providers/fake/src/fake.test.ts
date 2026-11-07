@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { FakeProviderDriver, fakeProvider } from "./index";
 import { FakeProviderEngine } from "./engine";
 import { startFakeProviderServer } from "./server";
-import { ProviderReadError } from "@sandbar/provider-spi";
+import { ProviderReadError } from "@beachside-internal/provider-spi";
 import { FakeAction } from "./protocol";
 
 const token = "local-test-token-12345";
@@ -39,7 +39,7 @@ let server: Awaited<ReturnType<typeof startFakeProviderServer>> | undefined;
 let directory: string | undefined;
 
 async function setup(statePath?: string) {
-  directory ??= await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+  directory ??= await mkdtemp(join(tmpdir(), "beachside-fake-"));
   server = await startFakeProviderServer({
     hostname: "127.0.0.1",
     port: 0,
@@ -101,7 +101,7 @@ describe("independent fake provider", () => {
       expect(FakeAction.safeParse(action).success).toBe(false);
     }
   });
-  test("lost create and exec responses remain observable across Sandbar-facing restart without duplicate effects", async () => {
+  test("lost create and exec responses remain observable across Beachside-facing restart without duplicate effects", async () => {
     const { driver, control, statePath } = await setup();
     await control("/_test/seed", {
       submissionId: "create_1",
@@ -307,7 +307,7 @@ describe("independent fake provider", () => {
   });
 
   test("fake server retains validated transport options after caller mutation", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
 
     const options = {
       hostname: "127.0.0.1" as const,
@@ -338,7 +338,7 @@ describe("independent fake provider", () => {
   });
 
   test("exported fake server refuses non-loopback binds at runtime", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     // SAFETY: This test deliberately passes a disallowed hostname to verify the runtime guard rejects it before binding a socket.
     await expect(
       startFakeProviderServer({
@@ -909,7 +909,7 @@ describe("independent fake provider", () => {
   });
 
   test("scope matching keeps NUL-containing account and region tuples distinct", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const statePath = join(directory, "provider.json");
     const engine = new FakeProviderEngine(statePath, true);
     await engine.load();
@@ -1282,7 +1282,7 @@ describe("independent fake provider", () => {
   });
 
   test("diagnostic invocation history remains bounded after repeated definitive rejections", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const engine = new FakeProviderEngine(join(directory, "provider.json"), true);
     await engine.load();
     // Seed the persisted boundary, then exercise real rejection/eviction and reload.
@@ -1319,7 +1319,7 @@ describe("independent fake provider", () => {
   });
 
   test("a submission ID cannot apply an effect for another project in the same native scope", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const statePath = join(directory, "provider.json");
     const engine = new FakeProviderEngine(statePath, true);
     await engine.load();
@@ -1351,7 +1351,7 @@ describe("independent fake provider", () => {
   });
 
   test("non-idempotent duplicate effects remain durable but cannot be observed as one result", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const statePath = join(directory, "provider.json");
     const engine = new FakeProviderEngine(statePath, true);
     await engine.load();
@@ -1386,7 +1386,7 @@ describe("independent fake provider", () => {
   });
 
   test("fake state recovery rejects malformed or unknown-version evidence without rewriting it", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const statePath = join(directory, "provider.json");
     const engine = new FakeProviderEngine(statePath, true);
     await engine.load();
@@ -1503,7 +1503,7 @@ describe("independent fake provider", () => {
   });
 
   test("fake state recovery requires destroy evidence and cleared files for destroyed sandboxes", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const statePath = join(directory, "provider.json");
     const engine = new FakeProviderEngine(statePath, true);
     await engine.load();
@@ -1545,7 +1545,7 @@ describe("independent fake provider", () => {
 
   // This exhaustive fixture performs 512 serialized durable writes on the CI filesystem.
   test("full effect ledger rejects the 513th mutation before changing provider state while preserving replay evidence", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const engine = new FakeProviderEngine(join(directory, "provider.json"), true);
     await engine.load();
 
@@ -1599,7 +1599,7 @@ describe("independent fake provider", () => {
   }, 30_000);
 
   test("state byte limit returns definitive capacity without persisting a large execution effect", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const engine = new FakeProviderEngine(join(directory, "provider.json"), true);
     await engine.load();
 
@@ -1651,7 +1651,7 @@ describe("independent fake provider", () => {
   });
 
   test("reads expose only committed state while a mutation save is pending or fails", async () => {
-    directory = await mkdtemp(join(tmpdir(), "sandbar-fake-"));
+    directory = await mkdtemp(join(tmpdir(), "beachside-fake-"));
     const statePath = join(directory, "provider.json");
     const engine = new FakeProviderEngine(statePath, true);
     await engine.load();

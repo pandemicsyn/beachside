@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createFakeAdapter } from "@sandbar/provider-fake";
-import { startFakeProviderServer } from "@sandbar/provider-fake/server";
-import { Image, OutcomeUnknownError, Sandbar, type RecoveryReference } from "./index";
+import { createFakeAdapter } from "@beachside-internal/provider-fake";
+import { startFakeProviderServer } from "@beachside-internal/provider-fake/server";
+import { Image, OutcomeUnknownError, Beachside, type RecoveryReference } from "./index";
 
 const token = "fake-images-token-123456";
 
@@ -15,7 +15,7 @@ let server: Awaited<ReturnType<typeof startFakeProviderServer>>;
 let calls: Record<string, number>;
 
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), "sandbar-fake-images-"));
+  directory = await mkdtemp(join(tmpdir(), "beachside-fake-images-"));
   server = await startFakeProviderServer({
     hostname: "127.0.0.1",
     port: 0,
@@ -43,7 +43,7 @@ const counting = Object.assign(
 ) as typeof fetch;
 
 async function connect(saved: RecoveryReference[] = []) {
-  return Sandbar.connect({
+  return Beachside.connect({
     adapter: createFakeAdapter({
       url: `http://127.0.0.1:${server.port}`,
       token,

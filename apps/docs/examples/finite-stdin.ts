@@ -1,4 +1,4 @@
-import type { ExecOutput, SandboxHandle } from "sandbar-sdk";
+import type { ExecOutput, SandboxHandle } from "beachside";
 
 /** Echo finite UTF-8 or binary input through the ordinary command result. */
 export function finiteStdinEcho(

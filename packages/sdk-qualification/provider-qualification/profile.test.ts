@@ -19,7 +19,7 @@ const profilePath = fileURLToPath(new URL("./fixtures/external-profile.ts", impo
 test("external profile loads its public adapter through the maintained baseline and owned cleanup", async () => {
   const profile = await loadProviderProfile(profilePath);
   const routing = profileRouting(profile, {});
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-external-profile-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-external-profile-"));
   directories.push(directory);
   const ledger = new LedgerStore(directory, crypto.randomUUID());
   await ledger.initialize(
@@ -29,7 +29,7 @@ test("external profile loads its public adapter through the maintained baseline 
   );
 
   const t = new TestResources(
-    profile.connection(routing, { SANDBAR_EXTERNAL_FIXTURE_TOKEN: "offline" }),
+    profile.connection(routing, { BEACHSIDE_EXTERNAL_FIXTURE_TOKEN: "offline" }),
     ledger,
     String(routing.imageId),
     "blocked",
@@ -64,8 +64,8 @@ test("serialized snapshot reference reopens and validates scope in a separate OS
     },
   };
 
-  const original = process.env.SANDBAR_EXTERNAL_FIXTURE_TOKEN;
-  process.env.SANDBAR_EXTERNAL_FIXTURE_TOKEN = "offline";
+  const original = process.env.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN;
+  process.env.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN = "offline";
 
   try {
     await reopenInFreshProcess(input, AbortSignal.timeout(5000));
@@ -82,15 +82,15 @@ test("serialized snapshot reference reopens and validates scope in a separate OS
       ),
     ).rejects.toThrow("reopen/inspect failed");
   } finally {
-    if (original === undefined) delete process.env.SANDBAR_EXTERNAL_FIXTURE_TOKEN;
-    else process.env.SANDBAR_EXTERNAL_FIXTURE_TOKEN = original;
+    if (original === undefined) delete process.env.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN;
+    else process.env.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN = original;
   }
 });
 
 test("serialized sandbox reference reopens and uses public files/exec in a separate OS process", async () => {
   const profile = await loadProviderProfile(profilePath);
-  const original = process.env.SANDBAR_EXTERNAL_FIXTURE_TOKEN;
-  process.env.SANDBAR_EXTERNAL_FIXTURE_TOKEN = "offline";
+  const original = process.env.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN;
+  process.env.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN = "offline";
 
   try {
     await reopenInFreshProcess(
@@ -119,7 +119,7 @@ test("serialized sandbox reference reopens and uses public files/exec in a separ
       AbortSignal.timeout(5000),
     );
   } finally {
-    if (original === undefined) delete process.env.SANDBAR_EXTERNAL_FIXTURE_TOKEN;
-    else process.env.SANDBAR_EXTERNAL_FIXTURE_TOKEN = original;
+    if (original === undefined) delete process.env.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN;
+    else process.env.BEACHSIDE_EXTERNAL_FIXTURE_TOKEN = original;
   }
 });

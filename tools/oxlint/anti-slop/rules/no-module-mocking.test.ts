@@ -8,7 +8,7 @@ const lint = join(root, "node_modules/.bin/oxlint");
 const config = join(root, ".oxlintrc.json");
 
 function reportsModuleMocking(source: string): boolean {
-  const directory = mkdtempSync(join(tmpdir(), "sandbar-mocking-lint-"));
+  const directory = mkdtempSync(join(tmpdir(), "beachside-mocking-lint-"));
 
   try {
     const file = join(directory, "probe.ts");

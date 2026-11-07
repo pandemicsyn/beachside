@@ -2,12 +2,12 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { adapterSuite } from "@sandbar-sdk/adapter/testing";
+import { adapterSuite } from "@beachside/adapter/testing";
 import { createFakeAdapter } from "./adapter";
 import { startFakeProviderServer } from "./server";
 
 test("fake public adapter passes the required managed-compute scenarios", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-fake-adapter-suite-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-fake-adapter-suite-"));
   const token = "long-fake-adapter-suite-token";
 
   const primary = await startFakeProviderServer({

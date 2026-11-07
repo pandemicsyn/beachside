@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { AdapterSandbox, Sandbar } from "sandbar-sdk";
+import { AdapterSandbox, Beachside } from "beachside";
 import { artifactFiles } from "../../../../apps/docs/examples/directory-files";
 import { createE2BAdapter } from "./index";
 import { createSdkTransport } from "./transport";
@@ -61,10 +61,10 @@ function fixture(version = "0.5.7", shortUpload = false, nativeFilesystem = fals
           state: "running",
           metadata: nativeFilesystem
             ? {
-                sandbar_scope: "team:base",
-                sandbar_template: "base",
-                sandbar_operation: "op_seed",
-                sandbar_submission: "sub_seed",
+                beachside_scope: "team:base",
+                beachside_template: "base",
+                beachside_operation: "op_seed",
+                beachside_submission: "sub_seed",
               }
             : {},
           envdVersion: version,
@@ -213,13 +213,13 @@ function fixture(version = "0.5.7", shortUpload = false, nativeFilesystem = fals
 test.skipIf(process.platform !== "linux")(
   "E2B public SDK runs the shared artifact recipe through native guest transport",
   async () => {
-    const root = mkdtempSync(join(tmpdir(), "sandbar-e2b-artifacts-"));
-    let client: Awaited<ReturnType<typeof Sandbar.connect>> | undefined;
+    const root = mkdtempSync(join(tmpdir(), "beachside-e2b-artifacts-"));
+    let client: Awaited<ReturnType<typeof Beachside.connect>> | undefined;
 
     try {
       const f = fixture("0.5.7", false, true);
 
-      client = await Sandbar.connect({
+      client = await Beachside.connect({
         adapter: createE2BAdapter(() => f.transport),
         config: { teamId: "team", preview: { access: "protected" } },
         credentials: { apiKey: "fixture" },
