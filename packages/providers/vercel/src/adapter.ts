@@ -2802,4 +2802,4 @@ export function createVercelAdapter(
   });
 }
 
-export const vercel = createVercelAdapter();
+export const vercelAdapter = createVercelAdapter();

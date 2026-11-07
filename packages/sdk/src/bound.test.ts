@@ -50,3 +50,17 @@ test("bound first-party factory uses the public connection validation and lifeti
 
   expect(releases).toBe(1);
 });
+
+test("a provider factory passed where a definition belongs fails with a pointer to both forms", async () => {
+  const factory = () => ({ name: "example" });
+
+  // SAFETY: The test intentionally passes a runtime value excluded from the public type.
+  const error = await Beachside.connect({
+    adapter: factory as never,
+    config: {},
+    credentials: {},
+  }).catch((cause: Error) => cause);
+
+  expect(error).toMatchObject({ code: "INVALID_ARGUMENT" });
+  expect(error.message).toContain("adapter: vercelAdapter");
+});

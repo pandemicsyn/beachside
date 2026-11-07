@@ -7,11 +7,13 @@ The `@beachside/e2b` package runs Beachside sandboxes on [E2B](https://e2b.dev) 
 
 ```ts
 import { Beachside } from "beachside";
-import { e2b } from "@beachside/e2b";
+import { e2bAdapter } from "@beachside/e2b";
 
-const client = await Beachside.connect(
-  e2b({ apiKey: process.env.E2B_API_KEY!, lifecycle: { lifetimeSeconds: 600 } }),
-);
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey: process.env.E2B_API_KEY! },
+  config: { lifecycle: { lifetimeSeconds: 600 } },
+});
 
 try {
   const box = await client.sandboxes.create();
@@ -27,6 +29,8 @@ try {
 ```
 
 Set `E2B_API_KEY` on the server. `E2B_API_ID` is not required and is not a team ID. Without `teamId`, `connect` verifies the key with an authenticated read and scopes everything to that key, so rotating the key changes the scope. With `teamId`, it verifies the team instead, and you can rotate keys within that team without losing access to saved references.
+
+The package also exports `e2b()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(e2b({ apiKey }))`. It is the same setup; use whichever reads better.
 
 ## Setup
 

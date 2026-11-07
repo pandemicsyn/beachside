@@ -88,7 +88,11 @@ Configure `network` once in adapter setup. Every adapter uses the same names, so
 
 ```ts
 // Only the adapter setup differs between providers.
-const client = await Beachside.connect(e2b({ apiKey, network: "internet" }));
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey },
+  config: { network: "internet" },
+});
 const box = await client.sandboxes.create();
 ```
 

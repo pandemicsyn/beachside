@@ -4,9 +4,13 @@ Install `beachside` and `@beachside/e2b`, then import the official adapter:
 
 ```ts
 import { Beachside, Image } from "beachside";
-import { e2b } from "@beachside/e2b";
+import { e2bAdapter } from "@beachside/e2b";
 
-const client = await Beachside.connect(e2b({ apiKey: process.env.E2B_API_KEY! }));
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey: process.env.E2B_API_KEY! },
+  config: {},
+});
 
 const box = await client.sandboxes.create({
   environment: Image.prepared("base"),

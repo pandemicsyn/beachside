@@ -7,16 +7,16 @@ The `@beachside/vercel` package runs short-lived [Vercel Sandbox](https://vercel
 
 ```ts
 import { Beachside } from "beachside";
-import { vercel } from "@beachside/vercel";
+import { vercelAdapter } from "@beachside/vercel";
 
 const client = await Beachside.connect({
-  adapter: vercel,
+  adapter: vercelAdapter,
+  credentials: { token: process.env.VERCEL_TOKEN! },
   config: {
-    teamId: process.env.BEACHSIDE_VERCEL_TEAM_ID!,
-    projectId: process.env.BEACHSIDE_VERCEL_PROJECT_ID!,
+    teamId: process.env.VERCEL_TEAM_ID!,
+    projectId: process.env.VERCEL_PROJECT_ID!,
     network: "blocked",
   },
-  credentials: { token: process.env.VERCEL_TOKEN! },
 });
 try {
   const box = await client.sandboxes.create();
@@ -32,6 +32,8 @@ try {
 ```
 
 Use a token that can access the team and project. `connect` checks the team, project and access with read-only requests and allocates no compute. Saved sandbox references contain no credentials.
+
+The package also exports `vercel()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(vercel({ token, teamId, projectId }))`. It is the same setup; use whichever reads better.
 
 ## Setup
 

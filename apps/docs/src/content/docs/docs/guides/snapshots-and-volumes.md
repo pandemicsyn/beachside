@@ -94,13 +94,16 @@ const captured = await source.snapshot({
 Choose what capture keeps once, in adapter setup, with `snapshots: { preserve }` and the exported `Preserve` constants. Every adapter with snapshots accepts it, so the setting carries over when you switch providers. The choice is exact: E2B's `Preserve.FILESYSTEM` skips memory, and restored sandboxes boot fresh. Daytona's `Preserve.FILESYSTEM_AND_MEMORY` captures memory from running Linux VMs; containers reject it before any change. boxd always keeps memory, so it rejects `Preserve.FILESYSTEM` at connect; Modal, Vercel, Runloop and Boat keep files only, so they reject `Preserve.FILESYSTEM_AND_MEMORY` at connect. Omit it to keep the provider's default. A choice the adapter cannot honor rejects before any sandbox changes.
 
 ```ts
-import { Preserve } from "beachside";
-import { e2b } from "@beachside/e2b";
+import { Beachside, Preserve } from "beachside";
+import { e2bAdapter } from "@beachside/e2b";
 
-const adapter = e2b({
-  apiKey: process.env.E2B_API_KEY!,
-  snapshots: { preserve: Preserve.FILESYSTEM },
-  lifecycle: { suspension: { preserve: Preserve.FILESYSTEM } },
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey: process.env.E2B_API_KEY! },
+  config: {
+    snapshots: { preserve: Preserve.FILESYSTEM },
+    lifecycle: { suspension: { preserve: Preserve.FILESYSTEM } },
+  },
 });
 ```
 
@@ -123,17 +126,18 @@ The following example uses Daytona. Configure the prepared image and network pol
 
 ```ts
 import { Image, Beachside } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const beachside = await Beachside.connect(
-  daytona({
-    apiKey: process.env.DAYTONA_API_KEY!,
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: {
     target: "us",
     environment: Image.prepared("daytona-small"),
     network: "daytona-default",
-  }),
-  { cleanup: { storage: "allow-unconfirmed" } },
-);
+  },
+  cleanup: { storage: "allow-unconfirmed" },
+});
 ```
 
 The default cleanup policy, `require-durable`, prevents destruction of mounted compute when writable-storage durability cannot be confirmed. Daytona cannot currently confirm that guarantee. `allow-unconfirmed` permits destruction while accepting that writes may not be fully durable. Finish application writes first; a completed write alone does not prove shutdown durability.

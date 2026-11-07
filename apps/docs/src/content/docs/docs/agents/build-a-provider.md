@@ -71,4 +71,4 @@ Finish with the implementation, usage example, validation results,
 and a precise list of unsupported or untested behavior.
 ```
 
-For a separately distributed adapter, consumers install its package alongside `beachside` and pass the exported definition to `Beachside.connect({ adapter, config, credentials })`. Official adapters use the same public contract with convenience factories imported from their separately installed packages.
+For a separately distributed adapter, consumers install its package alongside `beachside` and pass the exported definition to `Beachside.connect({ adapter, config, credentials })`. Official adapters use the same contract and form; each also exports an optional factory, built with `bindAdapter`, that takes credentials and config in one object.

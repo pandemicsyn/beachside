@@ -1,19 +1,20 @@
 import { Image, Beachside } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
 const apiKey = process.env.DAYTONA_API_KEY;
 
 if (!apiKey) throw new Error("Set DAYTONA_API_KEY before running this example");
 
-const beachside = await Beachside.connect(
-  daytona({
-    apiKey,
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey },
+  config: {
     target: "us",
     environment: Image.prepared("daytona-small"),
-    ttlMinutes: 15,
+    lifecycle: { lifetimeSeconds: 900 },
     network: "daytona-default",
-  }),
-);
+  },
+});
 
 try {
   await beachside.sandboxes.with({}, async (box) => {

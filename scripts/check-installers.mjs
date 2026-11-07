@@ -101,11 +101,11 @@ cases.push({
   name: "vercel",
   packageName: "@beachside/vercel",
   overrides: [adapterName],
-  runtime: `import { vercel, createVercelAdapter } from "@beachside/vercel";
-if (vercel.name !== "vercel" || createVercelAdapter().name !== "vercel") throw Error("Invalid Vercel definition");
-vercel.config.parse({ teamId: "team", projectId: "project" });`,
-  types: `import { vercel, createVercelAdapter } from "@beachside/vercel";
-const definition: typeof vercel = createVercelAdapter(); void definition;`,
+  runtime: `import { vercelAdapter, createVercelAdapter } from "@beachside/vercel";
+if (vercelAdapter.name !== "vercel" || createVercelAdapter().name !== "vercel") throw Error("Invalid Vercel definition");
+vercelAdapter.config.parse({ teamId: "team", projectId: "project" });`,
+  types: `import { vercelAdapter, createVercelAdapter } from "@beachside/vercel";
+const definition: typeof vercelAdapter = createVercelAdapter(); void definition;`,
 });
 
 cases.push({

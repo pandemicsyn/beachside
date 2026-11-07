@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Beachside } from "beachside";
-import { vercel } from "@beachside/vercel";
+import { vercelAdapter } from "@beachside/vercel";
 import { defineProviderProfile } from "./profile";
 
 const identifier = z
@@ -131,7 +131,7 @@ export default defineProviderProfile({
 
     return (onReference, onDiagnostic) =>
       Beachside.connect({
-        adapter: vercel,
+        adapter: vercelAdapter,
         config: {
           teamId: config.teamId,
           projectId: config.projectId,

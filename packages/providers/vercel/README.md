@@ -6,18 +6,18 @@ Install with `npm install beachside @beachside/vercel`:
 
 ```ts
 import { Beachside } from "beachside";
-import { vercel } from "@beachside/vercel";
+import { vercelAdapter } from "@beachside/vercel";
 
 const client = await Beachside.connect({
-  adapter: vercel,
+  adapter: vercelAdapter,
+  credentials: { token: process.env.VERCEL_TOKEN! },
   config: {
-    teamId: process.env.BEACHSIDE_VERCEL_TEAM_ID!,
-    projectId: process.env.BEACHSIDE_VERCEL_PROJECT_ID!,
+    teamId: process.env.VERCEL_TEAM_ID!,
+    projectId: process.env.VERCEL_PROJECT_ID!,
     region: "iad1",
     lifecycle: { lifetimeSeconds: 300 },
     network: "blocked",
   },
-  credentials: { token: process.env.VERCEL_TOKEN! },
 });
 try {
   const box = await client.sandboxes.create();

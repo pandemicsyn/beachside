@@ -88,7 +88,7 @@ export const providers: readonly ProviderDescriptor[] = [
   {
     id: "vercel",
     module: "@beachside/vercel",
-    export: "vercel",
+    export: "vercelAdapter",
     experimental: false,
     credentials: { token: "VERCEL_TOKEN" },
     config: {

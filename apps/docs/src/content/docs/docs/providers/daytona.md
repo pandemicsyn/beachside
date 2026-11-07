@@ -7,17 +7,18 @@ The `@beachside/daytona` package runs Beachside sandboxes on [Daytona](https://w
 
 ```ts
 import { Image, Beachside } from "beachside";
-import { daytona } from "@beachside/daytona";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const client = await Beachside.connect(
-  daytona({
-    apiKey: process.env.DAYTONA_API_KEY!,
+const client = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: {
     target: "us",
     environment: Image.prepared("daytona-small"),
     lifecycle: { lifetimeSeconds: 600 },
     network: "daytona-default",
-  }),
-);
+  },
+});
 
 try {
   const box = await client.sandboxes.create();
@@ -32,6 +33,8 @@ try {
 ```
 
 Set `DAYTONA_API_KEY` on the server. `connect` reads the key's organization and checks that the `target` region is available to it. Everything is scoped to that organization, region and network setting; a rotated key for the same organization works with saved references.
+
+The package also exports `daytona()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(daytona({ apiKey, target: "us", network: "daytona-default" }))`. It is the same setup; use whichever reads better.
 
 ## Setup
 
