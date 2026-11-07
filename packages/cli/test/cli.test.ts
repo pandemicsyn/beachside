@@ -2375,6 +2375,175 @@ describe("directory transfer", () => {
   });
 });
 
+describe("large files and input", () => {
+  const staging = "/tmp/beachside.fixture";
+  const big = (size: number) => Buffer.alloc(size, "abcdefghij");
+
+  async function seedScript(script: string, exitCode: number, stdout: string, stderr = "") {
+    await control("/_test/seed", {
+      submissionId: "*",
+      action: "exec",
+      command: {
+        command: { kind: "shell", script },
+        exitCode,
+        stdoutBase64: Buffer.from(stdout).toString("base64"),
+        stderrBase64: Buffer.from(stderr).toString("base64"),
+      },
+    });
+  }
+
+  /** The fake sandbox's files, as path → base64. */
+  async function sandboxFiles(): Promise<Record<string, string>> {
+    const response = await fetch(new URL("/_test/state", server.url), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    return (await response.json()).resources[0].files;
+  }
+
+  test("cp sends a file larger than one buffered write in parts the sandbox joins", async () => {
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    const source = big(2_500_000);
+    await writeFile(join(dir, "big.bin"), source);
+    await seedScript(scripts.stage(), 0, `${staging}\n`);
+    await seedScript(scripts.join(staging, "/work/big.bin", true), 0, "/work/big.bin\n");
+
+    const result = await cli(["cp", "big.bin", "box:/work/big.bin", "--json"]);
+
+    expect(envelope(result).data).toEqual({
+      sandbox: "box",
+      path: "/work/big.bin",
+      bytes: 2_500_000,
+    });
+    const files = await sandboxFiles();
+
+    const parts = Object.keys(files)
+      .filter((path) => path.startsWith(`${staging}/part.`))
+      .sort();
+
+    expect(parts).toEqual([
+      `${staging}/part.000000`,
+      `${staging}/part.000001`,
+      `${staging}/part.000002`,
+    ]);
+    expect(Buffer.concat(parts.map((part) => Buffer.from(files[part]!, "base64")))).toEqual(source);
+  });
+
+  test("cp --no-clobber reports a joined file that already exists", async () => {
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    await writeFile(join(dir, "big.bin"), big(1_500_000));
+    await seedScript(scripts.stage(), 0, `${staging}\n`);
+    await seedScript(scripts.join(staging, "/work/big.bin", false), 73, "", "exists\n");
+
+    const result = await cli(["cp", "--no-clobber", "big.bin", "box:/work/big.bin", "--json"]);
+
+    expect(result.code).toBe(1);
+    expect(envelope(result).error).toMatchObject({ code: "CONFLICT" });
+  });
+
+  describe("on a provider that streams files", () => {
+    let remote: string;
+
+    beforeEach(async () => {
+      remote = join(dir, "remote-files");
+      await writeConfig({
+        default: "files",
+        profiles: { files: { module: fixture, export: "fileStreaming" } },
+      });
+    });
+
+    test("cp and cat stream files of any size both ways", async () => {
+      const env = { BEACHSIDE_FAKE_FILES: remote };
+      await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);
+      const source = big(5_000_000);
+      await writeFile(join(dir, "big.bin"), source);
+
+      const up = await cli(["cp", "big.bin", "box:/work/big.bin", "--json"], env);
+
+      expect(envelope(up).data).toEqual({
+        sandbox: "box",
+        path: "/work/big.bin",
+        bytes: 5_000_000,
+      });
+      expect(await readFile(join(remote, "work", "big.bin"))).toEqual(source);
+
+      const down = await cli(["cp", "box:/work/big.bin", "copy.bin", "--json"], env);
+
+      expect(envelope(down).data).toEqual({
+        sandbox: "box",
+        path: join(dir, "copy.bin"),
+        bytes: 5_000_000,
+      });
+      expect(await readFile(join(dir, "copy.bin"))).toEqual(source);
+      expect(await readdir(dir)).not.toContainEqual(expect.stringContaining(".part"));
+
+      const cat = await cli(["cat", "box:/work/big.bin"], env);
+
+      expect(cat.code).toBe(0);
+      expect(cat.stdout.length).toBe(5_000_000);
+    });
+
+    test("a failed download leaves the local file as it was", async () => {
+      const env = { BEACHSIDE_FAKE_FILES: remote };
+      await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);
+      await writeFile(join(dir, "keep.txt"), "original\n");
+
+      const result = await cli(["cp", "box:/work/missing.bin", "keep.txt"], env);
+
+      expect(result.code).not.toBe(0);
+      expect(await readFile(join(dir, "keep.txt"), "utf8")).toBe("original\n");
+      expect((await readdir(dir)).filter((name) => name.includes(".part"))).toEqual([]);
+    });
+
+    test("cp --no-clobber leaves an existing local file alone", async () => {
+      const env = { BEACHSIDE_FAKE_FILES: remote };
+      await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);
+      await mkdir(join(remote, "work"), { recursive: true });
+      await writeFile(join(remote, "work", "a.txt"), "remote\n");
+      await writeFile(join(dir, "a.txt"), "local\n");
+
+      const result = await cli(["cp", "--no-clobber", "box:/work/a.txt", "a.txt", "--json"], env);
+
+      expect(envelope(result).error).toMatchObject({ code: "CONFLICT" });
+      expect(await readFile(join(dir, "a.txt"), "utf8")).toBe("local\n");
+    });
+  });
+
+  test("exec --stdin streams input larger than 1 MiB where the provider takes it", async () => {
+    await writeConfig({
+      default: "stdin",
+      profiles: { stdin: { module: fixture, export: "stdinStreaming" } },
+    });
+    const log = join(dir, "stdin.log");
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    await seedExec(["wc", "-c"], 0, "done\n");
+    const input = "x".repeat(3_000_000);
+
+    const result = await cli(
+      ["exec", "box", "--stdin", "--", "wc", "-c"],
+      { BEACHSIDE_FAKE_STDIN: log },
+      input,
+    );
+
+    expect(result).toEqual({ code: 0, stdout: "done\n", stderr: "" });
+    expect((await readFile(log, "utf8")).length).toBe(3_000_000);
+  });
+
+  test("exec --stdin explains input over 1 MiB on a provider that cannot stream it", async () => {
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+
+    const result = await cli(
+      ["exec", "box", "--stdin", "--json", "--", "wc", "-c"],
+      {},
+      "x".repeat(1_100_000),
+    );
+
+    expect(result.code).toBe(125);
+    expect(envelope(result).error).toMatchObject({ code: "CAPACITY" });
+    expect(envelope(result).error.hint).toContain("beachside cp");
+  });
+});
+
 describe("snapshots", () => {
   beforeEach(async () => {
     await writeConfig({

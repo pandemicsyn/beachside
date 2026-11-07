@@ -19,7 +19,8 @@ export type Context = {
   out: Output;
   flags: GlobalFlags;
   signal: AbortSignal;
-  readStdin: () => Promise<Uint8Array>;
+  /** The CLI's own stdin, read as it arrives. */
+  stdin: () => AsyncIterable<Uint8Array>;
 };
 
 /** Lazily loaded configuration, store and provider connections for one invocation. */

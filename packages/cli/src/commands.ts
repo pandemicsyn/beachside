@@ -1,4 +1,5 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
 import { basename, join, posix, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
@@ -47,9 +48,12 @@ import {
   defaultPushDir,
   download,
   Excludes,
+  fileChunks,
   localTree,
+  saveLocalFile,
   shellQuote,
   upload,
+  uploadFile,
   type LocalTree,
 } from "./transfer";
 import { parseDuration, parsePairs, parseSize } from "./units";
@@ -1162,19 +1166,33 @@ export async function rmCommand(session: Session, flags: Flags): Promise<number>
   return 0;
 }
 
+/**
+ * A command for exec, sh and run. Input is read lazily: streaming providers receive it as it
+ * arrives, so it has no size limit and can stay open (a tunnel or a REPL); the buffered path reads
+ * it whole, up to the SDK's finite stdin limit.
+ */
+type CliExecInput = Omit<ExecInput, "stdin"> & { stdin?: () => AsyncIterable<Uint8Array> };
+
+/** The SDK's limit for finite exec stdin, which the buffered path must fit. */
+const finiteStdinBytes = 1_048_576;
+
 async function execInput(
   session: Session,
   flags: Flags,
   command: ExecInput["command"],
-): Promise<ExecInput> {
+): Promise<CliExecInput> {
   if (flags.bool("stdin") && flags.string("stdin-file"))
     throw usage("Pass either --stdin or --stdin-file");
   const stdinFile = flags.string("stdin-file");
+  const stdinPath = stdinFile ? resolve(session.ctx.cwd, stdinFile) : undefined;
+
+  // A missing --stdin-file fails before anything is created or run.
+  if (stdinPath && !(await stat(stdinPath)).isFile()) throw usage(`${stdinFile} is not a file`);
 
   const stdin = flags.bool("stdin")
-    ? await session.ctx.readStdin()
-    : stdinFile
-      ? new Uint8Array(await readFile(resolve(session.ctx.cwd, stdinFile)))
+    ? session.ctx.stdin
+    : stdinPath
+      ? () => createReadStream(stdinPath)
       : undefined;
 
   const timeout = flags.string("timeout");
@@ -1209,7 +1227,7 @@ type Executed = ExecOutput | Streamed;
 async function execute(
   session: Session,
   box: SandboxHandle<true>,
-  input: ExecInput,
+  input: CliExecInput,
   flags: Flags,
 ): Promise<Executed> {
   // JSON keeps its one envelope, so only human output streams.
@@ -1219,14 +1237,55 @@ async function execute(
     if (streamed) return streamed;
   }
 
+  const stdin = input.stdin ? await finiteStdin(input.stdin) : undefined;
+
   try {
-    return await box.exec(input, { signal: session.ctx.signal });
+    return await box.exec({ ...input, stdin }, { signal: session.ctx.signal });
   } catch (cause) {
     if (!(cause instanceof NonzeroExitError)) throw cause;
 
     return cause.result;
   }
 }
+
+/** Read all of a command's input for the buffered exec path, which takes at most 1 MiB. */
+async function finiteStdin(source: () => AsyncIterable<Uint8Array>): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  for await (const chunk of source()) {
+    total += chunk.byteLength;
+
+    if (total > finiteStdinBytes)
+      throw new CliError(
+        "CAPACITY",
+        "Input over 1 MiB needs a provider that streams stdin (Daytona, E2B or Vercel)",
+        "copy the input in and redirect it instead, e.g. beachside cp input.sql box:/tmp/input.sql && beachside sh box 'psql < /tmp/input.sql'; --json and --no-stream also read stdin whole",
+      );
+    chunks.push(chunk);
+  }
+
+  return new Uint8Array(Buffer.concat(chunks));
+}
+
+/** Send `source` to the process as it arrives, in writes the SDK accepts, then close stdin. */
+async function feedStdin(
+  running: StreamHandle,
+  source: () => AsyncIterable<Uint8Array>,
+  signal: AbortSignal,
+): Promise<void> {
+  for await (const chunk of source()) {
+    signal.throwIfAborted();
+
+    for (let at = 0; at < chunk.byteLength; at += processWriteBytes)
+      await running.write(chunk.subarray(at, at + processWriteBytes), { signal });
+  }
+
+  await running.closeStdin({ signal });
+}
+
+/** The largest single process write the SDK accepts. */
+const processWriteBytes = 65_536;
 
 /**
  * Write the command's output as it arrives where the provider streams bytes. Returns null when it
@@ -1236,7 +1295,7 @@ async function execute(
 async function streamExec(
   session: Session,
   box: SandboxHandle<true>,
-  input: ExecInput,
+  input: CliExecInput,
 ): Promise<Streamed | null> {
   const { out, signal } = session.ctx;
   const seconds = input.deadlineSeconds ?? defaultTimeoutSeconds;
@@ -1259,13 +1318,26 @@ async function streamExec(
     (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
   );
 
-  try {
-    if (input.stdin) {
-      await running.write(input.stdin, { signal: stop });
-      await running.closeStdin({ signal: stop });
-    }
+  // Input flows while output streams, and the command may exit before its input ends.
+  const feeding = new AbortController();
+  let exited = false;
 
-    const exit = await running.wait({ signal: stop });
+  if (input.stdin)
+    void feedStdin(running, input.stdin, AbortSignal.any([stop, feeding.signal])).catch(
+      (cause: unknown) => {
+        if (exited || stop.aborted) return;
+        out.note(
+          `beachside: stopped sending stdin: ${cause instanceof Error ? cause.message : String(cause)}`,
+        );
+        void running.closeStdin({ signal: stop }).catch(() => undefined);
+      },
+    );
+
+  try {
+    const exit = await running.wait({ signal: stop }).finally(() => {
+      exited = true;
+      feeding.abort();
+    });
 
     await drained(running, pumped, exit, out);
 
@@ -1300,7 +1372,7 @@ type StreamHandle = ProcessHandle<"bytes"> | ProcessHandle<"text">;
 /** Start a streaming process, or return null when the provider rejects it before dispatch. */
 async function startStream(
   box: SandboxHandle<true>,
-  input: ExecInput,
+  input: CliExecInput,
   signal: AbortSignal,
   format: "bytes" | "text",
 ): Promise<StreamHandle | null> {
@@ -1579,14 +1651,11 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
       return 0;
     }
 
-    const bytes = new Uint8Array(await readFile(local));
+    const { size } = await stat(local);
     const { record } = await findTarget(session, to.target);
     const box = await session.reopen(record);
-    await box.writeFile(to.path, bytes, {
-      overwrite: !noClobber,
-      signal: session.ctx.signal,
-    });
-    session.ctx.out.success({ sandbox: record.name, path: to.path, bytes: bytes.byteLength }, "");
+    const bytes = await uploadFile(box, record.name, local, size, to.path, !noClobber, signal);
+    out.success({ sandbox: record.name, path: to.path, bytes }, "");
 
     return 0;
   }
@@ -1622,7 +1691,6 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
 
   const { record } = await findTarget(session, from!.target);
   const box = await session.reopen(record);
-  const bytes = await box.readFile(from!.path, { signal: session.ctx.signal });
   let local = resolve(session.ctx.cwd, destination);
 
   try {
@@ -1631,19 +1699,12 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
     // A missing destination is the file to create.
   }
 
-  try {
-    await writeFile(local, bytes, { flag: flags.bool("no-clobber") ? "wx" : "w" });
-  } catch (cause) {
-    if (cause instanceof Error && "code" in cause && cause.code === "EEXIST")
-      throw new CliError(
-        "CONFLICT",
-        `${local} already exists`,
-        "drop --no-clobber to overwrite it",
-      );
-    throw cause;
-  }
-
-  session.ctx.out.success({ sandbox: record.name, path: local, bytes: bytes.byteLength }, "");
+  // Check before transferring anything; the exclusive create below still guards a race.
+  if (noClobber && (await stat(local).catch(() => null)))
+    throw new CliError("CONFLICT", `${local} already exists`, "drop --no-clobber to overwrite it");
+  const chunks = fileChunks(box, record.name, from!.path, signal);
+  const bytes = await saveLocalFile(chunks, local, noClobber);
+  out.success({ sandbox: record.name, path: local, bytes }, "");
 
   return 0;
 }
@@ -1691,14 +1752,19 @@ export async function catCommand(session: Session, flags: Flags): Promise<number
   if (!location) throw usage("Usage: beachside cat <sandbox>:/path");
   const { record } = await findTarget(session, location.target);
   const box = await session.reopen(record);
-  const bytes = await box.readFile(location.path, { signal: session.ctx.signal });
-  const { out } = session.ctx;
+  const { out, signal } = session.ctx;
+  const chunks = fileChunks(box, record.name, location.path, signal);
 
   if (!out.json) {
-    out.streams.stdout(bytes);
+    for await (const chunk of chunks) out.streams.stdout(chunk);
 
     return 0;
   }
+
+  const parts: Uint8Array[] = [];
+
+  for await (const chunk of chunks) parts.push(chunk);
+  const bytes = new Uint8Array(Buffer.concat(parts));
 
   let text: string | null = null;
 
