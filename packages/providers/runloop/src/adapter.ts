@@ -31,7 +31,7 @@ import {
   type SnapshotInfo,
   type SnapshotProfile,
   listedTime,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { filesResult, parseWrapper, quote, wrapperScript, type WrapperResult } from "./exec";
 import {
   createRunloopClient,
@@ -65,16 +65,16 @@ export const MAX_FILE_BYTES = 64 * 1024 * 1024;
 /** Runloop's documented maximum keep-alive (48 hours). */
 const MAX_LIFETIME_SECONDS = 172_800;
 
-/** Devbox and snapshot metadata keys that record the Sandbar attempt that created them. */
+/** Devbox and snapshot metadata keys that record the Beachside attempt that created them. */
 const MARK = {
-  operation: "sandbar_operation",
-  submission: "sandbar_submission",
+  operation: "beachside_operation",
+  submission: "beachside_submission",
   /** Requested egress (`blocked` or `internet`), so recovery can check the policy without the token. */
-  network: "sandbar_network",
+  network: "beachside_network",
 } as const;
 
 /** Name of the account network policy the adapter uses for `network: "blocked"`. */
-export const BLOCKED_POLICY_NAME = "sandbar-blocked";
+export const BLOCKED_POLICY_NAME = "beachside-blocked";
 
 /** Runloop tunnel URLs are `https://{port}-{tunnel_key}.tunnel.runloop.ai`. */
 const TUNNEL_DOMAIN = "tunnel.runloop.ai";
@@ -499,7 +499,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         : ctx.unknown(`${reason}; do not replay`);
     };
 
-    /** A deny-all policy named for Sandbar, found read-only; null when none exists yet. */
+    /** A deny-all policy named for Beachside, found read-only; null when none exists yet. */
     const findBlockedPolicy = async (ctx: ReadContext): Promise<string | null> => {
       if (blockedPolicy) {
         let current: NetworkPolicy | null = null;
@@ -601,7 +601,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         const created = await native.createNetworkPolicy(
           {
             name: BLOCKED_POLICY_NAME,
-            description: "Deny-all egress for Sandbar sandboxes created with network: blocked",
+            description: "Deny-all egress for Beachside sandboxes created with network: blocked",
             allow_all: false,
             allowed_hostnames: [],
             allowed_cidrs: [],
@@ -977,7 +977,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
       let stdinPath: string | undefined;
 
       if (input.stdin !== undefined) {
-        stdinPath = `/tmp/sandbar-stdin-${crypto.randomUUID()}`;
+        stdinPath = `/tmp/beachside-stdin-${crypto.randomUUID()}`;
 
         try {
           await native.uploadFile(
@@ -1325,7 +1325,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         if (!tunnel || !/^[A-Za-z0-9-]{1,256}$/.test(tunnel.tunnel_key))
           throw new AdapterError(
             "UNAVAILABLE",
-            "This Runloop devbox has no tunnel; Sandbar enables one only on devboxes it creates",
+            "This Runloop devbox has no tunnel; Beachside enables one only on devboxes it creates",
           );
         const url = `https://${input.port}-${tunnel.tunnel_key}.${TUNNEL_DOMAIN}`;
 
@@ -1471,11 +1471,11 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         restore: { status: "supported" as const, value: restore },
         volumes: {
           status: "unsupported" as const,
-          reason: "Runloop storage objects are not exposed as Sandbar volumes yet",
+          reason: "Runloop storage objects are not exposed as Beachside volumes yet",
         },
         mounts: {
           status: "unsupported" as const,
-          reason: "Runloop object mounts are not exposed as Sandbar mounts yet",
+          reason: "Runloop object mounts are not exposed as Beachside mounts yet",
         },
       }),
       snapshotCapture: {

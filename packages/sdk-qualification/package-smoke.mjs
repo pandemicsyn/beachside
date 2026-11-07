@@ -10,23 +10,23 @@ import { z } from "zod";
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 const packages = [
-  ["@sandbar-sdk/adapter", "packages/adapter"],
-  ["@sandbar/provider-spi", "packages/provider-spi"],
-  ["@sandbar/provider-fake", "packages/providers/fake"],
-  ["@sandbar-sdk/daytona", "packages/providers/daytona"],
-  ["@sandbar-sdk/modal", "packages/providers/modal"],
-  ["@sandbar-sdk/boxd", "packages/providers/boxd"],
-  ["@sandbar-sdk/boat", "packages/providers/boat"],
-  ["@sandbar-sdk/runloop", "packages/providers/runloop"],
-  ["@sandbar-sdk/vercel", "packages/providers/vercel"],
-  ["@sandbar-sdk/e2b", "packages/providers/e2b"],
-  ["sandbar-sdk", "packages/sdk"],
-  ["@sandbar-sdk/cli", "packages/cli"],
+  ["@beachside/adapter", "packages/adapter"],
+  ["@beachside-internal/provider-spi", "packages/provider-spi"],
+  ["@beachside-internal/provider-fake", "packages/providers/fake"],
+  ["@beachside/daytona", "packages/providers/daytona"],
+  ["@beachside/modal", "packages/providers/modal"],
+  ["@beachside/boxd", "packages/providers/boxd"],
+  ["@beachside/boat", "packages/providers/boat"],
+  ["@beachside/runloop", "packages/providers/runloop"],
+  ["@beachside/vercel", "packages/providers/vercel"],
+  ["@beachside/e2b", "packages/providers/e2b"],
+  ["beachside", "packages/sdk"],
+  ["@beachside/cli", "packages/cli"],
 ];
 
 const forbidden = new Set([
-  "@sandbar/store",
-  "@sandbar/service-runtime",
+  "@beachside-internal/store",
+  "@beachside-internal/service-runtime",
   "hono",
   "drizzle-orm",
   "drizzle-kit",
@@ -71,20 +71,20 @@ async function pack(directory) {
 
   if (
     [
-      "sandbar-sdk",
-      "@sandbar-sdk/adapter",
-      "@sandbar-sdk/daytona",
-      "@sandbar-sdk/e2b",
-      "@sandbar-sdk/boxd",
-      "@sandbar-sdk/boat",
-      "@sandbar-sdk/runloop",
-      "@sandbar-sdk/cli",
+      "beachside",
+      "@beachside/adapter",
+      "@beachside/daytona",
+      "@beachside/e2b",
+      "@beachside/boxd",
+      "@beachside/boat",
+      "@beachside/runloop",
+      "@beachside/cli",
     ].includes(manifest.name)
   ) {
     for (const path of contents.filter((path) => /\.(?:js|d\.ts)$/.test(path))) {
       const source = run("tar", ["-xOzf", archive, path], root);
 
-      if (/(?:from\s*|import\s*\(?)["']@sandbar\//.test(source))
+      if (/(?:from\s*|import\s*\(?)["']@beachside-internal\//.test(source))
         throw new Error(`${manifest.name} leaks private workspace in ${path}`);
     }
   }
@@ -141,11 +141,11 @@ async function checkTypes(directory, mode) {
   if (mode === "observability")
     source = `
 import { type TracerProvider } from "@opentelemetry/api";
-import { Sandbar, type ObservabilityOptions, diagnosticContext } from "sandbar-sdk";
-import { acme } from "@acme/sandbar-adapter";
+import { Beachside, type ObservabilityOptions, diagnosticContext } from "beachside";
+import { acme } from "@acme/beachside-adapter";
 async function flow(provider: TracerProvider) {
   const options: ObservabilityOptions = { tracing: { tracerProvider: provider } };
-  const client = await Sandbar.connect({ adapter: acme, config: { region: "us" }, credentials: { token: "fixture" }, ...options });
+  const client = await Beachside.connect({ adapter: acme, config: { region: "us" }, credentials: { token: "fixture" }, ...options });
   const safe = diagnosticContext(new Error("private"));
   await client.close();
   return safe.recoveryAvailable;
@@ -154,20 +154,20 @@ void flow;
 `;
   else if (mode === "custom")
     source = `
-import { Sandbar, Image, type ReadOptions, type SandboxHandle, type ConnectOptions, type CloseOptions } from "sandbar-sdk";
-import { acme } from "@acme/sandbar-adapter";
+import { Beachside, Image, type ReadOptions, type SandboxHandle, type ConnectOptions, type CloseOptions } from "beachside";
+import { acme } from "@acme/beachside-adapter";
 async function flow() {
   const setup: ConnectOptions = { signal: new AbortController().signal, timeoutMs: 30_000 };
   const cleanup: CloseOptions = { timeoutMs: 5_000 };
-  const client = await Sandbar.connect({ adapter: acme, config: { region: "us" }, credentials: { token: "fixture" }, ...setup });
+  const client = await Beachside.connect({ adapter: acme, config: { region: "us" }, credentials: { token: "fixture" }, ...setup });
   const box = await client.sandboxes.create({ environment: Image.prepared("image-1") });
   const handle: SandboxHandle = box;
   const options: ReadOptions = { signal: new AbortController().signal };
-  const renewal: import("sandbar-sdk").RenewResult = await handle.renew({ forSeconds: 61 }, options);
+  const renewal: import("beachside").RenewResult = await handle.renew({ forSeconds: 61 }, options);
   const renewalOperation = await handle.submitRenew();
   const renewed = await renewalOperation.wait();
-  const suspended: import("sandbar-sdk").SuspendResult = await handle.suspend(options);
-  const resumed: import("sandbar-sdk").ResumeResult = await handle.resume(options);
+  const suspended: import("beachside").SuspendResult = await handle.suspend(options);
+  const resumed: import("beachside").ResumeResult = await handle.resume(options);
   await (await handle.submitSuspend(options)).wait(options);
   await (await handle.submitResume(options)).wait(options);
   void suspended; void resumed;
@@ -176,7 +176,7 @@ async function flow() {
   const preparedRenewal = await client.operations.prepare("sandbox_renew", {
     sandbox: { id: box.id, reference: box.reference }, forSeconds: 61,
   });
-  const resolvedRenewal: Readonly<import("sandbar-sdk").RenewRequest> | undefined = preparedRenewal.renewal;
+  const resolvedRenewal: Readonly<import("beachside").RenewRequest> | undefined = preparedRenewal.renewal;
   void resolvedRenewal;
   await handle.inspect(options);
   await handle.inspect({ ...options, pollMs: 500 });
@@ -186,7 +186,7 @@ async function flow() {
   await handle.readTextFile("/file");
   await handle.writeTextFile("/text", text);
   await handle.writeTextFile("/text", text, { overwrite: true, signal: options.signal });
-  const entries: import("sandbar-sdk").FileEntry[] = await handle.listFiles("/job", options);
+  const entries: import("beachside").FileEntry[] = await handle.listFiles("/job", options);
   const exists: boolean = await handle.fileExists("/job/file", options);
   await handle.makeDirectory("/job/results", { recursive: true, signal: options.signal });
   await handle.removeFile("/job", { recursive: true, signal: options.signal });
@@ -195,10 +195,10 @@ async function flow() {
   await client.close(cleanup);
 }
 function lifecycleHooks(
-  suspendSubmit: NonNullable<import("@sandbar-sdk/adapter").AdapterSession["suspend"]>["submit"],
-  resumeSubmit: NonNullable<import("@sandbar-sdk/adapter").AdapterSession["resume"]>["submit"],
+  suspendSubmit: NonNullable<import("@beachside/adapter").AdapterSession["suspend"]>["submit"],
+  resumeSubmit: NonNullable<import("@beachside/adapter").AdapterSession["resume"]>["submit"],
 ) {
-  type Session = import("@sandbar-sdk/adapter").AdapterSession;
+  type Session = import("@beachside/adapter").AdapterSession;
   // @ts-expect-error Suspend must resolve an intent in prepare; callable hooks cannot do so.
   const callableSuspend: Session["suspend"] = suspendSubmit;
   // @ts-expect-error Resume must resolve an intent in prepare; callable hooks cannot do so.
@@ -220,15 +220,15 @@ function lifecycleHooks(
 }
 void lifecycleHooks;
 // @ts-expect-error config must include region
-void Sandbar.connect({ adapter: acme, config: {}, credentials: { token: "fixture" } });
+void Beachside.connect({ adapter: acme, config: {}, credentials: { token: "fixture" } });
 void flow;
 `;
   else if (mode === "boxd")
     source = `
-import { Sandbar } from "sandbar-sdk";
-import { boxdAdapter } from "@sandbar-sdk/boxd";
+import { Beachside } from "beachside";
+import { boxdAdapter } from "@beachside/boxd";
 async function flow() {
-  const client = await Sandbar.connect({ adapter: boxdAdapter, config: { org: "team", networkPolicy: "internet" }, credentials: { apiKey: "fixture" } });
+  const client = await Beachside.connect({ adapter: boxdAdapter, config: { org: "team", networkPolicy: "internet" }, credentials: { apiKey: "fixture" } });
   const box = await client.sandboxes.create();
   const volume = await client.volumes.create({ name: "workspace" });
   const filesystem: "object-backed" | "block-backed" = (await volume.inspect()).filesystem;
@@ -245,10 +245,10 @@ void flow;
 `;
   else if (mode === "boat")
     source = `
-import { Sandbar, Image } from "sandbar-sdk";
-import { boatAdapter } from "@sandbar-sdk/boat";
+import { Beachside, Image } from "beachside";
+import { boatAdapter } from "@beachside/boat";
 async function flow() {
-  const client = await Sandbar.connect({ adapter: boatAdapter, config: { network: "internet", machine: "small" }, credentials: { apiKey: "fixture" } });
+  const client = await Beachside.connect({ adapter: boatAdapter, config: { network: "internet", machine: "small" }, credentials: { apiKey: "fixture" } });
   const box = await client.sandboxes.create({ environment: Image.prepared("ubuntu-24.04") });
   const suspended = await box.suspend();
   const preserve: "filesystem" | "filesystem+memory" = suspended.preserve;
@@ -263,10 +263,10 @@ void flow;
 `;
   else if (mode === "runloop")
     source = `
-import { Sandbar, Image } from "sandbar-sdk";
-import { runloopAdapter } from "@sandbar-sdk/runloop";
+import { Beachside, Image } from "beachside";
+import { runloopAdapter } from "@beachside/runloop";
 async function flow() {
-  const client = await Sandbar.connect({ adapter: runloopAdapter, config: { resources: { vcpus: 2 }, lifecycle: { idleSeconds: 600 } }, credentials: { apiKey: "fixture" } });
+  const client = await Beachside.connect({ adapter: runloopAdapter, config: { resources: { vcpus: 2 }, lifecycle: { idleSeconds: 600 } }, credentials: { apiKey: "fixture" } });
   const box = await client.sandboxes.create({ environment: Image.prepared("runloop-default"), networkPolicy: "blocked" });
   const { snapshot } = await box.snapshot();
   const restored = await snapshot.restore();
@@ -283,10 +283,10 @@ void flow;
 `;
   else if (mode === "vercel")
     source = `
-import { Sandbar, Image } from "sandbar-sdk";
-import { vercel } from "@sandbar-sdk/vercel";
+import { Beachside, Image } from "beachside";
+import { vercel } from "@beachside/vercel";
 async function flow() {
-  const client = await Sandbar.connect({ adapter: vercel, config: { teamId: "team", projectId: "project" }, credentials: { token: "fixture" } });
+  const client = await Beachside.connect({ adapter: vercel, config: { teamId: "team", projectId: "project" }, credentials: { token: "fixture" } });
   const box = await client.sandboxes.create();
   const reopened = await client.sandboxes.get(box.reference!);
   void reopened;
@@ -300,10 +300,10 @@ void flow;
 `;
   else if (mode === "modal")
     source = `
-import { Sandbar, Image } from "sandbar-sdk";
-import { modalAdapter } from "@sandbar-sdk/modal";
+import { Beachside, Image } from "beachside";
+import { modalAdapter } from "@beachside/modal";
 async function flow() {
-  const client = await Sandbar.connect({ adapter: modalAdapter, config: { appName: "existing", environment: "main" }, credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" } });
+  const client = await Beachside.connect({ adapter: modalAdapter, config: { appName: "existing", environment: "main" }, credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" } });
   const box = await client.sandboxes.create({ environment: Image.prepared("im-fixture"), networkPolicy: "blocked" });
   const bytes: Uint8Array = await box.readFile("/file");
   const exec = await box.exec({ command: { kind: "argv", argv: ["printf", "ready"] }, cwd: "/tmp", env: { KEY: "value" }, maxOutputBytes: 16 });
@@ -319,10 +319,10 @@ void flow;
 `;
   else if (mode === "daytona")
     source = `
-import { Sandbar, Image } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Beachside, Image } from "beachside";
+import { daytona } from "@beachside/daytona";
 async function flow() {
-  const client = await Sandbar.connect(daytona({ target: "us", apiKey: "fixture", ttlMinutes: 15, networkPolicy: "blocked", environment: Image.prepared("snap-1") }));
+  const client = await Beachside.connect(daytona({ target: "us", apiKey: "fixture", ttlMinutes: 15, networkPolicy: "blocked", environment: Image.prepared("snap-1") }));
   const built = await client.images.build({ source: Image.oci("alpine:3.21") });
   await client.sandboxes.create({ environment: Image.prepared(built.prepared), networkPolicy: "blocked" });
   await client.sandboxes.checkCreate();
@@ -338,10 +338,10 @@ void flow;
 `;
   else if (mode === "e2b")
     source = `
-import { Sandbar, Image } from "sandbar-sdk";
-import { e2b, createE2BAdapter } from "@sandbar-sdk/e2b";
+import { Beachside, Image } from "beachside";
+import { e2b, createE2BAdapter } from "@beachside/e2b";
 async function flow() {
-  const client = await Sandbar.connect(e2b({ apiKey: "fixture", lifecycle: { lifetimeSeconds: 600 } }));
+  const client = await Beachside.connect(e2b({ apiKey: "fixture", lifecycle: { lifetimeSeconds: 600 } }));
   const built = await client.images.build({ source: Image.oci("node:24") });
   const prepared = Image.prepared(built.prepared);
   const builtBox = await client.sandboxes.create({ environment: prepared, networkPolicy: "blocked" });
@@ -358,7 +358,7 @@ async function flow() {
 }
 void e2b({ apiKey: "fixture", templateId: "template_1" });
 async function configuredLifecycle() {
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createE2BAdapter(),
     config: { lifecycle: { lifetimeSeconds: 600, suspension: { preserve: "filesystem+memory" } }, preview: { access: "protected" } },
     credentials: { apiKey: "fixture" },
@@ -370,12 +370,12 @@ void flow;
 `;
   else if (mode === "builtins")
     source = `
-import { Sandbar } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
-import { e2b } from "@sandbar-sdk/e2b";
+import { Beachside } from "beachside";
+import { daytona } from "@beachside/daytona";
+import { e2b } from "@beachside/e2b";
 async function flow() {
-  const daytonaClient = await Sandbar.connect(daytona({ apiKey: "fixture", target: "us", lifecycle: { lifetimeSeconds: 600 } }));
-  const e2bClient = await Sandbar.connect(e2b({ apiKey: "fixture", teamId: "team_1", templateId: "template_1" }));
+  const daytonaClient = await Beachside.connect(daytona({ apiKey: "fixture", target: "us", lifecycle: { lifetimeSeconds: 600 } }));
+  const e2bClient = await Beachside.connect(e2b({ apiKey: "fixture", teamId: "team_1", templateId: "template_1" }));
   await daytonaClient.close();
   await e2bClient.close();
 }
@@ -387,24 +387,24 @@ void flow;
 `;
   else if (mode === "direct")
     source = `
-import { Sandbar, Image, type SandbarClient, type SandboxHandle, type DirectSandbarClient, type DirectSandboxHandle, type OutputPreview, type ExecOutput, type SandboxList, type SandboxListEntry, outputText } from "sandbar-sdk";
-import { createFakeAdapter } from "@sandbar/provider-fake/adapter";
+import { Beachside, Image, type BeachsideClient, type SandboxHandle, type DirectBeachsideClient, type DirectSandboxHandle, type OutputPreview, type ExecOutput, type SandboxList, type SandboxListEntry, outputText } from "beachside";
+import { createFakeAdapter } from "@beachside-internal/provider-fake/adapter";
 async function flow() {
-  const client: DirectSandbarClient = await Sandbar.connect({ adapter: createFakeAdapter({ url: "http://127.0.0.1:1234", token: "example-token-123456" }), config: {}, credentials: {} });
+  const client: DirectBeachsideClient = await Beachside.connect({ adapter: createFakeAdapter({ url: "http://127.0.0.1:1234", token: "example-token-123456" }), config: {}, credentials: {} });
   const box: DirectSandboxHandle = await client.sandboxes.create({ environment: Image.prepared("fake-starter") });
   const scoped: number = await client.sandboxes.with({ environment: Image.prepared("fake-starter") }, async owned => {
     const handle: SandboxHandle = owned;
     return handle.id.length;
   }, { cleanupTimeoutMs: 1000, storage: "allow-unconfirmed" });
   void scoped;
-  const commonClient: SandbarClient = client;
+  const commonClient: BeachsideClient = client;
   const commonSandbox: SandboxHandle = box;
   const destroy: SandboxHandle["destroy"] = box.destroy;
   void commonClient; void commonSandbox; void destroy;
   const listed: SandboxList = await client.sandboxes.list({ limit: 10 });
   const entry: SandboxListEntry | undefined = listed.items[0];
   if (entry?.reference) await client.sandboxes.get(entry.reference);
-  const coverage: "provider-scope" | "sandbar-managed" = listed.coverage;
+  const coverage: "provider-scope" | "managed" = listed.coverage;
   void coverage;
   const argv = ["fixture"] as const;
   const result = await box.exec(argv);
@@ -466,11 +466,11 @@ void flow;
 }
 
 const directSource = `
-import { OutcomeUnknownError as RootUnknown } from "sandbar-sdk";
-import { Sandbar, Image, outputText } from "sandbar-sdk";
-import { createFakeAdapter } from "@sandbar/provider-fake/adapter";
+import { OutcomeUnknownError as RootUnknown } from "beachside";
+import { Beachside, Image, outputText } from "beachside";
+import { createFakeAdapter } from "@beachside-internal/provider-fake/adapter";
 if (RootUnknown.name !== "OutcomeUnknownError") throw new Error("SDK error export unavailable");
-const client = await Sandbar.connect({ adapter: createFakeAdapter({ url: process.env.FAKE_URL, token: process.env.FAKE_TOKEN }), config: {}, credentials: {} });
+const client = await Beachside.connect({ adapter: createFakeAdapter({ url: process.env.FAKE_URL, token: process.env.FAKE_TOKEN }), config: {}, credentials: {} });
 try {
   const box = await client.sandboxes.create({ environment: Image.prepared("fake-starter") });
   let owned;
@@ -512,8 +512,8 @@ try {
 `;
 
 const daytonaSource = `
-import { Sandbar, Image } from "sandbar-sdk";
-import { createDaytonaAdapter } from "@sandbar-sdk/daytona";
+import { Beachside, Image } from "beachside";
+import { createDaytonaAdapter } from "@beachside/daytona";
 let nativeState = "started";
 let name = "", mutations = 0, snapshotName = "", labels = {}, renewalWindows = [], blockAll = true;
 const files = new Map([["/file", Uint8Array.from([0,255])]]);
@@ -540,7 +540,7 @@ const mock = async (input, init = {}) => {
   if (url.pathname.endsWith("/process/execute")) {
     mutations++;
     const command = JSON.parse(init.body).command;
-    if ((command.startsWith("mkdir -m 700 -- ") && !command.includes("SANDBAR-EXEC-V1"))) return json({ exitCode: 0, result: "" });
+    if ((command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1"))) return json({ exitCode: 0, result: "" });
     if (command.startsWith("cat ")) {
       const match = /^cat '([^']+)' > '([^']+)'/.exec(command);
       if (!match) throw Error("Invalid packed Daytona write command");
@@ -548,7 +548,7 @@ const mock = async (input, init = {}) => {
       files.delete(match[1]);
       return json({ exitCode: 0, result: "" });
     }
-    return json({ exitCode: 0, result: "SANDBAR-EXEC-V1\\n0\\n2\\n1\\n 00 ff\\nSANDBAR-STDERR\\n 7f\\nSANDBAR-END\\n" });
+    return json({ exitCode: 0, result: "BEACHSIDE-EXEC-V1\\n0\\n2\\n1\\n 00 ff\\nBEACHSIDE-STDERR\\n 7f\\nBEACHSIDE-END\\n" });
   }
   if (url.pathname.endsWith("/files/upload-v2")) {
     mutations++;
@@ -562,13 +562,13 @@ const mock = async (input, init = {}) => {
   }
   throw new Error("Unexpected fixture request: " + url.pathname);
 };
-const client = await Sandbar.connect({ adapter: createDaytonaAdapter(mock), config: { target: "us", networkPolicy: "blocked" }, credentials: { apiKey: "fixture-only" } });
+const client = await Beachside.connect({ adapter: createDaytonaAdapter(mock), config: { target: "us", networkPolicy: "blocked" }, credentials: { apiKey: "fixture-only" } });
 try {
   const built = await client.images.build({ source: Image.oci("alpine:3.21") });
   if (built.prepared.value !== "built-1" || built.prepared.provider !== "daytona" || built.retainedResources[0]?.ownership !== "unknown" || mutations !== 1) throw Error("Daytona scoped build mismatch");
   const box = await client.sandboxes.create({ environment: Image.prepared(built.prepared), networkPolicy: "blocked" });
   if (!box.reference) throw Error("Missing packed sandbox reference");
-  const fresh = await Sandbar.connect({ adapter: createDaytonaAdapter(mock), config: { target: "us", networkPolicy: "blocked" }, credentials: { apiKey: "rotated-fixture" } });
+  const fresh = await Beachside.connect({ adapter: createDaytonaAdapter(mock), config: { target: "us", networkPolicy: "blocked" }, credentials: { apiKey: "rotated-fixture" } });
   try {
     const reopened = await fresh.sandboxes.get(JSON.parse(JSON.stringify(box.reference)));
     if ((await reopened.inspect()).state !== "running" || reopened.id !== box.id) throw Error("Packed sandbox reopening differs");
@@ -610,8 +610,8 @@ try {
 
 const vercelSource = `
 import assert from "node:assert/strict";
-import { Sandbar, Image } from "sandbar-sdk";
-import { createVercelAdapter, vercel } from "@sandbar-sdk/vercel";
+import { Beachside, Image } from "beachside";
+import { createVercelAdapter, vercel } from "@beachside/vercel";
 assert.equal(vercel.name, "vercel");
 let stopped = false, closed = 0, mutations = 0;
 const session = () => ({ id: "session_1", region: "iad1", vcpus: 2, timeout: 900000, startedAt: 1700000000000, status: stopped ? "stopped" : "running", networkPolicy: { mode: "deny-all" } });
@@ -637,7 +637,7 @@ const adapter = createVercelAdapter(() => ({
   return Response.json(value);
  }
 }));
-const client = await Sandbar.connect({ adapter, config: { teamId: "team", projectId: "project" }, credentials: { token: "fixture" } });
+const client = await Beachside.connect({ adapter, config: { teamId: "team", projectId: "project" }, credentials: { token: "fixture" } });
 const box = await client.sandboxes.create({ networkPolicy: "vercel-deny-all" });
 assert.equal(box.id, "session_1");
 await box.destroy();
@@ -649,8 +649,8 @@ console.log("Packed Vercel adapter passed");
 `;
 
 const modalSource = `
-import { Sandbar, Image } from "sandbar-sdk";
-import { createModalAdapter } from "@sandbar-sdk/modal";
+import { Beachside, Image } from "beachside";
+import { createModalAdapter } from "@beachside/modal";
 let creates = 0, terminates = 0, closed = 0;
 const records = new Map();
 const files = new Map();
@@ -703,7 +703,7 @@ const transport = {
   async poll() { return "stopped"; },
   close() { closed++; },
 };
-const client = await Sandbar.connect({ adapter: createModalAdapter(() => transport), config: { appName: "existing", environment: "main", region: "us-east-1", timeoutSeconds: 300 }, credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" } });
+const client = await Beachside.connect({ adapter: createModalAdapter(() => transport), config: { appName: "existing", environment: "main", region: "us-east-1", timeoutSeconds: 300 }, credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" } });
 try {
   const box = await client.sandboxes.create({ environment: Image.prepared("im-fixture"), networkPolicy: "blocked", region: "us-east-1" });
   const bytes = await box.readFile("/file");
@@ -730,8 +730,8 @@ process.stdout.write("packed Modal fixture flow passed\\n");
 `;
 
 const e2bSource = `
-import { Sandbar, Image, OutcomeUnknownError } from "sandbar-sdk";
-import { createE2BAdapter } from "@sandbar-sdk/e2b";
+import { Beachside, Image, OutcomeUnknownError } from "beachside";
+import { createE2BAdapter } from "@beachside/e2b";
 let creates = 0, kills = 0, closes = 0, buildName = "", retained = "", renewalWindows = [];
 let record;
 let failWrite = false;
@@ -756,11 +756,11 @@ const transport = {
   async suspend(id) { if(id!==record?.id)throw Error("Wrong suspend ID"); record.state = "paused"; },
   async resume(id, seconds) { if(id!==record?.id || seconds!==900)throw Error("Wrong resume intent"); record.state = "running"; },
   async renew(id, seconds) { if(id!==record?.id)throw Error("Wrong renewal ID"); renewalWindows.push(seconds); },
-  async kill(id) { if (id !== record?.id) throw Error("Wrong kill"); retained = record.metadata.sandbar_build ? record.templateId : ""; kills++; record = undefined; return true; },
+  async kill(id) { if (id !== record?.id) throw Error("Wrong kill"); retained = record.metadata.beachside_build ? record.templateId : ""; kills++; record = undefined; return true; },
   async run(_id, script) {
-    if (script.includes("ln -T --")) { const staged = [...files.keys()].find((path) => path.includes(".sandbar-write-")); if (!staged) throw Error("Missing staged file"); files.set("/tmp/no-clobber.bin", files.get(staged)); return "CREATED"; }
+    if (script.includes("ln -T --")) { const staged = [...files.keys()].find((path) => path.includes(".beachside-write-")); if (!staged) throw Error("Missing staged file"); files.set("/tmp/no-clobber.bin", files.get(staged)); return "CREATED"; }
     if (script.includes(".status")) {
-      const stdout = script.match(/\\/tmp\\/\\.sandbar-[A-Za-z0-9_-]+\\.stdout/)?.[0];
+      const stdout = script.match(/\\/tmp\\/\\.beachside-[A-Za-z0-9_-]+\\.stdout/)?.[0];
       if (!stdout) throw Error("Missing command correlation path");
       files.set(stdout, binary);
       files.set(stdout.replace(".stdout", ".stderr"), Uint8Array.of(254));
@@ -777,7 +777,7 @@ const transport = {
   async remove(_id, path) { files.delete(path); },
   close() { closes++; },
 };
-const client = await Sandbar.connect({ adapter: createE2BAdapter(() => transport), config: {}, credentials: { apiKey: "fixture" } });
+const client = await Beachside.connect({ adapter: createE2BAdapter(() => transport), config: {}, credentials: { apiKey: "fixture" } });
 try {
   const box = await client.sandboxes.create({ environment: Image.prepared("base"), networkPolicy: "blocked" });
   const result = await box.exec({ command: { kind: "argv", argv: ["printf", "test"] }, maxOutputBytes: 8 });
@@ -790,7 +790,7 @@ try {
   if(recoveredRenewal.kind!=="sandbox_renew"||(await recoveredRenewal.wait()).requested.forSeconds!==60||renewalWindows.join()!=="60")throw Error("Packed E2B renewal replay");
   const suspended = await box.suspend();
   if(suspended.preserve!=="filesystem+memory")throw Error("Packed E2B preservation differs");
-  const fresh = await Sandbar.connect({adapter:createE2BAdapter(()=>transport),config:{},credentials:{apiKey:"fixture"}});
+  const fresh = await Beachside.connect({adapter:createE2BAdapter(()=>transport),config:{},credentials:{apiKey:"fixture"}});
   try {
     const inactive = await fresh.sandboxes.get(JSON.parse(JSON.stringify(box.reference)));
     if((await inactive.inspect()).state!=="suspended")throw Error("Packed E2B inactive reopen woke sandbox");
@@ -818,7 +818,7 @@ try {
   if(!restored.reference)throw Error("Restored sandbox reference missing");
   const reopenedBox=await client.sandboxes.get(JSON.parse(JSON.stringify(restored.reference)));
   if(reopenedBox.id!==restored.id||(await reopenedBox.inspect()).state!=="running")throw Error("Restored sandbox reopen failed");
-  if(record.metadata.sandbar_snapshot!=="snapshot_packed:11111111-1111-4111-8111-111111111111")throw Error("Restore did not pin the captured UUID");
+  if(record.metadata.beachside_snapshot!=="snapshot_packed:11111111-1111-4111-8111-111111111111")throw Error("Restore did not pin the captured UUID");
   await restored.destroy();
   await snapshot.delete();
   if(snapshots.size)throw Error("Containing snapshot cleanup failed");
@@ -839,8 +839,8 @@ process.stdout.write("packed E2B fixture flow passed\\n");
 `;
 
 const builtinsSource = `
-import { daytona } from "@sandbar-sdk/daytona";
-import { e2b } from "@sandbar-sdk/e2b";
+import { daytona } from "@beachside/daytona";
+import { e2b } from "@beachside/e2b";
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async () => { throw Error("Factory construction performed provider I/O"); };
 try {
@@ -854,7 +854,7 @@ try {
 
 const externalAdapterSource = `
 import { z } from "zod";
-import { defineAdapter, type SnapshotRestoreInput } from "@sandbar-sdk/adapter";
+import { defineAdapter, type SnapshotRestoreInput } from "@beachside/adapter";
 export const metrics = { creates: 0, destroys: 0, closes: 0, observes: 0, builds: 0 };
 export const acme = defineAdapter({
   name: "example.acme",
@@ -911,9 +911,9 @@ export const storageAdapter = defineAdapter({
 `;
 
 const customSource = `
-import { Sandbar, Image, ResourceReference, assertResourceScope, AdapterSnapshot, AdapterVolume } from "sandbar-sdk";
-import { acme, metrics, storageAdapter, restoreMetrics } from "@acme/sandbar-adapter";
-const client = await Sandbar.connect({
+import { Beachside, Image, ResourceReference, assertResourceScope, AdapterSnapshot, AdapterVolume } from "beachside";
+import { acme, metrics, storageAdapter, restoreMetrics } from "@acme/beachside-adapter";
+const client = await Beachside.connect({
   adapter: acme,
   config: { region: "us" },
   credentials: { token: "fixture" },
@@ -935,7 +935,7 @@ try {
 } finally { await client.close(); }
 if (metrics.creates !== 1 || metrics.destroys !== 1 || metrics.closes !== 1) throw Error("Mutation or release count mismatch");
 for (const specs of [false, true]) {
-  const storage = await Sandbar.connect({adapter: storageAdapter, config: {specs}, credentials: {}});
+  const storage = await Beachside.connect({adapter: storageAdapter, config: {specs}, credentials: {}});
   try {
     const ref = {version: 1, kind: "snapshot", provider: "example.storage", scope: storage.scope, nativeId: "snap", ownership: "unknown"};
     const snapshot = new AdapterSnapshot(storage, ref);
@@ -955,7 +955,7 @@ for (const specs of [false, true]) {
 process.stdout.write("packed external adapter flow passed\\n");
 `;
 
-const temporary = await mkdtemp(join(tmpdir(), "sandbar-packed-sdk-"));
+const temporary = await mkdtemp(join(tmpdir(), "beachside-packed-sdk-"));
 
 const archives = join(temporary, "archives");
 
@@ -977,15 +977,15 @@ try {
     join(externalDir, "package.json"),
     JSON.stringify(
       {
-        name: "@acme/sandbar-adapter",
+        name: "@acme/beachside-adapter",
         version: "0.0.1",
         type: "module",
         files: ["dist"],
         exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } },
-        peerDependencies: { "@sandbar-sdk/adapter": "0.0.0" },
-        overrides: { "@sandbar-sdk/adapter": archiveOverrides["@sandbar-sdk/adapter"] },
+        peerDependencies: { "@beachside/adapter": "0.0.0" },
+        overrides: { "@beachside/adapter": archiveOverrides["@beachside/adapter"] },
         dependencies: {
-          "@sandbar-sdk/adapter": archiveOverrides["@sandbar-sdk/adapter"],
+          "@beachside/adapter": archiveOverrides["@beachside/adapter"],
           zod: "4.6.5",
         },
       },
@@ -1013,35 +1013,39 @@ try {
   run("bun", ["install", "--no-save"], externalDir);
   run(join(root, "node_modules/.bin/tsc"), ["-p", "tsconfig.json"], externalDir);
   const externalManifest = JSON.parse(await readFile(join(externalDir, "package.json"), "utf8"));
-  delete externalManifest.dependencies["@sandbar-sdk/adapter"];
+  delete externalManifest.dependencies["@beachside/adapter"];
   delete externalManifest.overrides;
   await writeFile(join(externalDir, "package.json"), JSON.stringify(externalManifest, null, 2));
   const externalArchive = await pack(externalDir);
 
-  const sdkDeps = { "sandbar-sdk": archiveOverrides["sandbar-sdk"] };
+  const sdkDeps = { beachside: archiveOverrides["beachside"] };
 
   const customDeps = {
     ...sdkDeps,
-    "@acme/sandbar-adapter": `file:${externalArchive}`,
+    "@acme/beachside-adapter": `file:${externalArchive}`,
   };
 
   const directDeps = {
     ...sdkDeps,
-    "@sandbar/provider-fake": archiveOverrides["@sandbar/provider-fake"],
+    "@beachside-internal/provider-fake": archiveOverrides["@beachside-internal/provider-fake"],
   };
 
   const daytonaDeps = {
     ...sdkDeps,
-    "@sandbar-sdk/daytona": archiveOverrides["@sandbar-sdk/daytona"],
+    "@beachside/daytona": archiveOverrides["@beachside/daytona"],
   };
 
-  const vercelDeps = { ...sdkDeps, "@sandbar-sdk/vercel": archiveOverrides["@sandbar-sdk/vercel"] };
+  const vercelDeps = { ...sdkDeps, "@beachside/vercel": archiveOverrides["@beachside/vercel"] };
   const vercel = join(temporary, "vercel-consumer");
   await consumer(vercel, vercelDeps, archiveOverrides, vercelSource);
   await checkTypes(vercel, "vercel");
-  const vercelGraph = inspectGraph(vercel, ["sandbar-sdk", "@sandbar-sdk/vercel"]);
+  const vercelGraph = inspectGraph(vercel, ["beachside", "@beachside/vercel"]);
 
-  if (vercelGraph.some((name) => name.startsWith("@sandbar/") || name === "@vercel/sandbox"))
+  if (
+    vercelGraph.some(
+      (name) => name.startsWith("@beachside-internal/") || name === "@vercel/sandbox",
+    )
+  )
     throw new Error("Vercel package leaked private or unused native dependencies");
 
   for (const runtime of ["node", "bun"])
@@ -1049,28 +1053,28 @@ try {
 
   const modalDeps = {
     ...sdkDeps,
-    "@sandbar-sdk/modal": archiveOverrides["@sandbar-sdk/modal"],
+    "@beachside/modal": archiveOverrides["@beachside/modal"],
   };
 
   const boxd = join(temporary, "boxd-consumer");
   await consumer(
     boxd,
-    { ...sdkDeps, "@sandbar-sdk/boxd": archiveOverrides["@sandbar-sdk/boxd"] },
+    { ...sdkDeps, "@beachside/boxd": archiveOverrides["@beachside/boxd"] },
     archiveOverrides,
     `
-import { Sandbar } from "sandbar-sdk";
-import { boxdAdapter } from "@sandbar-sdk/boxd";
+import { Beachside } from "beachside";
+import { boxdAdapter } from "@beachside/boxd";
 if (boxdAdapter.name !== "boxd") throw Error("External adapter identity mismatch");
 if (boxdAdapter.config.safeParse({ org: "team" }).success) throw Error("Internet setup must be explicit");
 try {
-  await Sandbar.connect({ adapter: boxdAdapter, config: { org: "team" }, credentials: { apiKey: "fixture" } });
+  await Beachside.connect({ adapter: boxdAdapter, config: { org: "team" }, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
 } catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
 console.log("Packed boxd imports and local validation passed without provider IO");
 `,
   );
   await checkTypes(boxd, "boxd");
-  inspectGraph(boxd, ["sandbar-sdk", "@sandbar-sdk/boxd"]);
+  inspectGraph(boxd, ["beachside", "@beachside/boxd"]);
 
   for (const runtime of ["node", "bun"])
     console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], boxd)}`);
@@ -1078,22 +1082,22 @@ console.log("Packed boxd imports and local validation passed without provider IO
   const boat = join(temporary, "boat-consumer");
   await consumer(
     boat,
-    { ...sdkDeps, "@sandbar-sdk/boat": archiveOverrides["@sandbar-sdk/boat"] },
+    { ...sdkDeps, "@beachside/boat": archiveOverrides["@beachside/boat"] },
     archiveOverrides,
     `
-import { Sandbar } from "sandbar-sdk";
-import { boatAdapter } from "@sandbar-sdk/boat";
+import { Beachside } from "beachside";
+import { boatAdapter } from "@beachside/boat";
 if (boatAdapter.name !== "boat") throw Error("External adapter identity mismatch");
 if (boatAdapter.config.safeParse({}).success) throw Error("Internet setup must be explicit");
 try {
-  await Sandbar.connect({ adapter: boatAdapter, config: {}, credentials: { apiKey: "fixture" } });
+  await Beachside.connect({ adapter: boatAdapter, config: {}, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
 } catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
 console.log("Packed Boat imports and local validation passed without provider IO");
 `,
   );
   await checkTypes(boat, "boat");
-  inspectGraph(boat, ["sandbar-sdk", "@sandbar-sdk/boat"]);
+  inspectGraph(boat, ["beachside", "@beachside/boat"]);
 
   for (const runtime of ["node", "bun"])
     console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], boat)}`);
@@ -1101,27 +1105,27 @@ console.log("Packed Boat imports and local validation passed without provider IO
   const runloop = join(temporary, "runloop-consumer");
   await consumer(
     runloop,
-    { ...sdkDeps, "@sandbar-sdk/runloop": archiveOverrides["@sandbar-sdk/runloop"] },
+    { ...sdkDeps, "@beachside/runloop": archiveOverrides["@beachside/runloop"] },
     archiveOverrides,
     `
-import { Sandbar } from "sandbar-sdk";
-import { runloopAdapter } from "@sandbar-sdk/runloop";
+import { Beachside } from "beachside";
+import { runloopAdapter } from "@beachside/runloop";
 if (runloopAdapter.name !== "runloop") throw Error("External adapter identity mismatch");
 if (runloopAdapter.config.parse({}).network !== "blocked") throw Error("Egress must default to blocked");
 try {
-  await Sandbar.connect({ adapter: runloopAdapter, config: { lifecycle: { lifetimeSeconds: 600, idleSeconds: 300 } }, credentials: { apiKey: "fixture" } });
+  await Beachside.connect({ adapter: runloopAdapter, config: { lifecycle: { lifetimeSeconds: 600, idleSeconds: 300 } }, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
 } catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
 console.log("Packed Runloop imports and local validation passed without provider IO");
 `,
   );
   await checkTypes(runloop, "runloop");
-  inspectGraph(runloop, ["sandbar-sdk", "@sandbar-sdk/runloop"]);
+  inspectGraph(runloop, ["beachside", "@beachside/runloop"]);
 
   for (const runtime of ["node", "bun"])
     console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], runloop)}`);
 
-  const e2bDeps = { ...sdkDeps, "@sandbar-sdk/e2b": archiveOverrides["@sandbar-sdk/e2b"] };
+  const e2bDeps = { ...sdkDeps, "@beachside/e2b": archiveOverrides["@beachside/e2b"] };
 
   const custom = join(temporary, "custom-consumer");
   const direct = join(temporary, "direct-consumer");
@@ -1151,15 +1155,13 @@ console.log("Packed Runloop imports and local validation passed without provider
     core,
     sdkDeps,
     archiveOverrides,
-    `import { Sandbar, Image } from "sandbar-sdk"; if (typeof Sandbar.connect !== "function" || Image.prepared("base").kind !== "prepared") throw Error("Core imports failed");`,
+    `import { Beachside, Image } from "beachside"; if (typeof Beachside.connect !== "function" || Image.prepared("base").kind !== "prepared") throw Error("Core imports failed");`,
   );
-  const coreGraph = inspectGraph(core, ["sandbar-sdk"]);
+  const coreGraph = inspectGraph(core, ["beachside"]);
 
   if (
     coreGraph.some((name) =>
-      ["@sandbar-sdk/daytona", "@sandbar-sdk/e2b", "e2b", "@sandbar-sdk/modal", "modal"].includes(
-        name,
-      ),
+      ["@beachside/daytona", "@beachside/e2b", "e2b", "@beachside/modal", "modal"].includes(name),
     )
   )
     throw Error(`Core installed provider dependencies: ${coreGraph}`);
@@ -1172,7 +1174,7 @@ console.log("Packed Runloop imports and local validation passed without provider
   const lifecycleExample = await Bun.build({
     entrypoints: [join(root, "apps/docs/examples/sandbox-suspend-resume.ts")],
     target: "node",
-    external: ["sandbar-sdk", "@sandbar-sdk/daytona", "@sandbar-sdk/e2b"],
+    external: ["beachside", "@beachside/daytona", "@beachside/e2b"],
     write: false,
   });
 
@@ -1278,34 +1280,34 @@ console.log("Packed Runloop imports and local validation passed without provider
 
   for (const runtime of ["node", "bun"])
     console.log(`${runtime}: ${run(runtime, ["process-extensions.mjs"], builtins)}`);
-  inspectGraph(custom, ["sandbar-sdk", "@acme/sandbar-adapter"]);
-  inspectGraph(direct, ["sandbar-sdk", "@sandbar/provider-fake"]);
-  const daytonaGraph = inspectGraph(daytona, ["sandbar-sdk", "@sandbar-sdk/daytona"]);
+  inspectGraph(custom, ["beachside", "@acme/beachside-adapter"]);
+  inspectGraph(direct, ["beachside", "@beachside-internal/provider-fake"]);
+  const daytonaGraph = inspectGraph(daytona, ["beachside", "@beachside/daytona"]);
 
-  if (daytonaGraph.includes("e2b") || daytonaGraph.includes("@sandbar-sdk/e2b"))
+  if (daytonaGraph.includes("e2b") || daytonaGraph.includes("@beachside/e2b"))
     throw new Error("Daytona installed E2B");
-  const modalGraph = inspectGraph(modal, ["sandbar-sdk", "@sandbar-sdk/modal"]);
-  const e2bGraph = inspectGraph(e2b, ["sandbar-sdk", "@sandbar-sdk/e2b"]);
+  const modalGraph = inspectGraph(modal, ["beachside", "@beachside/modal"]);
+  const e2bGraph = inspectGraph(e2b, ["beachside", "@beachside/e2b"]);
 
-  if (e2bGraph.includes("@sandbar-sdk/daytona")) throw new Error("E2B installed Daytona");
-  const publicSdkGraph = inspectGraph(builtins, ["sandbar-sdk"]);
+  if (e2bGraph.includes("@beachside/daytona")) throw new Error("E2B installed Daytona");
+  const publicSdkGraph = inspectGraph(builtins, ["beachside"]);
 
-  if (publicSdkGraph.some((name) => name.startsWith("@sandbar/")))
+  if (publicSdkGraph.some((name) => name.startsWith("@beachside-internal/")))
     throw new Error(`SDK package leaked a private workspace dependency: ${publicSdkGraph}`);
 
-  if (modalGraph.some((name) => name.startsWith("@sandbar/")))
+  if (modalGraph.some((name) => name.startsWith("@beachside-internal/")))
     throw new Error(`Modal package leaked a private workspace dependency: ${modalGraph}`);
 
   if (
     publicSdkGraph.some((name) =>
       [
         "modal",
-        "@sandbar-sdk/modal",
+        "@beachside/modal",
         "@grpc/grpc-js",
         "e2b",
-        "@sandbar-sdk/e2b",
-        "@sandbar-sdk/daytona",
-        "@sandbar-sdk/vercel",
+        "@beachside/e2b",
+        "@beachside/daytona",
+        "@beachside/vercel",
         "tar-stream",
       ].includes(name),
     )
@@ -1366,24 +1368,24 @@ console.log("Packed Runloop imports and local validation passed without provider
   await consumer(
     cli,
     {
-      "@sandbar-sdk/cli": archiveOverrides["@sandbar-sdk/cli"],
-      "@sandbar/provider-fake": archiveOverrides["@sandbar/provider-fake"],
+      "@beachside/cli": archiveOverrides["@beachside/cli"],
+      "@beachside-internal/provider-fake": archiveOverrides["@beachside-internal/provider-fake"],
     },
     archiveOverrides,
-    `import { createFakeAdapter } from "@sandbar/provider-fake/adapter";
+    `import { createFakeAdapter } from "@beachside-internal/provider-fake/adapter";
 export const fake = createFakeAdapter({ url: process.env.FAKE_URL, token: process.env.FAKE_TOKEN });
 `,
   );
   await writeFile(
-    join(cli, "sandbar.json"),
+    join(cli, "beachside.json"),
     JSON.stringify({
       default: "fake",
       profiles: { fake: { module: "./consumer.mjs", export: "fake" } },
     }),
   );
-  const cliGraph = inspectGraph(cli, ["@sandbar-sdk/cli"]);
+  const cliGraph = inspectGraph(cli, ["@beachside/cli"]);
 
-  if (cliGraph.some((name) => name.startsWith("@sandbar/") || forbidden.has(name)))
+  if (cliGraph.some((name) => name.startsWith("@beachside-internal/") || forbidden.has(name)))
     throw new Error(`CLI package leaked private dependencies: ${cliGraph}`);
 
   const cliVersion = JSON.parse(
@@ -1393,19 +1395,19 @@ export const fake = createFakeAdapter({ url: process.env.FAKE_URL, token: proces
   const cliEnv = {
     HOME: cli,
     XDG_CONFIG_HOME: "",
-    SANDBAR_CONFIG: join(cli, "sandbar.json"),
-    SANDBAR_STATE_DIR: join(cli, "state"),
+    BEACHSIDE_CONFIG: join(cli, "beachside.json"),
+    BEACHSIDE_STATE_DIR: join(cli, "state"),
     FAKE_URL: fixture.fakeUrl,
     FAKE_TOKEN: fixture.fakeToken,
   };
 
   for (const runtime of ["node", "bun"]) {
-    const sandbar = (...args) =>
-      run(runtime, ["node_modules/@sandbar-sdk/cli/dist/main.js", ...args], cli, cliEnv);
+    const beachside = (...args) =>
+      run(runtime, ["node_modules/@beachside/cli/dist/main.js", ...args], cli, cliEnv);
 
-    if (sandbar("--version") !== cliVersion) throw new Error(`${runtime}: CLI version differs`);
+    if (beachside("--version") !== cliVersion) throw new Error(`${runtime}: CLI version differs`);
 
-    if (JSON.parse(sandbar("schema")).cliVersion !== cliVersion)
+    if (JSON.parse(beachside("schema")).cliVersion !== cliVersion)
       throw new Error(`${runtime}: CLI schema version differs`);
     await fixture.fakeControl("/_test/seed", {
       submissionId: "*",
@@ -1419,19 +1421,19 @@ export const fake = createFakeAdapter({ url: process.env.FAKE_URL, token: proces
     });
 
     const result = JSON.parse(
-      sandbar("run", "--json", "--prepared", "fake-starter", "--", "cli", "packed"),
+      beachside("run", "--json", "--prepared", "fake-starter", "--", "cli", "packed"),
     );
 
     if (!result.ok || result.data.stdout !== "packed cli\n" || result.data.sandbox.kept)
       throw new Error(`${runtime}: packed CLI run failed: ${JSON.stringify(result)}`);
 
-    if (JSON.parse(sandbar("ls", "--json")).data.sandboxes.length)
+    if (JSON.parse(beachside("ls", "--json")).data.sandboxes.length)
       throw new Error(`${runtime}: packed CLI run left a store record`);
     console.log(`${runtime}: packed CLI run passed`);
   }
 
   console.log(
-    `Packed consumer graph: ${inspectGraph(direct, ["sandbar-sdk", "@sandbar/provider-fake"]).join(", ")}`,
+    `Packed consumer graph: ${inspectGraph(direct, ["beachside", "@beachside-internal/provider-fake"]).join(", ")}`,
   );
 } finally {
   await fixture.close();

@@ -28,7 +28,7 @@ function record(
     platform: "fixture",
     timestamp: "2026-09-29T00:00:00Z",
     configuration: { imageClass: "oci", network: "blocked-requested", regionClass: "fixture" },
-    evidenceRef: "https://github.com/pandemicsyn/sandbar/pull/25",
+    evidenceRef: "https://github.com/pandemicsyn/beachside/pull/25",
   };
 }
 
@@ -118,7 +118,7 @@ test("historical unknown custody and later no-effect denial remain distinct evid
         cleanup: "incomplete",
         configuration: "Unacknowledged native create",
         attribution: "No inventory match does not prove no effect",
-        evidenceRef: "https://github.com/pandemicsyn/sandbar/pull/25",
+        evidenceRef: "https://github.com/pandemicsyn/beachside/pull/25",
       },
       {
         provider: "e2b",
@@ -128,7 +128,7 @@ test("historical unknown custody and later no-effect denial remain distinct evid
         cleanup: "not-required",
         configuration: "Native 403",
         attribution: "Separate no-effect rejection",
-        evidenceRef: "https://github.com/pandemicsyn/sandbar/pull/25",
+        evidenceRef: "https://github.com/pandemicsyn/beachside/pull/25",
       },
     ],
   });

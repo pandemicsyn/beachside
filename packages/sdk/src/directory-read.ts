@@ -5,9 +5,9 @@ import {
   MAX_DIRECTORY_NAME_BYTES,
   type FileEntry,
   type ReadContext,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { filesystemError } from "./file-transfer";
-import { SandbarError, raceAbort, type ReadOptions } from "./resource";
+import { BeachsideError, raceAbort, type ReadOptions } from "./resource";
 
 const Entry = z.strictObject({
   name: z
@@ -19,8 +19,8 @@ const Entry = z.strictObject({
 });
 
 export function directoryResult(
-  result: import("@sandbar-sdk/adapter").DirectoryResult,
-): import("@sandbar-sdk/adapter").DirectoryResult {
+  result: import("@beachside/adapter").DirectoryResult,
+): import("@beachside/adapter").DirectoryResult {
   const parsed = z
     .strictObject({
       entries: z.custom<FileEntry[]>(Array.isArray),
@@ -29,17 +29,17 @@ export function directoryResult(
     })
     .safeParse(result);
 
-  if (!parsed.success) throw new SandbarError("INVALID_RESPONSE", "Invalid directory result");
+  if (!parsed.success) throw new BeachsideError("INVALID_RESPONSE", "Invalid directory result");
 
   return { ...parsed.data, entries: directoryEntries(parsed.data.entries) };
 }
 
 export function directoryEntries(entries: FileEntry[]): FileEntry[] {
   if (!Array.isArray(entries))
-    throw new SandbarError("INVALID_RESPONSE", "Invalid directory listing");
+    throw new BeachsideError("INVALID_RESPONSE", "Invalid directory listing");
 
   if (entries.length > MAX_DIRECTORY_ENTRIES)
-    throw new SandbarError("OUTPUT_CAPACITY", "Directory exceeds 1024 entries");
+    throw new BeachsideError("OUTPUT_CAPACITY", "Directory exceeds 1024 entries");
   const result: FileEntry[] = [];
   const names = new Set<string>();
   let bytes = 0;
@@ -48,11 +48,11 @@ export function directoryEntries(entries: FileEntry[]): FileEntry[] {
     const parsed = Entry.safeParse(entry);
 
     if (!parsed.success || names.has(parsed.data.name))
-      throw new SandbarError("INVALID_RESPONSE", "Invalid or duplicate directory entry");
+      throw new BeachsideError("INVALID_RESPONSE", "Invalid or duplicate directory entry");
     bytes += new TextEncoder().encode(parsed.data.name).length;
 
     if (bytes > MAX_DIRECTORY_NAME_BYTES)
-      throw new SandbarError("OUTPUT_CAPACITY", "Directory names exceed 65536 UTF-8 bytes");
+      throw new BeachsideError("OUTPUT_CAPACITY", "Directory names exceed 65536 UTF-8 bytes");
     names.add(parsed.data.name);
     result.push(parsed.data);
   }
@@ -69,13 +69,13 @@ export async function directoryRead<T>(
   const controller = new AbortController();
 
   const cancel = () =>
-    controller.abort(new SandbarError("WAIT_ABORTED", "Filesystem read cancelled"));
+    controller.abort(new BeachsideError("WAIT_ABORTED", "Filesystem read cancelled"));
 
-  const close = () => controller.abort(new SandbarError("CLIENT_CLOSED", "Client is closed"));
+  const close = () => controller.abort(new BeachsideError("CLIENT_CLOSED", "Client is closed"));
   const deadline = Date.now() + 30_000;
 
   const timer = setTimeout(
-    () => controller.abort(new SandbarError("TIMEOUT", "Filesystem read timed out")),
+    () => controller.abort(new BeachsideError("TIMEOUT", "Filesystem read timed out")),
     30_000,
   );
 
@@ -112,8 +112,8 @@ export async function directoryListingRead<T>(
   try {
     return await directoryRead(read, closed, options);
   } catch (error) {
-    if (error instanceof SandbarError && error.code === "CAPACITY")
-      throw new SandbarError("OUTPUT_CAPACITY", error.message, error.effect);
+    if (error instanceof BeachsideError && error.code === "CAPACITY")
+      throw new BeachsideError("OUTPUT_CAPACITY", error.message, error.effect);
     throw error;
   }
 }

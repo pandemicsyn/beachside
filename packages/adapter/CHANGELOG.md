@@ -1,4 +1,4 @@
-# @sandbar-sdk/adapter
+# @beachside/adapter
 
 ## 0.7.0
 

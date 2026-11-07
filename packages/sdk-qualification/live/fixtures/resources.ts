@@ -5,13 +5,13 @@ import {
   AdapterSnapshot,
   OutcomeUnknownError,
   WaitAbortedError,
-  SandbarError,
+  BeachsideError,
   type AdapterDirectClient,
   type AdapterOperation,
   type AdapterRecoveryReference,
-} from "sandbar-sdk";
+} from "beachside";
 import { z } from "zod";
-import type { OperationOutcome, MountSpec } from "@sandbar-sdk/adapter";
+import type { OperationOutcome, MountSpec } from "@beachside/adapter";
 import type { ConnectionFactory } from "../../provider-qualification/connection";
 import { LedgerStore } from "../../provider-qualification/ledger";
 import { boundedRead } from "../../provider-qualification/bounds";
@@ -264,8 +264,8 @@ export class TestResources {
           ? error.reference
           : operation.reference,
         undefined,
-        error instanceof SandbarError && error.effect === "none",
-        error instanceof SandbarError ? error.outcome : undefined,
+        error instanceof BeachsideError && error.effect === "none",
+        error instanceof BeachsideError ? error.outcome : undefined,
       );
       throw error;
     }
@@ -301,7 +301,7 @@ export class TestResources {
 
     return this.wait(
       await this.client.volumes.submitCreate(
-        { name: `sandbar-${this.ledger.runId.replaceAll("-", "")}${suffix ? `-${suffix}` : ""}` },
+        { name: `beachside-${this.ledger.runId.replaceAll("-", "")}${suffix ? `-${suffix}` : ""}` },
         { signal: this.signal },
       ),
     );

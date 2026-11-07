@@ -4,8 +4,8 @@ import {
   observeOperation,
   prepareOperation,
   submitOperation,
-} from "@sandbar-sdk/adapter";
-import { Image, Sandbar } from "sandbar-sdk";
+} from "@beachside/adapter";
+import { Image, Beachside } from "beachside";
 import { createE2BAdapter } from "./index";
 import { createSdkTransport, type E2BRecord } from "./transport";
 import { classifyWriteFailure, E2BWriteFailure } from "./write-failure";
@@ -146,10 +146,10 @@ test("write recovery retains sanitized failure across restart and distinguishes 
   });
 
   let metadata: E2BRecord["metadata"] = {
-    sandbar_scope: "team_one:template_1",
-    sandbar_submission: "sub_seed",
-    sandbar_operation: "op_seed",
-    sandbar_template: "template_1",
+    beachside_scope: "team_one:template_1",
+    beachside_submission: "sub_seed",
+    beachside_operation: "op_seed",
+    beachside_template: "template_1",
   };
 
   const adapter = createE2BAdapter(() => ({
@@ -302,7 +302,7 @@ test("write recovery retains sanitized failure across restart and distinguishes 
     expect(writes - writesBefore).toBe(1);
 
     observed = original;
-    const client = await Sandbar.connect({ adapter, config, credentials });
+    const client = await Beachside.connect({ adapter, config, credentials });
 
     try {
       afterEffect = false;

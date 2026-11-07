@@ -7,7 +7,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { Sandbar, Image } from "sandbar-sdk";
+import { Beachside, Image } from "beachside";
 import { fixtureAdapter } from "./adapter";
 
 const manager = new AsyncLocalStorageContextManager().enable();
@@ -27,7 +27,7 @@ for (const mode of ["disabled", "unsampled", "sampled"] as const) {
 
     const fixture = fixtureAdapter({ exitCode: 0 });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: fixture.adapter,
       config: {},
       credentials: {},

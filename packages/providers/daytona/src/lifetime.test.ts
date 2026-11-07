@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { Image, Sandbar } from "sandbar-sdk";
+import { Image, Beachside } from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 const CreateBody = z.object({
@@ -58,7 +58,7 @@ function fixture() {
   );
 
   const connect = (config: { lifecycle?: { lifetimeSeconds: number }; ttlMinutes?: number } = {}) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createDaytonaAdapter(fetchImpl),
       config: {
         target: "us",

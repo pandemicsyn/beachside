@@ -2,13 +2,13 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
   ResourceReference,
-  SandbarError,
-  type SandbarClient,
+  BeachsideError,
+  type BeachsideClient,
   type CreateInput,
   type SandboxHandle,
   type SnapshotInfo,
   type SnapshotResult,
-} from "sandbar-sdk";
+} from "beachside";
 import { findTarget, type Flags } from "./commands";
 import { CliError, describeError, usage } from "./output";
 import type { Session } from "./session";
@@ -40,7 +40,7 @@ async function findSnapshot(store: StateStore, name: string): Promise<Entry> {
     throw new CliError(
       "NOT_FOUND",
       `No snapshot named ${name}`,
-      "list them with `sandbar snapshot ls`",
+      "list them with `beachside snapshot ls`",
     );
 
   return found;
@@ -69,7 +69,7 @@ async function claim(store: StateStore, record: Omit<SnapshotRecord, "name">, re
         throw new CliError(
           "CONFLICT",
           `Snapshot name ${name} is already in use`,
-          "pass --replace to capture it again, choose another --name, or `sandbar snapshot forget` the old record",
+          "pass --replace to capture it again, choose another --name, or `beachside snapshot forget` the old record",
         );
     }
   }
@@ -100,7 +100,7 @@ async function recoverCapture(session: Session, store: StateStore, entry: Entry)
   try {
     value = await (await client.recover(record.recovery)).observe();
   } catch (cause) {
-    if (cause instanceof SandbarError && cause.effect !== "none") return entry;
+    if (cause instanceof BeachsideError && cause.effect !== "none") return entry;
     throw cause;
   }
 
@@ -127,7 +127,7 @@ async function recoverCapture(session: Session, store: StateStore, entry: Entry)
 
 /** Delete a snapshot on the provider; null when it is confirmed gone, else why it may remain. */
 async function deleteRemote(
-  client: SandbarClient<true>,
+  client: BeachsideClient<true>,
   reference: z.infer<typeof SnapshotReference>,
   signal: AbortSignal,
 ): Promise<{ gone: boolean } | { error: unknown }> {
@@ -150,7 +150,7 @@ async function deleteRemote(
  */
 async function createCommand(session: Session, flags: Flags, args: readonly string[]) {
   if (args.length !== 1)
-    throw usage("Expected exactly one sandbox", "e.g. sandbar snapshot create web --name base");
+    throw usage("Expected exactly one sandbox", "e.g. beachside snapshot create web --name base");
   const store = await session.store();
   const target = await findTarget(session, args[0]!);
 
@@ -173,7 +173,7 @@ async function createCommand(session: Session, flags: Flags, args: readonly stri
     throw new CliError(
       "CONFLICT",
       `${existing.record.name} is ${existing.record.status}, not captured`,
-      "`sandbar snapshot inspect` checks it; `sandbar snapshot forget` drops the record",
+      "`beachside snapshot inspect` checks it; `beachside snapshot forget` drops the record",
     );
 
   if (existing && existing.record.profile !== source.profile)
@@ -227,7 +227,7 @@ async function createCommand(session: Session, flags: Flags, args: readonly stri
     }
 
     const recovery = report.known?.recovery;
-    let kept = `the store keeps ${claimed.record.name}; \`sandbar snapshot inspect ${claimed.record.name}\` checks the capture again`;
+    let kept = `the store keeps ${claimed.record.name}; \`beachside snapshot inspect ${claimed.record.name}\` checks the capture again`;
 
     if (existing)
       kept = `${existing.record.name} still holds the previous snapshot; the new one may exist on the provider`;
@@ -316,7 +316,7 @@ async function lsSnapshots(session: Session) {
           `${"NAME".padEnd(20)} ${"PROFILE".padEnd(12)} ${"STATUS".padEnd(9)} SANDBOX`,
           ...lines,
         ].join("\n")
-      : "no snapshots; capture one with `sandbar snapshot create <sandbox>`",
+      : "no snapshots; capture one with `beachside snapshot create <sandbox>`",
   );
 
   return 0;
@@ -347,8 +347,8 @@ async function lsRemote(session: Session) {
   if (capabilities.snapshots.list.status !== "supported")
     throw new CliError(
       "UNSUPPORTED",
-      `${profile.provider} cannot list snapshots through Sandbar`,
-      "`sandbar snapshot ls` shows the snapshots this store recorded",
+      `${profile.provider} cannot list snapshots through Beachside`,
+      "`beachside snapshot ls` shows the snapshots this store recorded",
     );
 
   const records = (await listAll(await session.store(), "snapshot")).filter(
@@ -446,7 +446,7 @@ async function forgetSnapshot(session: Session, args: readonly string[]) {
 
   if (record.reference)
     lines.push(
-      `${record.provider} still holds ${record.reference.nativeId}; forget never deletes it (\`sandbar snapshot rm\` does)`,
+      `${record.provider} still holds ${record.reference.nativeId}; forget never deletes it (\`beachside snapshot rm\` does)`,
     );
 
   session.ctx.out.success(
@@ -492,13 +492,13 @@ async function rmSnapshot(session: Session, args: readonly string[], force: bool
     try {
       value = await (await client.recover(record.recovery)).observe();
     } catch (cause) {
-      if (!(cause instanceof SandbarError)) throw cause;
+      if (!(cause instanceof BeachsideError)) throw cause;
 
       if (cause.effect === "none")
         throw new CliError(
           cause.code,
           cause.message,
-          `the store keeps ${record.name} deleting; run \`sandbar snapshot rm ${record.name}\` again`,
+          `the store keeps ${record.name} deleting; run \`beachside snapshot rm ${record.name}\` again`,
           { snapshot: record.name, recovery: record.recovery },
         );
     }
@@ -507,7 +507,7 @@ async function rmSnapshot(session: Session, args: readonly string[], force: bool
       throw new CliError(
         "OUTCOME_UNKNOWN",
         `The delete of ${record.name} is still unconfirmed`,
-        `the store keeps ${record.name}; run \`sandbar snapshot rm ${record.name}\` again later`,
+        `the store keeps ${record.name}; run \`beachside snapshot rm ${record.name}\` again later`,
         { snapshot: record.name, recovery: record.recovery },
       );
     await forgetDeleted(store, entry);
@@ -519,7 +519,7 @@ async function rmSnapshot(session: Session, args: readonly string[], force: bool
     throw new CliError(
       "CONFLICT",
       `${record.name} has no confirmed snapshot to delete`,
-      "`sandbar snapshot inspect` checks an uncertain capture; `sandbar snapshot forget` drops the record",
+      "`beachside snapshot inspect` checks an uncertain capture; `beachside snapshot forget` drops the record",
     );
 
   if (record.reference.ownership !== "verified-created" && !force)
@@ -548,10 +548,10 @@ async function rmSnapshot(session: Session, args: readonly string[], force: bool
     throw new CliError(
       "OUTCOME_UNKNOWN",
       report.message,
-      `the store keeps ${record.name} and there is no saved delete to check; check \`sandbar snapshot ls --remote\` before running \`sandbar snapshot rm ${record.name}\` again, which sends a new delete`,
+      `the store keeps ${record.name} and there is no saved delete to check; check \`beachside snapshot ls --remote\` before running \`beachside snapshot rm ${record.name}\` again, which sends a new delete`,
       { snapshot: record.name },
     );
-  let kept = `the store keeps ${record.name}; run \`sandbar snapshot rm ${record.name}\` again to check`;
+  let kept = `the store keeps ${record.name}; run \`beachside snapshot rm ${record.name}\` again to check`;
 
   try {
     await store.update(
@@ -575,7 +575,7 @@ export async function snapshotSource(session: Session, name: string): Promise<Sn
     throw new CliError(
       "CONFLICT",
       `Snapshot ${record.name} is ${record.status}, not captured`,
-      "`sandbar snapshot inspect` checks it",
+      "`beachside snapshot inspect` checks it",
     );
 
   return record;
@@ -584,7 +584,7 @@ export async function snapshotSource(session: Session, name: string): Promise<Sn
 /** Start a sandbox from a recorded snapshot with the create's network, env, labels and lifetime. */
 export async function restoreSnapshot(
   session: Session,
-  client: SandbarClient<true>,
+  client: BeachsideClient<true>,
   record: SnapshotRecord,
   input: CreateInput,
 ): Promise<SandboxHandle<true>> {
@@ -600,13 +600,13 @@ export async function snapshotCommand(session: Session, flags: Flags): Promise<n
   const [action, ...args] = flags.positionals;
 
   if ((flags.string("name") || flags.bool("replace")) && action !== "create")
-    throw usage("--name and --replace only apply to `sandbar snapshot create`");
+    throw usage("--name and --replace only apply to `beachside snapshot create`");
 
   if (flags.bool("remote") && action !== "ls")
-    throw usage("--remote only applies to `sandbar snapshot ls`");
+    throw usage("--remote only applies to `beachside snapshot ls`");
 
   if (flags.bool("force") && action !== "rm")
-    throw usage("--force only applies to `sandbar snapshot rm`");
+    throw usage("--force only applies to `beachside snapshot rm`");
 
   switch (action) {
     case "create":

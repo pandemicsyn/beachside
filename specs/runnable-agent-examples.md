@@ -4,16 +4,16 @@ Implemented scope and acceptance · October 10, 2026 · OpenCode on Daytona and 
 
 ## Goal and scope
 
-Add two runnable TypeScript applications under root `examples/` using public Sandbar SDK entrypoints and OpenCode's headless `run --pure` CLI with isolated configuration/data/cache directories. Both workflows select Daytona or E2B through configuration. Provider mechanics belong in shared adapter setup; ordinary SDK execution, file operations and cleanup remain visible in the entrypoints.
+Add two runnable TypeScript applications under root `examples/` using public Beachside SDK entrypoints and OpenCode's headless `run --pure` CLI with isolated configuration/data/cache directories. Both workflows select Daytona or E2B through configuration. Provider mechanics belong in shared adapter setup; ordinary SDK execution, file operations and cleanup remain visible in the entrypoints.
 
 1. Create a sandbox, install pinned OpenCode, ask **“What is 2 + 2?”**, capture stdout/stderr and print the response. Do not ask for or write an answer file.
-2. Upload the local `message.txt` fixture containing `Hello, NAME!\n`. Ask OpenCode to replace `NAME` with `Sandbar`, leaving the rest unchanged. Capture its output, read the remote file through Sandbar and display `Hello, Sandbar!\n`. Preserve the local fixture.
+2. Upload the local `message.txt` fixture containing `Hello, NAME!\n`. Ask OpenCode to replace `NAME` with `Beachside`, leaving the rest unchanged. Capture its output, read the remote file through Beachside and display `Hello, Beachside!\n`. Preserve the local fixture.
 
 Use bounded `exec()` calls. A provider-specific plugin, native SDK in workflow code, PTY, agent framework, server, repository integration and broader agent tasks are outside this slice.
 
 ## Setup and lifecycle
 
-Use a private examples workspace with `hello` and `edit` scripts, a shared provider setup and a pinned OpenCode installer/configuration helper. Scripts explicitly load `examples/.env.local`. Document checkout installation and package builds with Bun 1.3.14 while Sandbar packages are unpublished.
+Use a private examples workspace with `hello` and `edit` scripts, a shared provider setup and a pinned OpenCode installer/configuration helper. Scripts explicitly load `examples/.env.local`. Document checkout installation and package builds with Bun 1.3.14 while Beachside packages are unpublished.
 
 Select the model explicitly. Pin the standalone OpenCode `1.18.35` release binary and select `opencode/nemotron-3.5-lightning-free`, confirmed in the current public model catalog and Zen documentation on October 10, 2026; do not require an Anthropic credential. Support keyed models only through the implementation's explicit environment allowlist, keeping model credentials separate from sandbox credentials. Do not forward the entire host environment or expose secrets in arguments or ordinary logs. Anonymous service availability can change, and model selection must remain configurable.
 

@@ -21,7 +21,7 @@ export async function startFakeProviderServer(options: FakeServerOptions) {
   await engine.load();
 
   const json = <T>(value: T, status = 200) =>
-    Response.json(value, { status, headers: { "X-Sandbar-Fake-Provider": "simulation" } });
+    Response.json(value, { status, headers: { "X-Beachside-Fake-Provider": "simulation" } });
 
   return Bun.serve({
     hostname,

@@ -3,13 +3,13 @@ import { realpath } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { buildAndLoad } from "../provider-qualification/build";
 
-const directory = process.env.SANDBAR_QUAL_LEDGER_DIR;
+const directory = process.env.BEACHSIDE_QUAL_LEDGER_DIR;
 
 const runId = process.argv[2];
 
 if (!directory || !isAbsolute(directory) || !runId)
   throw Error(
-    "Usage: SANDBAR_QUAL_LEDGER_DIR=<existing private directory> bun live/reconcile.ts <run UUID>",
+    "Usage: BEACHSIDE_QUAL_LEDGER_DIR=<existing private directory> bun live/reconcile.ts <run UUID>",
   );
 
 const canonical = await realpath(directory);
@@ -25,7 +25,7 @@ await buildAndLoad(root, async () => {
 
   const saved = await ledger.read();
 
-  process.env.SANDBAR_QUAL_PROVIDER = saved.provider;
+  process.env.BEACHSIDE_QUAL_PROVIDER = saved.provider;
 
   const [{ configuredProvider }, { cleanupLedger }] = await Promise.all([
     import("./providers"),

@@ -10,8 +10,8 @@ const providerModule = new URL("./index.ts", import.meta.url).href;
 
 for (const alias of [false, true])
   test(`private ledger ${alias ? "symlink target" : "directory"} inside checkout is rejected before provider setup`, async () => {
-    const directory = await mkdtemp(join(checkout, ".sandbar-ledger-test-"));
-    const links = alias ? await mkdtemp(join(tmpdir(), "sandbar-ledger-link-")) : undefined;
+    const directory = await mkdtemp(join(checkout, ".beachside-ledger-test-"));
+    const links = alias ? await mkdtemp(join(tmpdir(), "beachside-ledger-link-")) : undefined;
 
     try {
       const supplied = links ? join(links, "ledger") : directory;
@@ -23,16 +23,16 @@ for (const alias of [false, true])
           process.execPath,
           "--eval",
           `import { setupLive } from ${JSON.stringify(providerModule)};
-        globalThis.sandbarLiveBuild = {revision: "a".repeat(40), dirty: false};
+        globalThis.beachsideLiveBuild = {revision: "a".repeat(40), dirty: false};
         try { await setupLive(["sandbox-lifecycle"], {compute: 0, snapshots: 0, volumes: 0}); process.exit(0); }
         catch (error) { console.error(error.message); process.exit(1); }`,
         ],
         {
           env: {
             PATH: process.env.PATH,
-            SANDBAR_LIVE: "1",
-            SANDBAR_QUAL_LIVE_AUTHORIZED: "yes",
-            SANDBAR_QUAL_LEDGER_DIR: supplied,
+            BEACHSIDE_LIVE: "1",
+            BEACHSIDE_QUAL_LIVE_AUTHORIZED: "yes",
+            BEACHSIDE_QUAL_LEDGER_DIR: supplied,
             // Missing report directory also prevents provider I/O if containment regresses.
           },
           stdout: "pipe",

@@ -1,14 +1,14 @@
 import { appendFile } from "node:fs/promises";
-import { bindAdapter, defineAdapter } from "@sandbar-sdk/adapter";
-import { AdapterImage } from "sandbar-sdk";
-import { createFakeAdapter } from "@sandbar/provider-fake";
+import { bindAdapter, defineAdapter } from "@beachside/adapter";
+import { AdapterImage } from "beachside";
+import { createFakeAdapter } from "@beachside-internal/provider-fake";
 import { z } from "zod";
 
-const url = process.env.SANDBAR_FAKE_URL;
+const url = process.env.BEACHSIDE_FAKE_URL;
 
-const token = process.env.SANDBAR_FAKE_TOKEN;
+const token = process.env.BEACHSIDE_FAKE_TOKEN;
 
-if (!url || !token) throw new Error("SANDBAR_FAKE_URL and SANDBAR_FAKE_TOKEN are required");
+if (!url || !token) throw new Error("BEACHSIDE_FAKE_URL and BEACHSIDE_FAKE_TOKEN are required");
 
 const definition = createFakeAdapter({ url, token });
 
@@ -68,9 +68,9 @@ export const plain = bindAdapter(
   {},
 );
 
-const terminations = process.env.SANDBAR_FAKE_TERMINATIONS;
+const terminations = process.env.BEACHSIDE_FAKE_TERMINATIONS;
 
-/** The fake adapter with its byte-streaming process transport; SANDBAR_FAKE_TERMINATIONS logs terminations. */
+/** The fake adapter with its byte-streaming process transport; BEACHSIDE_FAKE_TERMINATIONS logs terminations. */
 function streamingAdapter(holdMs: number, textOnly = false) {
   const processing = createFakeAdapter({
     url: url!,
@@ -125,11 +125,11 @@ export const hanging = streamingAdapter(60_000);
 /** Streams text only and keeps running, like Boat or Runloop. */
 export const hangingText = streamingAdapter(60_000, true);
 
-const builds = process.env.SANDBAR_FAKE_BUILDS;
+const builds = process.env.BEACHSIDE_FAKE_BUILDS;
 
 const building = createFakeAdapter({ url, token, imageBuild: true });
 
-/** The fake session with its simulated image build; SANDBAR_FAKE_BUILDS logs every build. */
+/** The fake session with its simulated image build; BEACHSIDE_FAKE_BUILDS logs every build. */
 async function buildingSession(host: Parameters<typeof building.connect>[0]["host"]) {
   const session = await building.connect({ config: {}, credentials: {}, host });
   const build = session.imageBuild;

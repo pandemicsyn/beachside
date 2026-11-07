@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AdapterRecoveryReference } from "sandbar-sdk";
+import type { AdapterRecoveryReference } from "beachside";
 import type { ConnectionFactory } from "../../provider-qualification/connection";
 import { LedgerStore } from "../../provider-qualification/ledger";
 import { boundedRead } from "../../provider-qualification/bounds";

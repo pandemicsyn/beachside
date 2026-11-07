@@ -5,8 +5,8 @@ import {
   defineAdapter,
   type AdapterSession,
   type FileEntry,
-} from "@sandbar-sdk/adapter";
-import { Image, Sandbar, type AdapterRecoveryReference } from "./index";
+} from "@beachside/adapter";
+import { Image, Beachside, type AdapterRecoveryReference } from "./index";
 
 async function directoryFixture(files: NonNullable<AdapterSession["files"]>) {
   const saved: AdapterRecoveryReference[] = [];
@@ -26,7 +26,7 @@ async function directoryFixture(files: NonNullable<AdapterSession["files"]>) {
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},

@@ -1,6 +1,6 @@
-import type { SnapshotProfile } from "@sandbar-sdk/adapter";
+import type { SnapshotProfile } from "@beachside/adapter";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { ResourceReference, SandbarError, OutcomeUnknownError } from "sandbar-sdk";
+import { ResourceReference, BeachsideError, OutcomeUnknownError } from "beachside";
 import { z } from "zod";
 import { TestResources } from "./fixtures/resources";
 import { liveEnabled, setupLive, finishLive, featureSupported, reopenSnapshot } from "./providers";
@@ -23,13 +23,13 @@ const restoredChanged = new Uint8Array([4, 5, 6]);
 export async function snapshotRoundtrip(
   t: TestResources,
   reopen: (reference: ResourceReference) => Promise<void>,
-  path = "/tmp/sandbar-captured.bin",
+  path = "/tmp/beachside-captured.bin",
   selectedProfile: (profile: SnapshotProfile) => void = () => {},
 ) {
   const restore = (await t.client.capabilities()).snapshots.restore;
 
   if (restore.status !== "supported")
-    throw new SandbarError(
+    throw new BeachsideError(
       restore.status === "unsupported" ? "UNSUPPORTED" : "UNAVAILABLE",
       restore.reason,
     );
@@ -37,7 +37,7 @@ export async function snapshotRoundtrip(
   const plan = await source.checkSnapshot();
 
   if (plan.status !== "supported")
-    throw new SandbarError(
+    throw new BeachsideError(
       plan.status === "unsupported" ? "UNSUPPORTED" : "UNAVAILABLE",
       plan.reason,
     );
@@ -48,7 +48,7 @@ export async function snapshotRoundtrip(
   expect(plan.value.sourceState).toBe("running");
   t.at("snapshot/write");
   await source.writeFile(path, bytes, { overwrite: true, signal: t.signal });
-  await t.exec(source, `python3 -c ${quote(memoryProgram)} >/tmp/sandbar-memory-error 2>&1 &`);
+  await t.exec(source, `python3 -c ${quote(memoryProgram)} >/tmp/beachside-memory-error 2>&1 &`);
   let before: ReturnType<typeof memorySample> | undefined;
 
   for (let index = 0; index < 10 && !before; index++) {
@@ -165,7 +165,7 @@ export async function snapshotRoundtrip(
 
 const enabled = liveEnabled && featureSupported("snapshots");
 
-describe("Sandbar snapshots", () => {
+describe("Beachside snapshots", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   beforeAll(async () => {
     if (enabled) {
@@ -188,7 +188,7 @@ describe("Sandbar snapshots", () => {
       await snapshotRoundtrip(
         configured.resources,
         (reference) => reopenSnapshot(configured, reference),
-        configured.fileRoot + "/sandbar-captured.bin",
+        configured.fileRoot + "/beachside-captured.bin",
         (profile) => {
           Object.assign(configured.context.configuration, {
             preserve: profile.preserve,

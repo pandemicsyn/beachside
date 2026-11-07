@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { Sandbar, Image, Preserve, SandbarError } from "sandbar-sdk";
-import { snapshotSuite } from "@sandbar-sdk/adapter/testing";
+import { Beachside, Image, Preserve, BeachsideError } from "beachside";
+import { snapshotSuite } from "@beachside/adapter/testing";
 import { createDaytonaAdapter } from "./adapter";
 
 test.each([
@@ -190,7 +190,7 @@ test.each([
     );
 
     const connect = () =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter: createDaytonaAdapter(fetchImpl),
         config: { target: "us", networkPolicy: "daytona-default" },
         credentials: { apiKey: "fixture" },
@@ -289,7 +289,7 @@ test.each([
             outcome: { kind: "snapshot_restore", mounts, sandbox: { nativeId: "restored" } },
           });
 
-          if (!(error instanceof SandbarError)) throw error;
+          if (!(error instanceof BeachsideError)) throw error;
 
           savedReference = error.reference;
         }
@@ -514,7 +514,7 @@ for (const hot of [false, true])
   test(`Linux VM ${hot ? "hot" : "cold"} capture restores unmounted and rejects mounted restore before effects`, async () => {
     const { fetchImpl, restores } = vmFixture(hot);
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createDaytonaAdapter(fetchImpl),
       config: {
         target: "us",
@@ -567,7 +567,7 @@ for (const hot of [false, true])
   test(`Linux VM ${hot ? "hot" : "cold"} capture passes the shared snapshot suite`, async () => {
     const preserve = hot ? Preserve.FILESYSTEM_AND_MEMORY : Preserve.FILESYSTEM;
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createDaytonaAdapter(vmFixture(hot).fetchImpl),
       config: { target: "us", networkPolicy: "daytona-default", snapshots: { preserve } },
       credentials: { apiKey: "fixture" },

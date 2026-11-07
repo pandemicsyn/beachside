@@ -25,7 +25,7 @@ for (const name of [
     "dirty",
   ] as const)
     test(`standard Bun JUnit ${name} ${mode} cannot fabricate support evidence`, async () => {
-      const dir = await mkdtemp(join(tmpdir(), "sandbar-junit-"));
+      const dir = await mkdtemp(join(tmpdir(), "beachside-junit-"));
 
       try {
         const context = {
@@ -59,7 +59,7 @@ for (const name of [
         await writeFile(join(dir, "contexts", `${name}.context.json`), JSON.stringify(context));
         await writeFile(
           join(dir, "ordinary.test.ts"),
-          `import {beforeAll,afterAll,describe,test,expect} from "bun:test";describe("Sandbar workflow",()=>{beforeAll(()=>{${mode === "setup" ? 'throw Error("private setup error")' : ""}});afterAll(()=>{${mode === "teardown" ? 'throw Error("private close error")' : ""}});${mode === "skip" ? "test.skip" : "test"}("${name}",()=>{expect(true).toBe(true);expect(${mode === "assertion" ? "false" : "true"}).toBe(true);});});`,
+          `import {beforeAll,afterAll,describe,test,expect} from "bun:test";describe("Beachside workflow",()=>{beforeAll(()=>{${mode === "setup" ? 'throw Error("private setup error")' : ""}});afterAll(()=>{${mode === "teardown" ? 'throw Error("private close error")' : ""}});${mode === "skip" ? "test.skip" : "test"}("${name}",()=>{expect(true).toBe(true);expect(${mode === "assertion" ? "false" : "true"}).toBe(true);});});`,
         );
 
         const child = Bun.spawn(
@@ -70,7 +70,7 @@ for (const name of [
             "--reporter=junit",
             `--reporter-outfile=${join(dir, "junit.xml")}`,
           ],
-          { stdout: "ignore", stderr: "ignore", env: { ...process.env, SANDBAR_LIVE: "0" } },
+          { stdout: "ignore", stderr: "ignore", env: { ...process.env, BEACHSIDE_LIVE: "0" } },
         );
 
         const exit = await child.exited;

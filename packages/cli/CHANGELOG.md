@@ -1,4 +1,4 @@
-# @sandbar-sdk/cli
+# @beachside/cli
 
 ## 0.7.0
 

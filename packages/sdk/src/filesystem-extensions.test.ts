@@ -5,8 +5,8 @@ import {
   defineAdapter,
   type AdapterSession,
   type DirectoryResult,
-} from "@sandbar-sdk/adapter";
-import { Image, Sandbar } from "./index";
+} from "@beachside/adapter";
+import { Image, Beachside } from "./index";
 
 async function fixture(files: NonNullable<AdapterSession["files"]>) {
   const adapter = defineAdapter({
@@ -23,7 +23,7 @@ async function fixture(files: NonNullable<AdapterSession["files"]>) {
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const box = await client.sandboxes.create({ environment: Image.prepared("base") });
 
   return { client, box };

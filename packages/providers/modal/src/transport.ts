@@ -11,14 +11,14 @@ import {
   type Sandbox,
 } from "modal";
 import { z } from "zod";
-import { AdapterError, type AdapterErrorCode } from "@sandbar-sdk/adapter";
+import { AdapterError, type AdapterErrorCode } from "@beachside/adapter";
 import { ModalRouterWire, type RouterOutput, type RouterRun } from "./router-wire";
 
 export const MODAL_ENDPOINT = "https://api.modal.com:443";
 
 // Modal 0.10.1's filesystem.readBytes() collects all stdout before returning.
 // Its own filesystem helper uses this command; stream it through the public
-// Sandbox.exec API so a growing file cannot exceed Sandbar's transfer bound.
+// Sandbox.exec API so a growing file cannot exceed Beachside's transfer bound.
 const MODAL_FS_TOOL = "/__modal/.bin/modal-sandbox-fs-tools";
 
 export async function readBoundedStream(
@@ -262,7 +262,7 @@ export const noRetryGrpcMiddleware: NonNullable<ModalClientParams["grpcMiddlewar
 
 /**
  * Modal 0.10.1's public grpcMiddleware is outside its built-in retry middleware.
- * Pass retries:0 inward so one Sandbar submission makes one control-plane call.
+ * Pass retries:0 inward so one Beachside submission makes one control-plane call.
  * The SDK's task-router calls have separate private retries; this adapter does
  * not invoke their mutating exec or filesystem-write paths.
  */

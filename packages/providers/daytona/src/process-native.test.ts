@@ -3,8 +3,8 @@ import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { processSupervisor, processRpc, pythonCommand } from "./process-helper";
 import { reopenDaytonaProcess, startDaytonaProcess, type ProcessExecute } from "./process-native";
-import type { NativeProcess, ProcessOutput, ProcessOutputBytes } from "@sandbar-sdk/adapter";
-import { Sandbar, AdapterSandbox, type ProcessHandle } from "sandbar-sdk";
+import type { NativeProcess, ProcessOutput, ProcessOutputBytes } from "@beachside/adapter";
+import { Beachside, AdapterSandbox, type ProcessHandle } from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 function fixture() {
@@ -267,7 +267,7 @@ test("Daytona bounds final output drain when a descendant retains a pipe", async
 
 test("Daytona public adapter maps interactive process HTTP workflow without native application options", async () => {
   const native = fixture();
-  let client: Awaited<ReturnType<typeof Sandbar.connect>> | undefined;
+  let client: Awaited<ReturnType<typeof Beachside.connect>> | undefined;
   let child: ProcessHandle | undefined;
 
   const transport: typeof fetch = Object.assign(
@@ -314,7 +314,7 @@ test("Daytona public adapter maps interactive process HTTP workflow without nati
   );
 
   try {
-    client = await Sandbar.connect({
+    client = await Beachside.connect({
       adapter: createDaytonaAdapter(transport),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -432,7 +432,7 @@ test("Daytona rejects malformed initial status without fabricating running", asy
 
 test("Daytona cancellation tombstone blocks a bootstrap delayed beyond setup cleanup", async () => {
   const native = fixture();
-  const sentinel = `/tmp/sandbar-late-child-${crypto.randomUUID()}`;
+  const sentinel = `/tmp/beachside-late-child-${crypto.randomUUID()}`;
   let delayedLaunch = "";
   let acknowledgeCleanup!: () => void;
 
@@ -479,8 +479,8 @@ test("Daytona cancellation tombstone blocks a bootstrap delayed beyond setup cle
 });
 
 test("Daytona cancellation between directory creation and socket bind shuts down the helper", async () => {
-  const root = `/tmp/sandbar-bind-race-${crypto.randomUUID()}`;
-  const sentinel = `/tmp/sandbar-bind-child-${crypto.randomUUID()}`;
+  const root = `/tmp/beachside-bind-race-${crypto.randomUUID()}`;
+  const sentinel = `/tmp/beachside-bind-child-${crypto.randomUUID()}`;
 
   const gated = processSupervisor.replace(
     "server=socket.socket",
@@ -768,7 +768,7 @@ test("Daytona explicit PTY owns controlling terminal, exact argv, dimensions, re
 });
 
 test("Daytona expired attachment leases park output, preserve input, and fence all old control", async () => {
-  const root = `/tmp/sandbar-process-${crypto.randomUUID()}`;
+  const root = `/tmp/beachside-process-${crypto.randomUUID()}`;
   const generation = crypto.randomUUID();
   const lease = crypto.randomUUID();
   const nextLease = crypto.randomUUID();

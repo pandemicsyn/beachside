@@ -1,9 +1,9 @@
 {
-  "name": "sandbar-docs",
+  "name": "beachside-docs",
   "compatibility_date": "2026-09-25",
   "routes": [
-    { "pattern": "sandbarsdk.dev", "custom_domain": true },
-    { "pattern": "www.sandbarsdk.dev", "custom_domain": true },
+    { "pattern": "beachside.run", "custom_domain": true },
+    { "pattern": "www.beachside.run", "custom_domain": true },
   ],
   "assets": {
     "directory": "./dist",

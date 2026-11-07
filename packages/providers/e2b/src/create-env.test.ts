@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { z } from "zod";
-import { Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
+import { Beachside, type AdapterRecoveryReference } from "beachside";
 import { createE2BAdapter } from "./index";
 import type { E2BRecord, E2BTransport } from "./transport";
 
@@ -63,7 +63,7 @@ test("E2B passes create env to the native create once and persists no value", as
 
   const saved: AdapterRecoveryReference[] = [];
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createE2BAdapter(() => transport),
     config: {},
     credentials: { apiKey: "private-key" },
@@ -118,7 +118,7 @@ test("E2B native create carries envVars and redacts an echoed value from rejecti
     { preconnect() {} },
   ) as typeof fetch;
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createE2BAdapter(),
     config: {},
     credentials: { apiKey: "fixture-key" },

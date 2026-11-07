@@ -3,7 +3,7 @@ import {
   sandboxReference,
   type SandboxReference,
   type Sandbox,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 import { resourceHistory } from "./resource-history";
 import {
@@ -21,7 +21,7 @@ import {
   type SnapshotProfile,
   type ReadContext,
   type AttemptContext,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { E2BVolumeCreateRejected, type E2BTransport, type E2BRecord } from "./transport";
 
 const VolumeCreateToken = z.strictObject({
@@ -264,7 +264,7 @@ export function e2bState(input: {
   }
 
   function continueRejectedDeletion(kind: "snapshot" | "volume") {
-    return async (attempt: import("@sandbar-sdk/adapter").RecoveryAttempt, ctx: AttemptContext) => {
+    return async (attempt: import("@beachside/adapter").RecoveryAttempt, ctx: AttemptContext) => {
       const token = DeleteToken.safeParse(attempt.token);
       const ref = attempt.resource;
       const saved = token.success ? token.data.resource : undefined;
@@ -912,7 +912,7 @@ export function e2bState(input: {
         lifetime: { minSeconds: 1, maxSeconds: input.maxLifetimeSeconds },
       },
       async prepare(value) {
-        if (Object.keys(value.request.labels ?? {}).some((key) => key.startsWith("sandbar_")))
+        if (Object.keys(value.request.labels ?? {}).some((key) => key.startsWith("beachside_")))
           throw new AdapterError("INVALID_ARGUMENT", "Reserved E2B metadata key");
         await restorePreflight(value);
 
@@ -944,11 +944,11 @@ export function e2bState(input: {
           templateId: selector,
           metadata: {
             ...value.request.labels,
-            sandbar_scope: input.scopeMarker,
-            sandbar_submission: ctx.submissionId,
-            sandbar_operation: ctx.operationId,
-            sandbar_template: selector,
-            sandbar_snapshot: selector,
+            beachside_scope: input.scopeMarker,
+            beachside_submission: ctx.submissionId,
+            beachside_operation: ctx.operationId,
+            beachside_template: selector,
+            beachside_snapshot: selector,
           },
           // E2B's shortest timeout is one minute; shorter lifetimes round up to it.
           timeoutMs: Math.max(60, value.request.lifetimeSeconds ?? input.timeoutSeconds) * 1000,
@@ -992,11 +992,11 @@ export function e2bState(input: {
         if (info.state !== "ready") return ctx.unknown("Original captured build is not ready");
 
         const metadata = {
-          sandbar_scope: input.scopeMarker,
-          sandbar_submission: attempt.submissionId,
-          sandbar_operation: attempt.operationId,
-          sandbar_template: token.data.selector,
-          sandbar_snapshot: token.data.selector,
+          beachside_scope: input.scopeMarker,
+          beachside_submission: attempt.submissionId,
+          beachside_operation: attempt.operationId,
+          beachside_template: token.data.selector,
+          beachside_snapshot: token.data.selector,
         };
 
         const page = await transport.list(metadata, 2);
@@ -1030,8 +1030,8 @@ export function e2bState(input: {
         return {
           id: current.id,
           reference: sandboxReference("e2b", input.scope, current.id, {
-            operation: current.metadata.sandbar_operation!,
-            submission: current.metadata.sandbar_submission!,
+            operation: current.metadata.beachside_operation!,
+            submission: current.metadata.beachside_submission!,
           }),
           state: current.state === "running" ? "running" : "unknown",
         };

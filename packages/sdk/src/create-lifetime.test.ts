@@ -5,8 +5,8 @@ import {
   sandboxReference,
   type CreateInput as NativeCreateInput,
   type LifetimeLimits,
-} from "@sandbar-sdk/adapter";
-import { Sandbar, SandbarError, UnsupportedFeatureError } from "./index";
+} from "@beachside/adapter";
+import { Beachside, BeachsideError, UnsupportedFeatureError } from "./index";
 
 const scope = { authority: { kind: "account", id: "one" }, partition: {} };
 
@@ -53,7 +53,7 @@ function fixture(lifetime?: LifetimeLimits) {
 
   return {
     creates,
-    connect: () => Sandbar.connect({ adapter, config: {}, credentials: {} }),
+    connect: () => Beachside.connect({ adapter, config: {}, credentials: {} }),
   };
 }
 
@@ -117,7 +117,7 @@ test("a lifetime that is not a positive whole number is an invalid argument", as
     expect(
       await client.sandboxes
         .create({ lifecycle: { lifetimeSeconds } })
-        .catch((cause: unknown) => cause instanceof SandbarError && cause.code),
+        .catch((cause: unknown) => cause instanceof BeachsideError && cause.code),
     ).toBe("INVALID_ARGUMENT");
 
   expect(f.creates).toEqual([]);

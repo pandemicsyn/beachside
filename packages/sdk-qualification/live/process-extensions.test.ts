@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import type { AdapterSandbox } from "sandbar-sdk";
+import type { AdapterSandbox } from "beachside";
 import { liveEnabled, setupLive, finishLive } from "./providers";
 
 const enabled =
-  liveEnabled && ["daytona", "e2b", "vercel"].includes(process.env.SANDBAR_QUAL_PROVIDER ?? "");
+  liveEnabled && ["daytona", "e2b", "vercel"].includes(process.env.BEACHSIDE_QUAL_PROVIDER ?? "");
 
-describe("Sandbar P4 terminal and process reopening", () => {
+describe("Beachside P4 terminal and process reopening", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   let box: AdapterSandbox;
 

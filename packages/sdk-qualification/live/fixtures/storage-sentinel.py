@@ -11,9 +11,9 @@ import signal
 import socket
 import uuid
 
-CONFIG = Path("/tmp/sandbar-storage-config.json")
-REPORT = Path("/tmp/sandbar-storage-report.json")
-STARTED = Path("/tmp/sandbar-storage-started.json")
+CONFIG = Path("/tmp/beachside-storage-config.json")
+REPORT = Path("/tmp/beachside-storage-report.json")
+STARTED = Path("/tmp/beachside-storage-started.json")
 
 
 def publish(path, value):

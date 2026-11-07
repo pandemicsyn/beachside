@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter, ResourceReference, type Scope } from "@sandbar-sdk/adapter";
-import { Sandbar } from "sandbar-sdk";
+import { defineAdapter, ResourceReference, type Scope } from "@beachside/adapter";
+import { Beachside } from "beachside";
 import { daytonaState } from "./state-native";
 
 const scope: Scope = {
@@ -24,7 +24,7 @@ type NativeImage = {
 
 const built = (id: string, overrides: Partial<NativeImage> = {}): NativeImage => ({
   id,
-  name: `sandbar-image-${id}`,
+  name: `beachside-image-${id}`,
   organizationId: "org-one",
   general: false,
   state: "active",
@@ -133,7 +133,7 @@ function fixture(
   return {
     calls,
     store,
-    connect: () => Sandbar.connect({ adapter, config: {}, credentials: {} }),
+    connect: () => Beachside.connect({ adapter, config: {}, credentials: {} }),
   };
 }
 

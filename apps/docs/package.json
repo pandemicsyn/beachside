@@ -1,5 +1,5 @@
 {
-  "name": "@sandbar/docs",
+  "name": "@beachside-internal/docs",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,18 +20,18 @@
   },
   "devDependencies": {
     "@astrojs/check": "0.9.6",
-    "sandbar-sdk": "workspace:*",
-    "@sandbar/provider-fake": "workspace:*",
+    "beachside": "workspace:*",
+    "@beachside-internal/provider-fake": "workspace:*",
     "typescript": "5.9.3",
     "wrangler": "4.141.0",
-    "@sandbar-sdk/adapter": "workspace:*",
+    "@beachside/adapter": "workspace:*",
     "zod": "4.6.5",
-    "@sandbar-sdk/modal": "workspace:*",
+    "@beachside/modal": "workspace:*",
     "satteri": "0.10.5",
-    "@sandbar-sdk/daytona": "workspace:*",
-    "@sandbar-sdk/e2b": "workspace:*",
-    "@sandbar-sdk/boxd": "workspace:*",
-    "@sandbar-sdk/boat": "workspace:*",
-    "@sandbar-sdk/runloop": "workspace:*"
+    "@beachside/daytona": "workspace:*",
+    "@beachside/e2b": "workspace:*",
+    "@beachside/boxd": "workspace:*",
+    "@beachside/boat": "workspace:*",
+    "@beachside/runloop": "workspace:*"
   }
 }

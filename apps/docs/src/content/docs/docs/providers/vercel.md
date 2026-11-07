@@ -3,17 +3,17 @@ title: Vercel Sandbox
 description: Run commands, work with files, suspend persistent sandboxes and restore filesystem snapshots on Vercel.
 ---
 
-The `@sandbar-sdk/vercel` package runs short-lived [Vercel Sandbox](https://vercel.com/docs/sandbox) VMs in an existing Vercel team and project. Install it with `npm install sandbar-sdk @sandbar-sdk/vercel`. It is experimental: it has not yet been tested against the live Vercel service. Use Node 20+ or Bun.
+The `@beachside/vercel` package runs short-lived [Vercel Sandbox](https://vercel.com/docs/sandbox) VMs in an existing Vercel team and project. Install it with `npm install beachside @beachside/vercel`. It is experimental: it has not yet been tested against the live Vercel service. Use Node 20+ or Bun.
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { vercel } from "@sandbar-sdk/vercel";
+import { Beachside } from "beachside";
+import { vercel } from "@beachside/vercel";
 
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter: vercel,
   config: {
-    teamId: process.env.SANDBAR_VERCEL_TEAM_ID!,
-    projectId: process.env.SANDBAR_VERCEL_PROJECT_ID!,
+    teamId: process.env.BEACHSIDE_VERCEL_TEAM_ID!,
+    projectId: process.env.BEACHSIDE_VERCEL_PROJECT_ID!,
     network: "blocked",
   },
   credentials: { token: process.env.VERCEL_TOKEN! },
@@ -49,7 +49,7 @@ Use a token that can access the team and project. `connect` checks the team, pro
 | `snapshots.preserve`         | `filesystem`                      | Vercel snapshots keep files only; `Preserve.FILESYSTEM_AND_MEMORY` rejects `UNSUPPORTED` at connect.                                                                                                                                                              |
 | `snapshots.retentionSeconds` | 30 days                           | Seconds a snapshot is kept after its last use; `0` never expires. Disposable mode only.                                                                                                                                                                           |
 
-Create-time image, region and network must match this setup. `create({ env })` sets Vercel session variables that every command inherits unless it overrides them; values are not saved in references and are redacted from Vercel error text. `labels` accepts up to four entries, and keys starting with `sandbar` are rejected. Mounts are rejected with `UNSUPPORTED`. See [environment variables](/docs/guides/images-and-networking/#set-environment-variables).
+Create-time image, region and network must match this setup. `create({ env })` sets Vercel session variables that every command inherits unless it overrides them; values are not saved in references and are redacted from Vercel error text. `labels` accepts up to four entries, and keys starting with `beachside` are rejected. Mounts are rejected with `UNSUPPORTED`. See [environment variables](/docs/guides/images-and-networking/#set-environment-variables).
 
 ## What works
 
@@ -79,7 +79,7 @@ Live results cover the tested image, region and network setting; see [Provider s
 
 `box.renew({ forSeconds })` **adds** 1 to 86,400 seconds to the running session. Vercel caps total session time by plan (Hobby 45 minutes, Pro and Enterprise 24 hours) and rejects requests over the cap. Inspecting or reopening a sandbox never renews or resumes it.
 
-Reopening searches at most 10,000 project sessions and fails if it cannot confirm the sandbox. `sandboxes.list()` returns every sandbox in the project and region by default; with `persistent: true` it returns only named sandboxes Sandbar created. Listed sandboxes have `ownership: "unknown"`.
+Reopening searches at most 10,000 project sessions and fails if it cannot confirm the sandbox. `sandboxes.list()` returns every sandbox in the project and region by default; with `persistent: true` it returns only named sandboxes Beachside created. Listed sandboxes have `ownership: "unknown"`.
 
 When Vercel refuses a create, nothing was created and `create()` rejects with Vercel's reason: 400 and 422 map to `INVALID_ARGUMENT`, 401 to `UNAUTHENTICATED`, 402 to `CAPACITY`, 403 to `FORBIDDEN`, 404 to `NOT_FOUND` and 429 to `RATE_LIMIT`. A 409, server error or lost response is `OUTCOME_UNKNOWN` and is never retried. See [recovery](/docs/guides/recovery/) and [resources](/docs/guides/resources/).
 
@@ -89,12 +89,12 @@ With `persistent: true`, `box.suspend()` stops compute and saves the filesystem,
 
 - Vercel bills stored checkpoints. The adapter keeps one rolling checkpoint, but Vercel's expiration still applies, so this is not permanent storage.
 - `destroy()` deletes the named sandbox but keeps its snapshots and reports their IDs. Delete them separately.
-- Serialize lifecycle changes for a sandbox, including those made outside Sandbar. Vercel has no atomic check on named resume or delete, so a sandbox replaced under the same name during a call could be affected. Detected replacements and changed settings are rejected.
+- Serialize lifecycle changes for a sandbox, including those made outside Beachside. Vercel has no atomic check on named resume or delete, so a sandbox replaced under the same name during a call could be affected. Detected replacements and changed settings are rejected.
 - `box.snapshot()` is unsupported in persistent mode; use `suspend()` instead. Restoring a snapshot taken in disposable mode can create a new persistent sandbox.
 
 ## Snapshots
 
-**`box.snapshot()` terminates the source sandbox.** It captures the filesystem only; restore creates a new, independent sandbox. Capture needs a disposable sandbox with no mounts that was created, restored or recovered in the current connection. Reopening from a reference alone is not enough. Restore uses the same configured image, and snapshots found only by listing cannot be restored through Sandbar.
+**`box.snapshot()` terminates the source sandbox.** It captures the filesystem only; restore creates a new, independent sandbox. Capture needs a disposable sandbox with no mounts that was created, restored or recovered in the current connection. Reopening from a reference alone is not enough. Restore uses the same configured image, and snapshots found only by listing cannot be restored through Beachside.
 
 Snapshots expire 30 days after their last use. Set `snapshots: { retentionSeconds }` to change that, with `0` for never; restoring from a snapshot resets its clock. The setting needs disposable mode and rejects `UNSUPPORTED` with `persistent: true`. Consistency is not guaranteed, and a minimum retention is guaranteed only up to the configured `retentionSeconds`. Requests needing more fail before capture. **Delete snapshots separately from compute cleanup**, since Vercel bills them until they expire. If a capture response is lost, the adapter does not guess which snapshot is yours. See [snapshots and volumes](/docs/guides/snapshots-and-volumes/).
 
@@ -107,4 +107,4 @@ Snapshots expire 30 days after their last use. Set `snapshots: { retentionSecond
 - Interrupted file transfers can leave temporary files until the sandbox is destroyed.
 - No custom or OCI images, volumes, mounts, egress allowlists, custom firewall rules or OIDC credential discovery.
 
-See the [Vercel Sandbox docs](https://vercel.com/docs/sandbox), [pricing and limits](https://vercel.com/docs/sandbox/pricing), the [adapter README](https://github.com/pandemicsyn/sandbar/blob/main/packages/providers/vercel/README.md) and the [native audit](https://github.com/pandemicsyn/sandbar/blob/main/packages/providers/vercel/NATIVE.md).
+See the [Vercel Sandbox docs](https://vercel.com/docs/sandbox), [pricing and limits](https://vercel.com/docs/sandbox/pricing), the [adapter README](https://github.com/pandemicsyn/beachside/blob/main/packages/providers/vercel/README.md) and the [native audit](https://github.com/pandemicsyn/beachside/blob/main/packages/providers/vercel/NATIVE.md).

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter } from "@sandbar-sdk/adapter";
-import { Sandbar, Image } from "./index";
+import { defineAdapter } from "@beachside/adapter";
+import { Beachside, Image } from "./index";
 import { bindAdapter } from "./bound";
 
 test("bound first-party factory uses the public connection validation and lifetime", async () => {
@@ -36,7 +36,7 @@ test("bound first-party factory uses the public connection validation and lifeti
   const bound = bindAdapter(definition, { target: "us" }, { token: "secret" });
   expect(connects).toBe(0);
 
-  const client = await Sandbar.connect(bound);
+  const client = await Beachside.connect(bound);
 
   try {
     expect(connects).toBe(1);

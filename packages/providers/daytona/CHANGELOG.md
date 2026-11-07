@@ -1,4 +1,4 @@
-# @sandbar-sdk/daytona
+# @beachside/daytona
 
 ## 0.7.0
 

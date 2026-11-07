@@ -24,16 +24,16 @@ Official maintenance and experimental status are independent of installation. Ap
 
 ## Capability statuses
 
-These describe native behavior in the explicitly researched product/configuration, not Sandbar support:
+These describe native behavior in the explicitly researched product/configuration, not Beachside support:
 
 | Status        | Meaning                                                                                                                                                                                |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `supported`   | Positive evidence establishes the capability's baseline below. Document its bounds and subfeatures; this is not a promise of every advanced feature or a live test pass.               |
-| `unsupported` | Authoritative evidence establishes absence. Include a citation and consequence for the adapter. Missing docs, failed credentials or a Sandbar gap do not establish native absence.     |
+| `unsupported` | Authoritative evidence establishes absence. Include a citation and consequence for the adapter. Missing docs, failed credentials or a Beachside gap do not establish native absence.   |
 | `conditional` | Known partial support or a material prerequisite (tier, region, image class, preview access, etc.) limits the baseline. State exactly what works and what does not.                    |
 | `unknown`     | Evidence is missing, stale or conflicting. State the question and what would resolve it. A capability omitted from the requested research scope remains unknown with that explanation. |
 
-For example, no native snapshot facility is `unsupported`; documented capture without a restore API is `conditional`; a restore API that could not be located is `unknown`. A native snapshot feature that Sandbar cannot currently express still gets its native status, with `contract extension needed` recorded separately. Apply this distinction to every capability.
+For example, no native snapshot facility is `unsupported`; documented capture without a restore API is `conditional`; a restore API that could not be located is `unknown`. A native snapshot feature that Beachside cannot currently express still gets its native status, with `contract extension needed` recorded separately. Apply this distinction to every capability.
 
 ## Capability baselines
 
@@ -55,7 +55,7 @@ Use the capability matrix for brief subfeature limitations and link selected-sco
 
 ## Required issue content
 
-Use the template's compact structure: opening brief, provider/target facts, one capability matrix, one decision table, initial recipes, delivery/validation and sources. Keep all capability rows; use `unknown` with a reason instead of blanks. The matrix records native status, key API/guarantee/limitation and source, plus Sandbar mapping (`fits current API`, `contract extension needed`, or `out of scope`). Evidence provenance is docs, pinned source or authorized live observation; it is not a capability status.
+Use the template's compact structure: opening brief, provider/target facts, one capability matrix, one decision table, initial recipes, delivery/validation and sources. Keep all capability rows; use `unknown` with a reason instead of blanks. The matrix records native status, key API/guarantee/limitation and source, plus Beachside mapping (`fits current API`, `contract extension needed`, or `out of scope`). Evidence provenance is docs, pinned source or authorized live observation; it is not a capability status.
 
 Give each fact one primary home. The brief summarizes the user outcome and next step; the decision table holds material tradeoffs and contract conflicts with links to the current contract. Recipes hold concrete calls for the selected scope. Delivery/validation references those recipes and decision IDs rather than repeating their explanations or the repository's standard checklists. Keep deferred capabilities to native support, material constraints, sources and future questions; no detailed future designs or run budgets unless requested. An optional collapsed appendix may hold necessary supporting evidence, not duplicate prose.
 

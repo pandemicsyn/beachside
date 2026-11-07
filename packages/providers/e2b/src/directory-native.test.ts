@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { z } from "zod";
-import { Image, Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
+import { Image, Beachside, type AdapterRecoveryReference } from "beachside";
 import { createE2BAdapter } from "./index";
 import { createSdkTransport } from "./transport";
 
@@ -89,7 +89,7 @@ function fixture() {
   globalThis.fetch = fetcher;
 
   const connect = (onReference?: (ref: AdapterRecoveryReference) => void) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createE2BAdapter(({ apiKey }) => createSdkTransport(apiKey, fetcher)),
       config: { teamId: "team_one", preview: { access: "protected" } },
       credentials: { apiKey: "test-key" },

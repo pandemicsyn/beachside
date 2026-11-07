@@ -37,7 +37,7 @@ import {
   type SandboxInfo,
   type SandboxReference,
   type SandboxState,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { parseWrapper, wrapperScript } from "./exec";
 import {
   BOAT_API,
@@ -162,7 +162,7 @@ const Artifact = z
 
 /** The deterministic per-attempt name is checkpointed before the save so a lost response can be found. */
 const CaptureToken = z.strictObject({
-  name: z.string().regex(/^sandbar-snapshot-[0-9a-f]{24}$/),
+  name: z.string().regex(/^beachside-snapshot-[0-9a-f]{24}$/),
   source: Id,
   sourceState: z.enum(["running", "suspended"]),
 });
@@ -174,7 +174,7 @@ const SnapshotDeleteToken = z.strictObject({ name: z.string().regex(SnapshotName
  * the reference also pins the captured artifact as its generation.
  */
 function snapshotName(submission: string): string {
-  return `sandbar-snapshot-${createHash("sha256").update(submission).digest("hex").slice(0, 24)}`;
+  return `beachside-snapshot-${createHash("sha256").update(submission).digest("hex").slice(0, 24)}`;
 }
 
 /** Boat freezes the sandbox's disk; restores boot a fresh machine from it. */
@@ -974,7 +974,7 @@ export function createBoatAdapter(options: BoatAdapterOptions = {}) {
             let stdinPath: string | undefined;
 
             if (input.stdin !== undefined) {
-              stdinPath = `/tmp/sandbar-stdin-${crypto.randomUUID()}`;
+              stdinPath = `/tmp/beachside-stdin-${crypto.randomUUID()}`;
 
               try {
                 const written = await native.writeFile(
@@ -1468,7 +1468,7 @@ export function createBoatAdapter(options: BoatAdapterOptions = {}) {
             .sort((a, b) => a.name.localeCompare(b.name));
 
           return {
-            // Listed snapshots carry no Sandbar creation evidence.
+            // Listed snapshots carry no Beachside creation evidence.
             items: all
               .slice(cursor, cursor + input.limit)
               .map((snapshot) => snapshotInfo(snapshot, listedRef(snapshot))),

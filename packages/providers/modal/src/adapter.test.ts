@@ -1,8 +1,8 @@
 import { expect, spyOn, test } from "bun:test";
-import { adapterSuite } from "@sandbar-sdk/adapter/testing";
+import { adapterSuite } from "@beachside/adapter/testing";
 import { createModalAdapter, modalWriteScript } from "./adapter";
 import type { ModalTransport } from "./transport";
-import { Image, OutcomeUnknownError, Sandbar } from "sandbar-sdk";
+import { Image, OutcomeUnknownError, Beachside } from "beachside";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -119,13 +119,13 @@ test("Modal public adapter passes required managed-compute scenarios", async () 
 });
 
 test("write command uses atomic noclobber and preserves binary bytes", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-modal-write-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-modal-write-"));
   const path = join(directory, "nested", "binary");
 
   const invoke = (overwrite: boolean, bytes: Uint8Array) =>
     spawnSync(
       "/bin/sh",
-      ["-c", modalWriteScript(overwrite), "sandbar-write", posix.dirname(path), path],
+      ["-c", modalWriteScript(overwrite), "beachside-write", posix.dirname(path), path],
       {
         input: Buffer.from(bytes),
       },
@@ -268,7 +268,7 @@ test("Modal direct exec and write recover by execution ID after one uncertain su
   let saved: unknown;
 
   const open = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { appName: "existing", environment: "main" },
       credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },
@@ -469,7 +469,7 @@ test.each(["lost-start", "lost-input", "lost-result"] as const)(
     const adapter = createModalAdapter(() => transport);
 
     const open = () =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: { appName: "existing", environment: "main" },
         credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },
@@ -593,7 +593,7 @@ test("public finite stdin preserves UTF-8 bytes, output streams, cwd, env and ex
     close() {},
   };
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createModalAdapter(() => transport),
     config: { appName: "existing", environment: "main" },
     credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },
@@ -701,7 +701,7 @@ test("file writes require decimal byte-count evidence in submit and reopened obs
   };
 
   const open = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createModalAdapter(() => transport),
       config: { appName: "existing", environment: "main" },
       credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },
@@ -832,7 +832,7 @@ test("OCI create builds only in submit and never replays an uncertain image or s
     const adapter = createModalAdapter(() => transport);
 
     const open = () =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: { appName: "existing", environment: "main" },
         credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },
@@ -941,7 +941,7 @@ test("Modal submission window covers start lookup and result; observation gets i
     close() {},
   };
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createModalAdapter(() => transport),
     config: { appName: "existing", environment: "main" },
     credentials: { tokenId: "ak", tokenSecret: "as" },
@@ -1036,7 +1036,7 @@ test("Modal setup supplies a working default image and a lifetime up to 24 hours
       3_600_000,
     ],
   ] as const) {
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: { appName: "existing", environment: "main", ...config },
       credentials,
@@ -1059,7 +1059,7 @@ test("Modal setup supplies a working default image and a lifetime up to 24 hours
     { image: "not-a-modal-image" },
   ])
     await expect(
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: { appName: "existing", environment: "main", ...config },
         credentials,
@@ -1071,7 +1071,7 @@ test("Modal lists the verified App's sandboxes without reopenable references", a
   const records: { id: string; tags: Record<string, string>; running: boolean }[] = [
     { id: "sb-1", tags: {}, running: true },
     { id: "sb-2", tags: {}, running: false },
-    { id: "sb-3", tags: { team: "other", sandbar_submission: "sub" }, running: true },
+    { id: "sb-3", tags: { team: "other", beachside_submission: "sub" }, running: true },
   ];
 
   const calls = { lookups: 0, lists: 0, yielded: 0 };
@@ -1126,7 +1126,7 @@ test("Modal lists the verified App's sandboxes without reopenable references", a
     close() {},
   };
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createModalAdapter(() => transport),
     config: { appName: "existing", environment: "main" },
     credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },
@@ -1148,7 +1148,7 @@ test("Modal lists the verified App's sandboxes without reopenable references", a
       coverage: "provider-scope",
       items: [
         { id: "sb-2", state: "unknown", reference: null, labels: {}, createdAt: null },
-        // Tags come back as labels without the adapter's `sandbar_` markers.
+        // Tags come back as labels without the adapter's `beachside_` markers.
         {
           id: "sb-3",
           state: "running",
@@ -1225,7 +1225,7 @@ test("Modal resources reserve the configured size and inspect reports it", async
     ],
     [{ vcpus: 2 }, { status: "unknown", reason: expect.any(String) }],
   ] as const) {
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: { appName: "existing", environment: "main", resources },
       credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },

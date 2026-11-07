@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ExecCommand, Effect, Id } from "@sandbar-sdk/adapter/portable";
+import { ExecCommand, Effect, Id } from "@beachside/adapter/portable";
 
 export const NativeScope = z
   .object({

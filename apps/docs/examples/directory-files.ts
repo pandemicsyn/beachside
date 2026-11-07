@@ -1,7 +1,7 @@
-import type { FileEntry, SandboxHandle, WalkFileEntry } from "sandbar-sdk";
+import type { FileEntry, SandboxHandle, WalkFileEntry } from "beachside";
 
 /** The same private-filesystem workflow works with Daytona, E2B and custom adapters. */
-export async function directoryFiles(box: SandboxHandle, root = "/home/user/sandbar-job") {
+export async function directoryFiles(box: SandboxHandle, root = "/home/user/beachside-job") {
   await box.makeDirectory(`${root}/results`, { recursive: true });
   await box.writeFile(`${root}/results/summary.bin`, Uint8Array.of(0, 255, 129));
 
@@ -22,7 +22,7 @@ export async function artifactFiles(
   box: SandboxHandle,
   input: AsyncIterable<Uint8Array>,
   destination: { write(chunk: Uint8Array): Promise<void> },
-  root = "/home/user/sandbar-artifacts",
+  root = "/home/user/beachside-artifacts",
   signal?: AbortSignal,
 ) {
   await box.makeDirectory(`${root}/results`, { recursive: true, signal });

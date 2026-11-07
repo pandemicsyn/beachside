@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { SandbarError } from "sandbar-sdk";
+import { BeachsideError } from "beachside";
 import {
   storageFixture,
   startupReport,
@@ -73,7 +73,7 @@ test("report publication can lag Toolbox without retrying its evidence", async (
   const published = JSON.stringify(report);
 
   const raw = await readPublishedReport(async () => {
-    if (++reads === 1) throw new SandbarError("NOT_FOUND", "Not published");
+    if (++reads === 1) throw new BeachsideError("NOT_FOUND", "Not published");
 
     return published;
   }, new AbortController().signal);
@@ -100,7 +100,7 @@ test("publication waits are finite and never retry other read failures", async (
   await expect(
     readPublishedReport(async () => {
       reads++;
-      throw new SandbarError("NOT_FOUND", "Not published");
+      throw new BeachsideError("NOT_FOUND", "Not published");
     }, new AbortController().signal),
   ).rejects.toThrow();
   expect(reads).toBeGreaterThan(0);
@@ -110,7 +110,7 @@ test("publication waits are finite and never retry other read failures", async (
   await expect(
     readPublishedReport(async () => {
       reads++;
-      throw new SandbarError("INVALID_RESPONSE", "Read failed");
+      throw new BeachsideError("INVALID_RESPONSE", "Read failed");
     }, new AbortController().signal),
   ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   expect(reads).toBe(1);

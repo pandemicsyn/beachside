@@ -9,8 +9,8 @@ import {
   ResourceReference,
   sandboxReference,
   type MountSpec,
-} from "@sandbar-sdk/adapter";
-import { Sandbar } from "sandbar-sdk";
+} from "@beachside/adapter";
+import { Beachside } from "beachside";
 import { LedgerStore } from "../../provider-qualification/ledger";
 
 const directories: string[] = [];
@@ -51,7 +51,7 @@ export async function fixture(
     failClose?: boolean;
   } = {},
 ) {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-state-qualification-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-state-qualification-"));
   directories.push(directory);
 
   const ledger = new LedgerStore(
@@ -517,9 +517,9 @@ export async function fixture(
   });
 
   const connect = (
-    onReference: Parameters<typeof Sandbar.connect>[0]["onReference"],
-    onDiagnostic?: Parameters<typeof Sandbar.connect>[0]["onDiagnostic"],
-  ) => Sandbar.connect({ adapter, config: {}, credentials: {}, onReference, onDiagnostic });
+    onReference: Parameters<typeof Beachside.connect>[0]["onReference"],
+    onDiagnostic?: Parameters<typeof Beachside.connect>[0]["onDiagnostic"],
+  ) => Beachside.connect({ adapter, config: {}, credentials: {}, onReference, onDiagnostic });
 
   return {
     ledger,

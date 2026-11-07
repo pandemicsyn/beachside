@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Sandbox } from "e2b";
 import { z } from "zod";
-import type { Json } from "@sandbar-sdk/adapter";
+import type { Json } from "@beachside/adapter";
 import { startProcess, ProcessReference } from "./process-native";
 
 function envelope(value: Json) {
@@ -100,11 +100,11 @@ test("terminal starts the requested command, preserves combined bytes and resize
   await p.resize!({ columns: 90, rows: 25 }, f.context);
   await expect(p.closeStdin!(f.context)).rejects.toMatchObject({ code: "UNSUPPORTED" });
   expect(f.calls[1]!.body).toEqual({
-    process: { tag: expect.stringMatching(/^sandbar-/) },
+    process: { tag: expect.stringMatching(/^beachside-/) },
     input: { pty: "BAA=" },
   });
   expect(f.calls[2]!.body).toEqual({
-    process: { tag: expect.stringMatching(/^sandbar-/) },
+    process: { tag: expect.stringMatching(/^beachside-/) },
     pty: { size: { cols: 90, rows: 25 } },
   });
   await p.disconnect!();

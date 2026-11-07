@@ -10,14 +10,14 @@ import {
   type NativeRef,
   type SandboxRef,
   type ProviderDriver,
-} from "@sandbar/provider-spi";
-import { ExecRequest, MAX_EXEC_STDIN_BYTES, type ExecCommand } from "@sandbar-sdk/adapter/portable";
+} from "@beachside-internal/provider-spi";
+import { ExecRequest, MAX_EXEC_STDIN_BYTES, type ExecCommand } from "@beachside/adapter/portable";
 import {
   AdapterError,
   AdapterFilesystemError,
   type FileTransferContext,
   type ImageBuildValue,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   filesystemCommand,
   filesystemResult,
@@ -173,7 +173,7 @@ function volumeContains(native: Sandbox, path: string): boolean {
 
 type DaytonaInventoryPage = Awaited<ReturnType<ProviderDriver["inventory"]>>;
 
-/** A Sandbar-labelled sandbox with the creation labels its reference is built from. */
+/** A Beachside-labelled sandbox with the creation labels its reference is built from. */
 type DaytonaListedSandbox = {
   observation: SandboxObservation;
   nativeState: string;
@@ -269,14 +269,14 @@ function quote(value: string): string {
 async function receiptPath(kind: "exec" | "write", submissionId: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(submissionId));
 
-  return `/tmp/.sandbar-${kind}-${Buffer.from(digest).toString("hex")}/receipt`;
+  return `/tmp/.beachside-${kind}-${Buffer.from(digest).toString("hex")}/receipt`;
 }
 
 async function execStdinPaths(submissionId: string) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(submissionId))
     throw new Error("Invalid Daytona execution submission ID");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(submissionId));
-  const directory = `/tmp/.sandbar-exec-stdin-${Buffer.from(digest).toString("hex")}`;
+  const directory = `/tmp/.beachside-exec-stdin-${Buffer.from(digest).toString("hex")}`;
 
   return { directory, payload: `${directory}/payload` };
 }
@@ -770,7 +770,7 @@ export class DaytonaDriver implements ProviderDriver {
     return fixedImage(image);
   }
   async imageBuildCandidate(submissionId: string): Promise<string | null> {
-    const name = `sandbar-image-${submissionId}`;
+    const name = `beachside-image-${submissionId}`;
     const response = await this.request("GET", `/snapshots/${encodeURIComponent(name)}`);
 
     if (!response.ok) return null;
@@ -824,7 +824,7 @@ export class DaytonaDriver implements ProviderDriver {
     image: string,
     snapshotId?: string,
   ): Promise<ImageBuildObservation | null> {
-    const name = `sandbar-image-${submissionId}`;
+    const name = `beachside-image-${submissionId}`;
 
     const response = await this.request(
       "GET",
@@ -851,7 +851,7 @@ export class DaytonaDriver implements ProviderDriver {
     signal: AbortSignal;
     onSubmit?: () => void;
   }): Promise<ImageBuildResult> {
-    const name = `sandbar-image-${input.submissionId}`;
+    const name = `beachside-image-${input.submissionId}`;
     let snapshotId: string | undefined;
 
     try {
@@ -939,7 +939,7 @@ export class DaytonaDriver implements ProviderDriver {
     requireSnapshotIdentity?: boolean;
     networkPolicy: string;
     labels?: Record<string, string>;
-    mounts?: import("@sandbar-sdk/adapter").MountSpec[];
+    mounts?: import("@beachside/adapter").MountSpec[];
     /** Native sandbox-wide environment; never copied into results or messages. */
     env?: Record<string, string>;
     /** This sandbox's lifetime in minutes; omitted uses the configured one. */
@@ -948,7 +948,7 @@ export class DaytonaDriver implements ProviderDriver {
   }): Promise<DaytonaCreateResult> {
     this.sameScope(input.scope);
 
-    if ("sandbar.imageSnapshot" in (input.labels ?? {}))
+    if ("beachside.imageSnapshot" in (input.labels ?? {}))
       return {
         status: "rejected",
         effect: "none",
@@ -980,7 +980,7 @@ export class DaytonaDriver implements ProviderDriver {
     }
 
     // A stable name lets an unknown OCI build be found without repeating the build.
-    const name = `sandbar-${input.identity.submissionId}`;
+    const name = `beachside-${input.identity.submissionId}`;
     let snapshotId = input.image;
     let retainedSnapshotId: string | undefined;
     let acknowledged: { id: string; labels: Record<string, string> } | undefined;
@@ -994,7 +994,7 @@ export class DaytonaDriver implements ProviderDriver {
     });
 
     if (input.imageKind === "oci") {
-      const snapshotName = `sandbar-image-${input.identity.submissionId}`;
+      const snapshotName = `beachside-image-${input.identity.submissionId}`;
       let buildSubmitted = false;
 
       try {
@@ -1087,11 +1087,11 @@ export class DaytonaDriver implements ProviderDriver {
 
     const labels = {
       ...input.labels,
-      "sandbar.submission": input.identity.submissionId,
-      "sandbar.operation": input.identity.operationId,
+      "beachside.submission": input.identity.submissionId,
+      "beachside.operation": input.identity.operationId,
     };
 
-    if (input.imageKind === "oci") Object.assign(labels, { "sandbar.imageSnapshot": snapshotId });
+    if (input.imageKind === "oci") Object.assign(labels, { "beachside.imageSnapshot": snapshotId });
 
     if (input.signal?.aborted) return uncertain("Daytona creation wait was aborted");
 
@@ -1144,8 +1144,8 @@ export class DaytonaDriver implements ProviderDriver {
         receipt.data.organizationId === this.scope.accountId &&
         receipt.data.target === this.scope.region &&
         receipt.data.name === name &&
-        receipt.data.labels?.["sandbar.submission"] === input.identity.submissionId &&
-        receipt.data.labels?.["sandbar.operation"] === input.identity.operationId
+        receipt.data.labels?.["beachside.submission"] === input.identity.submissionId &&
+        receipt.data.labels?.["beachside.operation"] === input.identity.operationId
       )
         acknowledged = { id: receipt.data.id, labels: receipt.data.labels };
       const value = NativeSandbox.parse(raw);
@@ -1167,8 +1167,8 @@ export class DaytonaDriver implements ProviderDriver {
         if (
           !mountDetail ||
           mountDetail.name !== name ||
-          mountDetail.labels?.["sandbar.submission"] !== input.identity.submissionId ||
-          mountDetail.labels?.["sandbar.operation"] !== input.identity.operationId ||
+          mountDetail.labels?.["beachside.submission"] !== input.identity.submissionId ||
+          mountDetail.labels?.["beachside.operation"] !== input.identity.operationId ||
           mountDetail.volumes?.length !== expectedMounts.length ||
           mountDetail.networkBlockAll !== (input.networkPolicy === "blocked") ||
           mountDetail.public !== false ||
@@ -1270,7 +1270,7 @@ export class DaytonaDriver implements ProviderDriver {
 
     return result;
   }
-  /** Sandbar-labelled sandboxes with their verified native state and creation labels. */
+  /** Beachside-labelled sandboxes with their verified native state and creation labels. */
   async listing(input: { scope: NativeScope; cursor?: string; limit: number }) {
     this.sameScope(input.scope);
     const query = new URLSearchParams({ limit: String(input.limit) });
@@ -1282,7 +1282,7 @@ export class DaytonaDriver implements ProviderDriver {
 
     for (const listed of page.items) {
       if (
-        !listed.labels?.["sandbar.submission"] ||
+        !listed.labels?.["beachside.submission"] ||
         listed.organizationId !== this.scope.accountId ||
         listed.target !== this.scope.region
       )
@@ -1292,11 +1292,11 @@ export class DaytonaDriver implements ProviderDriver {
 
       if (
         detail &&
-        detail.labels?.["sandbar.submission"] === listed.labels["sandbar.submission"] &&
-        detail.labels?.["sandbar.operation"] === listed.labels["sandbar.operation"]
+        detail.labels?.["beachside.submission"] === listed.labels["beachside.submission"] &&
+        detail.labels?.["beachside.operation"] === listed.labels["beachside.operation"]
       ) {
-        const operation = detail.labels["sandbar.operation"];
-        const submission = detail.labels["sandbar.submission"];
+        const operation = detail.labels["beachside.operation"];
+        const submission = detail.labels["beachside.submission"];
 
         const item: DaytonaListedSandbox = {
           observation: observed(this.scope, detail, this.config.configuration.networkPolicy),
@@ -1322,7 +1322,7 @@ export class DaytonaDriver implements ProviderDriver {
     expectedSnapshotId?: string;
   }): Promise<DaytonaCreateResult | null> {
     this.sameScope(input.scope);
-    const name = `sandbar-${input.submissionId}`;
+    const name = `beachside-${input.submissionId}`;
 
     const page = await this.json(
       "GET",
@@ -1335,15 +1335,15 @@ export class DaytonaDriver implements ProviderDriver {
         value.name === name &&
         value.organizationId === this.scope.accountId &&
         value.target === this.scope.region &&
-        value.labels?.["sandbar.submission"] === input.submissionId &&
-        (!input.operationId || value.labels["sandbar.operation"] === input.operationId),
+        value.labels?.["beachside.submission"] === input.submissionId &&
+        (!input.operationId || value.labels["beachside.operation"] === input.operationId),
     );
 
     if (matches.length !== 1) {
       // An OCI build may have materialized before its response was lost. This
       // is evidence of a scoped image candidate, never authority to create a sandbox.
       try {
-        const imageName = `sandbar-image-${input.submissionId}`;
+        const imageName = `beachside-image-${input.submissionId}`;
         const response = await this.request("GET", `/snapshots/${encodeURIComponent(imageName)}`);
 
         if (response.status === 404) return null;
@@ -1383,8 +1383,8 @@ export class DaytonaDriver implements ProviderDriver {
     if (
       !detail ||
       detail.name !== name ||
-      detail.labels?.["sandbar.submission"] !== input.submissionId ||
-      (input.operationId && detail.labels?.["sandbar.operation"] !== input.operationId)
+      detail.labels?.["beachside.submission"] !== input.submissionId ||
+      (input.operationId && detail.labels?.["beachside.operation"] !== input.operationId)
     )
       return null;
 
@@ -1437,7 +1437,7 @@ export class DaytonaDriver implements ProviderDriver {
 
     return async (
       command: string,
-      ctx: import("@sandbar-sdk/adapter").ReadContext,
+      ctx: import("@beachside/adapter").ReadContext,
     ): Promise<string> => {
       ctx.signal.throwIfAborted();
       const remaining = Math.max(1, Math.min(30_000, ctx.deadline - Date.now()));
@@ -1653,7 +1653,7 @@ export class DaytonaDriver implements ProviderDriver {
       : `trap 'rm -rf "$d"' EXIT; `;
 
     const stdinRedirect = stdinPaths ? `< ${quote(stdinPaths.payload)}` : "< /dev/null";
-    const capture = `PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export PATH; d=$(mktemp -d) || exit 125; ${stdinCleanup}mkfifo "$d/fo" "$d/fe" || exit 125; (exec 3<"$d/fo"; head -c ${max + 1} <&3 >"$d/o"; cat <&3 >/dev/null) & p1=$!; (exec 3<"$d/fe"; head -c ${max + 1} <&3 >"$d/e"; cat <&3 >/dev/null) & p2=$!; (${exports} ${command}) ${stdinRedirect} >"$d/fo" 2>"$d/fe"; rc=$?; wait "$p1"; wait "$p2"; o=$(wc -c <"$d/o"); e=$(wc -c <"$d/e"); o=$((o)); e=$((e)); a=$((o<${max}?o:${max})); b=$((e<${max}-a?e:${max}-a)); printf 'SANDBAR-EXEC-V1\\n%s\\n%s\\n%s\\n' "$rc" "$o" "$e"; if [ "$a" -gt 0 ]; then head -c "$a" "$d/o" | od -An -tx1 -v; fi; printf 'SANDBAR-STDERR\\n'; if [ "$b" -gt 0 ]; then head -c "$b" "$d/e" | od -An -tx1 -v; fi; printf 'SANDBAR-END\\n'`;
+    const capture = `PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export PATH; d=$(mktemp -d) || exit 125; ${stdinCleanup}mkfifo "$d/fo" "$d/fe" || exit 125; (exec 3<"$d/fo"; head -c ${max + 1} <&3 >"$d/o"; cat <&3 >/dev/null) & p1=$!; (exec 3<"$d/fe"; head -c ${max + 1} <&3 >"$d/e"; cat <&3 >/dev/null) & p2=$!; (${exports} ${command}) ${stdinRedirect} >"$d/fo" 2>"$d/fe"; rc=$?; wait "$p1"; wait "$p2"; o=$(wc -c <"$d/o"); e=$(wc -c <"$d/e"); o=$((o)); e=$((e)); a=$((o<${max}?o:${max})); b=$((e<${max}-a?e:${max}-a)); printf 'BEACHSIDE-EXEC-V1\\n%s\\n%s\\n%s\\n' "$rc" "$o" "$e"; if [ "$a" -gt 0 ]; then head -c "$a" "$d/o" | od -An -tx1 -v; fi; printf 'BEACHSIDE-STDERR\\n'; if [ "$b" -gt 0 ]; then head -c "$b" "$d/e" | od -An -tx1 -v; fi; printf 'BEACHSIDE-END\\n'`;
     const framePath = await receiptPath("exec", input.identity.submissionId);
     const receiptDirectory = framePath.slice(0, framePath.lastIndexOf("/"));
     const script = `mkdir -m 700 -- ${quote(receiptDirectory)} || exit 126; { ${capture}; } > ${quote(framePath)}; cat ${quote(framePath)}`;
@@ -1709,7 +1709,7 @@ export class DaytonaDriver implements ProviderDriver {
     result: string,
   ): DriverResult {
     const match =
-      /^SANDBAR-EXEC-V1\n(-?\d+)\n(\d+)\n(\d+)\n([\da-f\s]*)SANDBAR-STDERR\n([\da-f\s]*)SANDBAR-END\n?$/.exec(
+      /^BEACHSIDE-EXEC-V1\n(-?\d+)\n(\d+)\n(\d+)\n([\da-f\s]*)BEACHSIDE-STDERR\n([\da-f\s]*)BEACHSIDE-END\n?$/.exec(
         result,
       );
 
@@ -1798,7 +1798,7 @@ export class DaytonaDriver implements ProviderDriver {
         await boundedBytes(response, 4_194_304),
       );
 
-      if (!frame.includes("SANDBAR-END"))
+      if (!frame.includes("BEACHSIDE-END"))
         return {
           status: "pending",
           effect: "possible",
@@ -1939,7 +1939,7 @@ export class DaytonaDriver implements ProviderDriver {
         "Daytona stream writes require private same-filesystem staging",
       );
     input.signal?.throwIfAborted();
-    const directory = `${input.path.slice(0, input.path.lastIndexOf("/") + 1)}.sandbar-stream-${crypto.randomUUID()}`;
+    const directory = `${input.path.slice(0, input.path.lastIndexOf("/") + 1)}.beachside-stream-${crypto.randomUUID()}`;
 
     input.retain?.({ temporaryPaths: [directory] });
 
@@ -1959,7 +1959,7 @@ export class DaytonaDriver implements ProviderDriver {
     }
 
     const stage = `${directory}/payload`;
-    const boundary = `sandbar-${crypto.randomUUID()}`;
+    const boundary = `beachside-${crypto.randomUUID()}`;
     const encoder = new TextEncoder();
 
     const iterator = (async function* () {
@@ -2181,7 +2181,7 @@ export class DaytonaDriver implements ProviderDriver {
     // Object-backed mounts cannot chmod a private stage; overwrite commits do not require a same-filesystem link.
     const stageParent = mounted ? "/tmp/" : input.path.slice(0, input.path.lastIndexOf("/") + 1);
 
-    const stageDirectory = `${stageParent}.sandbar-${Buffer.from(
+    const stageDirectory = `${stageParent}.beachside-${Buffer.from(
       await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input.identity.submissionId)),
     )
       .toString("hex")
@@ -2442,7 +2442,7 @@ export class DaytonaDriver implements ProviderDriver {
 
     if (!value?.labels) return undefined;
 
-    const snapshotId = value?.labels?.["sandbar.imageSnapshot"];
+    const snapshotId = value?.labels?.["beachside.imageSnapshot"];
 
     return snapshotId ? [`daytona:snapshot:${snapshotId}`] : [];
   }
@@ -2534,7 +2534,7 @@ export class DaytonaDriver implements ProviderDriver {
       if (value.state !== "destroyed") return pending();
 
       if (retainedResources === undefined && value.labels) {
-        const snapshotId = value.labels["sandbar.imageSnapshot"];
+        const snapshotId = value.labels["beachside.imageSnapshot"];
 
         retainedResources = snapshotId ? [`daytona:snapshot:${snapshotId}`] : [];
       }
@@ -2614,8 +2614,8 @@ export class DaytonaDriver implements ProviderDriver {
           computeStopped: true,
           retainedResources:
             retainedResources ??
-            (value.labels?.["sandbar.imageSnapshot"]
-              ? [`daytona:snapshot:${value.labels["sandbar.imageSnapshot"]}`]
+            (value.labels?.["beachside.imageSnapshot"]
+              ? [`daytona:snapshot:${value.labels["beachside.imageSnapshot"]}`]
               : []),
         },
       },

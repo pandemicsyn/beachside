@@ -6,23 +6,23 @@ import Logo from "../components/Logo.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 import "../styles/tokens.css";
 
-const title = "Sandbar | One SDK. Every sandbox.";
+const title = "Beachside | One SDK. Every sandbox.";
 
 const description =
-  "Sandbar is a typed TypeScript API for Daytona, E2B, boxd, Boat, Runloop and Vercel sandboxes, with a public adapter API for other providers.";
+  "Beachside is a typed TypeScript API for Daytona, E2B, boxd, Boat, Runloop and Vercel sandboxes, with a public adapter API for other providers.";
 
 const fonts =
   "https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap";
 
-const github = "https://github.com/pandemicsyn/sandbar";
+const github = "https://github.com/pandemicsyn/beachside";
 
 const providers = ["daytona", "e2b", "boxd", "vercel"];
 
-const install = `npm install sandbar-sdk @sandbar-sdk/${providers[0]}`;
+const install = `npm install beachside @beachside/${providers[0]}`;
 
-const cliInstall = "npm install -g @sandbar-sdk/cli";
+const cliInstall = "npm install -g @beachside/cli";
 
-const skillInstall = "npx skills add pandemicsyn/sandbar --skill sandbar-cli -g";
+const skillInstall = "npx skills add pandemicsyn/beachside --skill beachside-cli -g";
 
 // One shell session per provider: only the setup line (and Daytona's snapshot) changes.
 const cliSessions = [
@@ -31,7 +31,7 @@ const cliSessions = [
   { provider: "boxd", env: "BOXD_API_KEY=... BOXD_ORG=... BOXD_NETWORK=internet", create: "", id: "bx_7kq2m9" },
   { provider: "vercel", env: "VERCEL_TOKEN=... VERCEL_TEAM_ID=... VERCEL_PROJECT_ID=...", create: "", id: "sbx_x2Lq9Ma" },
 ].map(({ provider, env, create, id }) => {
-  // Same layout as `sandbar ls`: columns padded to their widest cell, two spaces apart.
+  // Same layout as `beachside ls`: columns padded to their widest cell, two spaces apart.
   const rows = [
     ["NAME", "STATE", "PROVIDER", "PROFILE", "ID", "CREATED"],
     ["web", "running", provider, provider, id, "2026-10-19T09:41:07.312Z"],
@@ -46,15 +46,15 @@ const cliSessions = [
   return {
     provider,
     lines: [
-      { cmd: `export SANDBAR_PROVIDER=${provider} ${env}` },
-      { cmd: `sandbar create --name web${create}` },
+      { cmd: `export BEACHSIDE_PROVIDER=${provider} ${env}` },
+      { cmd: `beachside create --name web${create}` },
       { out: "web" },
-      { cmd: "sandbar cp ./app.py web:/tmp/app.py" },
-      { cmd: "sandbar exec web -- python3 /tmp/app.py" },
+      { cmd: "beachside cp ./app.py web:/tmp/app.py" },
+      { cmd: "beachside exec web -- python3 /tmp/app.py" },
       { out: `hello from ${provider}` },
-      { cmd: "sandbar ls" },
+      { cmd: "beachside ls" },
       { out: table },
-      { cmd: "sandbar rm web" },
+      { cmd: "beachside rm web" },
       { out: "web" },
     ],
   };
@@ -100,7 +100,7 @@ const sunBands = [
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <link rel="canonical" href="https://sandbarsdk.dev/" />
+    <link rel="canonical" href="https://beachside.run/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="sitemap" href="/sitemap-index.xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -130,7 +130,7 @@ const sunBands = [
   <body>
     <header class="site-header">
       <div class="header-row">
-        <a class="home" href="/" aria-label="Sandbar home"><Logo /></a>
+        <a class="home" href="/" aria-label="Beachside home"><Logo /></a>
         <div class="search-slot">
           <a class="search" href="/docs/?search" aria-keyshortcuts="Meta+K Control+K">
             <span class="search-label">Search the docs</span>
@@ -203,32 +203,32 @@ const sunBands = [
                   }
                 </div>
               </div>
-              <pre class="code" aria-label="Example: create a sandbox and run a command"><code><span data-factory-connect><span class="k">import</span> {"{"} Sandbar<span data-image-import>, Image</span> {"}"} <span class="k">from</span> <span class="s">"sandbar-sdk"</span>
-<span class="k">import</span> {"{"} <span data-typed-plain>daytona</span> {"}"} <span class="k">from</span> <span class="s">"@sandbar-sdk/<span data-typed-plain>daytona</span>"</span>
+              <pre class="code" aria-label="Example: create a sandbox and run a command"><code><span data-factory-connect><span class="k">import</span> {"{"} Beachside<span data-image-import>, Image</span> {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
+<span class="k">import</span> {"{"} <span data-typed-plain>daytona</span> {"}"} <span class="k">from</span> <span class="s">"@beachside/<span data-typed-plain>daytona</span>"</span>
 
-<span class="k">const</span> client = <span class="k">await</span> Sandbar.connect(
+<span class="k">const</span> client = <span class="k">await</span> Beachside.connect(
   <span class="typed"><span data-typed>daytona</span><span class="caret" data-caret></span></span>({"{"}
 <span data-options>    apiKey: process.env.DAYTONA_API_KEY!,
     target: "us",
     environment: Image.prepared("daytona-small"),
     networkPolicy: "daytona-default",</span>
   {"}"}),
-)</span><span data-boxd-connect hidden><span class="k">import</span> {"{"} Sandbar {"}"} <span class="k">from</span> <span class="s">"sandbar-sdk"</span>
-<span class="k">import</span> {"{"} boxdAdapter {"}"} <span class="k">from</span> <span class="s">"@sandbar-sdk/boxd"</span>
+)</span><span data-boxd-connect hidden><span class="k">import</span> {"{"} Beachside {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
+<span class="k">import</span> {"{"} boxdAdapter {"}"} <span class="k">from</span> <span class="s">"@beachside/boxd"</span>
 
-<span class="k">const</span> client = <span class="k">await</span> Sandbar.connect({"{"}
+<span class="k">const</span> client = <span class="k">await</span> Beachside.connect({"{"}
   adapter: <span class="typed"><span data-typed>boxdAdapter</span><span class="caret" data-caret></span></span>,
   credentials: {"{"} apiKey: process.env.BOXD_API_KEY! {"}"},
   config: {"{"} org: process.env.BOXD_ORG!, networkPolicy: <span class="s">"internet"</span> {"}"},
-{"}"})</span><span data-vercel-connect hidden><span class="k">import</span> {"{"} Sandbar {"}"} <span class="k">from</span> <span class="s">"sandbar-sdk"</span>
-<span class="k">import</span> {"{"} vercel {"}"} <span class="k">from</span> <span class="s">"@sandbar-sdk/vercel"</span>
+{"}"})</span><span data-vercel-connect hidden><span class="k">import</span> {"{"} Beachside {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
+<span class="k">import</span> {"{"} vercel {"}"} <span class="k">from</span> <span class="s">"@beachside/vercel"</span>
 
-<span class="k">const</span> client = <span class="k">await</span> Sandbar.connect({"{"}
+<span class="k">const</span> client = <span class="k">await</span> Beachside.connect({"{"}
   adapter: <span class="typed"><span data-typed>vercel</span><span class="caret" data-caret></span></span>,
   credentials: {"{"} token: process.env.VERCEL_TOKEN! {"}"},
   config: {"{"}
-    teamId: process.env.SANDBAR_VERCEL_TEAM_ID!,
-    projectId: process.env.SANDBAR_VERCEL_PROJECT_ID!,
+    teamId: process.env.BEACHSIDE_VERCEL_TEAM_ID!,
+    projectId: process.env.BEACHSIDE_VERCEL_PROJECT_ID!,
   {"}"},
 {"}"})</span>
 <span class="k">await</span> client.sandboxes.with({"{}"}, <span class="k">async</span> (box) =&gt; {"{"}
@@ -274,10 +274,10 @@ const sunBands = [
       <section class="cli wrap" id="cli">
         <div class="cli-head">
           <div class="cli-copy">
-            <span class="cli-chip">@sandbar-sdk/cli</span>
+            <span class="cli-chip">@beachside/cli</span>
             <h2>Same sandboxes. <span>Straight from your shell.</span></h2>
             <p>
-              <code>sandbar</code> creates, runs in and removes sandboxes on any provider with an adapter.
+              <code>beachside</code> creates, runs in and removes sandboxes on any provider with an adapter.
               It never prompts, every command has a <code>--json</code> form, and exit codes say what to do next,
               so your coding agent can drive it as easily as you can.
             </p>
@@ -309,7 +309,7 @@ const sunBands = [
             <span class="dot" style="background:var(--sb-pink)"></span>
             <span class="dot" style="background:var(--sb-coral)"></span>
             <span class="dot" style="background:var(--sb-aqua)"></span>
-            <span class="file">zsh — sandbar</span>
+            <span class="file">zsh — beachside</span>
             <div class="provider-tabs" role="group" aria-label="Provider">
               {
                 cliSessions.map(({ provider }, index) => (
@@ -366,11 +366,11 @@ const sunBands = [
       <section class="band">
         <div class="wrap band-grid">
           <div class="band-copy">
-            <span class="band-chip">@sandbar-sdk/adapter</span>
+            <span class="band-chip">@beachside/adapter</span>
             <h2>Bring your own provider</h2>
             <p>
               Wrap any sandbox API with <code>defineAdapter</code>. Declare config and credential schemas,
-              implement the operations your provider supports, and Sandbar handles lifecycle, error mapping
+              implement the operations your provider supports, and Beachside handles lifecycle, error mapping
               and recovery around it.
             </p>
             <a class="band-link" href="/docs/guides/write-an-adapter/">Writing an adapter →</a>
@@ -379,7 +379,7 @@ const sunBands = [
             <div class="code-bar"><span class="file file-only">adapters/acme.ts · excerpt</span></div>
             <Code code={adapterExample} lang="ts" theme={{ ...oceanDriveCodeTheme, type: "dark" }} class="adapter-code" />
             <div class="adapter-source">
-              <a class="band-link" href="https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/acme-adapter.ts">View complete source →</a>
+              <a class="band-link" href="https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/acme-adapter.ts">View complete source →</a>
             </div>
           </div>
         </div>
@@ -387,7 +387,7 @@ const sunBands = [
     </main>
 
     <footer class="wrap footer">
-      <span>Apache-2.0 · sandbarsdk.dev</span>
+      <span>Apache-2.0 · beachside.run</span>
       <span>Built with Astro + Starlight</span>
     </footer>
 
@@ -494,7 +494,7 @@ const sunBands = [
       const installText = document.querySelector<HTMLElement>("[data-install-text]");
 
       function renderInstall(provider: string) {
-        const command = `npm install sandbar-sdk @sandbar-sdk/${provider}`;
+        const command = `npm install beachside @beachside/${provider}`;
 
         if (installButton) {
           installButton.dataset.copy = command;

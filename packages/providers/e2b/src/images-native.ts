@@ -8,7 +8,7 @@ import {
   type ImageInfo,
   type RecoveryAttempt,
   type Scope,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   E2BTemplateDeleteRejected,
   type E2BStateTransport,

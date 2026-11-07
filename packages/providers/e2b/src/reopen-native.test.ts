@@ -2,8 +2,8 @@ import { afterEach, expect, spyOn, test } from "bun:test";
 import { Sandbox } from "e2b";
 import { createSdkTransport } from "./transport";
 import { createE2BAdapter } from "./index";
-import { Sandbar } from "sandbar-sdk";
-import { sandboxReference } from "@sandbar-sdk/adapter";
+import { Beachside } from "beachside";
+import { sandboxReference } from "@beachside/adapter";
 
 const originalFetch = globalThis.fetch;
 
@@ -134,15 +134,15 @@ test.each([
   if (mode === "paused") f.detail.state = "paused";
   expect(await f.transport.get("sandbox_one")).toMatchObject({ attachmentReady: false });
   Object.assign(f.detail.metadata, {
-    sandbar_scope: "team_one:base",
-    sandbar_operation: "operation_one",
-    sandbar_submission: "submission_one",
-    sandbar_template: "template_one",
+    beachside_scope: "team_one:base",
+    beachside_operation: "operation_one",
+    beachside_submission: "submission_one",
+    beachside_template: "template_one",
   });
   let saved = 0;
   const transport = { ...f.transport, async verifyAuth() {}, async verifyTeam() {} };
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createE2BAdapter(() => transport),
     config: { teamId: "team_one", preview: { access: "protected" } },
     credentials: { apiKey: "fixture-key" },
@@ -237,10 +237,10 @@ test.each([401, 403])(
             templateID: "template_one",
             state: "running",
             metadata: {
-              sandbar_scope: "team_one:base",
-              sandbar_operation: "operation_one",
-              sandbar_submission: "submission_one",
-              sandbar_template: "template_one",
+              beachside_scope: "team_one:base",
+              beachside_operation: "operation_one",
+              beachside_submission: "submission_one",
+              beachside_template: "template_one",
             },
           });
         }
@@ -250,7 +250,7 @@ test.each([401, 403])(
       { preconnect() {} },
     );
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createE2BAdapter(() => createSdkTransport("fixture-key", fetcher)),
       config: { teamId: "team_one", preview: { access: "protected" } },
       credentials: { apiKey: "fixture-key" },
@@ -356,7 +356,7 @@ test("pinned E2B file read forwards abort to download and cancels a stalled nati
   expect(signal?.aborted).toBe(true);
   expect(cancelled).toBe(1);
   // The pinned SDK keeps its private body reader locked even after cancel.
-  // Sandbar releases its own reader; native wrapper cleanup is best effort.
+  // Beachside releases its own reader; native wrapper cleanup is best effort.
   expect(
     f.calls.filter((c) => c.url.origin === "https://api.e2b.app").every((c) => c.method === "GET"),
   ).toBe(true);

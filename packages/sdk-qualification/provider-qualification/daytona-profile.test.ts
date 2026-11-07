@@ -8,7 +8,7 @@ import { TestResources } from "../live/fixtures/resources";
 import { cleanupLedger } from "../live/fixtures/reconcile";
 import { lifecycle, execution, files } from "../live/sandbox.test";
 import { recordLegacyReference as recordReference } from "./ledger";
-import { Image } from "sandbar-sdk";
+import { Image } from "beachside";
 
 const directories: string[] = [];
 
@@ -28,7 +28,7 @@ async function fixture(
     asynchronousDelete?: boolean;
   } = {},
 ) {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-daytona-qualification-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-daytona-qualification-"));
   directories.push(directory);
 
   const config = daytonaConfiguration.parse({
@@ -348,7 +348,7 @@ test("Daytona default recovery rejects import into strict scope", async () => {
 
       // SAFETY: This receipt was saved by the public SDK hook; recover validates schema and scope.
       const ref = (await native.ledger.read()).stateMutations![0]!
-        .reference as import("sandbar-sdk").AdapterRecoveryReference;
+        .reference as import("beachside").AdapterRecoveryReference;
 
       const strict = await daytonaConnection(
         { ...native.config, networkPolicy: "blocked" },

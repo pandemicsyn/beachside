@@ -7,7 +7,7 @@ import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-ho
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { Sandbar, Image } from "sandbar-sdk";
+import { Beachside, Image } from "beachside";
 import { fixtureAdapter } from "./adapter";
 
 const manager = new AsyncLocalStorageContextManager().enable();
@@ -20,7 +20,7 @@ provider.register({ contextManager: manager });
 
 const instrumentation = new HttpInstrumentation({
   ignoreIncomingRequestHook: () => true,
-  // The application controls provider/guest propagation separately from Sandbar.
+  // The application controls provider/guest propagation separately from Beachside.
   ignoreOutgoingRequestHook: (request) => request.hostname !== "127.0.0.1",
 });
 
@@ -62,7 +62,7 @@ const fixture = fixtureAdapter({
     }),
 });
 
-const client = await Sandbar.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
+const client = await Beachside.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
 
 const box = await client.sandboxes.create({ environment: Image.prepared("fixture") });
 
@@ -77,7 +77,7 @@ try {
   const spans = exporter.getFinishedSpans();
   const transports = spans.filter((s) => s.kind === SpanKind.CLIENT);
   assert.equal(transports.length, 1);
-  const semantic = spans.find((s) => s.name === "sandbar.file.read")!;
+  const semantic = spans.find((s) => s.name === "beachside.file.read")!;
   assert.equal(transports[0]!.parentSpanContext?.spanId, semantic.spanContext().spanId);
   assert(incoming?.includes(transports[0]!.spanContext().traceId));
   assert(!JSON.stringify(spans.map((s) => s.attributes)).includes("CANARY"));

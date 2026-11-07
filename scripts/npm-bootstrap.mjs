@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
-const repository = "pandemicsyn/sandbar";
+const repository = "pandemicsyn/beachside";
 
 const workflow = "release-npm.yml";
 
@@ -61,7 +61,7 @@ function whoami() {
   const result = npm(["whoami"]);
 
   if (result.status !== 0)
-    throw new Error("Run `npm login` with the account that will own the Sandbar packages");
+    throw new Error("Run `npm login` with the account that will own the Beachside packages");
 
   return result.stdout.trim();
 }
@@ -83,7 +83,7 @@ function placeholder({ path, manifest }, directory) {
       {
         name: manifest.name,
         version: placeholderVersion,
-        description: `Placeholder for ${manifest.name}. Install a published Sandbar release instead.`,
+        description: `Placeholder for ${manifest.name}. Install a published Beachside release instead.`,
         license: manifest.license,
         repository: manifest.repository,
         homepage: manifest.homepage ?? `https://github.com/${repository}#readme`,
@@ -119,7 +119,7 @@ if (!["plan", "publish", "trust"].includes(mode))
   throw new Error(`Unknown bootstrap mode: ${mode}; use plan, publish or trust`);
 
 if (mode === "plan") {
-  const directory = join(tmpdir(), `sandbar-npm-bootstrap-${process.pid}`);
+  const directory = join(tmpdir(), `beachside-npm-bootstrap-${process.pid}`);
 
   report(state());
 
@@ -148,7 +148,7 @@ if (mode === "publish") {
       throw new Error(`${item.manifest.name} exists and ${user} is not an owner; stopping`);
   }
 
-  const directory = join(tmpdir(), `sandbar-npm-bootstrap-${process.pid}`);
+  const directory = join(tmpdir(), `beachside-npm-bootstrap-${process.pid}`);
 
   for (const { item, versions } of rows) {
     if (versions) {

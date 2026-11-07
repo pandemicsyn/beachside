@@ -6,7 +6,7 @@ import {
   type ProcessStartContext,
   type ReadContext,
   type Json,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import type { Sandbox } from "e2b";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -118,7 +118,7 @@ export async function startProcess(
     (options.binding
       ? {
           version: 1 as const,
-          tag: `sandbar-${randomUUID()}`,
+          tag: `beachside-${randomUUID()}`,
           sandbox: credentials.id,
           binding: options.binding,
           profile: options.terminal ? ("terminal" as const) : ("process" as const),

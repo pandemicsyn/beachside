@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import type { AdapterSandbox } from "sandbar-sdk";
+import type { AdapterSandbox } from "beachside";
 import {
   interactiveWorker,
   buildWithProgress,
@@ -8,9 +8,9 @@ import {
 import { liveEnabled, setupLive, finishLive } from "./providers";
 
 const enabled =
-  liveEnabled && ["daytona", "e2b", "vercel"].includes(process.env.SANDBAR_QUAL_PROVIDER ?? "");
+  liveEnabled && ["daytona", "e2b", "vercel"].includes(process.env.BEACHSIDE_QUAL_PROVIDER ?? "");
 
-describe("Sandbar sustained and interactive processes", () => {
+describe("Beachside sustained and interactive processes", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   let box: AdapterSandbox;
   beforeAll(async () => {

@@ -1,4 +1,4 @@
-import { SandbarError } from "./resource";
+import { BeachsideError } from "./resource";
 
 /** Local connection setup controls; this signal does not own a returned client. */
 export type ConnectionWaitOptions = { signal?: AbortSignal; timeoutMs?: number };
@@ -10,17 +10,17 @@ export function connectionBudget(options: ConnectionWaitOptions, phase: "connect
     options.timeoutMs === undefined ? (phase === "connect" ? 30_000 : 5_000) : options.timeoutMs;
 
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0)
-    throw new SandbarError(
+    throw new BeachsideError(
       "INVALID_ARGUMENT",
       `${phase} timeoutMs must be a positive finite safe integer`,
     );
 
   if (options.signal !== undefined && !(options.signal instanceof AbortSignal))
-    throw new SandbarError("INVALID_ARGUMENT", `${phase} signal must be an AbortSignal`);
+    throw new BeachsideError("INVALID_ARGUMENT", `${phase} signal must be an AbortSignal`);
   const controller = new AbortController();
 
   const failure = (code: "WAIT_ABORTED" | "TIMEOUT", cause: unknown) => {
-    const error = new SandbarError(
+    const error = new BeachsideError(
       code,
       `${phase} local wait ${code === "TIMEOUT" ? "timed out" : "aborted"}`,
     );

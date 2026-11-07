@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar } from "sandbar-sdk";
+import { Image, Beachside } from "beachside";
 import { asyncAcme, metrics } from "./async-adapter";
 
 test("a saved pending reference reopens for observation without another create", async () => {
   const before = metrics.submits;
   let saved: unknown;
 
-  const first = await Sandbar.connect({
+  const first = await Beachside.connect({
     adapter: asyncAcme,
     config: { region: "us" },
     credentials: { token: "fixture-token" },
@@ -23,7 +23,7 @@ test("a saved pending reference reopens for observation without another create",
   saved = structuredClone(operation.reference); // Persist the accepted token update.
   await first.close();
 
-  const reopened = await Sandbar.connect({
+  const reopened = await Beachside.connect({
     adapter: asyncAcme,
     config: { region: "us" },
     credentials: { token: "fixture-token" },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { Sandbar, Image, diagnosticContext } from "sandbar-sdk";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { Beachside, Image, diagnosticContext } from "beachside";
+import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
 import { previewResponse } from "./sandbox-preview.js";
 import { textStreaming, terminateJob } from "./text-streaming.js";
@@ -61,7 +61,7 @@ const adapter = defineAdapter({
   },
 });
 
-const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
 try {
   const box = await client.sandboxes.create({ environment: Image.prepared("one") });

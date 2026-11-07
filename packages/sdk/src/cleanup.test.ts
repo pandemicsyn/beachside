@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter } from "@sandbar-sdk/adapter";
-import { Sandbar, Image, type DirectConnectOptions } from "./index";
+import { defineAdapter } from "@beachside/adapter";
+import { Beachside, Image, type DirectConnectOptions } from "./index";
 import { bindAdapter } from "./bound";
 
 function fixture() {
@@ -39,8 +39,8 @@ for (const form of ["bound", "explicit"] as const) {
 
     const connect = (options: DirectConnectOptions) =>
       form === "bound"
-        ? Sandbar.connect(bindAdapter(f.adapter, {}, {}), options)
-        : Sandbar.connect({ adapter: f.adapter, config: {}, credentials: {}, ...options });
+        ? Beachside.connect(bindAdapter(f.adapter, {}, {}), options)
+        : Beachside.connect({ adapter: f.adapter, config: {}, credentials: {}, ...options });
 
     const options: DirectConnectOptions = { cleanup: { storage: "allow-unconfirmed" } };
     const pending = connect(options);
@@ -92,8 +92,8 @@ for (const form of ["bound", "explicit"] as const) {
 
       const pending =
         form === "bound"
-          ? Sandbar.connect(bindAdapter(f.adapter, {}, {}), options)
-          : Sandbar.connect({ adapter: f.adapter, config: {}, credentials: {}, ...options });
+          ? Beachside.connect(bindAdapter(f.adapter, {}, {}), options)
+          : Beachside.connect({ adapter: f.adapter, config: {}, credentials: {}, ...options });
 
       await expect(pending).rejects.toMatchObject({ code: "INVALID_ARGUMENT", effect: "none" });
     }

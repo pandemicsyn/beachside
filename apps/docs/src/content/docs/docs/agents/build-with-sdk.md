@@ -1,30 +1,30 @@
 ---
 title: Build with the SDK
-description: A copyable prompt to get your coding agent building an application with Sandbar.
+description: A copyable prompt to get your coding agent building an application with Beachside.
 ---
 
-Replace the bracketed fields, then copy the prompt into your coding agent. Give it access to your project and the Sandbar documentation. Provider credentials belong in your environment, not in the prompt.
+Replace the bracketed fields, then copy the prompt into your coding agent. Give it access to your project and the Beachside documentation. Provider credentials belong in your environment, not in the prompt.
 
 ```text wrap title="Application prompt"
-Build [describe the feature] in this project using the Sandbar TypeScript SDK.
+Build [describe the feature] in this project using the Beachside TypeScript SDK.
 Use [Daytona, E2B, boxd or Vercel] as the sandbox provider.
 Read that provider's setup guide and supported operations before choosing a workflow.
 
 Read these docs first:
-- https://sandbarsdk.dev/docs/direct-quickstart/
-- https://sandbarsdk.dev/docs/providers/support/
-- https://sandbarsdk.dev/docs/reference/typescript/
-- https://sandbarsdk.dev/docs/guides/recovery/
-- https://sandbarsdk.dev/docs/guides/runnable-agent-examples/
-- https://github.com/pandemicsyn/sandbar/blob/main/examples/README.md
+- https://beachside.run/docs/direct-quickstart/
+- https://beachside.run/docs/providers/support/
+- https://beachside.run/docs/reference/typescript/
+- https://beachside.run/docs/guides/recovery/
+- https://beachside.run/docs/guides/runnable-agent-examples/
+- https://github.com/pandemicsyn/beachside/blob/main/examples/README.md
 
 Inspect the project and installed package versions before changing code.
-Install "sandbar-sdk" and the selected adapter package from npm. Do not
-substitute the unrelated npm package named "sandbar".
+Install "beachside" and the selected adapter package from npm. Do not
+substitute the unrelated npm package named "beachside".
 
-Use Sandbar and Image from "sandbar-sdk", with e2b from
-"@sandbar-sdk/e2b", daytona from "@sandbar-sdk/daytona", boxdAdapter from
-"@sandbar-sdk/boxd", or vercel from "@sandbar-sdk/vercel". Use the selected
+Use Beachside and Image from "beachside", with e2b from
+"@beachside/e2b", daytona from "@beachside/daytona", boxdAdapter from
+"@beachside/boxd", or vercel from "@beachside/vercel". Use the selected
 provider guide's connection form; boxd and Vercel take definition/config/credentials.
 Run the SDK on the server and read credentials from environment variables.
 

@@ -1,8 +1,8 @@
-import { Sandbar } from "sandbar-sdk";
-import { runloopAdapter } from "@sandbar-sdk/runloop";
+import { Beachside } from "beachside";
+import { runloopAdapter } from "@beachside/runloop";
 
 export async function runloopExample(apiKey: string) {
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: runloopAdapter,
     credentials: { apiKey },
     config: { network: "blocked" },

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar } from "sandbar-sdk";
+import { Image, Beachside } from "beachside";
 import { createModalAdapter } from "./adapter";
 import type { RouterOutput, RouterRun } from "./router-wire";
 import type { ModalTransport } from "./transport";
@@ -110,7 +110,7 @@ function fixture() {
   };
 
   const connect = async () => {
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createModalAdapter(() => transport),
       config: { appName: "existing", environment: "main" },
       credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },
@@ -163,7 +163,7 @@ test("byte output streams per stream before exit, through the PID wrapper", asyn
 
     const start = f.starts.at(-1)!;
     expect(start.command.slice(0, 3)).toEqual(["/bin/sh", "-c", 'echo $$ >"$0" && exec "$@"']);
-    expect(start.command[3]).toBe(`/tmp/.sandbar-process-${start.execId}.pid`);
+    expect(start.command[3]).toBe(`/tmp/.beachside-process-${start.execId}.pid`);
     expect(start.command.slice(4)).toEqual(["make", "test"]);
     expect(start).toMatchObject({ cwd: "/work", env: { CI: "1" } });
     expect(start.timeoutSeconds).toBeUndefined();
@@ -241,7 +241,10 @@ test("terminate sends SIGKILL to the recorded PID in a second exec", async () =>
 
     const kill = f.starts.at(-1)!;
     expect(kill.execId).not.toBe(launched.execId);
-    expect(kill.command.slice(3)).toEqual([`/tmp/.sandbar-process-${launched.execId}.pid`, "KILL"]);
+    expect(kill.command.slice(3)).toEqual([
+      `/tmp/.beachside-process-${launched.execId}.pid`,
+      "KILL",
+    ]);
     expect(kill.timeoutSeconds).toBe(30);
 
     f.killExit(4);

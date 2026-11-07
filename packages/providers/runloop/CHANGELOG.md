@@ -1,4 +1,4 @@
-# @sandbar-sdk/runloop
+# @beachside/runloop
 
 ## 0.7.0
 

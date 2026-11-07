@@ -17,14 +17,14 @@ import {
 } from "../../provider-qualification/profile";
 import { reopenInFreshProcess } from "../../provider-qualification/reopen";
 import { TestResources } from "../fixtures/resources";
-import type { ResourceReference } from "sandbar-sdk";
+import type { ResourceReference } from "beachside";
 
-export const liveEnabled = process.env.SANDBAR_LIVE === "1";
+export const liveEnabled = process.env.BEACHSIDE_LIVE === "1";
 
-const selectedProvider = process.env.SANDBAR_QUAL_PROVIDER ?? "daytona";
+const selectedProvider = process.env.BEACHSIDE_QUAL_PROVIDER ?? "daytona";
 
-const profilePath = process.env.SANDBAR_QUAL_PROFILE
-  ? resolve(process.env.SANDBAR_QUAL_PROFILE)
+const profilePath = process.env.BEACHSIDE_QUAL_PROFILE
+  ? resolve(process.env.BEACHSIDE_QUAL_PROFILE)
   : undefined;
 
 const external = profilePath ? await loadProviderProfile(profilePath) : undefined;
@@ -85,18 +85,18 @@ export async function configuredProvider(saved?: RunLedger["connection"]) {
 
     const connection = daytonaConfiguration.parse(
       saved ?? {
-        target: required("SANDBAR_DAYTONA_TARGET"),
-        snapshotId: required("SANDBAR_DAYTONA_SNAPSHOT_ID"),
-        networkPolicy: process.env.SANDBAR_DAYTONA_NETWORK_POLICY ?? "blocked",
-        ttlMinutes: process.env.SANDBAR_STORAGE_COMPOSITION === "1" ? 10 : 15,
-        restartAfterCapture: process.env.SANDBAR_STORAGE_COMPOSITION !== "1",
+        target: required("BEACHSIDE_DAYTONA_TARGET"),
+        snapshotId: required("BEACHSIDE_DAYTONA_SNAPSHOT_ID"),
+        networkPolicy: process.env.BEACHSIDE_DAYTONA_NETWORK_POLICY ?? "blocked",
+        ttlMinutes: process.env.BEACHSIDE_STORAGE_COMPOSITION === "1" ? 10 : 15,
+        restartAfterCapture: process.env.BEACHSIDE_STORAGE_COMPOSITION !== "1",
       },
     );
 
     return {
       provider,
       connection,
-      factory: daytonaConnection(connection, required("SANDBAR_DAYTONA_API_KEY")),
+      factory: daytonaConnection(connection, required("BEACHSIDE_DAYTONA_API_KEY")),
       imageId: connection.snapshotId,
       network: connection.networkPolicy,
       exerciseMs: 240000,
@@ -120,10 +120,10 @@ export async function configuredProvider(saved?: RunLedger["connection"]) {
 
   const connection = e2bConfiguration.parse(
     saved ?? {
-      teamId: process.env.SANDBAR_E2B_TEAM_ID,
-      templateId: process.env.SANDBAR_E2B_TEMPLATE_ID ?? "base",
+      teamId: process.env.BEACHSIDE_E2B_TEAM_ID,
+      templateId: process.env.BEACHSIDE_E2B_TEMPLATE_ID ?? "base",
       preview:
-        process.env.SANDBAR_E2B_PREVIEW_ACCESS === "public" ? { access: "public" } : undefined,
+        process.env.BEACHSIDE_E2B_PREVIEW_ACCESS === "public" ? { access: "public" } : undefined,
     },
   );
 
@@ -157,14 +157,14 @@ export async function setupLive(
   names: string[],
   budget: { compute: number; snapshots: number; volumes: number },
 ) {
-  if (!liveEnabled || process.env.CI || process.env.SANDBAR_QUAL_LIVE_AUTHORIZED !== "yes")
+  if (!liveEnabled || process.env.CI || process.env.BEACHSIDE_QUAL_LIVE_AUTHORIZED !== "yes")
     throw new Error("Explicit local live authorization is required");
 
-  if (!globalThis.sandbarLiveBuild)
+  if (!globalThis.beachsideLiveBuild)
     throw new Error(
       "Run Bun with --preload ./packages/sdk-qualification/live/preload.ts to build before SDK imports",
     );
-  const supplied = required("SANDBAR_QUAL_LEDGER_DIR");
+  const supplied = required("BEACHSIDE_QUAL_LEDGER_DIR");
 
   if (!isAbsolute(supplied)) throw Error("Ledger directory must be absolute");
   const directory = await realpath(supplied);
@@ -173,7 +173,7 @@ export async function setupLive(
   for (const parent of [root, "/tmp", "/private/tmp", await realpath(tmpdir())])
     if (directory === parent || directory.startsWith(parent + sep))
       throw Error("Custody requires stable private storage outside checkout/temp");
-  const reportDirectory = await realpath(required("SANDBAR_LIVE_REPORT_DIR"));
+  const reportDirectory = await realpath(required("BEACHSIDE_LIVE_REPORT_DIR"));
   await requirePrivateDirectory(reportDirectory);
   const profile = await configuredProvider();
   const ledger = new LedgerStore(directory, crypto.randomUUID());
@@ -205,9 +205,9 @@ export async function setupLive(
     schemaVersion: 1,
     provider: profile.provider,
     names,
-    sdkCommit: globalThis.sandbarLiveBuild.revision,
-    harnessCommit: globalThis.sandbarLiveBuild.revision,
-    dirty: globalThis.sandbarLiveBuild.dirty,
+    sdkCommit: globalThis.beachsideLiveBuild.revision,
+    harnessCommit: globalThis.beachsideLiveBuild.revision,
+    dirty: globalThis.beachsideLiveBuild.dirty,
     sdkVersion: manifest.version,
     nativeVersion: profile.nativeVersion,
     runtime: `Bun ${Bun.version}`,
@@ -269,7 +269,7 @@ export function reopenSnapshot(
     path: string;
     base64: string;
     inactive?: boolean;
-    expires: import("sandbar-sdk").Deadline;
+    expires: import("beachside").Deadline;
   },
 ) {
   return reopenInFreshProcess(

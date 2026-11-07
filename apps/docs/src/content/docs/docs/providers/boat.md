@@ -3,13 +3,13 @@ title: Boat
 description: Use the Boat adapter for full Ubuntu VMs with commands, files, archive/resume, snapshots and renewal.
 ---
 
-The `@sandbar-sdk/boat` package implements the public Sandbar adapter interface for [Boat](https://boat.dev). Install it with `npm install sandbar-sdk @sandbar-sdk/boat`; it is experimental. Use Node 20+ or Bun. Native SDK version: `@boatdev/sdk@1.9.9`, Boat Public API v1.
+The `@beachside/boat` package implements the public Beachside adapter interface for [Boat](https://boat.dev). Install it with `npm install beachside @beachside/boat`; it is experimental. Use Node 20+ or Bun. Native SDK version: `@boatdev/sdk@1.9.9`, Boat Public API v1.
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { boatAdapter } from "@sandbar-sdk/boat";
+import { Beachside } from "beachside";
+import { boatAdapter } from "@beachside/boat";
 
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter: boatAdapter,
   credentials: { apiKey: process.env.BOAT_API_KEY! },
   config: { network: "internet" },
@@ -60,7 +60,7 @@ Everything below is tested on every change, using the real Boat client against a
 
 `box.snapshot()` saves the sandbox's disk as a Boat [named snapshot](https://docs.boat.dev/api/v1) and waits for it to be ready. A running sandbox takes a fresh capture first, which can take minutes; an archived one saves the disk its stop already captured and stays archived. Memory, processes and connections are not kept: `snapshot.restore()` creates a new sandbox from the snapshot on a fresh machine of the type it was saved from, with the same `environment` or `noEnv` setting as any other create.
 
-Each capture gets its own name (`sandbar-snapshot-…`), because saving an existing Boat name replaces what it holds. The reference also records the frozen capture behind the name, so if the name is saved again outside Sandbar, `inspect()`, `restore()` and `delete()` on the old reference reject with `CONFLICT` instead of using the new contents.
+Each capture gets its own name (`beachside-snapshot-…`), because saving an existing Boat name replaces what it holds. The reference also records the frozen capture behind the name, so if the name is saved again outside Beachside, `inspect()`, `restore()` and `delete()` on the old reference reject with `CONFLICT` instead of using the new contents.
 
 `client.snapshots.list()` returns every named snapshot in the account, including ones you saved with the Boat CLI or dashboard. Named snapshots are kept until you delete them and count toward your Boat plan's snapshot allowance; destroying the source sandbox does not remove them.
 
@@ -70,7 +70,7 @@ Each capture gets its own name (`sandbar-snapshot-…`), because saving an exist
 
 ## How commands keep bytes and arguments
 
-Boat runs one shell string and returns stdout/stderr as UTF-8 text. To keep argv as separate arguments and output as exact bytes, the adapter sends a small POSIX `sh` wrapper: arguments are single-quoted, the command's stdout and stderr go to private files under `/tmp`, and the wrapper returns the exit code, the byte counts and base64 of each stream (bounded in the guest). Finite stdin is uploaded to a `/tmp/sandbar-stdin-*` file first and removed after the command. Your image needs `sh`, `mktemp`, `base64`, `head`, `wc` and `env`, which the stock Ubuntu machine has.
+Boat runs one shell string and returns stdout/stderr as UTF-8 text. To keep argv as separate arguments and output as exact bytes, the adapter sends a small POSIX `sh` wrapper: arguments are single-quoted, the command's stdout and stderr go to private files under `/tmp`, and the wrapper returns the exit code, the byte counts and base64 of each stream (bounded in the guest). Finite stdin is uploaded to a `/tmp/beachside-stdin-*` file first and removed after the command. Your image needs `sh`, `mktemp`, `base64`, `head`, `wc` and `env`, which the stock Ubuntu machine has.
 
 Shell commands run as `/bin/sh -c`, as Boat's `user` account. A command that hits its deadline is stopped by Boat and reported as `OUTCOME_UNKNOWN`, because its output is not returned.
 
@@ -80,8 +80,8 @@ Shell commands run as `/bin/sh -c`, as Boat's `user` account. A command that hit
 
 `suspend()` is Boat's stop: it saves the disk first and is refused if that save fails, leaving the sandbox running. An archived sandbox uses no machine time; Boat keeps its disk free for 14 days.
 
-Sandbar sends each mutation once; the generated client and the adapter add no retries, and the SDK's convenience helpers that resend commands are not used. Create sends the Sandbar submission id as Boat's `Idempotency-Key`. A refusal Boat documents as having no effect (4xx, `retryable: true`, `sandbox_restoring`, or `503 no_ready_machine`/`out_of_capacity`) is reported as that error. A lost response, `409 idempotency_in_progress` or another 5xx is `OUTCOME_UNKNOWN`. A lost or failed command result is never replayed, because Boat documents commands as not idempotent.
+Beachside sends each mutation once; the generated client and the adapter add no retries, and the SDK's convenience helpers that resend commands are not used. Create sends the Beachside submission id as Boat's `Idempotency-Key`. A refusal Boat documents as having no effect (4xx, `retryable: true`, `sandbox_restoring`, or `503 no_ready_machine`/`out_of_capacity`) is reported as that error. A lost response, `409 idempotency_in_progress` or another 5xx is `OUTCOME_UNKNOWN`. A lost or failed command result is never replayed, because Boat documents commands as not idempotent.
 
-If provisioning outlasts the in-call wait, the sandbox id is already saved and Sandbar finishes by reading its state. If a create ends `cancelled` or `error`, the error's `outcome.sandbox` holds the reference so you can inspect or destroy it.
+If provisioning outlasts the in-call wait, the sandbox id is already saved and Beachside finishes by reading its state. If a create ends `cancelled` or `error`, the error's `outcome.sandbox` holds the reference so you can inspect or destroy it.
 
-See the [provider research issue](https://github.com/pandemicsyn/sandbar/issues/40), [Boat API docs](https://docs.boat.dev/api/v1) and [TypeScript SDK docs](https://docs.boat.dev/sdks/typescript).
+See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/40), [Boat API docs](https://docs.boat.dev/api/v1) and [TypeScript SDK docs](https://docs.boat.dev/sdks/typescript).

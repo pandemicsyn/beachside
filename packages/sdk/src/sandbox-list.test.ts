@@ -10,8 +10,8 @@ import {
   type InventoryInput,
   type SandboxListPage,
   type AdapterSession,
-} from "@sandbar-sdk/adapter";
-import { Sandbar } from "./index";
+} from "@beachside/adapter";
+import { Beachside } from "./index";
 
 const scope = { authority: { kind: "fixture", id: "account" }, partition: { region: "one" } };
 
@@ -64,7 +64,7 @@ function fixture(options: {
 
           return (
             options.page?.(input) ?? {
-              coverage: "sandbar-managed",
+              coverage: "managed",
               items: [
                 {
                   id: "a",
@@ -88,7 +88,7 @@ function fixture(options: {
     requests,
     reopened,
     connect: () =>
-      Sandbar.connect({ adapter, config: {}, credentials: {}, tracing: options.tracing }),
+      Beachside.connect({ adapter, config: {}, credentials: {}, tracing: options.tracing }),
   };
 }
 
@@ -100,7 +100,7 @@ test("sandboxes.list applies the default page size and returns reopenable refere
     const page = await client.sandboxes.list();
     expect(f.requests).toEqual([{ limit: 50 }]);
     expect(page).toEqual({
-      coverage: "sandbar-managed",
+      coverage: "managed",
       items: [
         {
           id: "a",
@@ -206,7 +206,7 @@ test("sandboxes.list reports unsupported adapters and maps adapter errors", asyn
 
   try {
     await expect(second.sandboxes.list()).rejects.toMatchObject({
-      name: "SandbarError",
+      name: "BeachsideError",
       code: "RATE_LIMIT",
     });
   } finally {
@@ -255,7 +255,7 @@ test("operations.inventory derives from sandboxList and keeps a native inventory
   }
 });
 
-test("sandboxes.list records one sandbar.sandbox.list span", async () => {
+test("sandboxes.list records one beachside.sandbox.list span", async () => {
   const exporter = new InMemorySpanExporter();
 
   const tracerProvider = new NodeTracerProvider({
@@ -270,7 +270,9 @@ test("sandboxes.list records one sandbar.sandbox.list span", async () => {
     await client.close();
   }
 
-  const spans = exporter.getFinishedSpans().filter((span) => span.name === "sandbar.sandbox.list");
+  const spans = exporter
+    .getFinishedSpans()
+    .filter((span) => span.name === "beachside.sandbox.list");
 
   expect(spans).toHaveLength(1);
   expect(JSON.stringify(spans[0]!.attributes)).not.toContain("op-a");

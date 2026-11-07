@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import { type ExecInput, type ExecOutput } from "sandbar-sdk";
+import { type ExecInput, type ExecOutput } from "beachside";
 import { hello } from "./agent-hello-world/main";
 import { edit } from "./agent-edit-file/main";
 import {
@@ -93,7 +93,7 @@ test("edit uploads the local fixture bytes and reads the changed file after exec
           expect(path).toBe(`${WORKDIR}/message.txt`);
           expect(options).toEqual({ signal, maxBytes: 1024 });
 
-          return "Hello, Sandbar!\n";
+          return "Hello, Beachside!\n";
         },
       },
       env,
@@ -101,7 +101,7 @@ test("edit uploads the local fixture bytes and reads the changed file after exec
       message,
     );
 
-    expect(changed).toBe("Hello, Sandbar!\n");
+    expect(changed).toBe("Hello, Beachside!\n");
     expect(steps).toEqual(["upload", "exec", "read"]);
     expect(stdout).toHaveBeenCalledWith(changed);
     expect(new TextDecoder().decode(message)).toBe("Hello, NAME!\n");

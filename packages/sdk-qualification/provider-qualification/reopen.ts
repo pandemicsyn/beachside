@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import type { ResourceReference } from "sandbar-sdk";
+import type { ResourceReference } from "beachside";
 import type { RunLedger } from "./ledger";
 
 /** A separate OS process performs only scoped public get/inspect, never allocations. */
@@ -14,7 +14,7 @@ export async function reopenInFreshProcess(
       path: string;
       base64: string;
       inactive?: boolean;
-      expires: import("sandbar-sdk").Deadline;
+      expires: import("beachside").Deadline;
     };
   },
   signal: AbortSignal,

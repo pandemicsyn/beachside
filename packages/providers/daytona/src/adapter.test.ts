@@ -1,16 +1,16 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { adapterSuite } from "@sandbar-sdk/adapter/testing";
+import { adapterSuite } from "@beachside/adapter/testing";
 import { createDaytonaAdapter } from "./adapter";
 import {
-  Sandbar,
-  SandbarError,
+  Beachside,
+  BeachsideError,
   Image,
   AdapterSandbox,
   OutcomeUnknownError,
   WaitAbortedError,
   type AdapterRecoveryReference,
-} from "sandbar-sdk";
+} from "beachside";
 
 test.each([
   "normal",
@@ -129,7 +129,7 @@ test.each([
   const adapter = createDaytonaAdapter(fetchImpl);
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -145,7 +145,7 @@ test.each([
     await expect(
       client.sandboxes.create({
         environment: Image.prepared("built-1"),
-        labels: { "sandbar.imageSnapshot": "borrowed" },
+        labels: { "beachside.imageSnapshot": "borrowed" },
         networkPolicy: "blocked",
       }),
     ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
@@ -422,7 +422,7 @@ test("lost exec, write and destroy responses recover by read-only evidence after
           organizationId: "org-1",
           target: "us",
           state,
-          labels: state === "started" ? { "sandbar.imageSnapshot": "retained-1" } : undefined,
+          labels: state === "started" ? { "beachside.imageSnapshot": "retained-1" } : undefined,
           networkBlockAll: true,
           public: false,
           toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
@@ -452,10 +452,10 @@ test("lost exec, write and destroy responses recover by read-only evidence after
       }
 
       if (path.endsWith("/files/download")) {
-        if (url.searchParams.get("path")?.startsWith("/tmp/.sandbar-exec-")) {
+        if (url.searchParams.get("path")?.startsWith("/tmp/.beachside-exec-")) {
           execReads++;
 
-          if (execReads <= 2) return new Response("SANDBAR-EXEC-V1\n");
+          if (execReads <= 2) return new Response("BEACHSIDE-EXEC-V1\n");
         }
 
         const bytes = files.get(url.searchParams.get("path")!);
@@ -468,17 +468,17 @@ test("lost exec, write and destroy responses recover by read-only evidence after
           .object({ command: z.string() })
           .parse(JSON.parse(String(init?.body))).command;
 
-        if (command.startsWith("mkdir -m 700 -- ") && !command.includes("SANDBAR-EXEC-V1"))
+        if (command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1"))
           return Response.json({ exitCode: 0, result: "" });
 
-        if (command.includes("SANDBAR-EXEC-V1")) {
+        if (command.includes("BEACHSIDE-EXEC-V1")) {
           mutations.exec++;
           const receipt = /\}\s*>\s*'([^']+)'; cat/.exec(command)?.[1];
           expect(receipt).toBeDefined();
           files.set(
             receipt!,
             new TextEncoder().encode(
-              "SANDBAR-EXEC-V1\n0\n2\n0\n 00 ff\nSANDBAR-STDERR\nSANDBAR-END\n",
+              "BEACHSIDE-EXEC-V1\n0\n2\n0\n 00 ff\nBEACHSIDE-STDERR\nBEACHSIDE-END\n",
             ),
           );
           throw new Error("execution response lost");
@@ -505,7 +505,7 @@ test("lost exec, write and destroy responses recover by read-only evidence after
   const adapter = createDaytonaAdapter(fetchImpl);
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -677,7 +677,7 @@ test("destroy preflight failure rejects without attempting DELETE", async () => 
     { preconnect: fetch.preconnect },
   );
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createDaytonaAdapter(fetchImpl),
     config: { target: "us", networkPolicy: "blocked" },
     credentials: { apiKey: "fixture" },
@@ -733,14 +733,14 @@ test("exec receipt deadline starts after a slow preflight and survives reconnect
         throw new Error("response lost");
       }
 
-      if (path.endsWith("/files/download")) return new Response("SANDBAR-EXEC-V1\n");
+      if (path.endsWith("/files/download")) return new Response("BEACHSIDE-EXEC-V1\n");
       throw new Error("Unexpected fixture request");
     },
     { preconnect: fetch.preconnect },
   );
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createDaytonaAdapter(fetchImpl),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -828,12 +828,12 @@ test("tokenless image recovery reports scoped possible retention without certify
       if (path === "/api/organizations/org-1")
         return Response.json({ id: "org-1", sandboxLimitedNetworkEgress: false });
 
-      if (path === "/api/snapshots/sandbar-image-crash-build") {
+      if (path === "/api/snapshots/beachside-image-crash-build") {
         reads++;
 
         return Response.json({
           id: "possibly-retained",
-          name: "sandbar-image-crash-build",
+          name: "beachside-image-crash-build",
           organizationId: "org-1",
           imageName: "unproven:1",
           state: "active",
@@ -847,7 +847,7 @@ test("tokenless image recovery reports scoped possible retention without certify
     { preconnect: fetch.preconnect },
   );
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createDaytonaAdapter(fetchImpl),
     config: { target: "us", networkPolicy: "blocked" },
     credentials: { apiKey: "fixture" },
@@ -900,7 +900,7 @@ test.each(["unavailable", "throw", "existing"] as const)(
       { preconnect: fetch.preconnect },
     );
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createDaytonaAdapter(fetchImpl),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -985,7 +985,7 @@ test.each(["lost-name", "known-id", "known-id-throw"] as const)(
     );
 
     const connect = () =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter: createDaytonaAdapter(fetchImpl),
         config: { target: "us", networkPolicy: "blocked" },
         credentials: { apiKey: "fixture" },
@@ -1085,7 +1085,7 @@ test.each(["started", "stopped", "destroyed"])(
       { preconnect: fetch.preconnect },
     );
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createDaytonaAdapter(fetchImpl),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -1265,7 +1265,7 @@ test.each([
   );
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createDaytonaAdapter(fetchImpl),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -1401,7 +1401,7 @@ test.each(["immediate", "pending", "lost"] as const)(
       { preconnect: fetch.preconnect },
     );
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createDaytonaAdapter(fetcher),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -1485,7 +1485,7 @@ test.each([
       { preconnect: fetch.preconnect },
     );
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createDaytonaAdapter(fetcher),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -1558,7 +1558,7 @@ test.each(["prepare", "submit"] as const)(
       { preconnect: fetch.preconnect },
     );
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createDaytonaAdapter(fetcher),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -1647,7 +1647,7 @@ async function interruptedMountedDestroy(mode: "tombstone" | "absent" | "checkpo
   );
 
   const connect = (storage: "require-durable" | "allow-unconfirmed" = "allow-unconfirmed") =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createDaytonaAdapter(fetcher),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -1796,7 +1796,7 @@ for (const mode of ["gateway", "abort", "policy"] as const) {
     );
 
     const connect = (storage: "require-durable" | "allow-unconfirmed" = "require-durable") =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter: createDaytonaAdapter(fetcher),
         config: { target: "us", networkPolicy: "blocked" },
         credentials: { apiKey: "fixture" },
@@ -1818,7 +1818,7 @@ for (const mode of ["gateway", "abort", "policy"] as const) {
       } catch (error) {
         expect(
           error instanceof WaitAbortedError ||
-            (error instanceof SandbarError && error.effect === "none"),
+            (error instanceof BeachsideError && error.effect === "none"),
         ).toBe(true);
       }
 
@@ -1866,7 +1866,7 @@ test("Daytona defaults to provider-managed egress without an organization eligib
     { preconnect: fetch.preconnect },
   );
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createDaytonaAdapter(fetchImpl),
     config: { target: "us" },
     credentials: { apiKey: "fixture" },

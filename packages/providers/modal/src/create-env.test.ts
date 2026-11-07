@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
+import { Image, Beachside, type AdapterRecoveryReference } from "beachside";
 import { createModalAdapter } from "./adapter";
 import type { ModalTransport } from "./transport";
 
@@ -54,7 +54,7 @@ test("Modal passes create env to the single native create and saves no value", a
 
   const saved: AdapterRecoveryReference[] = [];
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createModalAdapter(() => transport),
     config: { appName: "existing", environment: "main", image: Image.prepared("im-fixture") },
     credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },

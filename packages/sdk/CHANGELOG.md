@@ -1,4 +1,4 @@
-# sandbar-sdk
+# beachside
 
 ## 0.7.0
 

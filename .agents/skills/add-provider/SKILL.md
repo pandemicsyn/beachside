@@ -1,35 +1,35 @@
 ---
 name: add-provider
-description: Write a Sandbar adapter that connects a sandbox provider to the Sandbar TypeScript SDK with defineAdapter from @sandbar-sdk/adapter, as an official @sandbar-sdk/<provider> package or a third-party one. Covers native guarantees, shared setup options, testing, packaging and docs.
+description: Write a Beachside adapter that connects a sandbox provider to the Beachside TypeScript SDK with defineAdapter from @beachside/adapter, as an official @beachside/<provider> package or a third-party one. Covers native guarantees, shared setup options, testing, packaging and docs.
 ---
 
-# Add a Sandbar provider
+# Add a Beachside provider
 
-An adapter connects one provider's native API to Sandbar. Applications switch providers by changing only adapter setup, so the adapter owns every provider mechanic (native clients, encodings, helper commands, lifecycle orchestration, cleanup) and application code never sees them. Prefer this experience over exact parity with the native API.
+An adapter connects one provider's native API to Beachside. Applications switch providers by changing only adapter setup, so the adapter owns every provider mechanic (native clients, encodings, helper commands, lifecycle orchestration, cleanup) and application code never sees them. Prefer this experience over exact parity with the native API.
 
-Official and third-party adapters implement the same public `@sandbar-sdk/adapter` API. Official integrations are separately installed `@sandbar-sdk/<provider>` packages maintained in the Sandbar monorepo; separate distribution does not imply experimental support. Third-party authors use their own package names, such as `@acme/sandbar-adapter`. Never add an SDK subpath for a provider.
+Official and third-party adapters implement the same public `@beachside/adapter` API. Official integrations are separately installed `@beachside/<provider>` packages maintained in the Beachside monorepo; separate distribution does not imply experimental support. Third-party authors use their own package names, such as `@acme/beachside-adapter`. Never add an SDK subpath for a provider.
 
 Implement only the requested provider and operations. Live provider calls, paid resources, publishing and deployment need explicit authorization from the account owner.
 
 References (links work wherever this skill is installed):
 
-- Guide: https://sandbarsdk.dev/docs/guides/write-an-adapter/
-- Capability checklist: https://sandbarsdk.dev/docs/guides/adapter-capabilities/
-- Recovery rules: https://sandbarsdk.dev/docs/guides/adapter-recovery/
-- Tested minimal adapter: https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/acme-adapter.ts and its test `acme.test.ts`
-- Tested async adapter: https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/async-adapter.ts
-- A complete recent adapter: https://github.com/pandemicsyn/sandbar/blob/main/packages/providers/boat/src/adapter.ts
-- Public types: https://github.com/pandemicsyn/sandbar/blob/main/packages/adapter/src/index.ts
+- Guide: https://beachside.run/docs/guides/write-an-adapter/
+- Capability checklist: https://beachside.run/docs/guides/adapter-capabilities/
+- Recovery rules: https://beachside.run/docs/guides/adapter-recovery/
+- Tested minimal adapter: https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/acme-adapter.ts and its test `acme.test.ts`
+- Tested async adapter: https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/async-adapter.ts
+- A complete recent adapter: https://github.com/pandemicsyn/beachside/blob/main/packages/providers/boat/src/adapter.ts
+- Public types: https://github.com/pandemicsyn/beachside/blob/main/packages/adapter/src/index.ts
 
-Inside the Sandbar repository, also follow `AGENTS.md` and [package conventions](https://github.com/pandemicsyn/sandbar/blob/main/specs/package-conventions.md).
+Inside the Beachside repository, also follow `AGENTS.md` and [package conventions](https://github.com/pandemicsyn/beachside/blob/main/specs/package-conventions.md).
 
 ## Establish the native boundary
 
-If a provider research issue is supplied, read it and its discussion first, and use its evidence, proposed defaults, checklist and open questions as the brief. Research issues can be stale: recheck version-sensitive claims against the provider's current docs and SDK, and against current Sandbar exports. Research does not establish implemented support or authorize paid tests. For missing research, use the [provider-research skill](https://github.com/pandemicsyn/sandbar/blob/main/.agents/skills/provider-research/SKILL.md) for the gaps relevant to this implementation; a small adapter fix needs no new issue.
+If a provider research issue is supplied, read it and its discussion first, and use its evidence, proposed defaults, checklist and open questions as the brief. Research issues can be stale: recheck version-sensitive claims against the provider's current docs and SDK, and against current Beachside exports. Research does not establish implemented support or authorize paid tests. For missing research, use the [provider-research skill](https://github.com/pandemicsyn/beachside/blob/main/.agents/skills/provider-research/SKILL.md) for the gaps relevant to this implementation; a small adapter fix needs no new issue.
 
 Inspect the provider's current API docs and the exact native SDK version. Record evidence for the operations you expose, especially authentication, identity, retry defaults, command execution, network policy and deletion confirmation. Pin a deliberate dependency version.
 
-Use a small injectable native client or transport so fixtures exercise real request construction and response handling. Count outbound attempts at that boundary: a Sandbar callback invoked once does not prove the native SDK disabled retries. Disable hidden mutation retries, or leave the operation unsupported until a safe transport exists.
+Use a small injectable native client or transport so fixtures exercise real request construction and response handling. Count outbound attempts at that boundary: a Beachside callback invoked once does not prove the native SDK disabled retries. Disable hidden mutation retries, or leave the operation unsupported until a safe transport exists.
 
 Declare only guarantees the adapter and provider together enforce:
 
@@ -60,11 +60,11 @@ Add provider-specific keys only for real choices the shared names cannot express
 
 ### Snapshot defaults
 
-When snapshot capture is in scope, follow [provider state portability](https://github.com/pandemicsyn/sandbar/blob/main/specs/provider-state-portability.md#2-snapshot-and-restore). The normal call is `box.snapshot()` with no required options; the adapter supplies the simplest supported native workflow and owns its lifecycle orchestration.
+When snapshot capture is in scope, follow [provider state portability](https://github.com/pandemicsyn/beachside/blob/main/specs/provider-state-portability.md#2-snapshot-and-restore). The normal call is `box.snapshot()` with no required options; the adapter supplies the simplest supported native workflow and owns its lifecycle orchestration.
 
 - Expose typed configuration only for real choices. Daytona defaults to stop/capture/start for a running source, leaves a stopped source stopped, and offers `restartAfterCapture: false`. E2B capture includes memory and handles pause/resume natively; do not invent memory-exclusion or pause-permission settings.
 - Advertise the configured default and actual guarantees. Optional exact requirements validate that default before effects; they never select different semantics. No snapshot capability means effect-free `UNSUPPORTED` before stopping compute.
-- Keep the configured source-restoration attempt after definitive capture failure. Preserve the confirmed capture and retained snapshot identity if source restart fails; distinguish failed from uncertain restart. Follow the [ordinary results and resource identity contract](https://github.com/pandemicsyn/sandbar/blob/main/specs/sdk-recovery-dx.md); never replay uncertain effects.
+- Keep the configured source-restoration attempt after definitive capture failure. Preserve the confirmed capture and retained snapshot identity if source restart fails; distinguish failed from uncertain restart. Follow the [ordinary results and resource identity contract](https://github.com/pandemicsyn/beachside/blob/main/specs/sdk-recovery-dx.md); never replay uncertain effects.
 - Document capture scope and exclusions, memory inclusion, source lifecycle and process/connection effects, restored execution, options and defaults, prerequisites, and partial-failure cleanup. Distinguish planned, implemented, fixture-tested and live-qualified behavior.
 - Test no-argument defaults, option alternatives, strict rejection before effects, source restoration and failures, and uncertain dispatch without replay, including fresh connections and reopening after source deletion where supported.
 
@@ -73,11 +73,11 @@ When snapshot capture is in scope, follow [provider state portability](https://g
 1. Export a `defineAdapter` definition with a stable lowercase provider `name`, `displayName`, `z.strictObject` configuration and credential schemas, and a `connect` callback. Separate secrets from ordinary configuration; host-controlled endpoint allowlists or policy must not become project-controlled inputs. Importing the module or constructing the definition performs no provider IO.
 2. In `connect`, validate setup (for example `smallestSize`), create the native client, register `host.onClose` before fallible verification, verify scope, and return `scope`, `supports`, `create` and `destroy`, plus `defaultImage` and `defaultNetworkPolicy` from setup.
 3. `create` makes exactly one native submission, passes `ctx.submissionId` for correlation (not assumed idempotent without evidence), and rejects unsupported image kinds, network policies, regions, labels, mounts, requirements or `env` in `prepare` before dispatch. Return `state: "running"` only after confirmed readiness. Set `supports.createEnv: true` only when create-time `env` reaches every command, process and terminal, including after `reopen`; never put its values in tokens or messages.
-4. For reopening, return `reference: sandboxReference(provider, scope, nativeId, { operation, submission })` from create and implement `reopen`, checking with `assertResourceScope`. `sandboxList` references must be ones `reopen` accepts, built only from native evidence, or `null`. Return each item's create `labels` (strip your own markers with `listedLabels`; `null` when the provider keeps none) and native `createdAt` (`listedTime`; `null` when unreported), so `sandbar gc` can find a killed job's sandboxes.
+4. For reopening, return `reference: sandboxReference(provider, scope, nativeId, { operation, submission })` from create and implement `reopen`, checking with `assertResourceScope`. `sandboxList` references must be ones `reopen` accepts, built only from native evidence, or `null`. Return each item's create `labels` (strip your own markers with `listedLabels`; `null` when the provider keeps none) and native `createdAt` (`listedTime`; `null` when unreported), so `beachside gc` can find a killed job's sandboxes.
 5. Add `inspect` (start facts from `unknownSandboxFacts()` and fill in known expiry, idle stop and `resources`), `exec`, `processes`, `files`, `preview`, `inventory`/`sandboxList`, `renew`, `suspend`/`resume`, images, snapshots or volumes only as the capability checklist allows. Declare process and stdin behaviors with their explicit markers (`processes.supports`, `exec.finiteStdin: "bytes"`).
 6. Prefer plain async methods returning documented plain values. Use `{ prepare, submit, observe }` when preflight or asynchronous recovery needs the split; `prepare` is read-only, and resource or image-building effects belong in an explicitly supported mutation.
 7. Narrow discriminated command/image inputs before using provider fields. Do not weaken public inference with broad casts, and do not export private workspace types in declarations.
-8. Export a factory built with `bindAdapter(definition, config, credentials)` so applications write `Sandbar.connect(provider({ ...options }))`. Official adapters export `<provider>Adapter`, `create<Provider>Adapter(options)` (injectable transport and timing for tests) and `<provider>(options)`.
+8. Export a factory built with `bindAdapter(definition, config, credentials)` so applications write `Beachside.connect(provider({ ...options }))`. Official adapters export `<provider>Adapter`, `create<Provider>Adapter(options)` (injectable transport and timing for tests) and `<provider>(options)`.
 
 ### Uncertain outcomes and recovery
 
@@ -90,22 +90,22 @@ When snapshot capture is in scope, follow [provider state portability](https://g
 
 ## Test
 
-- Run `adapterSuite` from `@sandbar-sdk/adapter/testing` against a deterministic native-boundary fixture with two genuinely different verified scopes, effect/release counters, lost-response and held-response faults, and proof that native mutation retries are disabled. Report the scenarios it actually ran; it is not live certification. In the repository, follow `packages/adapter/src/testing.ts` and `packages/providers/*/src/adapter.test.ts`.
+- Run `adapterSuite` from `@beachside/adapter/testing` against a deterministic native-boundary fixture with two genuinely different verified scopes, effect/release counters, lost-response and held-response faults, and proof that native mutation retries are disabled. Report the scenarios it actually ran; it is not live certification. In the repository, follow `packages/adapter/src/testing.ts` and `packages/providers/*/src/adapter.test.ts`.
 - Add focused tests for each declared operation: unsupported inputs before mutation, scope mismatch, loss after one native effect, observation without replay, binary and argument fidelity, declared bounds, setup defaults, `resources` selection and rejection, and cleanup. If pending tokens are supported, reopen a connection and recover the saved reference.
-- Connect through `sandbar-sdk` in at least one test.
+- Connect through `beachside` in at least one test.
 - Pack real artifacts into a clean consumer: strict NodeNext declarations, Node and Bun execution, npm/pnpm/Bun installs, no undeclared or private dependencies. In the repository, extend `packages/sdk-qualification/package-smoke.mjs` and run `bun run package:smoke`. Report unrun environments explicitly.
 
 ## Package and release
 
-- Ship ESM with TypeScript declarations. Depend on `@sandbar-sdk/adapter`, the schema library and the pinned native SDK; `sandbar-sdk` only for tests and examples. No SQL dependency, no private workspace imports in the installed artifact.
-- The `sandbar` CLI loads any adapter through a profile's `module` and `export` in `sandbar.json`, so third-party packages need nothing extra.
+- Ship ESM with TypeScript declarations. Depend on `@beachside/adapter`, the schema library and the pinned native SDK; `beachside` only for tests and examples. No SQL dependency, no private workspace imports in the installed artifact.
+- The `beachside` CLI loads any adapter through a profile's `module` and `export` in `beachside.json`, so third-party packages need nothing extra.
 
-For an official adapter in the Sandbar repository, also:
+For an official adapter in the Beachside repository, also:
 
 - add the package to the `build:packages` and `check:built` chains in the root `package.json` and to `apps/docs` dev dependencies when docs examples import it;
 - add it to the fixed release group with a changeset (experimental packages keep their existing release status);
 - add a CLI descriptor in `packages/cli/src/providers.ts` mapping its credentials and required config to environment variables;
-- add a provider profile in `packages/sdk-qualification/provider-qualification/profile.ts` and reuse the ordinary `bun:test` suites in `packages/sdk-qualification/live`; follow the [qualification skill](https://github.com/pandemicsyn/sandbar/blob/main/.agents/skills/qualify-provider/SKILL.md) for an authorized live run;
+- add a provider profile in `packages/sdk-qualification/provider-qualification/profile.ts` and reuse the ordinary `bun:test` suites in `packages/sdk-qualification/live`; follow the [qualification skill](https://github.com/pandemicsyn/beachside/blob/main/.agents/skills/qualify-provider/SKILL.md) for an authorized live run;
 - before the first release, a maintainer publishes a `0.0.0` placeholder and configures npm trusted publishing for the new name (`bun run release:bootstrap publish`, then `bun run release:bootstrap trust <package>`), or the release cannot publish it.
 
 Run root build/typecheck (`bun run check`), focused tests, `bun run lint`, `bun run format:check`, `bun run package:smoke` and `bun run docs:check` as the changed surfaces require; run shared builds sequentially.

@@ -7,16 +7,16 @@ import {
   unknownSandboxFacts,
   type AdapterSession,
   type Sandbox,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
-  Sandbar,
+  Beachside,
   Image,
-  SandbarError,
+  BeachsideError,
   type DirectConnectOptions,
   type AdapterRecoveryReference,
 } from "./index";
 
-type InspectionFixtureFacts = Record<string, import("@sandbar-sdk/adapter").Json>;
+type InspectionFixtureFacts = Record<string, import("@beachside/adapter").Json>;
 
 function fixture(reopening: boolean, pendingOperations = false) {
   const scope = { authority: { kind: "fixture", id: "account" }, partition: {} };
@@ -240,7 +240,7 @@ function fixture(reopening: boolean, pendingOperations = false) {
 
   return {
     connect: (options: DirectConnectOptions = {}) =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: {},
         credentials: {},
@@ -362,7 +362,7 @@ test("reopened handles retain verified reference in every sandbox dispatch and e
   }
 });
 
-test("invalid sandbox references surface SandbarError with no effect before reopening", async () => {
+test("invalid sandbox references surface BeachsideError with no effect before reopening", async () => {
   const f = fixture(true);
   const client = await f.connect();
 
@@ -373,7 +373,7 @@ test("invalid sandbox references surface SandbarError with no effect before reop
       { ...f.reference, scope: { ...f.reference.scope, partition: { region: "other" } } },
     ]) {
       const error = await client.sandboxes.get(reference).catch((error) => error);
-      expect(error).toBeInstanceOf(SandbarError);
+      expect(error).toBeInstanceOf(BeachsideError);
       expect(error).toMatchObject({ effect: "none" });
     }
 
@@ -395,7 +395,7 @@ test("SDK reopen timeout normalizes a non-cooperative hook", async () => {
     expect(timeout).toHaveBeenCalledWith(30000);
     controller.abort(new DOMException("Timed out", "TimeoutError"));
     const error = await opening.catch((error) => error);
-    expect(error).toBeInstanceOf(SandbarError);
+    expect(error).toBeInstanceOf(BeachsideError);
     expect(error).toMatchObject({ code: "TIMEOUT", effect: "none" });
   } finally {
     timeout.mockRestore();
@@ -441,7 +441,7 @@ test("recovery keeps sandbox identity across serialized operations and rejects f
       { ...f.reference, scope: { ...f.reference.scope, partition: { region: "other" } } },
     ])
       await expect(fresh.recover({ ...reference, sandboxReference })).rejects.toBeInstanceOf(
-        SandbarError,
+        BeachsideError,
       );
     expect(f.dispatched.length).toBe(before);
     const { sandboxReference: _legacy, ...legacy } = reference;
@@ -462,7 +462,7 @@ for (const code of ["NOT_FOUND", "FORBIDDEN", "CONFLICT", "UNAVAILABLE"] as cons
       for (const synchronous of [false, true]) {
         f.failReopen(code, synchronous);
         const error = await client.sandboxes.get(f.reference).catch((error) => error);
-        expect(error).toBeInstanceOf(SandbarError);
+        expect(error).toBeInstanceOf(BeachsideError);
         expect(error).toMatchObject({ code, effect: "none" });
       }
     } finally {
@@ -494,7 +494,7 @@ for (const code of [
       for (const synchronous of [false, true]) {
         f.failInspection(code, synchronous);
         const error = await box.inspect().catch((error) => error);
-        expect(error).toBeInstanceOf(SandbarError);
+        expect(error).toBeInstanceOf(BeachsideError);
         expect(error).toMatchObject({ code, effect: "none" });
       }
 
@@ -507,7 +507,7 @@ for (const code of [
         () => box.destroy(),
       ]) {
         const error = await operation().catch((error) => error);
-        expect(error).toBeInstanceOf(SandbarError);
+        expect(error).toBeInstanceOf(BeachsideError);
         expect(error).toMatchObject({ code, effect: "none" });
       }
 
@@ -534,7 +534,7 @@ test("inspection keeps caller cancellation typed and normalizes its owned timeou
     const timed = box.inspect();
     timeoutController.abort(new DOMException("Timed out", "TimeoutError"));
     const error = await timed.catch((error) => error);
-    expect(error).toBeInstanceOf(SandbarError);
+    expect(error).toBeInstanceOf(BeachsideError);
     expect(error).toMatchObject({ code: "TIMEOUT", effect: "none" });
   } finally {
     timeout.mockRestore();
@@ -562,7 +562,7 @@ for (const facts of [
       const box = await client.sandboxes.get(f.reference);
       f.setInspectionFacts(facts);
       const error = await box.inspect().catch((error) => error);
-      expect(error).toBeInstanceOf(SandbarError);
+      expect(error).toBeInstanceOf(BeachsideError);
       expect(error.code).toBe("INVALID_RESPONSE");
     } finally {
       await client.close();
@@ -581,7 +581,7 @@ for (const code of ["NOT_FOUND", "FORBIDDEN", "CONFLICT"] as const) {
 
       for (const call of [() => box.capabilities(), () => box.checkSnapshot()]) {
         const error = await call().catch((error) => error);
-        expect(error).toBeInstanceOf(SandbarError);
+        expect(error).toBeInstanceOf(BeachsideError);
         expect(error).toMatchObject({ code, effect: "none" });
       }
     } finally {

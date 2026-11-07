@@ -9,8 +9,8 @@ import { SecretReader } from "../src/secrets";
 let home: string;
 
 beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), "sandbar-providers-"));
-  const scope = join(home, ".config", "sandbar", "adapters", "node_modules", "@sandbar-sdk");
+  home = await mkdtemp(join(tmpdir(), "beachside-providers-"));
+  const scope = join(home, ".config", "beachside", "adapters", "node_modules", "@beachside");
   await mkdir(scope, { recursive: true });
   await symlink(join(import.meta.dir, "..", "..", "providers", "boxd"), join(scope, "boxd"));
   await symlink(join(import.meta.dir, "..", "..", "providers", "boat"), join(scope, "boat"));

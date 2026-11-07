@@ -1,4 +1,4 @@
-import type { SandbarClient, SandboxHandle } from "sandbar-sdk";
+import type { BeachsideClient, SandboxHandle } from "beachside";
 import { loadConfig, maxSandboxes, stateDir, type Env, type LoadedConfig } from "./config";
 import { CliError, type Output } from "./output";
 import { connect, descriptor, resolveProfile, type ResolvedProfile } from "./providers";
@@ -25,7 +25,7 @@ export type Context = {
 /** Lazily loaded configuration, store and provider connections for one invocation. */
 export class Session {
   private loaded?: LoadedConfig;
-  private opened: SandbarClient<true>[] = [];
+  private opened: BeachsideClient<true>[] = [];
   private readonly secrets: SecretReader;
 
   constructor(readonly ctx: Context) {
@@ -69,19 +69,22 @@ export class Session {
     );
   }
 
-  async connect(profile: ResolvedProfile): Promise<SandbarClient<true>> {
+  async connect(profile: ResolvedProfile): Promise<BeachsideClient<true>> {
     const client = await connect(profile, this.ctx.cwd, this.ctx.env, this.secrets);
     this.opened.push(client);
 
     return client;
   }
 
-  async reopen(record: SandboxRecord, client?: SandbarClient<true>): Promise<SandboxHandle<true>> {
+  async reopen(
+    record: SandboxRecord,
+    client?: BeachsideClient<true>,
+  ): Promise<SandboxHandle<true>> {
     if (!record.reference)
       throw new CliError(
         "UNSUPPORTED",
         `Sandbox ${record.name} has no reopenable reference (status ${record.status})`,
-        "inspect it with the provider's own tools; `sandbar rm --force` drops the record",
+        "inspect it with the provider's own tools; `beachside rm --force` drops the record",
       );
     const connected = client ?? (await this.connect(await this.profileNamed(record.profile)));
 

@@ -1,6 +1,6 @@
-# Working in Sandbar
+# Working in Beachside
 
-Sandbar is a TypeScript SDK for working with sandbox providers.
+Beachside is a TypeScript SDK for working with sandbox providers.
 
 ## Find your way
 
@@ -13,7 +13,7 @@ Sandbar is a TypeScript SDK for working with sandbox providers.
 
 ## SDK experience
 
-Sandbar should let applications switch providers with changes concentrated in adapter setup. Use a small, consistent SDK vocabulary and sensible native defaults; adapters handle provider mechanics. Put meaningful provider choices in adapter configuration rather than requiring capability negotiation, permission flags, or native options throughout application code. Document each adapter's defaults, guarantees, and limitations. Report unsupported operations clearly, preserve confirmed outcomes and resource identities, and never hide a replacement resource or silently weaken an explicitly configured guarantee. Prefer this experience over exact parity between native APIs.
+Beachside should let applications switch providers with changes concentrated in adapter setup. Use a small, consistent SDK vocabulary and sensible native defaults; adapters handle provider mechanics. Put meaningful provider choices in adapter configuration rather than requiring capability negotiation, permission flags, or native options throughout application code. Document each adapter's defaults, guarantees, and limitations. Report unsupported operations clearly, preserve confirmed outcomes and resource identities, and never hide a replacement resource or silently weaken an explicitly configured guarantee. Prefer this experience over exact parity between native APIs.
 
 ## Make changes
 

@@ -6,12 +6,12 @@ import { fileURLToPath } from "node:url";
 
 for (const artifacts of ["missing", "stale", "failed-build"] as const)
   test(`reconciliation builds before loading ${artifacts} adapter artifacts and reading custody`, async () => {
-    const root = await mkdtemp(join(tmpdir(), "sandbar-reconcile-build-"));
+    const root = await mkdtemp(join(tmpdir(), "beachside-reconcile-build-"));
 
     try {
       const live = join(root, "packages/sdk-qualification/live");
       const qualification = join(root, "packages/sdk-qualification/provider-qualification");
-      const adapter = join(root, "node_modules/@sandbar-sdk/adapter");
+      const adapter = join(root, "node_modules/@beachside/adapter");
       await mkdir(join(live, "fixtures"), { recursive: true });
       await mkdir(join(live, "providers"));
       await mkdir(qualification);
@@ -32,7 +32,7 @@ for (const artifacts of ["missing", "stale", "failed-build"] as const)
       await writeFile(
         join(adapter, "package.json"),
         JSON.stringify({
-          name: "@sandbar-sdk/adapter",
+          name: "@beachside/adapter",
           type: "module",
           exports: "./dist/index.js",
         }),
@@ -45,7 +45,7 @@ for (const artifacts of ["missing", "stale", "failed-build"] as const)
         `
         import { writeFile } from "node:fs/promises";
         await writeFile("trace.log", "build\\n");
-        ${artifacts === "failed-build" ? 'throw Error("fixture build failed");' : 'await writeFile("node_modules/@sandbar-sdk/adapter/dist/index.js", \'export const schemaVersion = "fresh";\');'}
+        ${artifacts === "failed-build" ? 'throw Error("fixture build failed");' : 'await writeFile("node_modules/@beachside/adapter/dist/index.js", \'export const schemaVersion = "fresh";\');'}
       `,
       );
       // Only the package boundary is synthetic: the entrypoint and rebuild helper are unchanged.
@@ -53,7 +53,7 @@ for (const artifacts of ["missing", "stale", "failed-build"] as const)
         join(qualification, "ledger.ts"),
         `
         import { appendFile } from "node:fs/promises";
-        import { schemaVersion } from "@sandbar-sdk/adapter";
+        import { schemaVersion } from "@beachside/adapter";
         await appendFile("trace.log", "ledger:" + schemaVersion + "\\n");
         export async function requirePrivateDirectory() {}
         export class LedgerStore {
@@ -68,7 +68,7 @@ for (const artifacts of ["missing", "stale", "failed-build"] as const)
         join(live, "providers/index.ts"),
         `
         export async function configuredProvider(connection) {
-          if (process.env.SANDBAR_QUAL_PROVIDER !== "fixture" || connection.schemaVersion !== "fresh")
+          if (process.env.BEACHSIDE_QUAL_PROVIDER !== "fixture" || connection.schemaVersion !== "fresh")
             throw Error("Stale custody schema");
           return { factory: "fresh", cleanupMs: 1000 };
         }
@@ -92,7 +92,7 @@ for (const artifacts of ["missing", "stale", "failed-build"] as const)
           cwd: root,
           env: {
             PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`,
-            SANDBAR_QUAL_LEDGER_DIR: join(root, "custody"),
+            BEACHSIDE_QUAL_LEDGER_DIR: join(root, "custody"),
           },
           stdout: "pipe",
           stderr: "pipe",

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Sandbar } from "sandbar-sdk";
+import { Beachside } from "beachside";
 import { createE2BAdapter } from "./index";
 import type { E2BRecord, E2BTransport } from "./transport";
 
@@ -53,7 +53,7 @@ function fixture() {
   };
 
   const connect = (config: { lifecycle?: { lifetimeSeconds: number }; timeoutSeconds?: number }) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createE2BAdapter(() => transport),
       config,
       credentials: { apiKey: "private-key" },

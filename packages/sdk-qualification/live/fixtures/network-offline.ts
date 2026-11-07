@@ -2,8 +2,8 @@ import { afterEach, expect } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Sandbar } from "sandbar-sdk";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { Beachside } from "beachside";
+import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
 import { LedgerStore } from "../../provider-qualification/ledger";
 
@@ -26,7 +26,7 @@ export async function networkFixture(
   failDestroy = false,
   failCreate = false,
 ) {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-network-offline-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-network-offline-"));
   directories.push(directory);
   const internet = new LedgerStore(directory, crypto.randomUUID());
   const blocked = new LedgerStore(directory, crypto.randomUUID());
@@ -93,8 +93,8 @@ export async function networkFixture(
     },
   });
 
-  const factory = (onReference: Parameters<typeof Sandbar.connect>[0]["onReference"]) =>
-    Sandbar.connect({ adapter, config: {}, credentials: {}, onReference });
+  const factory = (onReference: Parameters<typeof Beachside.connect>[0]["onReference"]) =>
+    Beachside.connect({ adapter, config: {}, credentials: {}, onReference });
 
   return {
     internet,

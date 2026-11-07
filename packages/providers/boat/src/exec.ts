@@ -1,4 +1,4 @@
-import { AdapterError, type Command } from "@sandbar-sdk/adapter";
+import { AdapterError, type Command } from "@beachside/adapter";
 
 /**
  * Boat runs one command string and returns UTF-8 text. To keep argv as arguments
@@ -7,7 +7,7 @@ import { AdapterError, type Command } from "@sandbar-sdk/adapter";
  * prints only a header line plus base64 of each (bounded) stream. User output
  * is never interpreted as a control record.
  */
-export const EXEC_RECORD = "SANDBAR-EXEC-1";
+export const EXEC_RECORD = "BEACHSIDE-EXEC-1";
 
 const EnvKey = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -57,13 +57,13 @@ export function wrapperScript(input: WrapperInput): string {
   const bound = Math.max(0, Math.floor(input.maxBytes));
 
   return [
-    "sandbar_d=$(mktemp -d /tmp/sandbar-exec.XXXXXXXX) || exit 97",
-    `(${body}) <${stdin} >"$sandbar_d/o" 2>"$sandbar_d/e"`,
-    "sandbar_c=$?",
-    `printf '${EXEC_RECORD} %s %s %s\\n' "$sandbar_c" "$(($(wc -c <"$sandbar_d/o")))" "$(($(wc -c <"$sandbar_d/e")))"`,
-    `head -c ${bound} "$sandbar_d/o" | base64 | tr -d '\\n'; printf '\\n'`,
-    `head -c ${bound} "$sandbar_d/e" | base64 | tr -d '\\n'; printf '\\n'`,
-    `rm -rf "$sandbar_d"${input.stdinPath === undefined ? "" : ` ${stdin}`}`,
+    "beachside_d=$(mktemp -d /tmp/beachside-exec.XXXXXXXX) || exit 97",
+    `(${body}) <${stdin} >"$beachside_d/o" 2>"$beachside_d/e"`,
+    "beachside_c=$?",
+    `printf '${EXEC_RECORD} %s %s %s\\n' "$beachside_c" "$(($(wc -c <"$beachside_d/o")))" "$(($(wc -c <"$beachside_d/e")))"`,
+    `head -c ${bound} "$beachside_d/o" | base64 | tr -d '\\n'; printf '\\n'`,
+    `head -c ${bound} "$beachside_d/e" | base64 | tr -d '\\n'; printf '\\n'`,
+    `rm -rf "$beachside_d"${input.stdinPath === undefined ? "" : ` ${stdin}`}`,
   ].join("\n");
 }
 

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { Sandbar, Image } from "sandbar-sdk";
-import { createFakeAdapter } from "@sandbar/provider-fake";
+import { Beachside, Image } from "beachside";
+import { createFakeAdapter } from "@beachside-internal/provider-fake";
 import { ProcessFixture } from "../../../packages/sdk-qualification/processes";
 import { reopenListed } from "./sandbox-reopen";
 
@@ -11,7 +11,7 @@ test("listed references reopen running sandboxes from a fresh connection", async
     await fixture.startFake();
 
     const connect = () =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter: createFakeAdapter({ url: fixture.fakeUrl!, token: fixture.fakeToken }),
         config: {},
         credentials: {},

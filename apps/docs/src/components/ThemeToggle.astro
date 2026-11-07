@@ -24,7 +24,7 @@
     );
   }
 
-  class SandbarThemeToggle extends HTMLElement {
+  class BeachsideThemeToggle extends HTMLElement {
     connectedCallback() {
       const button = this.querySelector("button");
 
@@ -47,7 +47,7 @@
   }
 
   if (!customElements.get("sb-theme-toggle")) {
-    customElements.define("sb-theme-toggle", SandbarThemeToggle);
+    customElements.define("sb-theme-toggle", BeachsideThemeToggle);
   }
 </script>
 

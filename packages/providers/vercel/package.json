@@ -1,5 +1,5 @@
 {
-  "name": "@sandbar-sdk/vercel",
+  "name": "@beachside/vercel",
   "version": "0.7.0",
   "private": false,
   "files": [
@@ -19,26 +19,26 @@
   },
   "scripts": {
     "check": "tsc -p tsconfig.json",
-    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --outdir dist --external @sandbar-sdk/adapter --external tar-stream --external zod && tsc -p tsconfig.build.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../../scripts/rewrite-declarations.mjs"
+    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --outdir dist --external @beachside/adapter --external tar-stream --external zod && tsc -p tsconfig.build.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../../scripts/rewrite-declarations.mjs"
   },
   "dependencies": {
     "zod": "4.6.5",
     "tar-stream": "3.2.2",
-    "@sandbar-sdk/adapter": "workspace:*"
+    "@beachside/adapter": "workspace:*"
   },
   "devDependencies": {
-    "sandbar-sdk": "workspace:*",
+    "beachside": "workspace:*",
     "@types/tar-stream": "3.1.5"
   },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pandemicsyn/sandbar.git",
+    "url": "git+https://github.com/pandemicsyn/beachside.git",
     "directory": "packages/providers/vercel"
   },
-  "description": "Vercel Sandbox adapter for Sandbar with immutable sessions, snapshots and binary IO.",
+  "description": "Vercel Sandbox adapter for Beachside with immutable sessions, snapshots and binary IO.",
   "bugs": {
-    "url": "https://github.com/pandemicsyn/sandbar/issues"
+    "url": "https://github.com/pandemicsyn/beachside/issues"
   },
   "publishConfig": {
     "access": "public"

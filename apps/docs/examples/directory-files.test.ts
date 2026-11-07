@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { Sandbar, Image } from "sandbar-sdk";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { Beachside, Image } from "beachside";
+import { defineAdapter } from "@beachside/adapter";
 import { artifactFiles, directoryFiles, listChildren } from "./directory-files";
 
 test("public directory example preserves bytes and requests recursion deliberately", async () => {
@@ -113,14 +113,14 @@ test("public directory example preserves bytes and requests recursion deliberate
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared("base") });
     expect(await directoryFiles(box)).toEqual(Uint8Array.of(0, 255, 129));
     expect(mutations).toEqual([
-      expect.objectContaining({ path: "/home/user/sandbar-job/results", recursive: true }),
-      expect.objectContaining({ path: "/home/user/sandbar-job", recursive: true }),
+      expect.objectContaining({ path: "/home/user/beachside-job/results", recursive: true }),
+      expect.objectContaining({ path: "/home/user/beachside-job", recursive: true }),
     ]);
     expect(await listChildren(box, "/job")).toEqual([
       { name: "a", type: "symlink" },

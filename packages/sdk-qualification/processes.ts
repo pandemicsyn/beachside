@@ -84,18 +84,18 @@ export class ProcessFixture {
 
   async startFake(): Promise<void> {
     if (this.fake) throw new Error("Fake provider is already running");
-    this.directory ??= await mkdtemp(join(tmpdir(), "sandbar-sdk-qualification-"));
+    this.directory ??= await mkdtemp(join(tmpdir(), "beachside-qualification-"));
     const port = await freePort();
     this.fakeUrl = `http://127.0.0.1:${port}`;
     this.fake = spawn("bun", ["packages/providers/fake/src/cli.ts"], {
       cwd: root,
       env: {
         ...process.env,
-        SANDBAR_ENABLE_FAKE_PROVIDER: "1",
-        SANDBAR_FAKE_TEST_MODE: "1",
-        SANDBAR_FAKE_STATE_PATH: join(this.directory, "fake.json"),
-        SANDBAR_FAKE_TOKEN: this.fakeToken,
-        SANDBAR_FAKE_PORT: String(port),
+        BEACHSIDE_ENABLE_FAKE_PROVIDER: "1",
+        BEACHSIDE_FAKE_TEST_MODE: "1",
+        BEACHSIDE_FAKE_STATE_PATH: join(this.directory, "fake.json"),
+        BEACHSIDE_FAKE_TOKEN: this.fakeToken,
+        BEACHSIDE_FAKE_PORT: String(port),
       },
       stdio: "inherit",
     });

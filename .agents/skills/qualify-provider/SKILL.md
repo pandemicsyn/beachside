@@ -21,7 +21,7 @@ Before requesting live approval, complete the concrete resource budget, total/pe
 
 Use the existing persistent owner-only ledger directory, never a new directory to evade unresolved custody. The SDK's awaited pre-dispatch hook saves scoped recovery references before effects. Tests expose fixture ownership before awaiting provider IO; setup/body cancellation forbids later creators and teardown has its own bounded signal. Preserve failures and attempt necessary cleanup within the authorized run without asking again. SIGKILL requires explicit reconciliation of the saved receipt. A final CI artifact upload cannot substitute for pre-dispatch durable custody.
 
-Run the preload documented in the README to build sequentially before SDK imports. Record exact source/native version/runtime/platform/configuration; both branches and merged revisions use the same command. Debug dirty runs cannot produce clean-revision docs evidence. Credentials may be injected or read from owner-only `~/.config/sandbar.env`; never print/commit them. External profiles are trusted, effect-free committed adapter factories with pinned dependencies, nonsecret saved routing, finite bounds and concise feature declarations.
+Run the preload documented in the README to build sequentially before SDK imports. Record exact source/native version/runtime/platform/configuration; both branches and merged revisions use the same command. Debug dirty runs cannot produce clean-revision docs evidence. Credentials may be injected or read from owner-only `~/.config/beachside.env`; never print/commit them. External profiles are trusted, effect-free committed adapter factories with pinned dependencies, nonsecret saved routing, finite bounds and concise feature declarations.
 
 ## Cleanup and admission
 

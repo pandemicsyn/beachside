@@ -1,6 +1,6 @@
-import type { ProcessOutput, ProcessOutputBytes } from "@sandbar-sdk/adapter";
+import type { ProcessOutput, ProcessOutputBytes } from "@beachside/adapter";
 import { z } from "zod";
-import { SandbarError, raceAbort } from "./resource";
+import { BeachsideError, raceAbort } from "./resource";
 
 export type ProcessLine = {
   stream: "stdout" | "stderr";
@@ -43,7 +43,7 @@ function limit(value: number | undefined, fallback: number, ceiling: number): nu
   const result = value ?? fallback;
 
   if (!Number.isSafeInteger(result) || result < 1 || result > ceiling)
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid process output helper limit");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid process output helper limit");
 
   return result;
 }
@@ -56,7 +56,7 @@ const Chunk = z.union([
 function parseChunk(chunk: ProcessOutput | ProcessOutputBytes): z.infer<typeof Chunk> {
   const parsed = Chunk.safeParse(chunk);
 
-  if (!parsed.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid process output chunk");
+  if (!parsed.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid process output chunk");
 
   return parsed.data;
 }
@@ -172,18 +172,18 @@ export async function* readProcessLines(
   function* observe(source: Generator<ProcessLine>): Generator<ProcessLine> {
     for (const line of source) {
       if (signal.aborted)
-        throw new SandbarError("WAIT_ABORTED", "Process line observation stopped");
+        throw new BeachsideError("WAIT_ABORTED", "Process line observation stopped");
       yield line;
 
       if (signal.aborted)
-        throw new SandbarError("WAIT_ABORTED", "Process line observation stopped");
+        throw new BeachsideError("WAIT_ABORTED", "Process line observation stopped");
     }
   }
 
   try {
     while (true) {
       if (signal.aborted)
-        throw new SandbarError("WAIT_ABORTED", "Process line observation stopped");
+        throw new BeachsideError("WAIT_ABORTED", "Process line observation stopped");
 
       const next = await raceAbort(
         Promise.resolve().then(() => iterator.next()),
@@ -200,7 +200,8 @@ export async function* readProcessLines(
 
     yield* observe(lines.finish());
   } catch (error) {
-    if (signal.aborted) throw new SandbarError("WAIT_ABORTED", "Process line observation stopped");
+    if (signal.aborted)
+      throw new BeachsideError("WAIT_ABORTED", "Process line observation stopped");
 
     throw error;
   } finally {

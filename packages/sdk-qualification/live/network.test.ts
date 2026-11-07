@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { networkScript, networkSampleSchema } from "../provider-qualification/network-probe";
-import type { AdapterSandbox } from "sandbar-sdk";
+import type { AdapterSandbox } from "beachside";
 import { TestResources } from "./fixtures/resources";
 import { liveEnabled, setupLive, finishLive } from "./providers";
 
@@ -45,9 +45,9 @@ export async function networkControls(t: TestResources) {
   ]);
 }
 
-const enabled = liveEnabled && process.env.SANDBAR_QUAL_PROVIDER === "e2b";
+const enabled = liveEnabled && process.env.BEACHSIDE_QUAL_PROVIDER === "e2b";
 
-describe("Sandbar network controls", () => {
+describe("Beachside network controls", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   beforeAll(async () => {
     if (enabled) {

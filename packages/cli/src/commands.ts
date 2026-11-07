@@ -6,18 +6,18 @@ import {
   Image,
   NonzeroExitError,
   ResourceReference,
-  SandbarError,
+  BeachsideError,
   assertResourceScope,
   type CreateInput,
   type ExecInput,
   type ExecOutput,
   type ProcessExit,
   type ProcessHandle,
-  type SandbarClient,
+  type BeachsideClient,
   type SandboxHandle,
   type SandboxList,
   type SandboxListEntry,
-} from "sandbar-sdk";
+} from "beachside";
 import { z } from "zod";
 import { searchProjectAdapters, valueAvailable, type Env, type LoadedConfig } from "./config";
 import {
@@ -253,7 +253,7 @@ function createInput(request: CreateRequest): CreateInput {
 }
 
 type Created = {
-  client: SandbarClient<true>;
+  client: BeachsideClient<true>;
   box: SandboxHandle<true>;
   record: SandboxRecord;
   existing: boolean;
@@ -283,7 +283,7 @@ async function claimName(
           "CONFLICT",
           cause.message,
           ifNotExists
-            ? "its record is not a confirmed sandbox (still creating, or outcome unknown); check `sandbar inspect`, or drop it with `sandbar rm --force`"
+            ? "its record is not a confirmed sandbox (still creating, or outcome unknown); check `beachside inspect`, or drop it with `beachside rm --force`"
             : "pass --if-not-exists to reuse it, or choose another --name",
         );
     }
@@ -369,7 +369,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
 
         return { client, box, ...current, existing: true };
       } catch (cause) {
-        if (!(cause instanceof SandbarError) || cause.code !== "NOT_FOUND") throw cause;
+        if (!(cause instanceof BeachsideError) || cause.code !== "NOT_FOUND") throw cause;
         await store.remove("sandbox", current.record.name, current.version);
       }
     }
@@ -381,7 +381,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
     throw new CliError(
       "LIMIT_REACHED",
       `The store already holds ${limit} sandboxes (limits.maxSandboxes)`,
-      "remove some with `sandbar rm`, or raise limits.maxSandboxes in sandbar.json",
+      "remove some with `beachside rm`, or raise limits.maxSandboxes in beachside.json",
     );
 
   const claimed = await claimName(
@@ -401,7 +401,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
     request.ifNotExists,
   );
 
-  let client: SandbarClient<true>;
+  let client: BeachsideClient<true>;
   const input = createInput(request);
 
   try {
@@ -500,7 +500,7 @@ function unrecordedError(created: Created): CliError {
   return new CliError(
     "STORE_WRITE_FAILED",
     `Created ${created.record.name} but could not record it in the store: ${created.unrecorded?.message}`,
-    "save the reference below to a file and use `sandbar rm @<file>` to destroy it",
+    "save the reference below to a file and use `beachside rm @<file>` to destroy it",
     { sandbox: created.record.name, reference: created.record.reference },
     "partial",
   );
@@ -575,7 +575,7 @@ export async function findTarget(session: Session, target: string): Promise<Targ
   throw new CliError(
     "NOT_FOUND",
     `No sandbox named ${target} in the store`,
-    "list known sandboxes with `sandbar ls`",
+    "list known sandboxes with `beachside ls`",
   );
 }
 
@@ -602,7 +602,7 @@ export async function createCommand(session: Session, flags: Flags): Promise<num
 async function stateOf(
   session: Session,
   record: SandboxRecord,
-  client: SandbarClient<true> | null,
+  client: BeachsideClient<true> | null,
 ) {
   if (!record.reference || !client)
     return record.status === "created" ? "unreachable" : record.status;
@@ -612,9 +612,9 @@ async function stateOf(
 
     return (await box.inspect({ signal: session.ctx.signal })).state;
   } catch (cause) {
-    if (cause instanceof SandbarError && cause.code === "NOT_FOUND") return "gone";
+    if (cause instanceof BeachsideError && cause.code === "NOT_FOUND") return "gone";
 
-    if (cause instanceof SandbarError && cause.code === "UNSUPPORTED") return "unknown";
+    if (cause instanceof BeachsideError && cause.code === "UNSUPPORTED") return "unknown";
 
     return "unreachable";
   }
@@ -632,7 +632,7 @@ type RemoteListing = {
 
 /** Page through the provider's sandbox listing, stopping early once `until` matches an item. */
 export async function remoteSandboxes(
-  client: SandbarClient<true>,
+  client: BeachsideClient<true>,
   until?: (item: SandboxListEntry) => boolean,
 ): Promise<RemoteListing> {
   const items: SandboxListEntry[] = [];
@@ -653,7 +653,7 @@ export async function remoteSandboxes(
 
 export const coverageNote = {
   "provider-scope": "every sandbox this profile's account and scope can see",
-  "sandbar-managed": "only sandboxes created through Sandbar in this profile's scope",
+  managed: "only sandboxes created through Beachside in this profile's scope",
 } satisfies Record<SandboxList["coverage"], string>;
 
 /** Listed labels as `k=v,k2=v2`; `-` when there are none or the provider records none. */
@@ -751,7 +751,7 @@ export async function adoptCommand(session: Session, flags: Flags): Promise<numb
     throw new CliError(
       "CONFLICT",
       `${id} is already in the store as ${known.record.name}`,
-      `use \`sandbar inspect ${known.record.name}\``,
+      `use \`beachside inspect ${known.record.name}\``,
     );
 
   if (!listed)
@@ -759,7 +759,7 @@ export async function adoptCommand(session: Session, flags: Flags): Promise<numb
       "NOT_FOUND",
       `${profile.provider} does not list a sandbox ${id} for profile ${profile.name}`,
       listing.complete
-        ? "list what it does show with `sandbar ls --remote`"
+        ? "list what it does show with `beachside ls --remote`"
         : "the listing was cut short; check the provider's own tools",
     );
 
@@ -814,7 +814,7 @@ export async function lsCommand(session: Session, flags: Flags): Promise<number>
   );
 
   const offline = flags.bool("offline");
-  const clients = new Map<string, SandbarClient<true> | null>();
+  const clients = new Map<string, BeachsideClient<true> | null>();
 
   if (!offline)
     for (const profile of new Set(entries.map((entry) => entry.record.profile))) {
@@ -910,7 +910,7 @@ function refusal(record: SandboxRecord): CliError | null {
     return new CliError(
       "UNSUPPORTED",
       `${record.name} has no reopenable reference (status ${record.status}); it cannot be destroyed from here`,
-      "check the provider for it, then `sandbar rm --force` to drop the record",
+      "check the provider for it, then `beachside rm --force` to drop the record",
       { sandbox: record.name },
     );
 
@@ -937,7 +937,7 @@ function refusal(record: SandboxRecord): CliError | null {
 export function storesSandbox(
   record: SandboxRecord,
   profile: ResolvedProfile,
-  client: SandbarClient<true>,
+  client: BeachsideClient<true>,
   item: SandboxListEntry,
 ): boolean {
   const stored = record.reference;
@@ -1012,7 +1012,7 @@ async function recoverCreate(session: Session, store: StateStore, target: Target
   try {
     value = await (await client.recover(record.recovery)).observe();
   } catch (cause) {
-    if (cause instanceof SandbarError && cause.effect !== "none") return target;
+    if (cause instanceof BeachsideError && cause.effect !== "none") return target;
     throw cause;
   }
 
@@ -1066,7 +1066,7 @@ async function removeOne(
   try {
     box = await session.reopen(record);
   } catch (cause) {
-    if (!(cause instanceof SandbarError) || cause.code !== "NOT_FOUND") throw cause;
+    if (!(cause instanceof BeachsideError) || cause.code !== "NOT_FOUND") throw cause;
     await forget(store, target);
 
     return { kind: "removed", item: { name: record.name, result: "gone", retainedResources: [] } };
@@ -1193,7 +1193,7 @@ async function execInput(
 
 function argvCommand(flags: Flags): ExecInput["command"] {
   if (!flags.rest?.length)
-    throw usage("Give the command after --, e.g. sandbar exec web -- ls -la");
+    throw usage("Give the command after --, e.g. beachside exec web -- ls -la");
 
   return { kind: "argv", argv: [...flags.rest] };
 }
@@ -1279,7 +1279,7 @@ async function streamExec(
       .catch(() => "termination was not acknowledged, so it may still be running");
 
     if (signal.aborted) {
-      out.note(`sandbar: interrupted; ${stopped}`);
+      out.note(`beachside: interrupted; ${stopped}`);
       throw cause;
     }
 
@@ -1322,7 +1322,7 @@ async function startStream(
           { signal },
         );
   } catch (cause) {
-    if (cause instanceof SandbarError && cause.code === "UNSUPPORTED" && cause.effect === "none")
+    if (cause instanceof BeachsideError && cause.code === "UNSUPPORTED" && cause.effect === "none")
       return null;
     throw cause;
   }
@@ -1346,7 +1346,7 @@ async function drained(
 
   if (failure === "late" || failure || !(await running.wait()).outputComplete)
     out.note(
-      `sandbar: the command exited ${exit.exitCode} but its output may be incomplete${
+      `beachside: the command exited ${exit.exitCode} but its output may be incomplete${
         failure instanceof Error ? `: ${failure.message}` : ""
       }`,
     );
@@ -1370,7 +1370,7 @@ function printStreams(out: Output, result: Executed): void {
   if (result.stderr.byteLength) out.streams.stderr(result.stderr);
 
   if (result.truncated)
-    out.note("sandbar: output was truncated; raise --max-output to capture more");
+    out.note("beachside: output was truncated; raise --max-output to capture more");
 }
 
 type RunSandbox = { name: string; id: string | null; kept: boolean };
@@ -1413,7 +1413,7 @@ function shScript(flags: Flags): ShScript {
   if (!flags.rest && flags.positionals.length === 2) return { target: target!, script: inline! };
 
   throw usage(
-    "Usage: sandbar sh <sandbox> '<script>' (or put the script after --, as one argument)",
+    "Usage: beachside sh <sandbox> '<script>' (or put the script after --, as one argument)",
   );
 }
 
@@ -1495,7 +1495,7 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
       `Cleanup of ${created.record.name} failed: ${report.message}${
         failure ? `; the command also failed: ${describeError(failure).message}` : ""
       }`,
-      `remove it with \`sandbar rm ${created.record.name}\``,
+      `remove it with \`beachside rm ${created.record.name}\``,
       {
         sandbox: created.record.name,
         reference: created.record.reference,
@@ -1547,7 +1547,7 @@ function remotePath(path: string): string {
 
 export async function cpCommand(session: Session, flags: Flags): Promise<number> {
   if (flags.positionals.length !== 2)
-    throw usage("Usage: sandbar cp [-r] <src> <dst> (one side is <sandbox>:/path)");
+    throw usage("Usage: beachside cp [-r] <src> <dst> (one side is <sandbox>:/path)");
   const recursive = flags.bool("recursive");
   const noClobber = flags.bool("no-clobber");
   const excludes = new Excludes(flags.strings("exclude"));
@@ -1603,7 +1603,7 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
 
     if (result.skipped.length)
       out.note(
-        `sandbar: skipped ${result.skipped.length} special file(s) such as devices or fifos`,
+        `beachside: skipped ${result.skipped.length} special file(s) such as devices or fifos`,
       );
     out.success(
       {
@@ -1664,7 +1664,7 @@ async function pushTree(session: Session, flags: Flags, path: string): Promise<L
 
 export async function pushCommand(session: Session, flags: Flags): Promise<number> {
   if (flags.positionals.length < 1 || flags.positionals.length > 2)
-    throw usage("Usage: sandbar push <sandbox>[:/dir] [path]");
+    throw usage("Usage: beachside push <sandbox>[:/dir] [path]");
   const [target, path = "."] = [flags.positionals[0]!, flags.positionals[1]];
   const location = remote(target);
   const tree = await pushTree(session, flags, path);
@@ -1688,7 +1688,7 @@ export async function pushCommand(session: Session, flags: Flags): Promise<numbe
 export async function catCommand(session: Session, flags: Flags): Promise<number> {
   const location = remote(onePositional(flags, "<sandbox>:/path"));
 
-  if (!location) throw usage("Usage: sandbar cat <sandbox>:/path");
+  if (!location) throw usage("Usage: beachside cat <sandbox>:/path");
   const { record } = await findTarget(session, location.target);
   const box = await session.reopen(record);
   const bytes = await box.readFile(location.path, { signal: session.ctx.signal });

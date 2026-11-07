@@ -9,8 +9,8 @@ import {
   type NativeProcess,
   type Sandbox,
   type ProcessStartContext,
-} from "@sandbar-sdk/adapter";
-import { Sandbar, Image, diagnosticContext, type StartProcessInput } from "./index";
+} from "@beachside/adapter";
+import { Beachside, Image, diagnosticContext, type StartProcessInput } from "./index";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -40,7 +40,7 @@ async function fixture(
 ) {
   const exit = deferred<{ exitCode: number }>();
   const outputEnd = deferred<void>();
-  const capture = deferred<import("@sandbar-sdk/adapter").ExecValue>();
+  const capture = deferred<import("@beachside/adapter").ExecValue>();
   const writes: Uint8Array[] = [];
   let writeGate: Promise<void> | undefined;
   let closeGate: Promise<void> | undefined;
@@ -181,7 +181,7 @@ async function fixture(
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const box = await client.sandboxes.create({ environment: Image.prepared("one") });
 
   return {
@@ -1781,10 +1781,10 @@ test("cyclic, huge and deeply nested native selectors cannot become persisted re
   for (const kind of ["cycle", "huge", "deep"] as const) {
     const f = await fixture({ interactive: true, extensions: true });
 
-    type CyclicSelector = { self?: import("@sandbar-sdk/adapter").Json };
+    type CyclicSelector = { self?: import("@beachside/adapter").Json };
 
     const cyclic: CyclicSelector = {};
-    let native: import("@sandbar-sdk/adapter").Json = cyclic;
+    let native: import("@beachside/adapter").Json = cyclic;
 
     if (kind === "cycle") cyclic.self = cyclic;
 
@@ -1816,7 +1816,7 @@ test("reopen snapshots nested native selectors before its asynchronous dispatch"
   const p = await f.box.processes.start({ ...input, stdin: "pipe", output: { mode: "stream" } });
   const selector = { tag: "original", generation: { id: "original-generation" } };
   const saved = { ...p.reference(), native: selector };
-  let selected: import("@sandbar-sdk/adapter").Json | undefined;
+  let selected: import("@beachside/adapter").Json | undefined;
   f.client.session.processes!.reopen = async (request) => {
     selected = request.reference;
 

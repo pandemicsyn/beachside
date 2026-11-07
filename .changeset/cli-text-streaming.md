@@ -1,5 +1,5 @@
 ---
-"@sandbar-sdk/cli": patch
+"@beachside/cli": patch
 ---
 
-`sandbar exec`, `sh` and `run` also stream on adapters whose processes stream text but not bytes, instead of falling back to buffered output.
+`beachside exec`, `sh` and `run` also stream on adapters whose processes stream text but not bytes, instead of falling back to buffered output.

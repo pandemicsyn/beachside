@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { Sandbar } from "sandbar-sdk";
-import { vercel } from "@sandbar-sdk/vercel";
+import { Beachside } from "beachside";
+import { vercel } from "@beachside/vercel";
 import { defineProviderProfile } from "./profile";
 
 const identifier = z
@@ -107,11 +107,11 @@ export default defineProviderProfile({
   configure: (environment, saved) =>
     routingSchema.parse(
       saved ?? {
-        teamId: environment.SANDBAR_VERCEL_TEAM_ID,
-        projectId: environment.SANDBAR_VERCEL_PROJECT_ID,
+        teamId: environment.BEACHSIDE_VERCEL_TEAM_ID,
+        projectId: environment.BEACHSIDE_VERCEL_PROJECT_ID,
         region: "iad1",
         imageId: "vercel/sandbox/universal:latest",
-        networkPolicy: environment.SANDBAR_VERCEL_NETWORK_POLICY ?? "vercel-deny-all",
+        networkPolicy: environment.BEACHSIDE_VERCEL_NETWORK_POLICY ?? "vercel-deny-all",
         nativeLifetimeSeconds: 300,
       },
     ),
@@ -130,7 +130,7 @@ export default defineProviderProfile({
     const config = routingSchema.parse(routing);
 
     return (onReference, onDiagnostic) =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter: vercel,
         config: {
           teamId: config.teamId,

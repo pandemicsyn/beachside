@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FILESYSTEM_HELPER, filesystemResult, type FilesystemInput } from "./filesystem";
 import { daytonaProvider, createDaytonaAdapter } from "./index";
-import { Sandbar, AdapterSandbox } from "sandbar-sdk";
+import { Beachside, AdapterSandbox } from "beachside";
 import { artifactFiles } from "../../../../apps/docs/examples/directory-files";
 
 function run(input: FilesystemInput) {
@@ -30,7 +30,7 @@ function run(input: FilesystemInput) {
 }
 
 test("recursive mkdir reports possible effects when a parent is created before the leaf fails", () => {
-  const root = mkdtempSync(join(tmpdir(), "sandbar-daytona-mkdir-"));
+  const root = mkdtempSync(join(tmpdir(), "beachside-daytona-mkdir-"));
   const parent = join(root, "created-parent");
 
   try {
@@ -46,7 +46,7 @@ test("recursive mkdir reports possible effects when a parent is created before t
 });
 
 test("guest filesystem preserves unusual names, dangling links, directory protection and staged copy", () => {
-  const root = mkdtempSync(join(tmpdir(), "sandbar-daytona-fs-"));
+  const root = mkdtempSync(join(tmpdir(), "beachside-daytona-fs-"));
   const source = join(root, "quote'\n雪.bin");
 
   try {
@@ -308,8 +308,8 @@ test("Daytona transfer transport streams 32 MiB with incremental multipart input
 });
 
 test("Daytona public SDK preserves definitive filesystem rejections and artifact workflow outcomes", async () => {
-  const root = mkdtempSync(join(tmpdir(), "sandbar-daytona-public-files-"));
-  let client: Awaited<ReturnType<typeof Sandbar.connect>> | undefined;
+  const root = mkdtempSync(join(tmpdir(), "beachside-daytona-public-files-"));
+  let client: Awaited<ReturnType<typeof Beachside.connect>> | undefined;
   let delayCleanup = false;
   let delayedStage = "";
   let releaseCleanup: (() => void) | undefined;
@@ -400,7 +400,7 @@ test("Daytona public SDK preserves definitive filesystem rejections and artifact
       { preconnect: fetch.preconnect },
     );
 
-    client = await Sandbar.connect({
+    client = await Beachside.connect({
       adapter: createDaytonaAdapter(transport),
       config: { target: "us", networkPolicy: "blocked" },
       credentials: { apiKey: "fixture" },
@@ -482,7 +482,7 @@ test("Daytona public SDK preserves definitive filesystem rejections and artifact
           effect: "applied",
           destination: published,
           bytesTransferred: payload.byteLength,
-          temporaryPaths: [expect.stringContaining(".sandbar-stream-")],
+          temporaryPaths: [expect.stringContaining(".beachside-stream-")],
         },
       });
       expect(readFileSync(published)).toEqual(Buffer.from(payload));
@@ -511,7 +511,7 @@ test("Daytona public SDK preserves definitive filesystem rejections and artifact
 }, 30_000);
 
 test("Daytona interrupted and malformed helpers retain possible copy effects and staging custody", async () => {
-  const root = mkdtempSync(join(tmpdir(), "sandbar-daytona-interrupted-"));
+  const root = mkdtempSync(join(tmpdir(), "beachside-daytona-interrupted-"));
   const source = join(root, "source");
   const destination = join(root, "destination");
   const stagingDirectory = join(root, ".stage");
