@@ -32,6 +32,7 @@ import { adapterCommand } from "./adapters";
 import { gcCommand } from "./gc";
 import { complete, completionCommand, formatCompletion } from "./completion";
 import type { Env } from "./config";
+import { programStatus } from "./program-status";
 
 type FlagSpec = {
   type: "string" | "boolean";
@@ -656,6 +657,8 @@ export type Io = {
   env: Env;
   cwd: string;
   streams: Streams;
+  /** Whether stderr is a terminal; terminal tab status (OSC 7501) is only written to one. */
+  stderrTerminal?: boolean;
   signal: AbortSignal;
   readStdin: () => Promise<Uint8Array>;
 };
@@ -686,6 +689,29 @@ async function completeWords(words: readonly string[], io: Io): Promise<number> 
   return 0;
 }
 
+/** Commands that create, change or wait on sandboxes report tab status; quick reads stay quiet. */
+const statusCommands = new Set(["create", "adopt", "rm", "gc", "exec", "sh", "run", "cp", "push"]);
+
+const statusSubcommands = new Set(["image build", "image rm", "snapshot create", "snapshot rm"]);
+
+/** A short label for the tab, such as "beachside exec web" or "beachside image build". */
+function statusTitle(name: string, flags: Flags): string | undefined {
+  const [first, second] = flags.positionals;
+
+  if (statusSubcommands.has(`${name} ${first}`))
+    return ["beachside", name, first, second].filter(Boolean).join(" ");
+
+  if (!statusCommands.has(name)) return undefined;
+
+  const target = name === "create" ? flags.string("name") : first;
+
+  return ["beachside", name, target].filter(Boolean).join(" ");
+}
+
+function exitMessage(code: number): string {
+  return code === 0 ? "done" : `exit code ${code}`;
+}
+
 /** Run one CLI invocation and return its exit code. */
 export async function main(argv: readonly string[], io: Io): Promise<number> {
   if (argv[0] === "__complete") return completeWords(argv.slice(argv[1] === "--" ? 2 : 1), io);
@@ -696,7 +722,8 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
   const nameIndex = commandIndex(head);
   const name = nameIndex === -1 ? undefined : head[nameIndex];
   const jsonFromEnv = io.env.BEACHSIDE_JSON === "1" || io.env.BEACHSIDE_JSON === "true";
-  const out = new Output(jsonFromEnv || head.includes("--json"), io.streams);
+  const status = programStatus(io.env, io.stderrTerminal === true, io.streams.stderr);
+  const out = new Output(jsonFromEnv || head.includes("--json"), io.streams, status);
   const command = commands.find((candidate) => candidate.name === name);
 
   try {
@@ -781,9 +808,18 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     };
 
     const session = new Session(context);
+    const title = statusTitle(command.name, flags);
 
     try {
-      return await command.run(session, flags);
+      if (title) status.report("working", title);
+      const code = await command.run(session, flags);
+
+      if (title) status.report(code === 0 ? "done" : "error", `${title}: ${exitMessage(code)}`);
+
+      return code;
+    } catch (cause) {
+      if (title) status.report("error", `${title}: ${describeError(cause).message}`);
+      throw cause;
     } finally {
       await session.close();
     }

@@ -5,6 +5,7 @@ import {
   type ResourceReference,
   type SandboxReference,
 } from "beachside";
+import { silentStatus, type ProgramStatus } from "./program-status";
 
 /** A failure the CLI detected itself, before or around provider calls. */
 export class CliError extends Error {
@@ -174,6 +175,8 @@ export class Output {
   constructor(
     readonly json: boolean,
     readonly streams: Streams,
+    /** Terminal tab status (OSC 7501); silent unless stderr is a terminal that wants it. */
+    readonly status: ProgramStatus = silentStatus,
   ) {}
 
   /** Print the command's single result: a JSON envelope or the human text. */
