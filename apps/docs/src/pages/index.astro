@@ -219,7 +219,10 @@ const sunBands = [
 <span class="k">const</span> client = <span class="k">await</span> Beachside.connect({"{"}
   adapter: <span class="typed"><span data-typed>boxdAdapter</span><span class="caret" data-caret></span></span>,
   credentials: {"{"} apiKey: process.env.BOXD_API_KEY! {"}"},
-  config: {"{"} org: process.env.BOXD_ORG!, networkPolicy: <span class="s">"internet"</span> {"}"},
+  config: {"{"}
+    org: process.env.BOXD_ORG!,
+    networkPolicy: <span class="s">"internet"</span>,
+  {"}"},
 {"}"})</span><span data-vercel-connect hidden><span class="k">import</span> {"{"} Beachside {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
 <span class="k">import</span> {"{"} vercel {"}"} <span class="k">from</span> <span class="s">"@beachside/vercel"</span>
 
@@ -227,15 +230,15 @@ const sunBands = [
   adapter: <span class="typed"><span data-typed>vercel</span><span class="caret" data-caret></span></span>,
   credentials: {"{"} token: process.env.VERCEL_TOKEN! {"}"},
   config: {"{"}
-    teamId: process.env.BEACHSIDE_VERCEL_TEAM_ID!,
-    projectId: process.env.BEACHSIDE_VERCEL_PROJECT_ID!,
+    teamId: process.env.VERCEL_TEAM_ID!,
+    projectId: process.env.VERCEL_PROJECT_ID!,
   {"}"},
 {"}"})</span>
 <span class="k">await</span> client.sandboxes.with({"{}"}, <span class="k">async</span> (box) =&gt; {"{"}
   <span class="k">const</span> run = <span class="k">await</span> box.exec([<span class="s">"printf"</span>, <span class="s">"ready"</span>])
   console.log(run.stdoutText())
 {"}"})
-<span class="k">await</span> client.close()</code></pre>
+<span class="k">await</span> client.close()<span data-pad></span></code></pre>
               <div class="code-status" aria-live="polite">
                 <span class="status-dot" data-status-dot></span>
                 <span class="status-text" data-status>connecting…</span>
@@ -264,7 +267,7 @@ const sunBands = [
             <li class="chip chip-boxd"><span></span>boxd (exp)</li>
             <li class="chip chip-boat"><span></span>Boat (exp)</li>
             <li class="chip chip-runloop"><span></span>Runloop (exp)</li>
-            <li class="chip chip-vercel"><span></span>Vercel</li>
+            <li class="chip chip-vercel"><span></span>Vercel (exp)</li>
             <li class="chip chip-modal"><span></span>Modal (exp)</li>
             <li class="chip chip-yours">+ your adapter</li>
           </ul>
@@ -486,6 +489,16 @@ const sunBands = [
         });
 
         optionsNode.replaceChildren(...lines.flatMap((line, i) => (i ? ["\n", line] : [line])));
+
+        // Pad factory providers with fewer options so the code panel keeps one height across tabs.
+        const longest = Math.max(...[...providerOptions.values()].map((options) => options.length));
+
+        const pad = document.querySelector<HTMLElement>("[data-pad]");
+
+        const missing = providerOptions.has(provider) ? longest - lines.length : 0;
+
+        // A pre drops a trailing newline, so end the padding with a space to keep the last line.
+        if (pad) pad.textContent = missing ? `${"\n".repeat(missing)} ` : "";
       }
 
       // Keep the install command on the selected provider's package.
