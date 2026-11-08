@@ -46,7 +46,7 @@ test("a background poll that loses the create result stays unknown and recovers 
   }
 });
 
-test("a lost create with env never recovers as ready without the env file", async () => {
+test("a lost create with env recovers in the same process by writing the env file", async () => {
   const { fixture, connect } = setup();
   const client = await connect();
 
@@ -55,10 +55,87 @@ test("a lost create with env never recovers as ready without the env file", asyn
     const lost = await client.sandboxes.submitCreate({ env: { GREETING: "hi" } });
     await expect(lost.observe()).rejects.toBeInstanceOf(OutcomeUnknownError);
 
-    await expect((await client.recover(lost.reference)).observe()).rejects.toBeInstanceOf(
-      OutcomeUnknownError,
-    );
+    const recovered = await (await client.recover(lost.reference)).observe();
+
+    if (!recovered || !("reference" in recovered) || !recovered.reference)
+      throw new Error("expected the recovered sandbox");
+    const box = await client.sandboxes.get(JSON.parse(JSON.stringify(recovered.reference)));
+    expect((await box.exec(["/bin/sh", "-c", 'printf "%s" "$GREETING"'])).stdoutText()).toBe("hi");
     expect(fixture.effects.create).toBe(1);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a lost create with env stays unknown in a fresh process, which never has the values", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    fixture.loseNextCreateResponse();
+    const lost = await client.sandboxes.submitCreate({ env: { GREETING: "hi" } });
+    await expect(lost.observe()).rejects.toBeInstanceOf(OutcomeUnknownError);
+
+    const fresh = createFreestyleAdapter({
+      fetch: fixture.fetch,
+      pollIntervalMs: 1,
+      settleSeconds: 1,
+    });
+
+    const other = await Beachside.connect({
+      adapter: fresh,
+      config: {},
+      credentials: { apiKey: "fixture-main" },
+    });
+
+    try {
+      await expect((await other.recover(lost.reference)).observe()).rejects.toBeInstanceOf(
+        OutcomeUnknownError,
+      );
+    } finally {
+      await other.close();
+    }
+
+    expect(fixture.effects.create).toBe(1);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a slow boot with env finishes setup through observation", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    fixture.setBootPolls(1_000_000);
+    const submitted = await client.sandboxes.submitCreate({ env: { GREETING: "late" } });
+    expect(await submitted.observe()).toBeNull();
+    fixture.setBootPolls(0);
+
+    for (const vm of fixture.vms.values()) vm.state = "running";
+    const box = await submitted.observe();
+
+    if (!box) throw new Error("expected the created sandbox");
+    expect((await box.exec(["/bin/sh", "-c", 'printf "%s" "$GREETING"'])).stdoutText()).toBe(
+      "late",
+    );
+  } finally {
+    await client.close();
+  }
+});
+
+test("the create-time env file is readable by root only", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    await client.sandboxes.create({ env: { SECRET: "s" } });
+
+    const write = fixture.calls.find(
+      (call) => call.method === "PUT" && call.query.get("path") === "/etc/beachside.env",
+    );
+
+    expect(write?.query.get("mode")).toBe(String(0o600));
   } finally {
     await client.close();
   }

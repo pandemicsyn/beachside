@@ -18,7 +18,7 @@ import { commandLine, quote } from "./exec";
  * the guest: stdout and stderr go to private files, the exit status is written last, and the
  * adapter reads new bytes from both files (base64, so they survive the lossy UTF-8 text
  * channel) until the exit status appears and both files are drained. Pipe stdin is a FIFO
- * kept open by a holder process; closing stdin stops the holder.
+ * kept open by a holder process; closing stdin, or the job's exit, stops the holder.
  */
 export const PROCESS_RECORD = "BEACHSIDE-PROC-1";
 
@@ -118,9 +118,14 @@ export function launcherScript(input: ProcessStartInput): string {
     commandLine(input),
   ].join("; ");
 
+  // Once the command ends (or is killed), the stdin holder has nothing left to feed, so the
+  // job stops it before publishing the exit status.
   const job = [
     `setsid -w sh -c ${quote(command)} sh "$1"`,
     'echo $? >"$1/exit.tmp"',
+    ...(piped
+      ? ['[ -s "$1/holder" ] && kill "$(cat "$1/holder")" 2>/dev/null; : >"$1/holder"']
+      : []),
     'mv "$1/exit.tmp" "$1/exit"',
   ].join("; ");
 
@@ -361,6 +366,13 @@ export async function observeJob(
   const control = async (script: string, context: ReadContext, stdin?: Uint8Array) => {
     if (detached) throw fail();
 
+    // A guest command would wake a VM this client is pausing or holds paused.
+    if (await options.held?.())
+      throw new AdapterError(
+        "CONFLICT",
+        "Freestyle VM is paused; resume it before controlling the process",
+      );
+
     return run(`cd ${dir} 2>/dev/null || { echo gone; exit 0; }\n${script}`, context, stdin);
   };
 
@@ -426,15 +438,30 @@ export async function observeJob(
         throw new AdapterError("UNSUPPORTED", "This Freestyle process has closed stdin");
 
       for (let index = 0; index < bytes.length; index += MAX_WRITE_BYTES) {
-        // Opening the FIFO blocks only when nothing reads it; bound that wait in the guest.
-        const answer = await control(
-          "if [ -f exit ] || [ ! -s holder ]; then echo gone; elif timeout 10 sh -c 'cat >>in'; then echo ok; else echo gone; fi",
-          context,
-          bytes.subarray(index, index + MAX_WRITE_BYTES),
-        );
+        // A reader that is slow or never reads blocks the write; bound that wait in the guest.
+        // Only the check before writing proves nothing was delivered.
+        const answer = (
+          await control(
+            "if [ -f exit ] || [ ! -s holder ]; then echo gone; else timeout 10 sh -c 'cat >>in'; beachside_s=$?; if [ $beachside_s = 0 ]; then echo ok; elif [ $beachside_s = 124 ]; then echo timeout; else echo failed; fi; fi",
+            context,
+            bytes.subarray(index, index + MAX_WRITE_BYTES),
+          )
+        ).trim();
 
-        if (answer.trim() !== "ok")
+        if (answer === "gone")
           throw new AdapterError("NOT_FOUND", "Freestyle process stdin is closed or absent");
+
+        if (answer === "timeout")
+          throw new AdapterError(
+            "TIMEOUT",
+            "Freestyle process did not read its stdin in time; part of the input may have been written",
+          );
+
+        if (answer !== "ok")
+          throw new AdapterError(
+            "UNAVAILABLE",
+            "Freestyle process stdin write failed; part of the input may have been written",
+          );
       }
     },
     async closeStdin(context) {

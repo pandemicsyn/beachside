@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Json } from "@beachside/adapter";
@@ -158,7 +158,7 @@ export function freestyleFixture() {
   let held: Promise<void> | undefined;
   let createFault: Response | undefined;
   let commandFault: Response | "lost" | undefined;
-  let commandOverride: ((command: string) => CommandResult) | undefined;
+  let commandOverride: ((command: string) => CommandResult | undefined) | undefined;
   /** Polls a VM needs before it reports `running` after create or start. */
   let bootPolls = 0;
   /** Answer the next create as a background request that finishes on its first poll. */
@@ -171,6 +171,8 @@ export function freestyleFixture() {
   let afterPut: ((path: string) => void) | undefined;
   /** Acknowledge the next pause but leave the VM running. */
   let ignorePause = false;
+  /** Answer for the next start instead of starting the VM. */
+  let startFault: Response | undefined;
   const background = new Map<string, Response>();
 
   /** The guest env file lives on the local disk too, because commands run through the local sh. */
@@ -422,6 +424,13 @@ export function freestyleFixture() {
     }
 
     if (method === "POST" && rest === "start") {
+      if (startFault) {
+        const fault = startFault;
+        startFault = undefined;
+
+        return fault;
+      }
+
       effects.start++;
       vm.state = bootPolls > 0 ? "starting" : "running";
       vm.polls = 0;
@@ -601,6 +610,30 @@ export function freestyleFixture() {
       return new Response(null, { status: 204 });
     }
 
+    if (method === "GET" && rest === "fs/exists")
+      return json(200, {
+        exists: local
+          ? existsSync(file)
+          : vm.files.has(file) || [...vm.files.keys()].some((key) => key.startsWith(`${file}/`)),
+      });
+
+    if (method === "GET" && rest === "fs/stat") {
+      const bytes = vm.files.get(file);
+
+      if (!bytes) return error(404, "FILE_NOT_FOUND");
+
+      return json(200, {
+        size: bytes.length,
+        isFile: true,
+        isDirectory: false,
+        isSymlink: false,
+        permissions: "0644",
+        owner: "ubuntu",
+        group: "ubuntu",
+        modified: vm.createdAt,
+      });
+    }
+
     if (method === "GET" && rest === "fs/dir" && local)
       return json(200, {
         entries: readdirSync(file, { withFileTypes: true }).map((entry) => ({
@@ -650,6 +683,9 @@ export function freestyleFixture() {
     ignoreNextPause() {
       ignorePause = true;
     },
+    failNextStart(response: Response) {
+      startFault = response;
+    },
     forgetNextBackgroundResult() {
       forgetNextBackground = true;
     },
@@ -662,7 +698,7 @@ export function freestyleFixture() {
     failNextCommand(response: Response | "lost") {
       commandFault = response;
     },
-    overrideCommands(handler: ((command: string) => CommandResult) | undefined) {
+    overrideCommands(handler: ((command: string) => CommandResult | undefined) | undefined) {
       commandOverride = handler;
     },
     loseNextSnapshotResponse() {

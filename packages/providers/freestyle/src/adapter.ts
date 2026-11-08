@@ -34,6 +34,7 @@ import {
   type CreateInput,
   type ExecInput,
   type Fact,
+  type FileEntry,
   type FileWriteInput,
   type ImageInfo,
   type ObserveContext,
@@ -642,13 +643,20 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
         const env = input.env && Object.keys(input.env).length ? input.env : undefined;
         // The env requirement is saved before dispatch, so a recovered attempt still demands
-        // the env file's marker before it reports the VM as ready.
+        // the env file's marker before it reports the VM as ready. The values stay in this
+        // process only, so its own observation can still write them.
         await ctx.checkpoint(env ? { slug, env: true } : { slug });
+
+        if (env) launchEnv.set(slug, env);
         let created: VmData;
 
         try {
           created = (await api(ctx.signal).vms.create(request)).data;
         } catch (error) {
+          if (refusedBeforeEffect(failure(error))) launchEnv.delete(slug);
+
+          // The VM may exist; observation finds it by the attempt's slug and, in this process,
+          // still writes the env file.
           return rejection(
             ctx,
             error,
@@ -679,16 +687,13 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           });
 
           if (result?.current?.state === "running" && env) {
-            try {
-              await api(callSignal(readContext(ctx.signal, 60)))
-                .vms.ref(id.data)
-                .fs.writeFile(ENV_FILE, envFile(env, slug), { mode: 0o644 });
-            } catch {
+            launchEnv.delete(slug);
+
+            if (!(await writeEnv(id.data, env, slug, ctx.signal)))
               return ctx.unknown(
                 "Freestyle VM is running but its sandbox environment was not confirmed; destroy it",
                 partial(id.data, ctx),
               );
-            }
           }
 
           if (result) return launched(result.current, token, ctx, ctx, partial);
@@ -698,6 +703,27 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
         return ctx.pending(token, { pollAfterMs: pollMs });
       };
+
+      /**
+       * Create-time env values by attempt slug, kept in memory only until this process's own
+       * create or observation writes them. A fresh process never has them.
+       */
+      const launchEnv = new Map<string, Record<string, string>>();
+
+      /** Write the env file, readable by root only, as Freestyle's own default. */
+      const writeEnv = (
+        id: string,
+        env: Record<string, string>,
+        slug: string,
+        signal: AbortSignal,
+      ) =>
+        api(callSignal(readContext(signal, 60)))
+          .vms.ref(id)
+          .fs.writeFile(ENV_FILE, envFile(env, slug), { mode: 0o600 })
+          .then(
+            () => true,
+            () => false,
+          );
 
       /**
        * Observation of a create or restore. A recovered attempt cannot rewrite the environment
@@ -713,20 +739,30 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         const vm = token.id ? await find(token.id, ctx) : await findBySlug(token.slug, ctx);
 
         if (vm?.state === "running" && token.env) {
-          const written = await api(callSignal(ctx))
-            .vms.ref(vm.id)
-            .fs.readTextFile(ENV_FILE)
-            .then(
-              (text) => text.startsWith(`${envMarker(token.slug)}\n`),
-              () => false,
-            );
+          const env = launchEnv.get(token.slug);
+          launchEnv.delete(token.slug);
+
+          const written = env
+            ? await writeEnv(vm.id, env, token.slug, ctx.signal)
+            : await api(callSignal(ctx))
+                .vms.ref(vm.id)
+                .fs.readTextFile(ENV_FILE)
+                .then(
+                  (text) => text.startsWith(`${envMarker(token.slug)}\n`),
+                  () => false,
+                );
 
           if (!written)
             return ctx.unknown(
-              "Freestyle VM is running but its sandbox environment was never written; destroy it",
+              env
+                ? "Freestyle VM is running but its sandbox environment was not confirmed; destroy it"
+                : "Freestyle VM is running but its sandbox environment was never written; destroy it",
               partial(vm.id, attempt),
             );
         }
+
+        // Anything but a VM still starting ends the attempt; its env values are not needed.
+        if (vm?.state !== "starting") launchEnv.delete(token.slug);
 
         return launched(vm, token, attempt, ctx, partial);
       };
@@ -891,6 +927,48 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         );
       };
 
+      /** Entries from the native file API, which reads without waking a paused VM. */
+      const nativeEntries = async (
+        vmId: string,
+        path: string,
+        ctx: ReadContext,
+      ): Promise<FileEntry[]> => {
+        const entries = await read(ctx, (native) => native.vms.ref(vmId).fs.readDir(path));
+
+        if (entries.length > MAX_DIRECTORY_ENTRIES)
+          throw new AdapterError("CAPACITY", "Freestyle directory exceeds the listing bound");
+
+        return entries.map((entry) => ({
+          name: entry.name,
+          type:
+            entry.kind === "file" || entry.kind === "directory" || entry.kind === "symlink"
+              ? entry.kind
+              : "unknown",
+        }));
+      };
+
+      /** Metadata from the native file API, for a VM that is not running. */
+      const nativeStat = async (vmId: string, path: string, ctx: ReadContext) => {
+        const native = await read(ctx, (client) => client.vms.ref(vmId).fs.stat(path));
+        const modified = Date.parse(native.modified);
+
+        if (!Number.isFinite(modified) || !/^0?[0-7]{1,6}$/.test(native.permissions))
+          throw new AdapterError("UNAVAILABLE", "Freestyle metadata response is invalid");
+
+        return statValue({
+          type: native.isSymlink
+            ? "symlink"
+            : native.isFile
+              ? "file"
+              : native.isDirectory
+                ? "directory"
+                : "unknown",
+          sizeBytes: native.size,
+          modifiedAt: modified / 1000,
+          mode: Number.parseInt(native.permissions, 8) & 0o7777,
+        });
+      };
+
       /** One guest control command; anything but a clean exit is an error. */
       const guest =
         (vmId: string): GuestRunner =>
@@ -920,18 +998,23 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           return response.stdout ?? "";
         };
 
-      /** VMs this client is pausing or holds paused; their process observers stop polling. */
+      /**
+       * VMs this client is pausing or holds paused; their process observers stop polling and
+       * process controls are refused. `inFlight` lasts only while a pause request of this
+       * client is being submitted; otherwise the hold follows native state.
+       */
       const held = new Map<string, { inFlight: boolean; checkedAt: number }>();
 
-      /** A confirmed running VM ends a hold that no suspend of this client still owns. */
+      /** A confirmed running VM ends a hold that no in-flight suspend still needs. */
       const release = (vmId: string) => {
         if (!held.get(vmId)?.inFlight) held.delete(vmId);
       };
 
       /**
-       * Whether observers should skip a poll. Outside an in-flight suspend the hold is checked
-       * against native state (an API read, which never wakes the VM) every two seconds, so a
-       * VM started elsewhere or woken by traffic resumes observation.
+       * Whether a guest command would wake the VM. Outside an in-flight suspend the hold is
+       * checked against native state (an API read, which never wakes the VM) every two seconds,
+       * so a VM started elsewhere, woken by traffic or left running by an ignored pause
+       * resumes observation.
        */
       const holding = async (vmId: string) => {
         const hold = held.get(vmId);
@@ -944,6 +1027,12 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         const vm = await find(vmId, readContext(AbortSignal.timeout(10_000), 10)).catch(
           () => undefined,
         );
+
+        if (vm === null) {
+          held.delete(vmId);
+
+          return false;
+        }
 
         if (vm?.state !== "running") return true;
         release(vmId);
@@ -1552,8 +1641,9 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         },
         files: {
           maxBytes: MAX_FILE_BYTES,
+          // Freestyle serves reads from a paused or stopped VM without waking it.
           async read(input, ctx) {
-            await requireRunning(input.sandbox, ctx);
+            await requireVm(input.sandbox, ctx);
             const limit = Math.min(input.maxBytes ?? MAX_FILE_BYTES, MAX_FILE_BYTES);
 
             try {
@@ -1606,15 +1696,32 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
               return { bytesWritten: input.bytes.byteLength };
             },
           },
+          // A running VM answers through the guest helper; a paused or stopped one through
+          // Freestyle's own read-only file API, which never wakes it.
           async readDirectory(input, ctx) {
-            await requireRunning(input.sandbox, ctx);
+            if ((await requireVm(input.sandbox, ctx)).state !== "running")
+              return {
+                entries: (await nativeEntries(input.sandbox.id, input.path, ctx)).sort((a, b) =>
+                  a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+                ),
+                completeness: "complete" as const,
+                observedAt: new Date().toISOString(),
+              };
 
             return directoryValue(
               await files(input.sandbox.id).helper("list", input.path, "", false, ctx),
             );
           },
           async stat(input, ctx) {
-            await requireRunning(input.sandbox, ctx);
+            if ((await requireVm(input.sandbox, ctx)).state !== "running") {
+              if (!input.followSymlinks)
+                throw new AdapterError(
+                  "CONFLICT",
+                  "Freestyle reports a link's own metadata only on a running VM",
+                );
+
+              return nativeStat(input.sandbox.id, input.path, ctx);
+            }
 
             return statValue(
               await files(input.sandbox.id).helper(
@@ -1627,14 +1734,15 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             );
           },
           async exists(input, ctx) {
-            await requireRunning(input.sandbox, ctx);
+            if ((await requireVm(input.sandbox, ctx)).state !== "running")
+              return read(ctx, (native) => native.vms.ref(input.sandbox.id).fs.exists(input.path));
 
             return Exists.parse(
               await files(input.sandbox.id).helper("exists", input.path, "", false, ctx),
             ).exists;
           },
           async readStream(input, ctx) {
-            await requireRunning(input.sandbox, ctx);
+            await requireVm(input.sandbox, ctx);
 
             return files(input.sandbox.id).read(input.path, ctx);
           },
@@ -1779,22 +1887,9 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             },
           },
           async list(input, ctx) {
-            await requireRunning(input.sandbox, ctx);
+            await requireVm(input.sandbox, ctx);
 
-            const entries = await read(ctx, (native) =>
-              native.vms.ref(input.sandbox.id).fs.readDir(input.path),
-            );
-
-            if (entries.length > MAX_DIRECTORY_ENTRIES)
-              throw new AdapterError("CAPACITY", "Freestyle directory exceeds the listing bound");
-
-            return entries.map((entry) => ({
-              name: entry.name,
-              type:
-                entry.kind === "file" || entry.kind === "directory" || entry.kind === "symlink"
-                  ? entry.kind
-                  : "unknown",
-            }));
+            return nativeEntries(input.sandbox.id, input.path, ctx);
           },
         },
         async suspensionCapabilities() {
@@ -1833,35 +1928,49 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             const token = { id: Id.parse(input.sandbox.id), since: Date.now() };
             await ctx.checkpoint(token);
             // Process observers stop polling first: their guest commands keep the VM running.
-            held.set(token.id, { inFlight: true, checkedAt: 0 });
+            const hold = { inFlight: true, checkedAt: 0 };
+            held.set(token.id, hold);
 
             try {
-              await api(callSignal(readContext(ctx.signal, 120)))
-                .vms.ref(token.id)
-                .pause();
-            } catch (error) {
-              held.delete(token.id);
+              try {
+                await api(callSignal(readContext(ctx.signal, 120)))
+                  .vms.ref(token.id)
+                  .pause();
+              } catch (error) {
+                const rejected = rejection(
+                  ctx,
+                  error,
+                  "Freestyle pause response was not confirmed",
+                );
 
-              return rejection(ctx, error, "Freestyle pause response was not confirmed");
-            }
+                // A refused pause leaves the VM running; an uncertain one keeps the hold until
+                // native state shows the VM running.
+                if (refusedBeforeEffect(failure(error))) held.delete(token.id);
 
-            try {
-              const paused = await settle(ctx.signal, async (read) => {
-                const vm = await find(token.id, read);
-
-                return vm?.state === "paused" ? vm : undefined;
-              });
-
-              if (paused) {
-                held.set(token.id, { inFlight: false, checkedAt: Date.now() });
-
-                return suspended(paused, input.sandbox.reference);
+                return rejected;
               }
-            } catch {
-              /* Pause is acknowledged; completion continues through observation. */
-            }
 
-            return ctx.pending(token, { pollAfterMs: pollMs });
+              try {
+                const paused = await settle(ctx.signal, async (read) => {
+                  const vm = await find(token.id, read);
+
+                  return vm?.state === "paused" ? vm : undefined;
+                });
+
+                if (paused) {
+                  hold.checkedAt = Date.now();
+
+                  return suspended(paused, input.sandbox.reference);
+                }
+              } catch {
+                /* Pause is acknowledged; completion continues through observation. */
+              }
+
+              return ctx.pending(token, { pollAfterMs: pollMs });
+            } finally {
+              // From here on the hold follows native state, checked on the next poll.
+              hold.inFlight = false;
+            }
           },
           async observe(attempt, ctx) {
             const token = LifecycleToken.safeParse(attempt.token);
@@ -1878,7 +1987,10 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             }
 
             if (vm.state === "paused") {
-              held.set(vm.id, { inFlight: false, checkedAt: Date.now() });
+              const hold = held.get(vm.id);
+
+              if (hold) hold.checkedAt = Date.now();
+              else held.set(vm.id, { inFlight: false, checkedAt: Date.now() });
 
               return suspended(vm, box.reference);
             }
@@ -1915,9 +2027,8 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           async submit(input, ctx) {
             const token = { id: Id.parse(input.sandbox.id) };
             await ctx.checkpoint(token);
-            // Process observers resume polling once the VM is asked to run again.
-            held.delete(token.id);
 
+            // Process observers stay held until the VM is confirmed running again.
             try {
               await api(callSignal(readContext(ctx.signal, 120)))
                 .vms.ref(token.id)
@@ -1933,7 +2044,11 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
                 return vm?.state === "running" ? vm : undefined;
               });
 
-              if (ready) return resumed(ready, input.sandbox.reference);
+              if (ready) {
+                release(token.id);
+
+                return resumed(ready, input.sandbox.reference);
+              }
             } catch {
               /* Start is acknowledged; readiness continues through observation. */
             }
@@ -1950,7 +2065,11 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
             if (!vm) return ctx.unknown("Freestyle VM disappeared while resuming");
 
-            if (vm.state === "running") return resumed(vm, box.reference);
+            if (vm.state === "running") {
+              release(vm.id);
+
+              return resumed(vm, box.reference);
+            }
 
             return vm.state === "paused" || vm.state === "starting"
               ? ctx.pending(token.data, { pollAfterMs: pollMs })

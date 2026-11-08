@@ -202,6 +202,43 @@ test("no-clobber writes and copies refuse an existing target; moves keep bytes",
   }
 });
 
+test("a paused VM serves reads through the file API without waking, and refuses writes", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    const path = "/home/ubuntu/data/notes.txt";
+    await box.writeFile(path, new TextEncoder().encode("kept"), { overwrite: true });
+    await box.suspend();
+    const execs = fixture.effects.exec;
+
+    expect(new TextDecoder().decode(await box.readFile(path))).toBe("kept");
+    const streamed: Uint8Array[] = [];
+
+    for await (const part of box.readFileStream(path)) streamed.push(part);
+    expect(Buffer.concat(streamed).toString()).toBe("kept");
+    expect((await box.readDirectory("/home/ubuntu/data")).entries).toEqual([
+      { name: "notes.txt", type: "file" },
+    ]);
+    expect(await box.statFile(path, { followSymlinks: true })).toMatchObject({
+      type: "file",
+      sizeBytes: 4,
+      mode: 0o644,
+    });
+    expect(await box.fileExists(path)).toBe(true);
+    expect(await box.fileExists("/home/ubuntu/data/missing")).toBe(false);
+    await expect(box.statFile(path)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      box.writeFile(path, new TextEncoder().encode("x"), { overwrite: true }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    expect(fixture.effects.exec).toBe(execs);
+    expect(fixture.effects.wake).toBe(0);
+    expect(fixture.vms.get(box.id)?.state).toBe("paused");
+  } finally {
+    await client.close();
+  }
+});
+
 test("directories, metadata, symlinks and removal run in the guest", async () => {
   const { client, box, dir } = await setup();
 

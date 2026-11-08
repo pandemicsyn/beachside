@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { Beachside } from "beachside";
 import type { PtySessionEvents, PtySessionInfo } from "freestyle";
 import { createFreestyleAdapter } from "./adapter";
+import { observeJob } from "./process";
 import { freestyleFixture } from "./fixture.test-support";
 import type { PtyDriver } from "./terminal";
 
@@ -323,35 +324,49 @@ test("a suspend holds process polling, so the job's guest commands never wake th
   }
 });
 
-test("an acknowledged pause that leaves the VM running ends as unknown, not a hang", async () => {
+test("an acknowledged pause that leaves the VM running ends as unknown, and observers poll again", async () => {
   const { fixture, client, box } = await setup();
 
   try {
-    fixture.ignoreNextPause();
-    await expect(box.suspend()).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
-    expect(fixture.vms.get(box.id)?.state).toBe("running");
-  } finally {
-    await client.close();
-  }
-});
-
-test("a process reopened after a native resume polls again instead of staying held", async () => {
-  const { fixture, client, box } = await setup();
-
-  try {
-    const first = await box.processes.start({
-      command: { kind: "shell", script: "sleep 0.5; printf after" },
+    const process = await box.processes.start({
+      command: { kind: "shell", script: "sleep 0.3; printf after" },
       output: { mode: "stream" },
     });
 
-    const reference = JSON.parse(JSON.stringify(first.reference()));
+    fixture.ignoreNextPause();
+    await expect(box.suspend()).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
+    expect(fixture.vms.get(box.id)?.state).toBe("running");
+    expect((await process.wait()).exitCode).toBe(0);
+    await process.detach();
+  } finally {
+    await client.close();
+  }
+}, 20_000);
+
+test("process controls refuse while the VM is held paused, so they never wake it", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    const process = await box.processes.start({
+      command: { kind: "shell", script: "sleep 0.4; printf after" },
+      output: { mode: "stream" },
+      stdin: "pipe",
+    });
+
+    const reference = JSON.parse(JSON.stringify(process.reference()));
     await box.suspend();
+    const execs = fixture.effects.exec;
 
-    // Started outside Beachside, so this client never saw a resume.
-    const vm = fixture.vms.get(box.id);
+    // The SDK ends handles on suspend; a reopen waits for a running VM.
+    await expect(process.status()).rejects.toBeDefined();
+    await expect(process.signal("SIGTERM")).rejects.toBeDefined();
+    await expect(box.processes.reopen(reference)).rejects.toMatchObject({ code: "CONFLICT" });
 
-    if (vm) vm.state = "running";
+    expect(fixture.effects.exec).toBe(execs);
+    expect(fixture.effects.wake).toBe(0);
+    expect(fixture.vms.get(box.id)?.state).toBe("paused");
 
+    await box.resume();
     const again = await box.processes.reopen(reference);
     expect((await again.wait()).exitCode).toBe(0);
     await again.detach();
@@ -359,3 +374,144 @@ test("a process reopened after a native resume polls again instead of staying he
     await client.close();
   }
 }, 20_000);
+
+test("a refused resume keeps observers held until the VM really runs", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    const process = await box.processes.start({
+      command: { kind: "shell", script: "sleep 0.3; printf after" },
+      output: { mode: "stream" },
+    });
+
+    await box.suspend();
+    fixture.failNextStart(fixture.error(400, "BAD_REQUEST"));
+    await expect(box.resume()).rejects.toBeDefined();
+    const execs = fixture.effects.exec;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(fixture.effects.exec).toBe(execs);
+    expect(fixture.effects.wake).toBe(0);
+
+    await box.resume();
+    let text = "";
+
+    for await (const chunk of process.output()) if ("text" in chunk) text += chunk.text;
+    expect(text).toBe("after");
+    await process.detach();
+  } finally {
+    await client.close();
+  }
+}, 20_000);
+
+test("piped stdin holders end with the job, whether it exits or is terminated", async () => {
+  const { fixture, client, box } = await setup();
+
+  const holders = () =>
+    Bun.spawnSync(["sh", "-c", `pgrep -f 'sleep 2147483647' | wc -l`]).stdout.toString().trim();
+
+  try {
+    const before = holders();
+
+    const exits = await box.processes.start({
+      command: { kind: "shell", script: "head -c 2" },
+      output: { mode: "stream" },
+      stdin: "pipe",
+    });
+
+    await exits.write("hi");
+    expect((await exits.wait()).exitCode).toBe(0);
+    await exits.detach();
+
+    const killed = await box.processes.start({
+      command: { kind: "shell", script: "sleep 30" },
+      output: { mode: "stream" },
+      stdin: "pipe",
+    });
+
+    await killed.terminate();
+    await killed.wait().catch(() => undefined);
+    await killed.detach();
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(holders()).toBe(before);
+    expect(fixture.effects.exec).toBeGreaterThan(0);
+  } finally {
+    await client.close();
+  }
+}, 20_000);
+
+test("a held job refuses every control before running a guest command", async () => {
+  const commands: string[] = [];
+
+  const job = await observeJob(
+    {
+      run: async (command) => {
+        commands.push(command);
+
+        return "ok\n";
+      },
+      held: async () => true,
+      pollMs: 1,
+      requestSeconds: 1,
+    },
+    {
+      version: 1,
+      kind: "freestyle-job",
+      sandbox: "vm1",
+      directory: "/tmp/beachside-proc.abcdefgh",
+      stdin: "pipe",
+    },
+    { format: "text", fromEnd: false },
+    {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 10_000,
+      onOutput: () => undefined,
+    },
+  );
+
+  const context = { signal: new AbortController().signal, deadline: Date.now() + 10_000 };
+  const conflict = { code: "CONFLICT" };
+  await expect(job.status?.(context)).rejects.toMatchObject(conflict);
+  await expect(job.signal?.("SIGTERM", context)).rejects.toMatchObject(conflict);
+  await expect(job.terminate?.(context)).rejects.toMatchObject(conflict);
+  await expect(job.write?.(new Uint8Array([1]), context)).rejects.toMatchObject(conflict);
+  await expect(job.closeStdin?.(context)).rejects.toMatchObject(conflict);
+  expect(commands).toEqual([]);
+  await job.disconnect?.();
+});
+
+test("a stdin write to a reader that never reads times out as possibly partial, not absent", async () => {
+  const answers = ["timeout\n", "failed\n", "gone\n"];
+
+  const job = await observeJob(
+    {
+      run: async (command) =>
+        command.includes("cat >>in") ? (answers.shift() ?? "") : "BEACHSIDE-POLL-1 gone\n",
+      pollMs: 1,
+      requestSeconds: 1,
+    },
+    {
+      version: 1,
+      kind: "freestyle-job",
+      sandbox: "vm1",
+      directory: "/tmp/beachside-proc.abcdefgh",
+      stdin: "pipe",
+    },
+    { format: "text", fromEnd: false },
+    {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 10_000,
+      onOutput: () => undefined,
+    },
+  );
+
+  const context = { signal: new AbortController().signal, deadline: Date.now() + 10_000 };
+  const bytes = new TextEncoder().encode("x");
+  const write = job.write;
+
+  if (!write) throw new Error("expected a stdin writer");
+  await expect(write(bytes, context)).rejects.toMatchObject({ code: "TIMEOUT" });
+  await expect(write(bytes, context)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  await expect(write(bytes, context)).rejects.toMatchObject({ code: "NOT_FOUND" });
+  await job.disconnect?.();
+});
