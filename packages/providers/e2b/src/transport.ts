@@ -1134,8 +1134,7 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         throw new AdapterError("UNSUPPORTED", "E2B streaming writes require envd 0.5.7 or later");
       const parent = path.slice(0, path.lastIndexOf("/")) || "/";
       const stage = `${parent}/.beachside-stream-${randomUUID()}`;
-      let reserved = false;
-      let step: StreamStep = "reserve";
+      let step: StreamStep = "upload";
       let dispatched = false;
       let published = false;
       let bytesWritten = 0;
@@ -1173,9 +1172,9 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         signal.throwIfAborted();
         retain?.({ temporaryPaths: [stage] });
         dispatched = true;
-        await guestFilesystem(sandbox, "reserve", stage, "", false, signal);
-        reserved = true;
-        step = "upload";
+        // envd creates the stage itself. Pre-creating it as the sandbox user breaks uploads into
+        // sticky directories such as /tmp: envd reopens it as root, which fs.protected_regular
+        // refuses for a file owned by someone else.
 
         const receipt = await sandbox.files.write(stage, body, {
           useOctetStream: true,
@@ -1238,8 +1237,8 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
       } finally {
         void iterator.return?.().catch(() => undefined);
 
-        if (reserved && !published) {
-          // Only the correlated reserved staging artifact is eligible for cleanup.
+        if (dispatched && !published) {
+          // Only the correlated, uniquely named staging artifact is eligible for cleanup.
           await guestFilesystem(sandbox, "remove", stage).then(
             () => {
               retain?.({ temporaryPaths: [] });

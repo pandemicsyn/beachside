@@ -63,8 +63,6 @@ try:
     else: os.rmdir(p)
    else: os.unlink(p)
   except FileNotFoundError: pass
- elif op=='reserve':
-  fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
  elif op=='publish':
   regular(p);publish(p,q);published=True
  elif op=='copy':

@@ -64,7 +64,7 @@ export function writeFailureReason(reason: string, failure?: Failure): string {
   return `${reason}; native write failure: stage=${failure.stage}, error=${failure.errorName}, httpStatus=${failure.httpStatus ?? "unavailable"}`;
 }
 
-export type StreamStep = "reserve" | "upload" | "verify" | "publish";
+export type StreamStep = "upload" | "verify" | "publish";
 
 /** Names the streamed-write step that failed and its classification, never the native message. */
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Native exceptions cross this boundary and only allowlisted classification is retained.
