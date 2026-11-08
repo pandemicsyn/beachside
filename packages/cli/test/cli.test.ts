@@ -2529,6 +2529,24 @@ describe("large files and input", () => {
     expect((await readFile(log, "utf8")).length).toBe(3_000_000);
   });
 
+  test("exec --stdin --json sends input over 1 MiB through the SDK's streamed stdin", async () => {
+    await writeConfig({
+      default: "stdin",
+      profiles: { stdin: { module: fixture, export: "stdinStreaming" } },
+    });
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    // The fixture's capture reports the input size; no live output is needed.
+    await seedExec(["wc", "-c"], 0, "");
+
+    const result = await cli(
+      ["exec", "box", "--stdin", "--json", "--", "wc", "-c"],
+      {},
+      "x".repeat(3_000_000),
+    );
+
+    expect(envelope(result).data).toMatchObject({ exitCode: 0, stdout: "3000000\n" });
+  });
+
   test("exec --stdin explains input over 1 MiB on a provider that cannot stream it", async () => {
     await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
 

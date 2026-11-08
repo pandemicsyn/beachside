@@ -89,12 +89,86 @@ export type ExecInput = {
   command: ExecCommand;
   cwd?: string;
   env?: Record<string, string>;
-  /** Finite stdin bytes; strings encode as UTF-8 and supplied input ends with guest EOF. */
-  stdin?: string | Uint8Array;
+  /**
+   * Command input, ending with guest EOF. Strings encode as UTF-8. A stream (`AsyncIterable` or
+   * `ReadableStream` of bytes) is sent as it arrives, with no size limit, while the command runs;
+   * streams and input over 1 MiB need an adapter with incremental process stdin.
+   */
+  stdin?: string | Uint8Array | ExecStdinStream;
   /** Provider-specific execution/observation limit (default 300), not a total wait budget. Use the call signal to bound local waiting. */
   deadlineSeconds?: number;
   maxOutputBytes?: number;
 };
+
+/** Streamed command input: any async iterable or web stream of byte chunks. */
+export type ExecStdinStream = AsyncIterable<Uint8Array> | ReadableStream<Uint8Array>;
+
+export function isStdinStream(value: ExecInput["stdin"]): value is ExecStdinStream {
+  return (
+    value instanceof ReadableStream ||
+    (value !== null &&
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Distinguish caller-supplied iterables from byte and text input.
+      typeof value === "object" &&
+      !(value instanceof Uint8Array) &&
+      Symbol.asyncIterator in value)
+  );
+}
+
+/** Whether stdin must travel incrementally: a stream, or bytes or text over the finite bound. */
+export function stdinNeedsStream(stdin: ExecInput["stdin"]): boolean {
+  if (stdin === undefined) return false;
+
+  if (isStdinStream(stdin)) return true;
+
+  if (stdin instanceof Uint8Array) return stdin.byteLength > MAX_EXEC_STDIN_BYTES;
+
+  return stdin.length * 3 > MAX_EXEC_STDIN_BYTES && utf8Bytes(stdin) > MAX_EXEC_STDIN_BYTES;
+}
+
+function utf8Bytes(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+/** Input that must travel incrementally as byte chunks, or undefined for finite input. */
+export function streamedStdin(stdin: ExecInput["stdin"]): AsyncIterable<Uint8Array> | undefined {
+  if (stdin === undefined || !stdinNeedsStream(stdin)) return undefined;
+
+  if (isStdinStream(stdin)) return stdinChunks(stdin);
+
+  const bytes =
+    stdin instanceof Uint8Array ? Uint8Array.from(stdin) : new TextEncoder().encode(stdin);
+
+  return (async function* () {
+    yield bytes;
+  })();
+}
+
+async function* stdinChunks(stream: ExecStdinStream): AsyncIterable<Uint8Array> {
+  const source: AsyncIterable<unknown> =
+    stream instanceof ReadableStream ? readableChunks(stream) : stream;
+
+  for await (const chunk of source) {
+    if (!(chunk instanceof Uint8Array))
+      throw new BeachsideError("INVALID_ARGUMENT", "Expected stdin stream byte chunks");
+    yield chunk;
+  }
+}
+
+async function* readableChunks(stream: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
+  const reader = stream.getReader();
+
+  try {
+    for (;;) {
+      const part = await reader.read();
+
+      if (part.done) return;
+      yield part.value;
+    }
+  } finally {
+    void reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+}
 
 export type ValidatedExecInput = Required<
   Pick<ExecInput, "command" | "deadlineSeconds" | "maxOutputBytes">
@@ -489,6 +563,12 @@ export function validateExec(
     throw new BeachsideError("INVALID_ARGUMENT", "stdin is available only for finite exec input");
 
   let stdin: Uint8Array | undefined;
+
+  if (request?.stdin !== undefined && isStdinStream(request.stdin))
+    throw new BeachsideError(
+      "INVALID_ARGUMENT",
+      "Streamed stdin is available through exec(), not as finite input",
+    );
 
   if (request?.stdin !== undefined) {
     const parsedInput = ExecStdinInput.safeParse(request.stdin);

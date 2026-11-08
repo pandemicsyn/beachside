@@ -80,7 +80,7 @@ Previews are public by default. A public sandbox accepts inbound traffic from th
 
 Shell scripts run under Bash. Exec's `deadlineSeconds` defaults to 300 and sets E2B's RPC timeouts: it limits how long Beachside waits, not how long the command runs, so a command can continue after the deadline. An abort `signal` also stops only local waiting. Neither kills the process nor changes the sandbox lifetime; see [execution and waiting timeouts](/docs/guides/resources/#execution-and-waiting-timeouts). Process termination does not guarantee that child processes stop.
 
-Files were live-tested in `/home/user` on `base`; an overwrite directly in the sticky `/tmp` directory failed, so check other paths and custom templates yourself. Buffered reads and writes default to 1 MiB and accept `maxBytes` up to 16 MiB; use byte streams for larger files. Your template needs:
+Files were live-tested in `/home/user` on `base`; an overwrite directly in the sticky `/tmp` directory failed, so check other paths and custom templates yourself. Buffered reads and writes work at any size; files over 16 MiB stream underneath. Your template needs:
 
 - GNU `ln -T` and hard-link support for no-clobber writes.
 - Linux and Python 3 for directory listing, stat and race-safe removal. The adapter installs nothing.

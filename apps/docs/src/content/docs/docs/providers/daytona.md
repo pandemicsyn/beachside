@@ -65,7 +65,7 @@ Create-time `env` is sent as native sandbox environment variables, so it applies
 | Commands                     | argv and shell, exact stdout/stderr bytes up to 1 MiB per stream, deadline default 300 seconds.                  | Yes         |
 | Streaming and terminals      | `processes.start()`, signals, terminals and reattaching after reconnecting.                                      | Yes         |
 | Command input                | Finite byte stdin.                                                                                               | No          |
-| Files                        | Binary read and write up to 16 MiB, overwrite and no-clobber, plus byte streams.                                 | Yes         |
+| Files                        | Binary read and write of any size (byte streams underneath), overwrite and no-clobber.                           | Yes         |
 | Directories                  | List, stat, create, remove, copy and move.                                                                       | Yes         |
 | HTTP previews                | Protected only, with an `x-daytona-preview-token` header. Public previews are not supported.                     | Yes         |
 | Images                       | Prepared snapshots and OCI builds; `images.get`, `list` and `delete` over native snapshots.                      | No          |

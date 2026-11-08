@@ -293,7 +293,8 @@ const stdinLog = process.env.BEACHSIDE_FAKE_STDIN;
 
 /**
  * Streams output and takes incremental stdin, like Daytona, E2B or Vercel. Each command appends
- * its input to BEACHSIDE_FAKE_STDIN and exits once its stdin is closed.
+ * its input to BEACHSIDE_FAKE_STDIN and exits once its stdin is closed; a buffered exec captures
+ * the number of input bytes as stdout.
  */
 export const stdinStreaming = bindAdapter(
   defineAdapter({
@@ -310,13 +311,18 @@ export const stdinStreaming = bindAdapter(
         ...session,
         processes: {
           ...processes,
-          supports: { ...processes.supports, stdin: "bytes" as const },
+          supports: {
+            ...processes.supports,
+            stdin: "bytes" as const,
+            execCapture: "bytes" as const,
+          },
           async start(
             input: Parameters<typeof processes.start>[0],
             ctx: Parameters<typeof processes.start>[1],
           ) {
             const native = await processes.start(input, ctx);
             let closed = false;
+            let received = 0;
             let open: () => void = () => undefined;
 
             const gate = new Promise<void>((resolve) => {
@@ -333,11 +339,20 @@ export const stdinStreaming = bindAdapter(
                 return native.wait();
               },
               outputDone: gate.then(() => native.outputDone),
+              // Buffered exec captures the byte count received, like `wc -c`.
+              capture: gate.then(async () => ({
+                exitCode: (await native.wait()).exitCode,
+                stdout: new TextEncoder().encode(`${received}\n`),
+                stderr: new Uint8Array(),
+                truncated: false,
+              })),
               detachOutput: () => native.detachOutput!(),
               terminate: (context: Parameters<NonNullable<typeof native.terminate>>[0]) =>
                 native.terminate!(context),
               detach: () => native.detach(),
               async write(bytes: Uint8Array) {
+                received += bytes.byteLength;
+
                 if (stdinLog) await appendFile(stdinLog, bytes);
               },
               async closeStdin() {

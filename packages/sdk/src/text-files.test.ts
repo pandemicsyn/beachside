@@ -84,12 +84,12 @@ test("text roundtrips empty and multibyte content without changing newlines or b
     expect(await f.box.readTextFile("/binary")).toBe("\0��");
     const large = new Uint8Array(2_097_152).fill(255);
 
-    await expect(f.box.writeFile("/large", large)).rejects.toMatchObject({ code: "CAPACITY" });
-    await f.box.writeFile("/large", large, { maxBytes: large.length });
-    await expect(
-      f.box.writeFile("/large", large, { maxBytes: large.length }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
-    expect(await f.box.readFile("/large", { maxBytes: large.length })).toEqual(large);
+    await expect(f.box.writeFile("/large", large, { maxBytes: 1_048_576 })).rejects.toMatchObject({
+      code: "CAPACITY",
+    });
+    await f.box.writeFile("/large", large);
+    await expect(f.box.writeFile("/large", large)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await f.box.readFile("/large")).toEqual(large);
   } finally {
     await f.client.close();
   }

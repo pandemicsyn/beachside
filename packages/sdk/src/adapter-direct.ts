@@ -1,7 +1,9 @@
 import { withSandbox, type SandboxScopeOptions } from "./scoped-sandbox";
 import { connectionBudget, type ConnectionWaitOptions, type CloseOptions } from "./connection-wait";
 import {
+  adapterFileLimit,
   bufferedLimit,
+  byteLimit,
   streamFile,
   writeStream,
   filesystemError,
@@ -140,6 +142,7 @@ import {
   newInvocationKey,
   raceAbort,
   validateCreate,
+  stdinNeedsStream,
   validateExec,
   validateFilePath,
   type ReadOptions,
@@ -346,7 +349,7 @@ function fileReadLimit(maxBytes: number): number {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
     throw new BeachsideError("INVALID_ARGUMENT", "Adapter file limit is invalid", "none");
 
-  return Math.min(maxBytes, 1_048_576);
+  return maxBytes;
 }
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- AbortSignal.reason may be any JavaScript value and is preserved in WaitAbortedError.
@@ -1367,7 +1370,10 @@ export class AdapterSandbox {
     );
   }
   async exec(input: ExecInput | readonly string[], options: ExecOptions = {}): Promise<ExecOutput> {
-    if (options.onOutput !== undefined) {
+    const streamed = !Array.isArray(input) && "command" in input && stdinNeedsStream(input.stdin);
+
+    // Streamed input runs on the process transport; without a callback, output is only captured.
+    if (options.onOutput !== undefined || streamed) {
       this.client.ensureOpen();
       const control = processControl(this.client, this.id);
 
@@ -1376,7 +1382,7 @@ export class AdapterSandbox {
         sandboxInput(this.id, this.reference),
         () => control.active,
         input,
-        options,
+        options.onOutput ? options : { ...options, onOutput: () => undefined },
       );
     }
 
@@ -1745,19 +1751,53 @@ export class AdapterSandbox {
   async readFile(path: string, options: FileReadOptions = {}): Promise<Uint8Array> {
     this.client.ensureOpen();
 
-    if (!this.client.session.files?.read) unsupported("readFile");
+    const files = this.client.session.files;
+
+    if (!files?.read) unsupported("readFile");
     validateFilePath(path);
-    const maxBytes = bufferedLimit(options.maxBytes, this.client.session.files.maxBytes);
+    const guard = byteLimit(options.maxBytes);
+    const maxBytes = bufferedLimit(guard, files.maxBytes);
 
-    const read = this.client.session.files.read.bind(this.client.session.files);
+    const read = files.read.bind(files);
 
-    return readFileBytes(
-      (context) =>
-        read({ sandbox: sandboxInput(this.id, this.reference), path, maxBytes }, context),
-      maxBytes,
-      this.client.signal,
-      options,
-    );
+    try {
+      return await readFileBytes(
+        (context) =>
+          read({ sandbox: sandboxInput(this.id, this.reference), path, maxBytes }, context),
+        maxBytes,
+        this.client.signal,
+        options,
+      );
+    } catch (error) {
+      // Only the adapter's buffered limit was hit: read the whole file through its stream.
+      const adapterBound = guard === undefined || guard > files.maxBytes;
+
+      if (!(error instanceof BeachsideError) || error.code !== "OUTPUT_CAPACITY" || !adapterBound)
+        throw error;
+
+      if (!files.readStream) throw adapterFileLimit(files.maxBytes, "OUTPUT_CAPACITY");
+    }
+
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+
+    for await (const chunk of this.readFileStream(path, {
+      signal: options.signal,
+      maxBytes: guard,
+    })) {
+      chunks.push(chunk);
+      total += chunk.byteLength;
+    }
+
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    return bytes;
   }
   async writeFile(path: string, bytes: Uint8Array, options: FileWriteOptions = {}): Promise<void> {
     if (!this.supports("writeFile")) unsupported("writeFile");
@@ -1765,11 +1805,17 @@ export class AdapterSandbox {
 
     if (!(bytes instanceof Uint8Array))
       throw new BeachsideError("INVALID_ARGUMENT", "Expected byte buffer");
-    const limit = bufferedLimit(options.maxBytes, this.client.session.files!.maxBytes);
+    const files = this.client.session.files!;
+    const guard = byteLimit(options.maxBytes);
 
-    if (bytes.length > limit) throw new BeachsideError("CAPACITY", "File exceeds byte limit");
+    if (guard !== undefined && bytes.length > guard)
+      throw new BeachsideError("CAPACITY", "File exceeds byte limit");
 
-    if (bytes.length > 1_048_576 && this.client.session.files?.writeStream) {
+    if (bytes.length > files.maxBytes && !files.writeStream)
+      throw adapterFileLimit(files.maxBytes, "CAPACITY");
+
+    // Large files travel through the adapter's stream, so the buffered limit never applies.
+    if ((bytes.length > 1_048_576 || bytes.length > files.maxBytes) && files.writeStream) {
       const payload = Uint8Array.from(bytes);
 
       async function* chunks() {

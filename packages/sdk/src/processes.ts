@@ -14,6 +14,7 @@ import {
 import { z } from "zod";
 import {
   BeachsideError,
+  streamedStdin,
   validateExec,
   validateFilePath,
   checkExec,
@@ -1483,12 +1484,24 @@ export async function callbackExec(
   if (typeof callback !== "function")
     throw new BeachsideError("INVALID_ARGUMENT", "Expected execution output callback");
 
-  const request = validateExec(input);
+  const object = Array.isArray(input) || !("command" in input) ? undefined : input;
+  const streamed = streamedStdin(object?.stdin);
+  const request = validateExec(streamed && object ? { ...object, stdin: undefined } : input);
+  const deadlineSeconds = object?.deadlineSeconds;
 
-  if (!Array.isArray(input) && "deadlineSeconds" in input && input.deadlineSeconds !== undefined)
+  // Streamed input runs on the process transport, so the SDK enforces its deadline locally.
+  const localDeadline = streamed ? (deadlineSeconds ?? request.deadlineSeconds) : undefined;
+
+  if (!streamed && deadlineSeconds !== undefined)
     throw new BeachsideError(
       "UNSUPPORTED",
       "Callback execution cannot map deadlineSeconds on the process transport; use signal to bound local observation",
+    );
+
+  if (streamed && client.session.processes?.supports?.stdin !== "bytes")
+    throw new BeachsideError(
+      "UNSUPPORTED",
+      "Streamed stdin and stdin over 1 MiB need incremental process stdin, which this adapter lacks",
     );
 
   const maxOutputBytes = client.session.supports.exec?.maxOutputBytes;
@@ -1507,7 +1520,7 @@ export async function callbackExec(
       cwd: request.cwd,
       env: request.env,
       output: { mode: "stream" },
-      stdin: request.stdin === undefined ? "closed" : "pipe",
+      stdin: request.stdin === undefined && !streamed ? "closed" : "pipe",
     },
     options,
     controlActive,
@@ -1580,20 +1593,60 @@ export async function callbackExec(
     }
   })().catch(stop);
 
+  const source =
+    streamed ??
+    (request.stdin === undefined
+      ? undefined
+      : (async function* () {
+          yield request.stdin!;
+        })());
+
   const delivery = (async () => {
-    if (request.stdin !== undefined) {
-      for (let offset = 0; offset < request.stdin.length; offset += 65_536) {
+    if (source === undefined) return;
+
+    for await (const chunk of source)
+      for (let offset = 0; offset < chunk.length; offset += 65_536) {
         if (signal.aborted) throw signal.reason;
-        await process.write(request.stdin.subarray(offset, offset + 65_536), { signal });
+
+        // A command that exits before reading all of a stream simply stops receiving it.
+        if (streamed && exit) return;
+        await process.write(chunk.subarray(offset, offset + 65_536), { signal });
       }
 
-      if (signal.aborted) throw signal.reason;
-      await process.closeStdin({ signal });
-    }
-  })().catch(stop);
+    if (signal.aborted) throw signal.reason;
+    await process.closeStdin({ signal });
+  })().then(
+    () => undefined,
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Input transport rejections are untrusted failure evidence, never serialized.
+    (error: unknown) => {
+      if (streamed && exit) return;
+      stop(error);
+    },
+  );
+
+  const deadline =
+    localDeadline === undefined
+      ? undefined
+      : setTimeout(() => {
+          initiatingFailure ??= {
+            error: new BeachsideError(
+              "TIMEOUT",
+              `Execution exceeded deadlineSeconds (${localDeadline}); termination was requested`,
+              "possible",
+            ),
+          };
+          observation.abort();
+          void process.terminate({ signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
+        }, localDeadline * 1000);
 
   try {
-    await Promise.all([delivery, output, waiting, raceAbort(capture, signal)]);
+    // Streamed input may never end (an open pipe); the command's exit settles the call.
+    await Promise.all([
+      streamed ? Promise.race([delivery, waiting]) : delivery,
+      output,
+      waiting,
+      raceAbort(capture, signal),
+    ]);
 
     if (captured!.exitCode !== exit!.exitCode)
       throw new BeachsideError(
@@ -1640,6 +1693,7 @@ export async function callbackExec(
     if (captured) context.output = captured;
     throw context;
   } finally {
+    clearTimeout(deadline);
     await process.detach();
   }
 }

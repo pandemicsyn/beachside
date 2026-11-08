@@ -1237,35 +1237,61 @@ async function execute(
     if (streamed) return streamed;
   }
 
-  const stdin = input.stdin ? await finiteStdin(input.stdin) : undefined;
+  const stdin = input.stdin ? await bufferedStdin(input.stdin) : undefined;
 
   try {
     return await box.exec({ ...input, stdin }, { signal: session.ctx.signal });
   } catch (cause) {
+    if (
+      stdin &&
+      !(stdin instanceof Uint8Array) &&
+      cause instanceof BeachsideError &&
+      cause.code === "UNSUPPORTED" &&
+      cause.effect === "none"
+    )
+      throw stdinCapacity();
+
     if (!(cause instanceof NonzeroExitError)) throw cause;
 
     return cause.result;
   }
 }
 
-/** Read all of a command's input for the buffered exec path, which takes at most 1 MiB. */
-async function finiteStdin(source: () => AsyncIterable<Uint8Array>): Promise<Uint8Array> {
+/**
+ * The command's input for the buffered exec path: bytes when it fits the SDK's finite limit, or
+ * else a stream (what was read, then the rest), which the SDK sends incrementally where the
+ * adapter takes process stdin.
+ */
+async function bufferedStdin(
+  source: () => AsyncIterable<Uint8Array>,
+): Promise<Uint8Array | AsyncIterable<Uint8Array>> {
+  const iterator = source()[Symbol.asyncIterator]();
   const chunks: Uint8Array[] = [];
   let total = 0;
 
-  for await (const chunk of source()) {
-    total += chunk.byteLength;
+  for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
+    chunks.push(next.value);
+    total += next.value.byteLength;
 
     if (total > finiteStdinBytes)
-      throw new CliError(
-        "CAPACITY",
-        "Input over 1 MiB needs a provider that streams stdin (Daytona, E2B or Vercel)",
-        "copy the input in and redirect it instead, e.g. beachside cp input.sql box:/tmp/input.sql && beachside sh box 'psql < /tmp/input.sql'; --json and --no-stream also read stdin whole",
-      );
-    chunks.push(chunk);
+      return (async function* () {
+        yield* chunks;
+
+        for (let rest = await iterator.next(); !rest.done; rest = await iterator.next())
+          yield rest.value;
+      })();
   }
 
   return new Uint8Array(Buffer.concat(chunks));
+}
+
+/** The error for input over 1 MiB on a provider without incremental stdin. */
+function stdinCapacity(): CliError {
+  return new CliError(
+    "CAPACITY",
+    "Input over 1 MiB needs a provider that streams stdin (Daytona, E2B or Vercel)",
+    "copy the input in and redirect it instead, e.g. beachside cp input.sql box:/tmp/input.sql && beachside sh box 'psql < /tmp/input.sql'",
+  );
 }
 
 /** Send `source` to the process as it arrives, in writes the SDK accepts, then close stdin. */
