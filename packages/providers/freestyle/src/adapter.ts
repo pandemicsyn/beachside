@@ -9,6 +9,7 @@ import type {
   TlsSpec,
   VmData,
 } from "freestyle";
+import { FreestyleApiError } from "freestyle";
 import { z } from "zod";
 import {
   AdapterCheckpointError,
@@ -59,7 +60,7 @@ import {
   wrapperScript,
   type WrapperResult,
 } from "./exec";
-import { directoryValue, Exists, filesystem, statValue } from "./filesystem";
+import { directoryValue, Exists, filesystem, rangeResult, statValue } from "./filesystem";
 import {
   launcherScript,
   observeJob,
@@ -603,7 +604,10 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
         if (tls) request.tls = tls;
 
-        await ctx.checkpoint({ slug });
+        const env = input.env && Object.keys(input.env).length ? input.env : undefined;
+        // The env requirement is saved before dispatch, so a recovered attempt still demands
+        // the env file's marker before it reports the VM as ready.
+        await ctx.checkpoint(env ? { slug, env: true } : { slug });
         let created: VmData;
 
         try {
@@ -621,7 +625,6 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         if (!id.success || created.slug !== slug)
           return ctx.unknown("Freestyle create acknowledgement does not match the attempt");
         const token: z.infer<typeof CreateToken> = { slug, id: id.data };
-        const env = input.env && Object.keys(input.env).length ? input.env : undefined;
 
         if (env) token.env = true;
 
@@ -775,16 +778,50 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             truncated: true,
           };
 
-        // Best effort: the directory holds only this command's bounded output under /tmp.
-        await api(callSignal(readContext(ctx.signal, 15)))
-          .vms.ref(input.sandbox.id)
-          .exec({ command: `rm -rf -- ${quote(record.directory)}`, timeoutMs: 10_000 })
-          .catch(() => undefined);
+        const assembled = filesResult(record, stdout, stderr, input.maxOutputBytes);
 
-        return (
-          filesResult(record, stdout, stderr, input.maxOutputBytes) ??
-          ctx.unknown("Freestyle command output does not match its recorded length")
-        );
+        if (!assembled)
+          return ctx.unknown("Freestyle command output is longer than its recorded length");
+
+        // Best effort, and only once every byte arrived: a short download leaves the directory
+        // in /tmp so the rest of the output can still be read from the guest.
+        if (assembled.complete)
+          await api(callSignal(readContext(ctx.signal, 15)))
+            .vms.ref(input.sandbox.id)
+            .exec({ command: `rm -rf -- ${quote(record.directory)}`, timeoutMs: 10_000 })
+            .catch(() => undefined);
+
+        return assembled.result;
+      };
+
+      /**
+       * One verified native PUT. Freestyle creates new files as the default user, but replaces
+       * an existing one as root, so the previous owner is restored (best effort, as root) and
+       * commands keep the access they had.
+       */
+      const putFile = async (
+        vmId: string,
+        path: string,
+        bytes: Uint8Array,
+        signal: AbortSignal,
+      ) => {
+        const vm = api(callSignal(readContext(signal, 120))).vms.ref(vmId);
+        const before = await vm.fs.stat(path).catch(() => undefined);
+
+        await vm.fs.writeFile(path, bytes);
+
+        if (
+          before?.isFile &&
+          !before.isSymlink &&
+          (before.owner !== "root" || before.group !== "root")
+        )
+          await vm
+            .exec({
+              command: `chown -- ${quote(`${before.owner}:${before.group}`)} ${quote(path)}`,
+              linuxUser: "root",
+              timeoutMs: 10_000,
+            })
+            .catch(() => undefined);
       };
 
       /** One guest control command; anything but a clean exit is an error. */
@@ -824,13 +861,29 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
       const files = (vmId: string) =>
         filesystem(guest(vmId), async (path, offset, length, ctx) => {
+          const route = `/v5/vms/${encodeURIComponent(vmId)}/fs/read?${new URLSearchParams({ path })}`;
+          let response: Response;
+
           try {
-            return await api(callSignal(ctx), length + 1024)
-              .vms.ref(vmId)
-              .fs.readFile(path, { offset, length });
+            // The raw route, because EOF evidence is in the `Content-Range` header.
+            response = await api(callSignal(ctx), length + 1024).fetch(route, {
+              method: "GET",
+              headers: { range: `bytes=${offset}-${offset + length - 1}` },
+            });
           } catch (error) {
             throw failure(error).error;
           }
+
+          if (!response.ok && response.status !== 416) {
+            const body = await response.json().catch(() => ({}));
+            throw failure(new FreestyleApiError(response.status, body, route)).error;
+          }
+
+          const result = await rangeResult(response, offset, length);
+
+          if (!result) throw new AdapterError("UNAVAILABLE", "Freestyle file range is malformed");
+
+          return result;
         });
 
       // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Helper throws are normalized at this boundary.
@@ -1346,7 +1399,8 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           submit: (input, ctx) => runCommand(input, ctx),
         },
         async preview(input, ctx) {
-          const vm = await requireVm(input.sandbox, ctx);
+          // Inbound traffic can wake an idle-paused VM, so only running compute gets access.
+          const vm = await requireRunning(input.sandbox, ctx);
 
           const published = async () =>
             (await read(ctx, (native) => native.tls.rules.list({ vmId: vm.id }))).rules.find(
@@ -1433,9 +1487,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
               try {
                 // One request, verified by sha256 and replaced atomically in the guest.
-                await api(callSignal(readContext(ctx.signal, 120)))
-                  .vms.ref(input.sandbox.id)
-                  .fs.writeFile(input.path, input.bytes);
+                await putFile(input.sandbox.id, input.path, input.bytes, ctx.signal);
               } catch (error) {
                 return rejection(ctx, error, "Freestyle file write was not confirmed");
               }
@@ -1498,9 +1550,12 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
             if (ended) {
               try {
-                await api(callSignal(readContext(ctx.signal, 120)))
-                  .vms.ref(input.sandbox.id)
-                  .fs.writeFile(input.path, new Uint8Array(Buffer.concat(head)));
+                await putFile(
+                  input.sandbox.id,
+                  input.path,
+                  new Uint8Array(Buffer.concat(head)),
+                  ctx.signal,
+                );
               } catch (error) {
                 const native = failure(error);
 

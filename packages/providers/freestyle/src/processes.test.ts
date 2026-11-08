@@ -22,6 +22,7 @@ function fakePty() {
   const sessions = new Map<string, Session>();
   const resized: { cols: number; rows: number }[] = [];
   const opened: string[] = [];
+  const reconnect: (PtySessionEvents["reconnect"] | undefined)[] = [];
 
   const handle = (slug: string) => ({
     write(data: Uint8Array) {
@@ -46,6 +47,7 @@ function fakePty() {
   const driver: PtyDriver = {
     async open(_vmId, options) {
       opened.push(options.exec);
+      reconnect.push(options.reconnect);
 
       const child = Bun.spawn(["sh", "-c", options.exec], {
         stdin: "pipe",
@@ -91,7 +93,7 @@ function fakePty() {
     },
   };
 
-  return { driver, resized, opened };
+  return { driver, resized, opened, reconnect };
 }
 
 async function setup() {
@@ -168,6 +170,27 @@ test("byte output survives exactly, and piped stdin reaches the process until EO
   }
 });
 
+test("a burst larger than the SDK output queue reaches an active reader intact", async () => {
+  const { client, box } = await setup();
+
+  try {
+    const process = await box.processes.start({
+      command: { kind: "shell", script: "head -c 300000 /dev/zero | tr '\\0' a" },
+      output: { mode: "stream" },
+    });
+
+    let length = 0;
+
+    for await (const chunk of process.output()) if ("text" in chunk) length += chunk.text.length;
+
+    expect(length).toBe(300_000);
+    expect((await process.wait()).exitCode).toBe(0);
+    await process.detach();
+  } finally {
+    await client.close();
+  }
+});
+
 test("SIGTERM reaches the job's process group, and status reports the exit", async () => {
   const { client, box } = await setup();
 
@@ -224,6 +247,8 @@ test("terminals run on a named Freestyle PTY session and resize", async () => {
     });
 
     expect(pty.opened.at(-1)).toContain("TERM=xterm-256color");
+    // Automatic reconnects would replay scrollback as new output.
+    expect(pty.reconnect).toEqual([false]);
     await terminal.resize({ columns: 120, rows: 40 });
     expect(pty.resized).toEqual([{ cols: 120, rows: 40 }]);
     await terminal.write("hi\n");

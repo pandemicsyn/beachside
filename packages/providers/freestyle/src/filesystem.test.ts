@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, symlinkSync } from "node:fs";
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Beachside } from "beachside";
 import { createFreestyleAdapter, MAX_FILE_BYTES } from "./adapter";
@@ -80,6 +80,42 @@ test("files over 8 MiB stream in and out without one large request", async () =>
     await client.close();
   }
 }, 60_000);
+
+test("streamed reads end cleanly at exact chunk multiples and on empty files", async () => {
+  const { client, box, dir } = await setup();
+
+  try {
+    for (const size of [0, 1024 * 1024, 2 * 1024 * 1024, 1024 * 1024 + 1]) {
+      const bytes = pattern(size);
+      const path = join(dir, `exact-${size}.bin`);
+      writeFileSync(path, bytes);
+
+      const received: Uint8Array[] = [];
+
+      for await (const part of box.readFileStream(path)) received.push(part);
+
+      expect(Buffer.concat(received).equals(Buffer.from(bytes))).toBe(true);
+    }
+  } finally {
+    await client.close();
+  }
+});
+
+test("an overwrite keeps the file's owner, so commands keep the access they had", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    const path = "/home/ubuntu/notes.txt";
+    await box.writeFile(path, new TextEncoder().encode("one"), { overwrite: true });
+    expect(fixture.vms.get(box.id)?.owners.get(path)).toBe("ubuntu:ubuntu");
+
+    await box.writeFile(path, new TextEncoder().encode("two"), { overwrite: true });
+    expect(fixture.vms.get(box.id)?.owners.get(path)).toBe("ubuntu:ubuntu");
+    expect(new TextDecoder().decode(await box.readFile(path))).toBe("two");
+  } finally {
+    await client.close();
+  }
+});
 
 test("no-clobber writes and copies refuse an existing target; moves keep bytes", async () => {
   const { client, box, dir } = await setup();

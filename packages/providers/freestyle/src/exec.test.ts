@@ -45,10 +45,48 @@ test("output beyond the inline bound stays in the guest for download", () => {
 
   const stdout = new Uint8Array(INLINE_BYTES + 1);
   expect(filesResult(files, stdout, new Uint8Array(), 1024 * 1024)).toMatchObject({
-    exitCode: 0,
-    truncated: false,
+    complete: true,
+    result: { exitCode: 0, truncated: false },
   });
-  expect(filesResult(files, stdout.subarray(1), new Uint8Array(), 1024 * 1024)).toBeNull();
+  // A short download keeps the confirmed exit and reports the gap; a longer one is not ours.
+  expect(filesResult(files, stdout.subarray(1), new Uint8Array(), 1024 * 1024)).toMatchObject({
+    complete: false,
+    result: { exitCode: 0, truncated: true },
+  });
+  expect(
+    filesResult(files, new Uint8Array(INLINE_BYTES + 2), new Uint8Array(), 1024 * 1024),
+  ).toBeNull();
+});
+
+test("an argv program whose path contains = runs literally", () => {
+  const script = wrapperScript({
+    command: { kind: "argv", argv: ["/nonexistent/tool=runner", "printf", "WRONG_PROGRAM"] },
+    env: { V: "x" },
+    maxBytes: 1024,
+  });
+
+  const result = parseWrapper(sh(script));
+
+  expect(result).toMatchObject({ exitCode: 127, stdout: new Uint8Array() });
+});
+
+test("output past the bound does not keep disk blocks while the command runs", () => {
+  // The command reports the blocks its own stdout file holds after a 4 MB burst.
+  const script = wrapperScript({
+    command: {
+      kind: "shell",
+      script: "head -c 4000000 /dev/zero; sleep 0.6; stat -L -c %b /proc/self/fd/1 >&2",
+    },
+    maxBytes: 1024,
+  });
+
+  const result = parseWrapper(sh(script));
+
+  if (!result || !("stderr" in result)) throw Error("Expected an inline record");
+  expect(result.stdout.length).toBe(1024);
+  expect(result.truncated).toBe(true);
+  // 512-byte blocks: far below the 4 MB written.
+  expect(Number(new TextDecoder().decode(result.stderr)) * 512).toBeLessThan(256 * 1024);
 });
 
 test("records that are malformed, padded or longer than reported are rejected", () => {

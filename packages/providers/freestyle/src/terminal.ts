@@ -66,7 +66,8 @@ function deferred<T>() {
 /**
  * A Beachside terminal on a named Freestyle PTY session. Output is the TTY's byte stream on
  * stdout; a reattach skips the scrollback Freestyle replays first, so only new output is
- * reported.
+ * reported. Connections never reconnect on their own: a lost connection fails observation,
+ * and the terminal keeps running for a reopen.
  */
 export async function openTerminal(
   driver: PtyDriver,
@@ -110,7 +111,9 @@ export async function openTerminal(
   };
 
   const events: PtySessionEvents = {
-    reconnect: true,
+    // An automatic reconnect replays scrollback that may repeat delivered output or miss some,
+    // so a dropped connection ends observation instead; a reopen reports the output gap.
+    reconnect: false,
     onReplayStart: () => {
       replaying = input.command === undefined;
     },

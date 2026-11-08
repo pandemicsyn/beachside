@@ -8,6 +8,7 @@ import {
   type ProcessStartInput,
   type ReadContext,
 } from "@beachside/adapter";
+import { setImmediate as yieldOutput } from "node:timers/promises";
 import { z } from "zod";
 import { commandLine, quote } from "./exec";
 
@@ -25,6 +26,9 @@ const POLL_RECORD = "BEACHSIDE-POLL-1";
 
 /** Bytes read from each stream per poll. */
 export const POLL_BYTES = 256 * 1024;
+
+/** Bytes per output callback, well inside the SDK's pending output queue. */
+const DELIVERY_BYTES = 16_384;
 
 /** Largest stdin chunk written per request (Freestyle's native stdin bound). */
 export const MAX_WRITE_BYTES = 1_048_576;
@@ -241,7 +245,18 @@ export async function observeJob(
     offsets.stderr = first.sizes.stderr;
   }
 
-  const deliver = (stream: "stdout" | "stderr", bytes: Uint8Array) => {
+  /**
+   * One poll can return far more than the SDK's pending output queue holds, so each batch is
+   * delivered in bounded segments with a yield between them for a ready consumer to drain.
+   */
+  const deliver = async (stream: "stdout" | "stderr", bytes: Uint8Array) => {
+    for (let index = 0; index < bytes.length; index += DELIVERY_BYTES) {
+      deliverSegment(stream, bytes.subarray(index, index + DELIVERY_BYTES));
+      await yieldOutput();
+    }
+  };
+
+  const deliverSegment = (stream: "stdout" | "stderr", bytes: Uint8Array) => {
     if (!bytes.length) return;
 
     if (capture) {
@@ -286,8 +301,8 @@ export async function observeJob(
       }
 
       if (result.gone) throw fail();
-      deliver("stdout", result.stdout);
-      deliver("stderr", result.stderr);
+      await deliver("stdout", result.stdout);
+      await deliver("stderr", result.stderr);
       offsets.stdout += result.stdout.length;
       offsets.stderr += result.stderr.length;
 

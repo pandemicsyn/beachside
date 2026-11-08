@@ -13,6 +13,15 @@ export const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
  */
 export const CANCELLED = "BEACHSIDE_CANCELLED";
 
+/**
+ * Code of the synthetic error that replaces a poll-level failure of a background request. A
+ * stored result carries the request id header; a failure without it (such as a 404 for an
+ * unknown or expired result) says nothing about the operation itself, which may have run.
+ */
+export const RESULT_LOST = "BACKGROUND_RESULT_LOST";
+
+const BACKGROUND_ID = "x-freestyle-background-request-id";
+
 /** 409 codes that do not prove the request was refused: the command may already have run. */
 const inFlight = new Set(["VM_NON_RESPONSIVE"]);
 
@@ -208,6 +217,26 @@ export function callFetch(
       redirect: "error",
       signal: AbortSignal.any(signals),
     });
+
+    // The SDK retries transient poll statuses itself; any other poll failure without the
+    // request id is not the operation's result, so it must not read as a refusal. A 500 ends
+    // the SDK's polling at once and the `BACKGROUND_` code keeps the outcome uncertain.
+    if (
+      url.pathname.startsWith("/v5/background-requests/") &&
+      !response.ok &&
+      ![408, 429, 502, 503, 504].includes(response.status) &&
+      !response.headers.has(BACKGROUND_ID)
+    ) {
+      await response.body?.cancel().catch(() => undefined);
+
+      return new Response(
+        JSON.stringify({
+          code: RESULT_LOST,
+          message: `Freestyle background result was unavailable (${response.status})`,
+        }),
+        { status: 500, headers: { "content-type": "application/json" } },
+      );
+    }
 
     return bounded(response, limit);
   };

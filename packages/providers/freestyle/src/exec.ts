@@ -65,7 +65,7 @@ export function checkEnv(env: Record<string, string> | undefined): void {
   for (const [key, value] of Object.entries(env ?? {})) quote(`${checkedEnvKey(key)}=${value}`);
 }
 
-/** The user's command as one sh line: optional `cd`, then `exec env` with quoted assignments. */
+/** The user's command as one sh line: optional `cd`, quoted exports, then `exec` of the program. */
 export function commandLine(input: Pick<WrapperInput, "command" | "cwd" | "env">): string {
   if (input.command.kind === "argv" && input.command.argv.length === 0)
     throw new AdapterError("INVALID_ARGUMENT", "argv must name a program");
@@ -79,8 +79,10 @@ export function commandLine(input: Pick<WrapperInput, "command" | "cwd" | "env">
       ? input.command.argv.map(quote).join(" ")
       : `/bin/sh -c ${quote(input.command.script)}`;
 
-  // The sandbox-wide environment first, so a per-call entry overrides the same key.
-  const run = `{ if [ -r ${ENV_FILE} ]; then . ${ENV_FILE}; fi; exec env -- ${[...env, program].join(" ")}; }`;
+  // The sandbox-wide environment first, so a per-call entry overrides the same key. Exports
+  // are separate from `exec`, so the program word is never read as an assignment.
+  const exports = env.length ? `export ${env.join(" ")}; ` : "";
+  const run = `{ if [ -r ${ENV_FILE} ]; then . ${ENV_FILE}; fi; ${exports}exec ${program}; }`;
 
   return input.cwd === undefined ? run : `cd -- ${quote(input.cwd)} && ${run}`;
 }
@@ -93,8 +95,14 @@ export function wrapperScript(input: WrapperInput): string {
 
   return [
     "beachside_d=$(mktemp -d /tmp/beachside-exec.XXXXXXXX) || exit 97",
+    // While the command runs, a watcher frees the disk blocks past the bound in both raw files
+    // (punched holes keep the apparent size, which is the stream's total length), so a noisy
+    // command cannot fill the guest disk. It is best effort where the filesystem lacks holes.
+    `(while [ ! -e "$beachside_d/done" ]; do for beachside_s in stdout stderr; do beachside_z=$(($(wc -c <"$beachside_d/$beachside_s.raw" 2>/dev/null || echo 0))); if [ "$beachside_z" -gt ${bound} ]; then fallocate -p -o ${bound} -l $((beachside_z - ${bound})) "$beachside_d/$beachside_s.raw" 2>/dev/null; fi; done; sleep 0.2; done) </dev/null >/dev/null 2>&1 &`,
+    "beachside_w=$!",
     `(${body})${stdin} >"$beachside_d/stdout.raw" 2>"$beachside_d/stderr.raw"`,
     "beachside_c=$?",
+    `: >"$beachside_d/done"; kill "$beachside_w" 2>/dev/null; wait "$beachside_w" 2>/dev/null; rm -f "$beachside_d/done"`,
     `beachside_ol=$(($(wc -c <"$beachside_d/stdout.raw"))); beachside_el=$(($(wc -c <"$beachside_d/stderr.raw")))`,
     `head -c ${bound} "$beachside_d/stdout.raw" >"$beachside_d/stdout"; head -c ${bound} "$beachside_d/stderr.raw" >"$beachside_d/stderr"`,
     `rm -f "$beachside_d/stdout.raw" "$beachside_d/stderr.raw"`,
@@ -171,25 +179,30 @@ export function parseWrapper(stdout: string): WrapperResult | WrapperFiles | nul
   };
 }
 
-/** Assemble a downloaded result, or null when a stream is longer than the guest reported. */
+/**
+ * Assemble a downloaded result. A stream shorter than the guest reported keeps the confirmed
+ * exit and is marked truncated (`complete: false`); one longer than reported is not this
+ * command's output, so the result is null.
+ */
 export function filesResult(
   files: WrapperFiles,
   stdout: Uint8Array,
   stderr: Uint8Array,
   maxBytes: number,
-): WrapperResult | null {
+): { result: WrapperResult; complete: boolean } | null {
   const expected = (length: number) => Math.min(length, Math.max(0, Math.floor(maxBytes)));
+  const outExpected = expected(files.stdoutLength);
+  const errExpected = expected(files.stderrLength);
 
-  if (
-    stdout.byteLength !== expected(files.stdoutLength) ||
-    stderr.byteLength !== expected(files.stderrLength)
-  )
-    return null;
+  if (stdout.byteLength > outExpected || stderr.byteLength > errExpected) return null;
 
   return {
-    exitCode: files.exitCode,
-    stdout,
-    stderr,
-    truncated: stdout.byteLength < files.stdoutLength || stderr.byteLength < files.stderrLength,
+    complete: stdout.byteLength === outExpected && stderr.byteLength === errExpected,
+    result: {
+      exitCode: files.exitCode,
+      stdout,
+      stderr,
+      truncated: stdout.byteLength < files.stdoutLength || stderr.byteLength < files.stderrLength,
+    },
   };
 }

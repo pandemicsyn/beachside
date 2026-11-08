@@ -24,6 +24,8 @@ type FixtureVm = {
   createdAt: string;
   polls: number;
   files: Map<string, Uint8Array>;
+  /** `owner:group` of each file in `files`, as Freestyle's filesystem API reports it. */
+  owners: Map<string, string>;
   tls: { id: string; domain: string; port: number }[];
 };
 
@@ -70,6 +72,7 @@ const Body = z
     command: z.string().default(""),
     stdin: z.string().optional(),
     timeoutMs: z.number().optional(),
+    linuxUser: z.string().optional(),
   })
   .default({ command: "" });
 
@@ -159,6 +162,8 @@ export function freestyleFixture() {
   let bootPolls = 0;
   /** Answer the next create as a background request that finishes on its first poll. */
   let backgroundNextCreate = false;
+  /** Forget the next stored background result, as an expired or unknown request id. */
+  let forgetNextBackground = false;
   const background = new Map<string, Response>();
 
   /** The guest env file lives on the local disk too, because commands run through the local sh. */
@@ -188,7 +193,13 @@ export function freestyleFixture() {
     if (method === "GET" && stored) {
       const response = background.get(stored[1] ?? "");
 
-      return response ? response.clone() : error(404, "NOT_FOUND");
+      if (!response) return error(404, "NOT_FOUND");
+      const result = response.clone();
+      // A stored result, success or error, carries the request id; poll failures do not.
+      const headers = new Headers(result.headers);
+      headers.set("x-freestyle-background-request-id", stored[1] ?? "");
+
+      return new Response(result.body, { status: result.status, headers });
     }
 
     if (method === "GET" && path === "/v5/vms") {
@@ -241,6 +252,7 @@ export function freestyleFixture() {
         createdAt: new Date(Date.now() - 60_000).toISOString(),
         polls: 0,
         files: new Map(from?.files),
+        owners: new Map(),
         tls: (body.tls?.rules ?? []).map((rule) => ({
           id: `tls${++sequence}`,
           domain: rule.domain,
@@ -268,7 +280,9 @@ export function freestyleFixture() {
       if (backgroundNextCreate) {
         backgroundNextCreate = false;
         const requestId = `bg${++sequence}`;
-        background.set(requestId, result);
+
+        if (forgetNextBackground) forgetNextBackground = false;
+        else background.set(requestId, result);
 
         return new Response(JSON.stringify({ requestId }), {
           status: 202,
@@ -442,6 +456,15 @@ export function freestyleFixture() {
       if (vm.state !== "running") return error(409, "VM_NOT_RUNNING");
       effects.exec++;
       commands.push(body.command);
+      // A root `chown` of a map-backed file changes its recorded owner.
+      const chown = /^chown -- '([a-z0-9_-]+:[a-z0-9_-]+)' '([^']+)'$/.exec(body.command);
+
+      if (body.linuxUser === "root" && chown && vm.files.has(chown[2] ?? "")) {
+        vm.owners.set(chown[2] ?? "", chown[1] ?? "");
+
+        return json(200, { statusCode: 0, stdout: "", stderr: "" });
+      }
+
       const command = body.command.replaceAll(ENV_FILE, localEnv(vm));
       const override = commandOverride?.(body.command);
       let result: CommandResult;
@@ -490,9 +513,19 @@ export function freestyleFixture() {
 
       if (range) {
         const start = Number(range[1]);
-        const end = range[2] ? Number(range[2]) + 1 : bytes.length;
+        const end = Math.min(range[2] ? Number(range[2]) + 1 : bytes.length, bytes.length);
 
-        return new Response(bytes.slice(start, end), { status: 206 });
+        // As documented: a range starting at or past the end of the file is unsatisfiable.
+        if (start >= bytes.length)
+          return new Response(null, {
+            status: 416,
+            headers: { "content-range": `bytes */${bytes.length}` },
+          });
+
+        return new Response(bytes.slice(start, end), {
+          status: 206,
+          headers: { "content-range": `bytes ${start}-${end - 1}/${bytes.length}` },
+        });
       }
 
       return new Response(new Uint8Array(bytes));
@@ -505,11 +538,33 @@ export function freestyleFixture() {
       effects.write++;
 
       if (local) writeFileSync(file, raw);
-      else vm.files.set(file, new Uint8Array(raw));
+      else {
+        // As observed live: a new file belongs to the default user, a replaced one to root.
+        vm.owners.set(file, vm.files.has(file) ? "root:root" : "ubuntu:ubuntu");
+        vm.files.set(file, new Uint8Array(raw));
+      }
 
       if (file === ENV_FILE) writeFileSync(localEnv(vm), raw);
 
       return new Response(null, { status: 204 });
+    }
+
+    if (method === "GET" && rest === "fs/stat") {
+      const bytes = vm.files.get(file);
+
+      if (local || !bytes) return error(404, "FILE_NOT_FOUND");
+      const [owner, group] = (vm.owners.get(file) ?? "ubuntu:ubuntu").split(":");
+
+      return json(200, {
+        size: bytes.length,
+        isFile: true,
+        isDirectory: false,
+        isSymlink: false,
+        permissions: "0644",
+        owner: owner ?? "",
+        group: group ?? "",
+        modified: new Date().toISOString(),
+      });
     }
 
     if (method === "GET" && rest === "fs/dir" && local)
@@ -551,6 +606,9 @@ export function freestyleFixture() {
       calls.filter((call) => call.method === method && pattern.test(call.path)).length,
     setBootPolls(value: number) {
       bootPolls = value;
+    },
+    forgetNextBackgroundResult() {
+      forgetNextBackground = true;
     },
     backgroundNextCreate() {
       backgroundNextCreate = true;

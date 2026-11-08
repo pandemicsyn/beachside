@@ -74,7 +74,7 @@ Freestyle runs one command line through the guest shell and returns stdout/stder
 
 Terminals use Freestyle's own PTY sessions over a WebSocket, so output arrives as it is written. Freestyle terminals take `SIGKILL` only; `SIGTERM` rejects. A reopened terminal skips the scrollback Freestyle replays and reports only new output.
 
-Buffered files go through Freestyle's filesystem API in one sha256-verified request. Streamed reads use 1 MiB range requests. Streamed writes over 8 MiB, and every no-clobber write, are staged beside the target 1 MiB at a time and published with an atomic rename, or a hard link when the target must not be replaced. Copy, move, stat, make directory and remove run through a small Python 3 helper in the VM, which the Ubuntu bases are expected to include. Commands and the helper run as the VM's default user, while Freestyle's filesystem API runs as root.
+Buffered files go through Freestyle's filesystem API in one sha256-verified request. Streamed reads use 1 MiB range requests. Streamed writes over 8 MiB, and every no-clobber write, are staged beside the target 1 MiB at a time and published with an atomic rename, or a hard link when the target must not be replaced. Copy, move, stat, make directory and remove run through a small Python 3 helper in the VM (the Ubuntu bases ship Python 3.12). Commands and the helper run as the VM's default user, `ubuntu`. New files written through Freestyle's filesystem API belong to that user too, and an overwrite keeps the file's previous owner.
 
 Deadlines run up to 24 hours on VMs whose guest agent supports long execs. Older agents refuse anything over five minutes, and that refusal is reported as `UNSUPPORTED`. A command that passes its deadline is reported as `OUTCOME_UNKNOWN`.
 

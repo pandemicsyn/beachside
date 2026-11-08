@@ -138,12 +138,60 @@ const Receipt = z.discriminatedUnion("ok", [
 
 const reads = new Set(["stat", "list", "exists"]);
 
+/**
+ * One native range read. `total` is the file length the response declared (`Content-Range`),
+ * when it declared one; a range that starts at the end of the file yields no bytes.
+ */
 export type RangeReader = (
   path: string,
   offset: number,
   length: number,
   ctx: ReadContext,
-) => Promise<Uint8Array>;
+) => Promise<{ bytes: Uint8Array; total: number | undefined }>;
+
+/**
+ * Decode a native range response. A `206` carries `bytes a-b/total`; a `416` for a range that
+ * starts exactly at the end of the file (`bytes * /total`, including an empty file) is EOF;
+ * a `200` is the whole file, valid only for a read from offset 0.
+ */
+export async function rangeResult(
+  response: Response,
+  offset: number,
+  length: number,
+): Promise<{ bytes: Uint8Array; total: number | undefined } | null> {
+  const header = response.headers.get("content-range") ?? "";
+
+  if (response.status === 416) {
+    await response.body?.cancel().catch(() => undefined);
+    const match = /^bytes \*\/(\d{1,15})$/.exec(header);
+    const total = match ? Number(match[1]) : undefined;
+
+    return total === offset ? { bytes: new Uint8Array(), total } : null;
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+
+  if (response.status === 200)
+    return offset === 0 && bytes.length <= length ? { bytes, total: bytes.length } : null;
+
+  if (response.status !== 206 || bytes.length > length) return null;
+
+  if (!header) return { bytes, total: undefined };
+  const match = /^bytes (\d{1,15})-(\d{1,15})\/(\d{1,15}|\*)$/.exec(header);
+
+  if (!match) return null;
+  const [, start, end, size] = match;
+  const total = size === "*" ? undefined : Number(size);
+
+  if (
+    Number(start) !== offset ||
+    Number(end) - Number(start) + 1 !== bytes.length ||
+    (total !== undefined && Number(end) >= total)
+  )
+    return null;
+
+  return { bytes, total };
+}
 
 export function filesystem(run: GuestRunner, readRange: RangeReader) {
   const helper = async (
@@ -308,7 +356,7 @@ export function filesystem(run: GuestRunner, readRange: RangeReader) {
           },
           async pull(controller) {
             try {
-              const bytes = await readRange(path, offset, READ_CHUNK_BYTES, {
+              const { bytes, total } = await readRange(path, offset, READ_CHUNK_BYTES, {
                 signal,
                 deadline: Date.now() + 60_000,
               });
@@ -319,7 +367,11 @@ export function filesystem(run: GuestRunner, readRange: RangeReader) {
 
               if (bytes.length) controller.enqueue(bytes);
 
-              if (bytes.length < READ_CHUNK_BYTES) controller.close();
+              // EOF is the declared length when the response gave one; otherwise a short range.
+              if (total === undefined ? bytes.length < READ_CHUNK_BYTES : offset >= total)
+                controller.close();
+              else if (!bytes.length)
+                throw new AdapterError("UNAVAILABLE", "Freestyle file range ended early");
             } catch (error) {
               controller.error(error);
             }

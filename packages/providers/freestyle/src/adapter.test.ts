@@ -27,6 +27,43 @@ function setup() {
   return { fixture, adapter, connect };
 }
 
+test("a background poll that loses the create result stays unknown and recovers by slug", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    fixture.backgroundNextCreate();
+    fixture.forgetNextBackgroundResult();
+    const lost = await client.sandboxes.submitCreate();
+    await expect(lost.observe()).rejects.toBeInstanceOf(OutcomeUnknownError);
+    expect(fixture.vms.size).toBe(1);
+
+    const recovered = await (await client.recover(lost.reference)).observe();
+    expect(recovered).toMatchObject({ reference: { nativeId: [...fixture.vms.keys()].at(-1) } });
+    expect(creates(fixture)).toHaveLength(1);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a lost create with env never recovers as ready without the env file", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    fixture.loseNextCreateResponse();
+    const lost = await client.sandboxes.submitCreate({ env: { GREETING: "hi" } });
+    await expect(lost.observe()).rejects.toBeInstanceOf(OutcomeUnknownError);
+
+    await expect((await client.recover(lost.reference)).observe()).rejects.toBeInstanceOf(
+      OutcomeUnknownError,
+    );
+    expect(fixture.effects.create).toBe(1);
+  } finally {
+    await client.close();
+  }
+});
+
 const creates = (fixture: ReturnType<typeof freestyleFixture>) =>
   fixture.calls.filter((call) => call.method === "POST" && call.path === "/v5/vms");
 
@@ -395,6 +432,11 @@ test("configured preview ports are published at create, others on first use", as
       url: `https://${slug}-8080.style.dev`,
     });
     expect(await box.preview(8080)).toMatchObject({ url: `https://${slug}-8080.style.dev` });
+    expect(fixture.count("POST", /^\/v5\/tls$/)).toBe(1);
+
+    // A paused VM gets no route: inbound traffic could wake it.
+    await box.suspend();
+    await expect(box.preview(9090)).rejects.toMatchObject({ code: "CONFLICT" });
     expect(fixture.count("POST", /^\/v5\/tls$/)).toBe(1);
     await box.destroy();
   } finally {
