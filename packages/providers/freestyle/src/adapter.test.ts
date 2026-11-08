@@ -434,3 +434,46 @@ test("destroy confirms the VM is gone and references never carry the API key", a
     await client.close();
   }
 });
+
+test("create-time env applies to every command, a per-call env overrides it, and values are never saved", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const box = await client.sandboxes.create({ env: { GREETING: "it's here", SHARED: "box" } });
+
+    try {
+      const printed = await box.exec({
+        command: { kind: "argv", argv: ["/bin/sh", "-c", 'printf "%s|%s" "$GREETING" "$SHARED"'] },
+        env: { SHARED: "call" },
+      });
+
+      expect(printed.stdoutText()).toBe("it's here|call");
+      expect(fixture.vms.get(box.id)?.files.get("/etc/beachside.env")).toBeDefined();
+      expect(JSON.stringify(box.reference)).not.toContain("it's here");
+
+      const reopened = await client.sandboxes.get(JSON.parse(JSON.stringify(box.reference)));
+      expect((await reopened.exec(["/bin/sh", "-c", 'printf "%s" "$GREETING"'])).stdoutText()).toBe(
+        "it's here",
+      );
+    } finally {
+      await box.destroy();
+    }
+  } finally {
+    await client.close();
+  }
+});
+
+test("create-time env rejects invalid names before any Freestyle effect", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    await expect(client.sandboxes.create({ env: { "BAD-NAME": "x" } })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    expect(fixture.effects.create).toBe(0);
+  } finally {
+    await client.close();
+  }
+});

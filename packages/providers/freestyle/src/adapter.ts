@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import type {
+  CreateSnapshotOptions,
   CreateVmOptions,
   ExecOptions,
   Freestyle,
   FirewallSpec,
+  SnapshotData,
   TlsSpec,
   VmData,
 } from "freestyle";
@@ -18,7 +20,9 @@ import {
   listedTime,
   MAX_DIRECTORY_ENTRIES,
   Preserve,
+  PreserveSchema,
   PreviewPort,
+  resolveSnapshot,
   ResourceMinimums,
   sandboxReference,
   smallestSize,
@@ -29,15 +33,30 @@ import {
   type ExecInput,
   type Fact,
   type FileWriteInput,
+  type ImageInfo,
   type ObserveContext,
+  type OperationOutcome,
   type ReadContext,
+  type ResourceReference,
   type Sandbox,
   type SandboxInfo,
   type SandboxReference,
   type SandboxResources,
   type SandboxState,
+  type SnapshotInfo,
+  type SnapshotProfile,
 } from "@beachside/adapter";
-import { filesResult, parseWrapper, quote, wrapperScript, type WrapperResult } from "./exec";
+import {
+  checkEnv,
+  ENV_FILE,
+  envFile,
+  envMarker,
+  filesResult,
+  parseWrapper,
+  quote,
+  wrapperScript,
+  type WrapperResult,
+} from "./exec";
 import {
   createFreestyleClient,
   FREESTYLE_API,
@@ -124,6 +143,14 @@ const Configuration = z
           .default([]),
       })
       .default({ access: "public", ports: [] }),
+    snapshots: z
+      .strictObject({
+        /** Freestyle snapshots always keep memory and disk; `filesystem` rejects at connect. */
+        preserve: PreserveSchema.optional(),
+        /** Seconds Freestyle keeps each snapshot after capture (`ttlSeconds`); `0` keeps it until deleted. */
+        retentionSeconds: z.number().int().nonnegative().safe().optional(),
+      })
+      .optional(),
   })
   .superRefine((value, ctx) => {
     if (value.image !== undefined && value.resources !== undefined)
@@ -147,11 +174,63 @@ const Id = z
 const AttemptSlug = z.string().regex(/^beachside-[0-9a-f]{24}$/);
 
 /** The slug is saved before dispatch, so a lost create can still be found by it. */
-const CreateToken = z.strictObject({ slug: AttemptSlug, id: Id.optional() });
+const CreateToken = z.strictObject({
+  slug: AttemptSlug,
+  id: Id.optional(),
+  /** The create wrote a sandbox-wide env file; the values themselves are never saved. */
+  env: z.literal(true).optional(),
+});
 
 const DestroyToken = z.strictObject({ id: Id, acknowledged: z.boolean() });
 
 const LifecycleToken = z.strictObject({ id: Id });
+
+/** Snapshot slugs this adapter mints: one per capture attempt, derived from its submission id. */
+const SnapshotSlug = z.string().regex(/^beachside-snapshot-[0-9a-f]{24}$/);
+
+/** The slug is saved before the capture request, so a lost response can be found by it. */
+const CaptureToken = z.strictObject({
+  slug: SnapshotSlug,
+  source: Id,
+  sourceState: z.enum(["running", "suspended"]),
+  id: Id.optional(),
+});
+
+const SnapshotDeleteToken = z.strictObject({ id: Id });
+
+/**
+ * Freestyle captures the VM's exact state, memory and disk, from a running or paused VM; a
+ * VM created from the snapshot continues from that state.
+ */
+const snapshotProfile: SnapshotProfile = {
+  id: "freestyle-vm",
+  preserve: Preserve.FILESYSTEM_AND_MEMORY,
+  sourceStates: ["running", "suspended"],
+  // Freestyle does not document whether a capture briefly pauses the VM; claim no less.
+  interruption: "pause",
+  sourceAfter: "unchanged",
+  connections: "unknown",
+  consistency: "unknown",
+  restoreExecution: "resume",
+  mountHandling: "none",
+};
+
+const snapshotSupport = {
+  status: "supported" as const,
+  value: { profiles: [snapshotProfile], defaultProfileId: snapshotProfile.id },
+};
+
+/** A restore is an ordinary create from the snapshot id; the snapshot keeps its VM size. */
+const restoreSupport = {
+  networkPolicies: ["blocked", "internet"],
+  resources: false,
+  mounts: false,
+  independentLifecycle: true,
+};
+
+function snapshotSlug(submissionId: string): string {
+  return `beachside-snapshot-${createHash("sha256").update(submissionId).digest("hex").slice(0, 24)}`;
+}
 
 /** Freestyle metadata limits: up to 64 entries, keys and values at most 63 characters. */
 const Labels = z
@@ -265,6 +344,12 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         throw new AdapterError(
           "UNSUPPORTED",
           "Freestyle previews are public style.dev names; use preview.access public",
+        );
+
+      if (config.snapshots?.preserve === Preserve.FILESYSTEM)
+        throw new AdapterError(
+          "UNSUPPORTED",
+          "Freestyle snapshots always keep memory and disk; filesystem-only snapshots are not supported",
         );
 
       const image =
@@ -425,12 +510,31 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           : ctx.unknown(`${reason}; do not replay`);
       };
 
+      const partialRestore = (
+        id: string,
+        identity: { operationId: string; submissionId: string },
+      ) => ({
+        kind: "snapshot_restore" as const,
+        status: "unknown" as const,
+        sandbox: sandboxReference("freestyle", scope, id, {
+          operation: identity.operationId,
+          submission: identity.submissionId,
+        }),
+        mounts: [],
+      });
+
+      type PartialOutcome = (
+        id: string,
+        identity: { operationId: string; submissionId: string },
+      ) => OperationOutcome;
+
       /** A running VM completes the create; anything else stays pending or unknown. */
       const launched = (
         vm: VmData | null,
         token: z.infer<typeof CreateToken>,
         identity: { operationId: string; submissionId: string },
         settle: Pick<ObserveContext<z.infer<typeof CreateToken>>, "pending" | "unknown">,
+        partial: PartialOutcome = partialCreate,
       ) => {
         if (!vm)
           return settle.unknown(
@@ -457,7 +561,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
         return settle.unknown(
           `Freestyle VM is ${vm.state} before it was running; inspect or destroy it`,
-          partialCreate(vm.id, identity),
+          partial(vm.id, identity),
         );
       };
 
@@ -465,6 +569,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
       const launch = async (
         input: CreateInput,
         ctx: AttemptContext<z.infer<typeof CreateToken>>,
+        partial: PartialOutcome = partialCreate,
       ) => {
         const slug = attemptSlug(ctx.submissionId);
 
@@ -500,12 +605,15 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
         if (!id.success || created.slug !== slug)
           return ctx.unknown("Freestyle create acknowledgement does not match the attempt");
-        const token = { slug, id: id.data };
+        const token: z.infer<typeof CreateToken> = { slug, id: id.data };
+        const env = input.env && Object.keys(input.env).length ? input.env : undefined;
+
+        if (env) token.env = true;
 
         try {
           await ctx.checkpoint(token);
         } catch (error) {
-          if (error instanceof AdapterCheckpointError) error.outcome = partialCreate(id.data, ctx);
+          if (error instanceof AdapterCheckpointError) error.outcome = partial(id.data, ctx);
           throw error;
         }
 
@@ -516,12 +624,57 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             return current?.state === "starting" ? undefined : { current };
           });
 
-          if (result) return launched(result.current, token, ctx, ctx);
+          if (result?.current?.state === "running" && env) {
+            try {
+              await api(callSignal(readContext(ctx.signal, 60)))
+                .vms.ref(id.data)
+                .fs.writeFile(ENV_FILE, envFile(env, slug), { mode: 0o644 });
+            } catch {
+              return ctx.unknown(
+                "Freestyle VM is running but its sandbox environment was not confirmed; destroy it",
+                partial(id.data, ctx),
+              );
+            }
+          }
+
+          if (result) return launched(result.current, token, ctx, ctx, partial);
         } catch {
           /* A failed readiness read is not evidence; continue through observation. */
         }
 
         return ctx.pending(token, { pollAfterMs: pollMs });
+      };
+
+      /**
+       * Observation of a create or restore. A recovered attempt cannot rewrite the environment
+       * (values are never saved), so a running VM completes only when the attempt's env file
+       * is in place.
+       */
+      const observeLaunch = async (
+        token: z.infer<typeof CreateToken>,
+        attempt: { operationId: string; submissionId: string },
+        ctx: ObserveContext<z.infer<typeof CreateToken>>,
+        partial: PartialOutcome,
+      ) => {
+        const vm = token.id ? await find(token.id, ctx) : await findBySlug(token.slug, ctx);
+
+        if (vm?.state === "running" && token.env) {
+          const written = await api(callSignal(ctx))
+            .vms.ref(vm.id)
+            .fs.readTextFile(ENV_FILE)
+            .then(
+              (text) => text.startsWith(`${envMarker(token.slug)}\n`),
+              () => false,
+            );
+
+          if (!written)
+            return ctx.unknown(
+              "Freestyle VM is running but its sandbox environment was never written; destroy it",
+              partial(vm.id, attempt),
+            );
+        }
+
+        return launched(vm, token, attempt, ctx, partial);
       };
 
       const firewall = (policy: string): FirewallSpec =>
@@ -647,6 +800,169 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         };
       };
 
+      const snapshotRef = (
+        id: string,
+        ownership: ResourceReference["ownership"] = "unknown",
+      ): ResourceReference<"snapshot"> => ({
+        version: 1,
+        kind: "snapshot",
+        provider: "freestyle",
+        scope,
+        nativeId: id,
+        ownership,
+      });
+
+      const checkedSnapshot = (ref: ResourceReference) => {
+        assertResourceScope(ref, { provider: "freestyle", scope });
+
+        if (
+          ref.kind !== "snapshot" ||
+          ref.generation !== undefined ||
+          !Id.safeParse(ref.nativeId).success
+        )
+          throw new AdapterError("CONFLICT", "Invalid Freestyle snapshot identity");
+
+        return ref.nativeId;
+      };
+
+      /** A snapshot, or null once Freestyle no longer has it. */
+      const findSnapshot = async (id: string, ctx: ReadContext): Promise<SnapshotData | null> => {
+        try {
+          const snapshot = await api(callSignal(ctx)).vms.snapshots.get(id);
+
+          if (snapshot.id !== id)
+            throw new AdapterError("CONFLICT", "Freestyle returned a different snapshot identity");
+
+          return snapshot;
+        } catch (error) {
+          const native = failure(error);
+
+          if (native.status === 404) return null;
+          throw native.error;
+        }
+      };
+
+      const requireSnapshot = async (ref: ResourceReference, ctx: ReadContext) => {
+        const snapshot = await findSnapshot(checkedSnapshot(ref), ctx);
+
+        if (!snapshot) throw new AdapterError("NOT_FOUND", "Freestyle snapshot is unavailable");
+
+        return snapshot;
+      };
+
+      /** Finds an attempt's snapshot by its slug among the source VM's snapshots. */
+      const findSnapshotBySlug = async (
+        slug: string,
+        source: string,
+        ctx: ReadContext,
+      ): Promise<SnapshotData | null> => {
+        const matches: SnapshotData[] = [];
+
+        for (let offset = 0; ;) {
+          const listed = await read(ctx, (native) =>
+            native.vms.snapshots.list({ sourceVmId: source, limit: 100, offset }),
+          );
+
+          matches.push(...listed.snapshots.filter((snapshot) => snapshot.slug === slug));
+          offset += listed.snapshots.length;
+
+          if (!listed.snapshots.length || offset >= listed.totalCount) break;
+        }
+
+        if (matches.length > 1)
+          throw new AdapterError("CONFLICT", "Freestyle returned several snapshots for one slug");
+
+        return matches[0] ?? null;
+      };
+
+      const snapshotInfo = (snapshot: SnapshotData, ref: ResourceReference): SnapshotInfo => ({
+        reference: ref,
+        preserve: Preserve.FILESYSTEM_AND_MEMORY,
+        restoreExecution: "resume",
+        consistency: "unknown",
+        source:
+          snapshot.sourceVmId && Id.safeParse(snapshot.sourceVmId).success
+            ? { id: snapshot.sourceVmId, class: "freestyle-vm" }
+            : null,
+        // Freestyle returns a snapshot only once VMs can be created from it.
+        state: "ready",
+        createdAt: listedTime(snapshot.createdAt),
+        expiration: "unknown",
+        excludedPaths: null,
+        mounts: [],
+        mountHandling: "none",
+        restore: restoreSupport,
+        dependencies: [],
+        nativeDependencies: null,
+      });
+
+      const imageInfo = (snapshot: SnapshotData): ImageInfo => ({
+        reference: {
+          version: 1,
+          kind: "image",
+          provider: "freestyle",
+          scope,
+          nativeId: snapshot.id,
+          ownership: "unknown",
+        },
+        state: "ready",
+        createdAt: listedTime(snapshot.createdAt),
+        source: null,
+        visibility: snapshot.public ? "public" : "private",
+        nativeDependencies: null,
+      });
+
+      const snapshotPage = async (input: { cursor?: string; limit: number }, ctx: ReadContext) => {
+        const offset = input.cursor === undefined ? 0 : Number(input.cursor);
+
+        if (!Number.isSafeInteger(offset) || offset < 0)
+          throw new AdapterError("INVALID_ARGUMENT", "Invalid Freestyle snapshot cursor");
+        const limit = Math.min(100, input.limit);
+        const listed = await read(ctx, (native) => native.vms.snapshots.list({ limit, offset }));
+        const next = offset + listed.snapshots.length;
+
+        return {
+          snapshots: listed.snapshots.filter((snapshot) => Id.safeParse(snapshot.id).success),
+          nextCursor:
+            listed.snapshots.length === limit && next < listed.totalCount
+              ? String(next)
+              : undefined,
+        };
+      };
+
+      const captureResult = (
+        token: z.infer<typeof CaptureToken>,
+        snapshot: SnapshotData | null,
+        settle: Pick<ObserveContext<z.infer<typeof CaptureToken>>, "unknown">,
+      ) => {
+        if (!snapshot)
+          return settle.unknown(
+            "Freestyle snapshot response was lost and no snapshot carries this attempt's slug; list snapshots without replay",
+          );
+
+        if (
+          snapshot.slug !== token.slug ||
+          snapshot.sourceVmId !== token.source ||
+          (token.id !== undefined && snapshot.id !== token.id) ||
+          !Id.safeParse(snapshot.id).success
+        )
+          return settle.unknown(
+            "Freestyle snapshot identity differs from the attempt; do not replay",
+          );
+        const ref = snapshotRef(snapshot.id, "verified-created");
+
+        return {
+          snapshot: snapshotInfo(snapshot, ref),
+          capture: {
+            preserve: snapshotProfile.preserve,
+            interruption: snapshotProfile.interruption,
+            restoreExecution: snapshotProfile.restoreExecution,
+          },
+          source: { state: token.sourceState, connections: snapshotProfile.connections },
+          retainedResources: [ref],
+        };
+      };
+
       const session: AdapterSession<
         CreateInput,
         Sandbox,
@@ -663,6 +979,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           network: ["blocked", "internet"],
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
           fileWrite: { overwrite: true, noClobber: false },
+          createEnv: true,
           lifetime: { minSeconds: 60, maxSeconds: MAX_TTL_SECONDS },
         },
         create: {
@@ -712,6 +1029,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
                 "INVALID_ARGUMENT",
                 "Freestyle labels allow at most 64 entries with keys and values up to 63 characters",
               );
+            checkEnv(input.env);
 
             return input;
           },
@@ -722,11 +1040,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             if (!token.success || token.data.slug !== attemptSlug(attempt.submissionId))
               return ctx.unknown("Freestyle create identity is unavailable; do not replay");
 
-            const vm = token.data.id
-              ? await find(token.data.id, ctx)
-              : await findBySlug(token.data.slug, ctx);
-
-            return launched(vm, token.data, attempt, ctx);
+            return observeLaunch(token.data, attempt, ctx, partialCreate);
           },
         },
         async inspect(box, ctx) {
@@ -1121,9 +1435,217 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             };
           },
         },
+        snapshotProfiles: async () => snapshotSupport,
+        snapshotCapture: {
+          recovery: { version: 1, token: CaptureToken },
+          async prepare(input, ctx) {
+            const vm = await requireVm(input.sandbox, ctx);
+            const plan = resolveSnapshot(snapshotSupport, input.request, state(vm.state));
+
+            if (plan.status !== "supported") throw new AdapterError("UNSUPPORTED", plan.reason);
+
+            return {
+              ...input,
+              expectation: { profile: plan.value.profile, sourceState: plan.value.sourceState },
+            };
+          },
+          async submit(input, ctx) {
+            const token: z.infer<typeof CaptureToken> = {
+              slug: snapshotSlug(ctx.submissionId),
+              source: Id.parse(input.sandbox.id),
+              sourceState: input.expectation?.sourceState === "suspended" ? "suspended" : "running",
+            };
+
+            const request: CreateSnapshotOptions = { slug: token.slug };
+
+            const ttlSeconds =
+              input.request.retention?.cleanupAfterSeconds ?? config.snapshots?.retentionSeconds;
+
+            if (ttlSeconds) request.ttlSeconds = ttlSeconds;
+
+            await ctx.checkpoint(token);
+            let created;
+
+            try {
+              created = await api(callSignal(readContext(ctx.signal, 600)))
+                .vms.ref(token.source)
+                .snapshot(request);
+            } catch (error) {
+              const native = failure(error);
+
+              // A lost capture is found again by its attempt slug; it is never resent.
+              return refusedBeforeEffect(native)
+                ? ctx.reject(native.error.code, native.error.message)
+                : ctx.pending(token, { pollAfterMs: pollMs });
+            }
+
+            const id = Id.safeParse(created.snapshotId);
+
+            if (!id.success)
+              return ctx.unknown(
+                "Freestyle snapshot acknowledgement has no usable id; do not replay",
+              );
+
+            const tracked = { ...token, id: id.data };
+            await ctx.checkpoint(tracked);
+
+            return captureResult(tracked, { ...created.snapshot, id: id.data }, ctx);
+          },
+          async observe(attempt, ctx) {
+            const token = CaptureToken.safeParse(attempt.token);
+
+            if (
+              !token.success ||
+              token.data.source !== attempt.sandbox?.id ||
+              token.data.slug !== snapshotSlug(attempt.submissionId)
+            )
+              return ctx.unknown("Freestyle capture identity is unavailable; do not replay");
+
+            const snapshot = token.data.id
+              ? await findSnapshot(token.data.id, ctx)
+              : await findSnapshotBySlug(token.data.slug, token.data.source, ctx);
+
+            return captureResult(token.data, snapshot, ctx);
+          },
+        },
+        snapshotRestore: {
+          recovery: { version: 1, token: CreateToken },
+          options: {
+            env: true,
+            labels: true,
+            lifetime: { minSeconds: 60, maxSeconds: MAX_TTL_SECONDS },
+          },
+          async prepare(input, ctx) {
+            if (input.request.resources || input.request.mounts?.length)
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "Freestyle restores keep the snapshot's VM size and take no mounts",
+              );
+
+            if (!restoreSupport.networkPolicies.includes(input.request.networkPolicy))
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "Freestyle network policies are blocked and internet",
+              );
+
+            checkEnv(input.request.env);
+
+            if (input.request.labels && !Labels.safeParse(input.request.labels).success)
+              throw new AdapterError(
+                "INVALID_ARGUMENT",
+                "Freestyle labels allow at most 64 entries with keys and values up to 63 characters",
+              );
+            await requireSnapshot(input.snapshot, ctx);
+
+            return input;
+          },
+          submit: (input, ctx) =>
+            launch(
+              {
+                image: { kind: "prepared", value: input.snapshot.nativeId },
+                networkPolicy: input.request.networkPolicy,
+                labels: input.request.labels,
+                env: input.request.env,
+                lifetimeSeconds: input.request.lifetimeSeconds,
+              },
+              ctx,
+              partialRestore,
+            ),
+          async observe(attempt, ctx) {
+            const token = CreateToken.safeParse(attempt.token);
+
+            if (
+              !attempt.resource ||
+              !token.success ||
+              token.data.slug !== attemptSlug(attempt.submissionId)
+            )
+              return ctx.unknown("Freestyle restore identity is unavailable; do not replay");
+            checkedSnapshot(attempt.resource);
+
+            return observeLaunch(token.data, attempt, ctx, partialRestore);
+          },
+        },
+        async snapshotInspect(ref, ctx) {
+          return snapshotInfo(await requireSnapshot(ref, ctx), ref);
+        },
+        snapshotListCoverage: "provider-scope",
+        async snapshotList(input, ctx) {
+          const listed = await snapshotPage(input, ctx);
+
+          return {
+            // Freestyle lists every snapshot the account owns; none carries creation proof.
+            items: listed.snapshots.map((snapshot) =>
+              snapshotInfo(snapshot, snapshotRef(snapshot.id)),
+            ),
+            nextCursor: listed.nextCursor,
+            coverage: "provider-scope" as const,
+          };
+        },
+        snapshotDelete: {
+          recovery: { version: 1, token: SnapshotDeleteToken },
+          async prepare(ref, ctx) {
+            await requireSnapshot(ref, ctx);
+
+            return ref;
+          },
+          async submit(ref, ctx) {
+            const token = { id: checkedSnapshot(ref) };
+            await ctx.checkpoint(token);
+
+            try {
+              await api(callSignal(readContext(ctx.signal))).vms.snapshots.delete(token.id);
+            } catch (error) {
+              const native = failure(error);
+
+              if (refusedBeforeEffect(native))
+                return ctx.reject(native.error.code, native.error.message);
+
+              return ctx.pending(token, { pollAfterMs: pollMs });
+            }
+
+            return { deleted: true as const, reference: ref };
+          },
+          async observe(attempt, ctx) {
+            const token = SnapshotDeleteToken.safeParse(attempt.token);
+            const ref = attempt.resource;
+
+            if (!token.success || !ref || checkedSnapshot(ref) !== token.data.id)
+              return ctx.unknown(
+                "Freestyle snapshot deletion identity is unavailable; do not replay",
+              );
+
+            return (await findSnapshot(token.data.id, ctx))
+              ? ctx.unknown(
+                  "Freestyle snapshot still exists; deletion was not confirmed, so delete it again explicitly",
+                )
+              : { deleted: true as const, reference: ref };
+          },
+        },
+        async imageInspect(ref, ctx) {
+          assertResourceScope(ref, { provider: "freestyle", scope });
+
+          if (ref.kind !== "image" || !Id.safeParse(ref.nativeId).success)
+            throw new AdapterError("CONFLICT", "Invalid Freestyle image identity");
+          const snapshot = await findSnapshot(ref.nativeId, ctx);
+
+          if (!snapshot) throw new AdapterError("NOT_FOUND", "Freestyle snapshot is unavailable");
+
+          return imageInfo(snapshot);
+        },
+        imageListCoverage: "provider-scope",
+        async imageList(input, ctx) {
+          const listed = await snapshotPage(input, ctx);
+
+          return {
+            // Every Freestyle snapshot the account owns boots as a prepared image.
+            items: listed.snapshots.map(imageInfo),
+            nextCursor: listed.nextCursor,
+            coverage: "provider-scope" as const,
+          };
+        },
         async resourceCapabilities() {
           return {
-            restore: { status: "unsupported", reason: "Freestyle snapshots are not supported yet" },
+            restore: { status: "supported", value: restoreSupport },
             volumes: { status: "unsupported", reason: "Freestyle has no volumes" },
             mounts: { status: "unsupported", reason: "Freestyle has no volume mounts" },
           };

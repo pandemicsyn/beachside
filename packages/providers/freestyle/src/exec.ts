@@ -34,24 +34,53 @@ export type WrapperInput = {
   maxBytes: number;
 };
 
+/**
+ * Sandbox-wide environment written at create. Freestyle takes environment variables only per
+ * command, so every command, process and terminal sources this file before its own `env`.
+ */
+export const ENV_FILE = "/etc/beachside.env";
+
+function checkedEnvKey(key: string): string {
+  if (!EnvKey.test(key))
+    throw new AdapterError("INVALID_ARGUMENT", "Environment variable names must be POSIX names");
+
+  return key;
+}
+
+/** The env file: a marker naming the create attempt, then one quoted export per variable. */
+export function envFile(env: Record<string, string>, attempt: string): Uint8Array {
+  const lines = Object.entries(env).map(
+    ([key, value]) => `export ${checkedEnvKey(key)}=${quote(value)}`,
+  );
+
+  return new TextEncoder().encode([envMarker(attempt), ...lines, ""].join("\n"));
+}
+
+export function envMarker(attempt: string): string {
+  return `# beachside ${attempt}`;
+}
+
+/** Throws before any effect when a variable name or value cannot be written. */
+export function checkEnv(env: Record<string, string> | undefined): void {
+  for (const [key, value] of Object.entries(env ?? {})) quote(`${checkedEnvKey(key)}=${value}`);
+}
+
 /** The user's command as one sh line: optional `cd`, then `exec env` with quoted assignments. */
 export function commandLine(input: Pick<WrapperInput, "command" | "cwd" | "env">): string {
   if (input.command.kind === "argv" && input.command.argv.length === 0)
     throw new AdapterError("INVALID_ARGUMENT", "argv must name a program");
 
-  const env = Object.entries(input.env ?? {}).map(([key, value]) => {
-    if (!EnvKey.test(key))
-      throw new AdapterError("INVALID_ARGUMENT", "Environment variable names must be POSIX names");
-
-    return quote(`${key}=${value}`);
-  });
+  const env = Object.entries(input.env ?? {}).map(([key, value]) =>
+    quote(`${checkedEnvKey(key)}=${value}`),
+  );
 
   const program =
     input.command.kind === "argv"
       ? input.command.argv.map(quote).join(" ")
       : `/bin/sh -c ${quote(input.command.script)}`;
 
-  const run = `exec env -- ${[...env, program].join(" ")}`;
+  // The sandbox-wide environment first, so a per-call entry overrides the same key.
+  const run = `{ if [ -r ${ENV_FILE} ]; then . ${ENV_FILE}; fi; exec env -- ${[...env, program].join(" ")}; }`;
 
   return input.cwd === undefined ? run : `cd -- ${quote(input.cwd)} && ${run}`;
 }

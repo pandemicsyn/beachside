@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Json } from "@beachside/adapter";
@@ -26,6 +26,30 @@ type FixtureVm = {
   files: Map<string, Uint8Array>;
   tls: { id: string; domain: string; port: number }[];
 };
+
+type FixtureSnapshot = {
+  id: string;
+  slug: string | null;
+  sourceVmId: string;
+  account: string;
+  base: string;
+  ttlSeconds: number | null;
+  createdAt: string;
+  files: Map<string, Uint8Array>;
+};
+
+function snapshotView(snapshot: FixtureSnapshot) {
+  return {
+    id: snapshot.id,
+    sourceVmId: snapshot.sourceVmId,
+    slug: snapshot.slug,
+    accountId: snapshot.account,
+    public: false,
+    ttlSeconds: snapshot.ttlSeconds,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.createdAt,
+  };
+}
 
 type Call = { method: string; path: string; query: URLSearchParams; headers: Headers; body?: Json };
 
@@ -106,8 +130,19 @@ function bytesOf(body: BodyInit | null | undefined): Uint8Array {
 
 export function freestyleFixture() {
   const vms = new Map<string, FixtureVm>();
+  const snapshots = new Map<string, FixtureSnapshot>();
+  let loseNextSnapshot = false;
   const calls: Call[] = [];
-  const effects = { create: 0, destroy: 0, release: 0, exec: 0, write: 0, pause: 0, start: 0 };
+  const effects = {
+    create: 0,
+    destroy: 0,
+    release: 0,
+    exec: 0,
+    write: 0,
+    pause: 0,
+    start: 0,
+    snapshot: 0,
+  };
   const commands: string[] = [];
   const workdir = mkdtempSync(join(tmpdir(), "beachside-freestyle-fixture-"));
   let sequence = 0;
@@ -123,6 +158,10 @@ export function freestyleFixture() {
   /** Answer the next create as a background request that finishes on its first poll. */
   let backgroundNextCreate = false;
   const background = new Map<string, Response>();
+
+  /** The guest env file lives on the local disk too, because commands run through the local sh. */
+  const ENV_FILE = "/etc/beachside.env";
+  const localEnv = (vm: FixtureVm) => join(workdir, `${vm.id}.env`);
 
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : String(input));
@@ -183,19 +222,23 @@ export function freestyleFixture() {
         return error(409, "SLUG_TAKEN");
       effects.create++;
       const id = `vm${++sequence}`;
+      const from = snapshots.get(body.snapshotId ?? "");
+
+      if (body.snapshotId?.startsWith("sh-") && (!from || from.account !== account))
+        return error(404, "SNAPSHOT_NOT_FOUND");
 
       const vm: FixtureVm = {
         id,
         slug: body.slug ?? null,
         account,
         state: bootPolls > 0 ? "starting" : "running",
-        snapshotId: body.snapshotId ?? "freestyle/ubuntu",
+        snapshotId: from ? from.base : (body.snapshotId ?? "freestyle/ubuntu"),
         ttlSeconds: body.ttlSeconds ?? null,
         idleTimeoutSeconds: body.idleTimeoutSeconds ?? null,
         metadata: body.metadata ?? {},
         createdAt: new Date(Date.now() - 60_000).toISOString(),
         polls: 0,
-        files: new Map(),
+        files: new Map(from?.files),
         tls: (body.tls?.rules ?? []).map((rule) => ({
           id: `tls${++sequence}`,
           domain: rule.domain,
@@ -204,6 +247,9 @@ export function freestyleFixture() {
       };
 
       vms.set(id, vm);
+      const inherited = vm.files.get(ENV_FILE);
+
+      if (inherited) writeFileSync(localEnv(vm), inherited);
 
       if (loseNextCreate) {
         loseNextCreate = false;
@@ -256,6 +302,38 @@ export function freestyleFixture() {
       return json(200, { rules, totalCount: rules.length });
     }
 
+    if (method === "GET" && path === "/v5/snapshots") {
+      const source = url.searchParams.get("sourceVmId");
+      const limit = Number(url.searchParams.get("limit") ?? 50);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+
+      const all = [...snapshots.values()].filter(
+        (snapshot) =>
+          snapshot.account === account && (source === null || snapshot.sourceVmId === source),
+      );
+
+      return json(200, {
+        snapshots: all.slice(offset, offset + limit).map(snapshotView),
+        totalCount: all.length,
+      });
+    }
+
+    const snapshotPath = path.match(/^\/v5\/snapshots\/([^/]+)$/);
+
+    if (snapshotPath) {
+      const snapshot = snapshots.get(snapshotPath[1] ?? "");
+
+      if (!snapshot || snapshot.account !== account) return error(404, "SNAPSHOT_NOT_FOUND");
+
+      if (method === "DELETE") {
+        snapshots.delete(snapshot.id);
+
+        return new Response(null, { status: 204 });
+      }
+
+      return json(200, snapshotView(snapshot));
+    }
+
     const match = path.match(/^\/v5\/vms\/([^/]+)(?:\/(.+))?$/);
 
     if (!match) return error(404, "NOT_FOUND");
@@ -301,6 +379,38 @@ export function freestyleFixture() {
       return json(200, view(vm));
     }
 
+    if (method === "POST" && rest === "snapshot") {
+      if (vm.state !== "running" && vm.state !== "paused") return error(409, "VM_NOT_RUNNING");
+
+      if (body.slug && [...snapshots.values()].some((item) => item.slug === body.slug))
+        return error(409, "SLUG_TAKEN");
+      effects.snapshot++;
+
+      const snapshot: FixtureSnapshot = {
+        id: `sh-${++sequence}`,
+        slug: body.slug ?? null,
+        sourceVmId: vm.id,
+        account,
+        base: vm.snapshotId,
+        ttlSeconds: body.ttlSeconds ?? null,
+        createdAt: new Date().toISOString(),
+        files: new Map(vm.files),
+      };
+
+      snapshots.set(snapshot.id, snapshot);
+
+      if (loseNextSnapshot) {
+        loseNextSnapshot = false;
+        throw new TypeError("fetch failed");
+      }
+
+      return json(200, {
+        snapshotId: snapshot.id,
+        sourceVmId: vm.id,
+        snapshot: snapshotView(snapshot),
+      });
+    }
+
     if (method === "POST" && rest === "exec-await") {
       const fault = commandFault;
       commandFault = undefined;
@@ -310,12 +420,13 @@ export function freestyleFixture() {
       if (vm.state !== "running") return error(409, "VM_NOT_RUNNING");
       effects.exec++;
       commands.push(body.command);
+      const command = body.command.replaceAll(ENV_FILE, localEnv(vm));
       const override = commandOverride?.(body.command);
       let result: CommandResult;
 
       if (override) result = override;
       else {
-        const run = Bun.spawnSync(["sh", "-c", body.command], {
+        const run = Bun.spawnSync(["sh", "-c", command], {
           cwd: workdir,
           stdin: body.stdin === undefined ? "ignore" : Buffer.from(body.stdin, "base64"),
         });
@@ -356,6 +467,8 @@ export function freestyleFixture() {
       effects.write++;
       vm.files.set(file, new Uint8Array(raw));
 
+      if (file === ENV_FILE) writeFileSync(localEnv(vm), raw);
+
       return new Response(null, { status: 204 });
     }
 
@@ -384,6 +497,7 @@ export function freestyleFixture() {
     effects,
     commands,
     vms,
+    snapshots,
     workdir,
     count: (method: string, pattern: RegExp) =>
       calls.filter((call) => call.method === method && pattern.test(call.path)).length,
@@ -401,6 +515,9 @@ export function freestyleFixture() {
     },
     overrideCommands(handler: ((command: string) => CommandResult) | undefined) {
       commandOverride = handler;
+    },
+    loseNextSnapshotResponse() {
+      loseNextSnapshot = true;
     },
     loseNextCreateResponse() {
       loseNextCreate = true;
