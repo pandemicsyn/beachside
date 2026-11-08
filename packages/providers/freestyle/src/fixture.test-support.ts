@@ -133,6 +133,7 @@ export function freestyleFixture() {
   const snapshots = new Map<string, FixtureSnapshot>();
   let loseNextSnapshot = false;
   const calls: Call[] = [];
+
   const effects = {
     create: 0,
     destroy: 0,
@@ -143,6 +144,7 @@ export function freestyleFixture() {
     start: 0,
     snapshot: 0,
   };
+
   const commands: string[] = [];
   const workdir = mkdtempSync(join(tmpdir(), "beachside-freestyle-fixture-"));
   let sequence = 0;
