@@ -306,19 +306,20 @@ function expiry(vm: VmData): SandboxInfo["expires"] {
 }
 
 /**
- * Root ownership helper for overwrites. `owner PATH` prints `uid:gid` of a regular file (never
- * through a symlink) or nothing. `restore PATH UID GID SIZE SHA256 REPLACER` opens PATH with
- * O_NOFOLLOW and `fchown`s that open inode only when it is a regular file owned by REPLACER
- * (root, which replaced it), with one link and exactly the written bytes; it prints `ok` or
- * `skip`.
+ * Root shell command that prints `uid:gid` of an existing regular file (never through a
+ * symlink), followed by ` nopy` when the image has no Python 3 for the owner repair, or
+ * nothing for any other path. `$1` is the path.
+ */
+const OWNER_READ = `if [ -f "$1" ] && [ ! -h "$1" ]; then beachside_o=$(stat -c %u:%g -- "$1") || exit 1; if command -v python3 >/dev/null 2>&1; then echo "$beachside_o"; else echo "$beachside_o nopy"; fi; fi`;
+
+/**
+ * Root owner repair after an overwrite: `restore PATH UID GID SIZE SHA256 REPLACER` opens PATH
+ * with O_NOFOLLOW and `fchown`s that open inode only when it is a regular file owned by
+ * REPLACER (root, which replaced it), with one link and exactly the written bytes; it prints
+ * `ok` or `skip`.
  */
 const OWNER_HELPER = `import hashlib,os,stat,sys
-m,p=sys.argv[1],sys.argv[2]
-if m=='owner':
- try:st=os.lstat(p)
- except FileNotFoundError:sys.exit(0)
- if stat.S_ISREG(st.st_mode):print('%d:%d'%(st.st_uid,st.st_gid))
- sys.exit(0)
+p=sys.argv[2]
 u,g,n,h,r=int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]),sys.argv[6],int(sys.argv[7])
 fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
 try:
@@ -430,6 +431,27 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
       // Freestyle exposes no account id to an API key; one authenticated read proves the key.
       await read(readContext(host.signal), (native) => native.vms.list({ limit: 1 }));
+
+      // An account snapshot id must exist for this key. Slugs and public `owner/slug` bases
+      // have no lookup the key can make, so Freestyle checks them at create.
+      if (image.startsWith("sh-")) {
+        let found: SnapshotData | null;
+
+        try {
+          found = await api(callSignal(readContext(host.signal))).vms.snapshots.get(image);
+        } catch (error) {
+          const native = failure(error);
+
+          if (native.status !== 404) throw native.error;
+          found = null;
+        }
+
+        if (found?.id !== image)
+          throw new AdapterError(
+            "NOT_FOUND",
+            "Freestyle image snapshot is unavailable to this API key",
+          );
+      }
 
       // The authenticated read proves this credential works, not its native team identity.
       const scope = {
@@ -882,12 +904,8 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
       ): Promise<boolean> => {
         const vm = api(callSignal(readContext(signal, 120))).vms.ref(vmId);
 
-        const asRoot = async (args: string[]) => {
-          const result = await vm.exec({
-            command: `python3 -c ${quote(OWNER_HELPER)} ${args.map(quote).join(" ")}`,
-            linuxUser: "root",
-            timeoutMs: 10_000,
-          });
+        const asRoot = async (command: string) => {
+          const result = await vm.exec({ command, linuxUser: "root", timeoutMs: 10_000 });
 
           if (result.statusCode !== 0)
             throw new AdapterError("UNAVAILABLE", "Freestyle file owner command failed");
@@ -898,30 +916,42 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         let owner: string;
 
         try {
-          owner = await asRoot(["owner", path]);
+          owner = await asRoot(`sh -c ${quote(OWNER_READ)} beachside-owner ${quote(path)}`);
         } catch (error) {
           throw error instanceof AdapterError ? error : failure(error).error;
         }
 
-        const parsed = /^(\d{1,10}):(\d{1,10})$/.exec(owner);
+        const parsed = /^(\d{1,10}):(\d{1,10})( nopy)?$/.exec(owner);
 
         if (owner && !parsed)
           throw new AdapterError("UNAVAILABLE", "Freestyle file owner is malformed");
+        const keepOwner = parsed && !(parsed[1] === "0" && parsed[2] === "0");
+
+        // The repair is a Python helper; without it the replaced file would silently turn root's.
+        if (keepOwner && parsed[3])
+          throw new AdapterError(
+            "UNSUPPORTED",
+            "Freestyle needs Python 3 in the image to replace a file another user owns",
+          );
 
         await vm.fs.writeFile(path, bytes);
 
-        if (!parsed || owner === "0:0") return true;
+        if (!keepOwner) return true;
         const digest = createHash("sha256").update(bytes).digest("hex");
 
-        return asRoot([
-          "restore",
-          path,
-          parsed[1] ?? "",
-          parsed[2] ?? "",
-          String(bytes.byteLength),
-          digest,
-          "0",
-        ]).then(
+        return asRoot(
+          `python3 -I -c ${quote(OWNER_HELPER)} ${[
+            "restore",
+            path,
+            parsed[1] ?? "",
+            parsed[2] ?? "",
+            String(bytes.byteLength),
+            digest,
+            "0",
+          ]
+            .map(quote)
+            .join(" ")}`,
+        ).then(
           (result) => result === "ok",
           () => false,
         );
@@ -2137,6 +2167,12 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         snapshotCapture: {
           recovery: { version: 1, token: CaptureToken },
           async prepare(input, ctx) {
+            // Freestyle would delete a snapshot with no lifetime as soon as it exists.
+            if (input.request.retention?.cleanupAfterSeconds === 0)
+              throw new AdapterError(
+                "INVALID_ARGUMENT",
+                "Freestyle snapshot cleanup needs at least 1 second; omit it to keep the snapshot",
+              );
             const vm = await requireVm(input.sandbox, ctx);
             const plan = resolveSnapshot(snapshotSupport, input.request, state(vm.state));
 

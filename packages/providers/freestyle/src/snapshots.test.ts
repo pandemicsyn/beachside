@@ -128,6 +128,26 @@ test("filesystem-only snapshots reject at connect before any Freestyle call", as
   expect(fixture.calls).toHaveLength(0);
 });
 
+test("an image snapshot id is checked at connect against the API key", async () => {
+  const { connect } = setup();
+
+  await expect(connect({ image: "sh-missing" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+  const client = await connect();
+
+  try {
+    const source = await client.sandboxes.create();
+    const { snapshot } = await source.snapshot();
+    await source.destroy();
+
+    const booted = await connect({ image: snapshot.id });
+    await booted.close();
+    await snapshot.delete();
+  } finally {
+    await client.close();
+  }
+});
+
 test("restores that ask for a new size reject before any Freestyle effect", async () => {
   const { fixture, connect } = setup();
   const client = await connect();

@@ -104,7 +104,9 @@ export function wrapperScript(input: WrapperInput): string {
     "beachside_c=$?",
     `: >"$beachside_d/done"; kill "$beachside_w" 2>/dev/null; wait "$beachside_w" 2>/dev/null; rm -f "$beachside_d/done"`,
     `beachside_ol=$(($(wc -c <"$beachside_d/stdout.raw"))); beachside_el=$(($(wc -c <"$beachside_d/stderr.raw")))`,
-    `head -c ${bound} "$beachside_d/stdout.raw" >"$beachside_d/stdout"; head -c ${bound} "$beachside_d/stderr.raw" >"$beachside_d/stderr"`,
+    // One bound across both streams, stdout first, as Beachside captures them.
+    `beachside_ok=$((beachside_ol < ${bound} ? beachside_ol : ${bound}))`,
+    `head -c "$beachside_ok" "$beachside_d/stdout.raw" >"$beachside_d/stdout"; head -c $((${bound} - beachside_ok)) "$beachside_d/stderr.raw" >"$beachside_d/stderr"`,
     `rm -f "$beachside_d/stdout.raw" "$beachside_d/stderr.raw"`,
     `if [ $(($(wc -c <"$beachside_d/stdout") + $(wc -c <"$beachside_d/stderr"))) -le ${INLINE_BYTES} ]; then`,
     `printf '${EXEC_RECORD} inline %s %s %s\\n' "$beachside_c" "$beachside_ol" "$beachside_el"`,
@@ -190,9 +192,9 @@ export function filesResult(
   stderr: Uint8Array,
   maxBytes: number,
 ): { result: WrapperResult; complete: boolean } | null {
-  const expected = (length: number) => Math.min(length, Math.max(0, Math.floor(maxBytes)));
-  const outExpected = expected(files.stdoutLength);
-  const errExpected = expected(files.stderrLength);
+  const bound = Math.max(0, Math.floor(maxBytes));
+  const outExpected = Math.min(files.stdoutLength, bound);
+  const errExpected = Math.min(files.stderrLength, bound - outExpected);
 
   if (stdout.byteLength > outExpected || stderr.byteLength > errExpected) return null;
 

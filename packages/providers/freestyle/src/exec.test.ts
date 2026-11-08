@@ -15,20 +15,38 @@ test("quote keeps every byte literal and refuses NUL", () => {
   expect(() => quote("a\0b")).toThrow("NUL");
 });
 
-test("the wrapper reports exit code, exact lengths and bounded output inline", () => {
-  const script = wrapperScript({
-    command: { kind: "shell", script: "printf hello; printf oops >&2; exit 7" },
-    maxBytes: 3,
-  });
+test("the wrapper reports exit code, exact lengths and one bound across both streams", () => {
+  const run = (maxBytes: number) =>
+    parseWrapper(
+      sh(
+        wrapperScript({
+          command: { kind: "shell", script: "printf hello; printf oops >&2; exit 7" },
+          maxBytes,
+        }),
+      ),
+    );
 
-  const result = parseWrapper(sh(script));
-
-  expect(result).toEqual({
+  // stdout first, then what is left of the bound for stderr.
+  expect(run(3)).toEqual({
     exitCode: 7,
     stdout: new TextEncoder().encode("hel"),
-    stderr: new TextEncoder().encode("oop"),
+    stderr: new Uint8Array(),
     truncated: true,
   });
+  expect(run(7)).toEqual({
+    exitCode: 7,
+    stdout: new TextEncoder().encode("hello"),
+    stderr: new TextEncoder().encode("oo"),
+    truncated: true,
+  });
+  expect(
+    filesResult(
+      { exitCode: 0, stdoutLength: 5, stderrLength: 4, directory: "/tmp/beachside-exec.abcdefgh" },
+      new Uint8Array(5),
+      new Uint8Array(3),
+      7,
+    ),
+  ).toBeNull();
 });
 
 test("output beyond the inline bound stays in the guest for download", () => {

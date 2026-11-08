@@ -171,6 +171,8 @@ export function freestyleFixture() {
   let afterPut: ((path: string) => void) | undefined;
   /** Acknowledge the next pause but leave the VM running. */
   let ignorePause = false;
+  /** The image has no Python 3, as a minimal snapshot may not. */
+  let noPython = false;
   /** Answer for the next start instead of starting the VM. */
   let startFault: Response | undefined;
   const background = new Map<string, Response>();
@@ -489,7 +491,7 @@ export function freestyleFixture() {
       // The root owner helper on map-backed files uses the recorded numeric owner; on local
       // files it runs for real.
       if (body.linuxUser === "root") {
-        const owned = / 'owner' '([^']+)'$/.exec(body.command);
+        const owned = / beachside-owner '([^']+)'$/.exec(body.command);
 
         const restore = / 'restore' '([^']+)' '(\d+)' '(\d+)' '\d+' '[0-9a-f]+' '0'$/.exec(
           body.command,
@@ -501,7 +503,7 @@ export function freestyleFixture() {
           if (owned)
             return json(200, {
               statusCode: 0,
-              stdout: `${vm.owners.get(path) ?? "1000:1000"}\n`,
+              stdout: `${vm.owners.get(path) ?? "1000:1000"}${noPython ? " nopy" : ""}\n`,
               stderr: "",
             });
 
@@ -682,6 +684,9 @@ export function freestyleFixture() {
     },
     ignoreNextPause() {
       ignorePause = true;
+    },
+    withoutPython() {
+      noPython = true;
     },
     failNextStart(response: Response) {
       startFault = response;

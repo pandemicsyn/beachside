@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import {
   chownSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -125,6 +126,30 @@ test("an overwrite keeps the file's owner, so commands keep the access they had"
   }
 });
 
+test("without Python 3, new and root-owned files still write; replacing another user's refuses first", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    fixture.withoutPython();
+    const path = "/home/ubuntu/plain.txt";
+    await box.writeFile(path, new TextEncoder().encode("one"), { overwrite: true });
+    expect(new TextDecoder().decode(await box.readFile(path))).toBe("one");
+    const writes = fixture.effects.write;
+
+    await expect(
+      box.writeFile(path, new TextEncoder().encode("two"), { overwrite: true }),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(fixture.effects.write).toBe(writes);
+
+    fixture.vms.get(box.id)?.owners.set(path, "0:0");
+    await box.writeFile(path, new TextEncoder().encode("three"), { overwrite: true });
+    expect(new TextDecoder().decode(await box.readFile(path))).toBe("three");
+    expect(fixture.commands.some((command) => command.startsWith("python3"))).toBe(false);
+  } finally {
+    await client.close();
+  }
+});
+
 test("a root owner repair changes only the verified written file, never a swapped-in target", async () => {
   const { fixture, client, box, dir } = await setup();
 
@@ -185,14 +210,17 @@ test("no-clobber writes and copies refuse an existing target; moves keep bytes",
     const source = join(dir, "a.bin");
     await box.writeFile(source, Uint8Array.of(0, 255, 10), { overwrite: false });
 
+    // A confirmed collision leaves the target untouched, for writes and copies alike.
     await expect(
       box.writeFile(source, Uint8Array.of(1), { overwrite: false }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    ).rejects.toMatchObject({ code: "CONFLICT", effect: "none" });
 
     await box.copyFile(source, join(dir, "b.bin"));
     await expect(box.copyFile(source, join(dir, "b.bin"))).rejects.toMatchObject({
       code: "CONFLICT",
+      effect: "none",
     });
+    expect(readdirSync(dir).filter((name) => name.startsWith("."))).toEqual([]);
 
     await box.moveFile(join(dir, "b.bin"), join(dir, "c.bin"));
     expect(new Uint8Array(readFileSync(join(dir, "c.bin")))).toEqual(Uint8Array.of(0, 255, 10));

@@ -92,7 +92,11 @@ try:
  elif op=='reserve':
   parents(p);fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
  elif op=='publish':
-  regular(p);publish(p,q);published=True
+  regular(p)
+  try: publish(p,q);published=True
+  finally:
+   # A refused publish leaves nothing behind: the staged bytes are this attempt's own.
+   if not published and os.path.lexists(p): os.unlink(p)
  elif op=='copy':
   regular(p)
   if overwrite and os.path.lexists(q) and not stat.S_ISREG(os.lstat(q).st_mode): raise OSError(errno.EINVAL,'regular destination required')
