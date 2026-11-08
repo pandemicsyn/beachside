@@ -1,13 +1,13 @@
 import { z } from "zod";
 import {
-  SandbarError,
+  BeachsideError,
   raceAbort,
   type CreateInput,
   type SandboxHandle,
   type OperationHandle,
   type RecoveryReference,
 } from "./resource";
-import type { DestroyValue, SandboxReference, OperationKind } from "@sandbar-sdk/adapter";
+import type { DestroyValue, SandboxReference, OperationKind } from "@beachside/adapter";
 import type { AdapterDirectClient } from "./adapter-direct";
 
 /** Work cancellation does not cancel the separate cleanup budget. */
@@ -24,7 +24,7 @@ export type SandboxScopeCallbackOutcome<T> =
   | { status: "failed"; error: unknown };
 
 /** Destruction failed or was not confirmed; neither work nor cleanup is replayed. */
-export class SandboxCleanupError<T = unknown> extends SandbarError {
+export class SandboxCleanupError<T = unknown> extends BeachsideError {
   readonly sandboxId: string;
   readonly sandboxReference: SandboxReference | null;
   constructor(
@@ -34,7 +34,7 @@ export class SandboxCleanupError<T = unknown> extends SandbarError {
     readonly cleanupError: unknown,
     readonly cleanupOperation?: OperationHandle<DestroyValue, OperationKind>,
   ) {
-    const failure = cleanupError instanceof SandbarError ? cleanupError : undefined;
+    const failure = cleanupError instanceof BeachsideError ? cleanupError : undefined;
     super(
       "SANDBOX_CLEANUP_FAILED",
       "Owned sandbox cleanup was not confirmed; inspect the cleanup error and recovery reference",
@@ -66,7 +66,7 @@ export async function withSandbox<T>(
     .safeParse(options);
 
   if (!parsed.success || !z.function().safeParse(callback).success)
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid sandbox scope options or callback");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid sandbox scope options or callback");
   const timeout = parsed.data.cleanupTimeoutMs ?? 30_000;
   const { signal, storage } = parsed.data;
 
@@ -91,7 +91,9 @@ export async function withSandbox<T>(
 
   const timer = setTimeout(
     () =>
-      controller.abort(new SandbarError("TIMEOUT", "Sandbox cleanup budget exceeded", "possible")),
+      controller.abort(
+        new BeachsideError("TIMEOUT", "Sandbox cleanup budget exceeded", "possible"),
+      ),
     timeout,
   );
 

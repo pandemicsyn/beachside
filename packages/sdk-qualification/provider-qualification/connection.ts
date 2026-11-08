@@ -1,4 +1,4 @@
-import type { AdapterDirectClient, AdapterRecoveryReference } from "sandbar-sdk";
+import type { AdapterDirectClient, AdapterRecoveryReference } from "beachside";
 
 export type ConnectionFactory = (
   onReference: (reference: AdapterRecoveryReference) => Promise<void>,

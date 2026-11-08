@@ -1,8 +1,8 @@
-import { Sandbar } from "sandbar-sdk";
-import { boxdAdapter } from "@sandbar-sdk/boxd";
+import { Beachside } from "beachside";
+import { boxdAdapter } from "@beachside/boxd";
 
 export async function boxdExample(apiKey: string, org: string) {
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: boxdAdapter,
     credentials: { apiKey },
     config: { org, network: "internet" },

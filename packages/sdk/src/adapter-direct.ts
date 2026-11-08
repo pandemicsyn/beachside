@@ -1,7 +1,9 @@
 import { withSandbox, type SandboxScopeOptions } from "./scoped-sandbox";
 import { connectionBudget, type ConnectionWaitOptions, type CloseOptions } from "./connection-wait";
 import {
+  adapterFileLimit,
   bufferedLimit,
+  byteLimit,
   streamFile,
   writeStream,
   filesystemError,
@@ -12,7 +14,7 @@ import {
   type FileStreamWriteOptions,
   type TransferPolicy,
 } from "./file-transfer";
-import { FileMutationIntent, type FileEntry } from "@sandbar-sdk/adapter";
+import { FileMutationIntent, type FileEntry } from "@beachside/adapter";
 import {
   directoryEntries,
   directoryRead,
@@ -86,7 +88,7 @@ import {
   type SnapshotPlan,
   type CreatePlan,
   type DirectCapabilities,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 import {
   AdapterVolume,
@@ -106,7 +108,7 @@ import {
   type ArtifactDeletionResult,
   type DestroyValue,
   type OperationInput,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   AdapterError,
   AdapterCheckpointError,
@@ -127,23 +129,24 @@ import {
   type RuntimeResult,
   type Scope,
   type Sandbox,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   NonzeroExitError,
   NoExitCodeError,
   OutcomeUnknownError,
   WaitAbortedError,
-  SandbarError,
+  BeachsideError,
   UnsupportedFeatureError,
   checkExec,
   execOutput,
   newInvocationKey,
   raceAbort,
   validateCreate,
+  stdinNeedsStream,
   validateExec,
   validateFilePath,
   type ReadOptions,
-  type SandbarClient,
+  type BeachsideClient,
   type SandboxHandle,
   type VolumeHandle,
   type OperationHandle,
@@ -182,7 +185,7 @@ function sealedReference(value: RecoveryReference): RecoveryReference {
   const parsed = ReferenceSchema.parse(value);
 
   if (new TextEncoder().encode(JSON.stringify(parsed)).length > 16_384)
-    throw new SandbarError("INVALID_ARGUMENT", "Recovery reference exceeds 16384 bytes");
+    throw new BeachsideError("INVALID_ARGUMENT", "Recovery reference exceeds 16384 bytes");
   const copy = structuredClone(parsed);
 
   freezeReference(copy);
@@ -242,7 +245,7 @@ function assertRecoveryResourceKind(kind: string, resource?: ResourceReference):
         : null;
 
   if (expected && resource?.kind !== expected)
-    throw new SandbarError("INVALID_ARGUMENT", "Recovery resource kind differs from operation");
+    throw new BeachsideError("INVALID_ARGUMENT", "Recovery resource kind differs from operation");
 }
 
 function identity() {
@@ -254,14 +257,14 @@ function identity() {
 function asUnknown(
   ref: RecoveryReference,
   reason?: string,
-  outcome?: import("@sandbar-sdk/adapter").OperationOutcome,
+  outcome?: import("@beachside/adapter").OperationOutcome,
 ): OutcomeUnknownError<RecoveryReference> {
   return new OutcomeUnknownError(ref, reason, outcome);
 }
 
 function acknowledgedLifecycleOutcome(
   ref: RecoveryReference,
-): import("@sandbar-sdk/adapter").OperationOutcome | undefined {
+): import("@beachside/adapter").OperationOutcome | undefined {
   if (!ref.sandboxReference || !ref.lifecycle) return undefined;
 
   const token = z
@@ -310,7 +313,7 @@ function acknowledgedLifecycleOutcome(
 }
 
 /** Derive legacy inventory items from a listing when an adapter only implements `sandboxList`. */
-async function inventoryFromList(page: Promise<import("@sandbar-sdk/adapter").SandboxListPage>) {
+async function inventoryFromList(page: Promise<import("@beachside/adapter").SandboxListPage>) {
   const { items, nextCursor } = await page;
 
   return {
@@ -324,7 +327,7 @@ async function inventoryFromList(page: Promise<import("@sandbar-sdk/adapter").Sa
 }
 
 function unsupported(feature: string): never {
-  throw new SandbarError("UNSUPPORTED", `${feature} is unsupported`);
+  throw new BeachsideError("UNSUPPORTED", `${feature} is unsupported`);
 }
 
 function fileOptions(options: {
@@ -339,21 +342,21 @@ function fileOptions(options: {
       .object({ overwrite: z.boolean().optional(), followSymlinks: z.boolean().optional() })
       .safeParse(options).success
   )
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid filesystem options");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid filesystem options");
 }
 
 function fileReadLimit(maxBytes: number): number {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
-    throw new SandbarError("INVALID_ARGUMENT", "Adapter file limit is invalid", "none");
+    throw new BeachsideError("INVALID_ARGUMENT", "Adapter file limit is invalid", "none");
 
-  return Math.min(maxBytes, 1_048_576);
+  return maxBytes;
 }
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- AbortSignal.reason may be any JavaScript value and is preserved in WaitAbortedError.
 function abortWaiting(
   ref: RecoveryReference,
   reason: AbortSignal["reason"],
-  outcome?: import("@sandbar-sdk/adapter").OperationOutcome,
+  outcome?: import("@beachside/adapter").OperationOutcome,
 ): never {
   throw new WaitAbortedError(ref, reason, outcome ?? acknowledgedLifecycleOutcome(ref));
 }
@@ -389,7 +392,7 @@ async function waitForSubmission<T>(
 
 function assertSignal(signal?: AbortSignal) {
   if (signal?.aborted)
-    throw new SandbarError("WAIT_ABORTED", "Waiting stopped before submission", "none");
+    throw new BeachsideError("WAIT_ABORTED", "Waiting stopped before submission", "none");
 }
 
 async function readWhileOpen<T>(client: AdapterDirectClient, work: Promise<T>): Promise<T> {
@@ -519,11 +522,11 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
         first.kind,
         first.kind === "completed" ? "applied" : first.kind === "rejected" ? "none" : "possible",
       );
-    instrument(this, "observe", client.telemetry, "sandbar.operation.observe", {
+    instrument(this, "observe", client.telemetry, "beachside.operation.observe", {
       identity: this,
       origin: first ? activeTraceParent() : undefined,
     });
-    instrument(this, "wait", client.telemetry, "sandbar.operation.wait", {
+    instrument(this, "wait", client.telemetry, "beachside.operation.wait", {
       identity: this,
       effect: "applied",
       origin: first ? activeTraceParent() : undefined,
@@ -534,7 +537,7 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
     this.client.ensureOpen();
 
     if (this.continuing)
-      throw new SandbarError("CONFLICT", "Operation continuation is already active");
+      throw new BeachsideError("CONFLICT", "Operation continuation is already active");
     assertSignal(options.signal);
 
     const signal = options.signal
@@ -588,7 +591,7 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
       return this;
     } catch (error) {
       if (error instanceof AdapterCheckpointError && error.outcome)
-        throw new SandbarError(
+        throw new BeachsideError(
           "REFERENCE_SAVE_FAILED",
           error.message,
           "possible",
@@ -624,7 +627,7 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
   }
   private async observeWithSignal(signal: AbortSignal): Promise<T | null> {
     if (this.continuing)
-      throw new SandbarError("CONFLICT", "Operation continuation is already active");
+      throw new BeachsideError("CONFLICT", "Operation continuation is already active");
 
     if (signal.aborted)
       abortWaiting(
@@ -697,7 +700,7 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
           error instanceof AdapterError &&
           (error.code === "CONFLICT" || error.code === "INVALID_ARGUMENT")
         )
-          throw new SandbarError(error.code, error.message);
+          throw new BeachsideError(error.code, error.message);
 
         return null;
       });
@@ -738,7 +741,7 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
       const outcome = this.client.checkedOutcome(this.reference, result.outcome);
 
       if (outcome?.kind === "snapshot_capture" && outcome.restart?.status === "failed")
-        throw new SandbarError("SOURCE_RESTART_FAILED", result.reason, "partial", outcome);
+        throw new BeachsideError("SOURCE_RESTART_FAILED", result.reason, "partial", outcome);
       throw asUnknown(this.reference, result.reason, outcome);
     }
 
@@ -752,7 +755,7 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
       const error =
         result.code === "UNSUPPORTED"
           ? new UnsupportedFeatureError(this.reference.kind, [result.message])
-          : new SandbarError(result.code, result.message, "none");
+          : new BeachsideError(result.code, result.message, "none");
 
       this.terminal = { error };
       throw error;
@@ -787,7 +790,7 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
       : this.client.signal;
 
     if (!Number.isSafeInteger(pollMs) || pollMs < 50 || pollMs > 60_000)
-      throw new SandbarError("INVALID_ARGUMENT", "Invalid polling interval");
+      throw new BeachsideError("INVALID_ARGUMENT", "Invalid polling interval");
 
     while (true) {
       if (this.client.isClosed())
@@ -803,7 +806,7 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
         this.first?.kind === "rejected" ||
         (this.terminal &&
           "error" in this.terminal &&
-          this.terminal.error instanceof SandbarError &&
+          this.terminal.error instanceof BeachsideError &&
           this.terminal.error.effect === "none");
 
       if (options.signal?.aborted && !confirmedRejection)
@@ -827,11 +830,11 @@ export class AdapterOperation<T, K extends OperationKind = OperationKind> {
         confirmedRejection ? this.client.signal : signal,
       ).catch((error) => {
         this.client.telemetry.poll(
-          error instanceof SandbarError && error.effect === "applied"
+          error instanceof BeachsideError && error.effect === "applied"
             ? "completed"
             : this.terminal &&
                 "error" in this.terminal &&
-                error instanceof SandbarError &&
+                error instanceof BeachsideError &&
                 error.effect === "none"
               ? "rejected"
               : "unknown",
@@ -891,38 +894,44 @@ export class AdapterSandbox {
       assertResourceScope(reference, { provider: client.provider, scope: client.scope });
 
       if (reference.kind !== "sandbox" || reference.nativeId !== id)
-        throw new SandbarError("INVALID_RESPONSE", "Sandbox identity differs");
+        throw new BeachsideError("INVALID_RESPONSE", "Sandbox identity differs");
     }
 
     this.#reference = reference ? freezeReference(reference) : null;
-    instrument(this, "capabilities", client.telemetry, "sandbar.capabilities");
-    instrument(this, "checkSnapshot", client.telemetry, "sandbar.snapshot.check");
-    instrument(this, "preview", client.telemetry, "sandbar.sandbox.preview");
-    instrument(this, "inspect", client.telemetry, "sandbar.sandbox.inspect");
-    instrument(this, "submitExec", client.telemetry, "sandbar.exec.submit", { effect: "possible" });
-    instrument(this, "exec", client.telemetry, "sandbar.exec", { effect: "applied" });
-    instrument(this, "listFiles", client.telemetry, "sandbar.file.list");
-    instrument(this, "fileExists", client.telemetry, "sandbar.file.exists");
-    instrument(this, "makeDirectory", client.telemetry, "sandbar.file.mkdir", {
-      effect: "applied",
-    });
-    instrument(this, "removeFile", client.telemetry, "sandbar.file.remove", { effect: "applied" });
-    instrument(this, "readDirectory", client.telemetry, "sandbar.file.read_directory");
-    instrument(this, "statFile", client.telemetry, "sandbar.file.stat");
-    instrument(this, "copyFile", client.telemetry, "sandbar.file.copy", { effect: "applied" });
-    instrument(this, "moveFile", client.telemetry, "sandbar.file.move", { effect: "applied" });
-    instrument(this, "writeFileStream", client.telemetry, "sandbar.file.write_stream", {
-      effect: "applied",
-    });
-    instrument(this, "readFile", client.telemetry, "sandbar.file.read");
-    instrument(this, "writeFile", client.telemetry, "sandbar.file.write", { effect: "applied" });
-    instrument(this, "destroy", client.telemetry, "sandbar.sandbox.destroy", { effect: "applied" });
-    instrument(this.processes, "reopen", client.telemetry, "sandbar.process.reopen");
-    instrument(this.terminals, "start", client.telemetry, "sandbar.terminal.start", {
+    instrument(this, "capabilities", client.telemetry, "beachside.capabilities");
+    instrument(this, "checkSnapshot", client.telemetry, "beachside.snapshot.check");
+    instrument(this, "preview", client.telemetry, "beachside.sandbox.preview");
+    instrument(this, "inspect", client.telemetry, "beachside.sandbox.inspect");
+    instrument(this, "submitExec", client.telemetry, "beachside.exec.submit", {
       effect: "possible",
     });
-    instrument(this.terminals, "reopen", client.telemetry, "sandbar.terminal.reopen");
-    instrument(this.processes, "start", client.telemetry, "sandbar.process.start", {
+    instrument(this, "exec", client.telemetry, "beachside.exec", { effect: "applied" });
+    instrument(this, "listFiles", client.telemetry, "beachside.file.list");
+    instrument(this, "fileExists", client.telemetry, "beachside.file.exists");
+    instrument(this, "makeDirectory", client.telemetry, "beachside.file.mkdir", {
+      effect: "applied",
+    });
+    instrument(this, "removeFile", client.telemetry, "beachside.file.remove", {
+      effect: "applied",
+    });
+    instrument(this, "readDirectory", client.telemetry, "beachside.file.read_directory");
+    instrument(this, "statFile", client.telemetry, "beachside.file.stat");
+    instrument(this, "copyFile", client.telemetry, "beachside.file.copy", { effect: "applied" });
+    instrument(this, "moveFile", client.telemetry, "beachside.file.move", { effect: "applied" });
+    instrument(this, "writeFileStream", client.telemetry, "beachside.file.write_stream", {
+      effect: "applied",
+    });
+    instrument(this, "readFile", client.telemetry, "beachside.file.read");
+    instrument(this, "writeFile", client.telemetry, "beachside.file.write", { effect: "applied" });
+    instrument(this, "destroy", client.telemetry, "beachside.sandbox.destroy", {
+      effect: "applied",
+    });
+    instrument(this.processes, "reopen", client.telemetry, "beachside.process.reopen");
+    instrument(this.terminals, "start", client.telemetry, "beachside.terminal.start", {
+      effect: "possible",
+    });
+    instrument(this.terminals, "reopen", client.telemetry, "beachside.terminal.reopen");
+    instrument(this.processes, "start", client.telemetry, "beachside.process.start", {
       effect: "possible",
     });
   }
@@ -954,7 +963,7 @@ export class AdapterSandbox {
       this.client.ensureOpen();
 
       if (reference?.profile !== "terminal")
-        throw new SandbarError("INVALID_ARGUMENT", "Expected terminal reference");
+        throw new BeachsideError("INVALID_ARGUMENT", "Expected terminal reference");
       const control = processControl(this.client, this.id);
 
       return reopenProcess(
@@ -974,7 +983,7 @@ export class AdapterSandbox {
       this.client.ensureOpen();
 
       if (reference?.profile !== "process")
-        throw new SandbarError("INVALID_ARGUMENT", "Expected process reference");
+        throw new BeachsideError("INVALID_ARGUMENT", "Expected process reference");
       const control = processControl(this.client, this.id);
 
       return reopenProcess(
@@ -1081,7 +1090,7 @@ export class AdapterSandbox {
 
     if (plan.status === "unsupported") throw new UnsupportedFeatureError("snapshot", [plan.reason]);
 
-    if (plan.status !== "supported") throw new SandbarError("UNAVAILABLE", plan.reason, "none");
+    if (plan.status !== "supported") throw new BeachsideError("UNAVAILABLE", plan.reason, "none");
 
     assertSignal(signal);
     this.invalidateProcessControl();
@@ -1223,10 +1232,14 @@ export class AdapterSandbox {
         ),
       );
 
-      if (!result) throw new SandbarError("NOT_FOUND", "Sandbox is missing, expired, or deleted");
+      if (!result) throw new BeachsideError("NOT_FOUND", "Sandbox is missing, expired, or deleted");
 
       if (result.id !== this.id)
-        throw new SandbarError("INVALID_RESPONSE", "Provider returned another sandbox", "unknown");
+        throw new BeachsideError(
+          "INVALID_RESPONSE",
+          "Provider returned another sandbox",
+          "unknown",
+        );
 
       const { id: _id, ...facts } = result;
 
@@ -1238,7 +1251,8 @@ export class AdapterSandbox {
         observedAt: new Date().toISOString(),
       });
 
-      if (!parsed.success) throw new SandbarError("INVALID_RESPONSE", "Invalid sandbox inspection");
+      if (!parsed.success)
+        throw new BeachsideError("INVALID_RESPONSE", "Invalid sandbox inspection");
 
       const info = {
         ...parsed.data,
@@ -1247,7 +1261,7 @@ export class AdapterSandbox {
 
       if (info.reference) {
         if (info.reference.nativeId !== this.id)
-          throw new SandbarError("INVALID_RESPONSE", "Provider sandbox identity differs");
+          throw new BeachsideError("INVALID_RESPONSE", "Provider sandbox identity differs");
         assertResourceScope(info.reference, {
           provider: this.client.provider,
           scope: this.client.scope,
@@ -1260,9 +1274,9 @@ export class AdapterSandbox {
     } catch (error) {
       assertSignal(options.signal);
 
-      if (timeout.aborted) throw new SandbarError("TIMEOUT", "Sandbox inspection timed out");
+      if (timeout.aborted) throw new BeachsideError("TIMEOUT", "Sandbox inspection timed out");
 
-      if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+      if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
       throw error;
     }
   }
@@ -1271,7 +1285,7 @@ export class AdapterSandbox {
     this.client.ensureOpen();
 
     if (!PreviewPort.safeParse(port).success)
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_ARGUMENT",
         "Preview port must be an integer from 1 through 65535",
       );
@@ -1301,18 +1315,18 @@ export class AdapterSandbox {
       const parsed = PreviewResult.safeParse(result);
 
       if (!parsed.success)
-        throw new SandbarError("INVALID_RESPONSE", "Invalid preview access response");
+        throw new BeachsideError("INVALID_RESPONSE", "Invalid preview access response");
 
       return parsed.data;
     } catch (error) {
       assertSignal(options.signal);
 
-      if (timeout.aborted) throw new SandbarError("TIMEOUT", "Preview access timed out");
+      if (timeout.aborted) throw new BeachsideError("TIMEOUT", "Preview access timed out");
 
-      if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+      if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
 
-      if (error instanceof SandbarError) throw error;
-      throw new SandbarError("UNAVAILABLE", "Preview access is unavailable");
+      if (error instanceof BeachsideError) throw error;
+      throw new BeachsideError("UNAVAILABLE", "Preview access is unavailable");
     }
   }
   async submitExec(
@@ -1356,7 +1370,10 @@ export class AdapterSandbox {
     );
   }
   async exec(input: ExecInput | readonly string[], options: ExecOptions = {}): Promise<ExecOutput> {
-    if (options.onOutput !== undefined) {
+    const streamed = !Array.isArray(input) && "command" in input && stdinNeedsStream(input.stdin);
+
+    // Streamed input runs on the process transport; without a callback, output is only captured.
+    if (options.onOutput !== undefined || streamed) {
       this.client.ensureOpen();
       const control = processControl(this.client, this.id);
 
@@ -1365,7 +1382,7 @@ export class AdapterSandbox {
         sandboxInput(this.id, this.reference),
         () => control.active,
         input,
-        options,
+        options.onOutput ? options : { ...options, onOutput: () => undefined },
       );
     }
 
@@ -1383,14 +1400,14 @@ export class AdapterSandbox {
   async writeTextFile(path: string, text: string, options: FileWriteOptions = {}): Promise<void> {
     // oxlint-disable-next-line anti-slop/no-runtime-typeof -- JavaScript callers must not silently coerce non-text input during UTF-8 encoding.
     if (typeof text !== "string")
-      throw new SandbarError("INVALID_ARGUMENT", "Expected text string");
+      throw new BeachsideError("INVALID_ARGUMENT", "Expected text string");
 
     await this.writeFile(path, new TextEncoder().encode(text), options);
   }
   async readDirectory(
     path: string,
     options: ReadOptions = {},
-  ): Promise<import("@sandbar-sdk/adapter").DirectoryResult> {
+  ): Promise<import("@beachside/adapter").DirectoryResult> {
     this.client.ensureOpen();
     fileOptions(options);
     path = directoryPath(path);
@@ -1418,7 +1435,8 @@ export class AdapterSandbox {
       () => {
         this.client.ensureOpen();
 
-        if (options.signal?.aborted) throw new SandbarError("WAIT_ABORTED", "Traversal cancelled");
+        if (options.signal?.aborted)
+          throw new BeachsideError("WAIT_ABORTED", "Traversal cancelled");
       },
       options,
     );
@@ -1430,7 +1448,8 @@ export class AdapterSandbox {
       () => {
         this.client.ensureOpen();
 
-        if (options.signal?.aborted) throw new SandbarError("WAIT_ABORTED", "Text read cancelled");
+        if (options.signal?.aborted)
+          throw new BeachsideError("WAIT_ABORTED", "Text read cancelled");
       },
       options,
     );
@@ -1438,7 +1457,7 @@ export class AdapterSandbox {
   async statFile(
     path: string,
     options: ReadOptions & { followSymlinks?: boolean } = {},
-  ): Promise<import("@sandbar-sdk/adapter").FileStat> {
+  ): Promise<import("@beachside/adapter").FileStat> {
     this.client.ensureOpen();
     fileOptions(options);
     path = directoryPath(path);
@@ -1469,7 +1488,7 @@ export class AdapterSandbox {
       })
       .safeParse(result);
 
-    if (!parsed.success) throw new SandbarError("INVALID_RESPONSE", "Invalid file metadata");
+    if (!parsed.success) throw new BeachsideError("INVALID_RESPONSE", "Invalid file metadata");
 
     return parsed.data;
   }
@@ -1482,7 +1501,7 @@ export class AdapterSandbox {
     if (!files?.readStream) unsupported("readFileStream");
 
     return this.client.telemetry.iterate(
-      "sandbar.file.read_stream",
+      "beachside.file.read_stream",
       streamFile(
         (ctx) => files.readStream!({ sandbox: sandboxInput(this.id, this.reference), path }, ctx),
         this.client.signal,
@@ -1504,10 +1523,11 @@ export class AdapterSandbox {
 
     if (!files?.writeStream) unsupported("writeFileStream");
 
-    if (options.signal?.aborted) throw new SandbarError("WAIT_ABORTED", "File transfer cancelled");
+    if (options.signal?.aborted)
+      throw new BeachsideError("WAIT_ABORTED", "File transfer cancelled");
 
     const retained: Parameters<
-      NonNullable<import("@sandbar-sdk/adapter").FileTransferContext["retain"]>
+      NonNullable<import("@beachside/adapter").FileTransferContext["retain"]>
     >[0] = {};
 
     try {
@@ -1536,13 +1556,13 @@ export class AdapterSandbox {
     } catch (error) {
       if (
         !(error instanceof FilesystemError) &&
-        ((error instanceof SandbarError &&
+        ((error instanceof BeachsideError &&
           ["WAIT_ABORTED", "CLIENT_CLOSED", "TIMEOUT", "INVALID_RESPONSE"].includes(error.code)) ||
           !!retained.temporaryPaths?.length)
       ) {
         const failure = new FilesystemError(
-          error instanceof SandbarError ? error.code : "UNAVAILABLE",
-          error instanceof SandbarError ? error.message : "File input stream failed",
+          error instanceof BeachsideError ? error.code : "UNAVAILABLE",
+          error instanceof BeachsideError ? error.message : "File input stream failed",
           {
             destination: path,
             ...retained,
@@ -1585,17 +1605,17 @@ export class AdapterSandbox {
     destination = directoryPath(destination);
 
     if (source === destination || source === "/" || destination === "/")
-      throw new SandbarError("INVALID_ARGUMENT", "Invalid filesystem source or destination");
+      throw new BeachsideError("INVALID_ARGUMENT", "Invalid filesystem source or destination");
     const files = this.client.session.files;
     const operation = files?.[kind]?.bind(files);
 
     if (!operation) unsupported(kind + "File");
 
     if (options.signal?.aborted)
-      throw new SandbarError("WAIT_ABORTED", "Filesystem operation cancelled");
+      throw new BeachsideError("WAIT_ABORTED", "Filesystem operation cancelled");
 
     const retained: Parameters<
-      NonNullable<import("@sandbar-sdk/adapter").FileTransferContext["retain"]>
+      NonNullable<import("@beachside/adapter").FileTransferContext["retain"]>
     >[0] = {};
 
     try {
@@ -1623,14 +1643,14 @@ export class AdapterSandbox {
       );
 
       if (result.acknowledged !== true)
-        throw new SandbarError(
+        throw new BeachsideError(
           "INVALID_RESPONSE",
           "Filesystem completion was not confirmed",
           "unknown",
         );
     } catch (error) {
       if (
-        error instanceof SandbarError &&
+        error instanceof BeachsideError &&
         !(error instanceof FilesystemError) &&
         ["WAIT_ABORTED", "CLIENT_CLOSED", "TIMEOUT", "INVALID_RESPONSE"].includes(error.code)
       )
@@ -1674,7 +1694,7 @@ export class AdapterSandbox {
     );
 
     if (value !== true && value !== false)
-      throw new SandbarError("INVALID_RESPONSE", "Invalid entry existence result");
+      throw new BeachsideError("INVALID_RESPONSE", "Invalid entry existence result");
 
     return value;
   }
@@ -1699,7 +1719,7 @@ export class AdapterSandbox {
     path = directoryPath(path);
 
     if (kind === "file_remove" && path === "/")
-      throw new SandbarError("INVALID_ARGUMENT", "Cannot remove sandbox root");
+      throw new BeachsideError("INVALID_ARGUMENT", "Cannot remove sandbox root");
 
     const intent = validateResourceInput(
       FileMutationIntent,
@@ -1731,31 +1751,71 @@ export class AdapterSandbox {
   async readFile(path: string, options: FileReadOptions = {}): Promise<Uint8Array> {
     this.client.ensureOpen();
 
-    if (!this.client.session.files?.read) unsupported("readFile");
+    const files = this.client.session.files;
+
+    if (!files?.read) unsupported("readFile");
     validateFilePath(path);
-    const maxBytes = bufferedLimit(options.maxBytes, this.client.session.files.maxBytes);
+    const guard = byteLimit(options.maxBytes);
+    const maxBytes = bufferedLimit(guard, files.maxBytes);
 
-    const read = this.client.session.files.read.bind(this.client.session.files);
+    const read = files.read.bind(files);
 
-    return readFileBytes(
-      (context) =>
-        read({ sandbox: sandboxInput(this.id, this.reference), path, maxBytes }, context),
-      maxBytes,
-      this.client.signal,
-      options,
-    );
+    try {
+      return await readFileBytes(
+        (context) =>
+          read({ sandbox: sandboxInput(this.id, this.reference), path, maxBytes }, context),
+        maxBytes,
+        this.client.signal,
+        options,
+      );
+    } catch (error) {
+      // Only the adapter's buffered limit was hit: read the whole file through its stream.
+      const adapterBound = guard === undefined || guard > files.maxBytes;
+
+      if (!(error instanceof BeachsideError) || error.code !== "OUTPUT_CAPACITY" || !adapterBound)
+        throw error;
+
+      if (!files.readStream) throw adapterFileLimit(files.maxBytes, "OUTPUT_CAPACITY");
+    }
+
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+
+    for await (const chunk of this.readFileStream(path, {
+      signal: options.signal,
+      maxBytes: guard,
+    })) {
+      chunks.push(chunk);
+      total += chunk.byteLength;
+    }
+
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    return bytes;
   }
   async writeFile(path: string, bytes: Uint8Array, options: FileWriteOptions = {}): Promise<void> {
     if (!this.supports("writeFile")) unsupported("writeFile");
     validateFilePath(path);
 
     if (!(bytes instanceof Uint8Array))
-      throw new SandbarError("INVALID_ARGUMENT", "Expected byte buffer");
-    const limit = bufferedLimit(options.maxBytes, this.client.session.files!.maxBytes);
+      throw new BeachsideError("INVALID_ARGUMENT", "Expected byte buffer");
+    const files = this.client.session.files!;
+    const guard = byteLimit(options.maxBytes);
 
-    if (bytes.length > limit) throw new SandbarError("CAPACITY", "File exceeds byte limit");
+    if (guard !== undefined && bytes.length > guard)
+      throw new BeachsideError("CAPACITY", "File exceeds byte limit");
 
-    if (bytes.length > 1_048_576 && this.client.session.files?.writeStream) {
+    if (bytes.length > files.maxBytes && !files.writeStream)
+      throw adapterFileLimit(files.maxBytes, "CAPACITY");
+
+    // Large files travel through the adapter's stream, so the buffered limit never applies.
+    if ((bytes.length > 1_048_576 || bytes.length > files.maxBytes) && files.writeStream) {
       const payload = Uint8Array.from(bytes);
 
       async function* chunks() {
@@ -1797,12 +1857,12 @@ export class AdapterSandbox {
   }
   async submitDestroy(
     options: { signal?: AbortSignal; storage?: "require-durable" | "allow-unconfirmed" } = {},
-  ): Promise<OperationHandle<import("@sandbar-sdk/adapter").DestroyValue, OperationKind>> {
+  ): Promise<OperationHandle<import("@beachside/adapter").DestroyValue, OperationKind>> {
     this.client.ensureOpen();
     assertSignal(options.signal);
     this.invalidateProcessControl();
 
-    const op = await this.client.submit<import("@sandbar-sdk/adapter").DestroyValue>(
+    const op = await this.client.submit<import("@beachside/adapter").DestroyValue>(
       "destroy",
       {
         ...sandboxInput(this.id, this.reference),
@@ -1825,7 +1885,7 @@ export class AdapterSandbox {
   }
   async destroy(
     options: { signal?: AbortSignal; storage?: "require-durable" | "allow-unconfirmed" } = {},
-  ): Promise<import("@sandbar-sdk/adapter").DestroyValue> {
+  ): Promise<import("@beachside/adapter").DestroyValue> {
     return waitFor(this.client.telemetry, await this.submitDestroy(options), options);
   }
 }
@@ -1850,7 +1910,7 @@ export type AdvancedObservation = {
   sandboxId?: string;
   sandboxReference?: SandboxReference;
   resource?: ResourceReference;
-  mounts?: import("@sandbar-sdk/adapter").MountSpec[];
+  mounts?: import("@beachside/adapter").MountSpec[];
   token?: Json;
   tokenVersion?: number;
 };
@@ -1910,7 +1970,7 @@ export class PreparedAdapterAttempt {
       onCheckpoint?: (token: Json, version: number) => Promise<void>;
     },
   ): Promise<AdvancedOperationResult | null> {
-    if (this.used) throw new SandbarError("CONFLICT", "Prepared attempt was already used");
+    if (this.used) throw new BeachsideError("CONFLICT", "Prepared attempt was already used");
     this.used = true;
     this.client.ensureOpen();
     assertSignal(options.signal);
@@ -1932,7 +1992,7 @@ export class PreparedAdapterAttempt {
         assertSignal(options.signal);
 
         if (error instanceof AdapterError && error.code === "TIMEOUT")
-          throw new SandbarError(error.code, error.message);
+          throw new BeachsideError(error.code, error.message);
         throw error;
       }
 
@@ -1965,7 +2025,7 @@ export class PreparedAdapterAttempt {
       return await waitForSubmission(
         // Requirements were checked before the durable marker; no read hook may run after it.
         this.client.telemetry.run(
-          "sandbar.submit",
+          "beachside.submit",
           () =>
             waitForSubmission(
               submitOperation(
@@ -1975,7 +2035,7 @@ export class PreparedAdapterAttempt {
                 this.kind === "exec" ? this.maxOutputBytes : undefined,
                 async (token, version) => {
                   if (!options.onCheckpoint)
-                    throw new SandbarError(
+                    throw new BeachsideError(
                       "INVALID_ARGUMENT",
                       "Checkpointing submissions require onCheckpoint persistence",
                     );
@@ -2016,7 +2076,7 @@ export class PreparedAdapterAttempt {
   }
 }
 
-/** Use the SandbarClient type for consumer annotations. This compatibility runtime class remains supported. */
+/** Use the BeachsideClient type for consumer annotations. This compatibility runtime class remains supported. */
 export class AdapterDirectClient {
   private closed = false;
   private closePromise?: Promise<void>;
@@ -2140,7 +2200,7 @@ export class AdapterDirectClient {
           ).safeParse(input);
 
           if (!parsed.success)
-            throw new SandbarError("INVALID_ARGUMENT", "Invalid lifecycle mutation input");
+            throw new BeachsideError("INVALID_ARGUMENT", "Invalid lifecycle mutation input");
           const renewal = parsed.data;
           assertResourceScope(renewal.sandbox.reference, {
             provider: this.provider,
@@ -2174,7 +2234,7 @@ export class AdapterDirectClient {
           if (error instanceof AdapterError && error.code === "UNSUPPORTED")
             throw new UnsupportedFeatureError(kind, [error.message]);
 
-          if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+          if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
           throw error;
         }
 
@@ -2227,13 +2287,13 @@ export class AdapterDirectClient {
           .parse(input);
 
         if (canonicalScope(checked.scope) !== canonicalScope(this.scope))
-          throw new SandbarError(
+          throw new BeachsideError(
             "FORBIDDEN",
             "Observation scope differs from the verified connection",
           );
 
         if (checked.kind === "sandbox_renew" && (!checked.renewal || !checked.sandboxReference))
-          throw new SandbarError(
+          throw new BeachsideError(
             "INVALID_ARGUMENT",
             "Renewal observation requires saved intent and identity",
           );
@@ -2244,7 +2304,7 @@ export class AdapterDirectClient {
             checked.kind !== `sandbox_${checked.lifecycle.action}` ||
             !checked.sandboxReference)
         )
-          throw new SandbarError(
+          throw new BeachsideError(
             "INVALID_ARGUMENT",
             "Lifecycle observation requires saved intent and identity",
           );
@@ -2285,10 +2345,10 @@ export class AdapterDirectClient {
           ) &&
             !checked.resource)
         )
-          throw new SandbarError("INVALID_ARGUMENT", "Observation sandbox binding is invalid");
+          throw new BeachsideError("INVALID_ARGUMENT", "Observation sandbox binding is invalid");
 
         if (checked.kind === "snapshot_capture" && !checked.capture)
-          throw new SandbarError(
+          throw new BeachsideError(
             "INVALID_ARGUMENT",
             "Capture observation requires saved expectations",
           );
@@ -2353,32 +2413,34 @@ export class AdapterDirectClient {
         waitFor(this.telemetry, await internalMethod(this.submitBuild)(input, options), options),
       submitBuild: (input, options = {}) => this.submitBuild(input, options),
     };
-    instrument(this, "capabilities", this.telemetry, "sandbar.capabilities");
-    instrument(this, "checkCreate", this.telemetry, "sandbar.sandbox.check_create");
-    instrument(this, "submitCreate", this.telemetry, "sandbar.sandbox.submit_create", {
+    instrument(this, "capabilities", this.telemetry, "beachside.capabilities");
+    instrument(this, "checkCreate", this.telemetry, "beachside.sandbox.check_create");
+    instrument(this, "submitCreate", this.telemetry, "beachside.sandbox.submit_create", {
       effect: "possible",
     });
-    instrument(this, "submitBuild", this.telemetry, "sandbar.image.submit_build", {
+    instrument(this, "submitBuild", this.telemetry, "beachside.image.submit_build", {
       effect: "possible",
     });
-    instrument(this, "recover", this.telemetry, "sandbar.operation.recover", {
+    instrument(this, "recover", this.telemetry, "beachside.operation.recover", {
       effect: "possible",
     });
-    instrument(this, "close", this.telemetry, "sandbar.close");
-    instrument(this.sandboxes, "create", this.telemetry, "sandbar.sandbox.create", {
+    instrument(this, "close", this.telemetry, "beachside.close");
+    instrument(this.sandboxes, "create", this.telemetry, "beachside.sandbox.create", {
       effect: "applied",
     });
-    instrument(this.images, "build", this.telemetry, "sandbar.image.build", { effect: "applied" });
-    instrument(this.operations, "inventory", this.telemetry, "sandbar.sandbox.inventory");
-    instrument(this.sandboxes, "list", this.telemetry, "sandbar.sandbox.list");
-    instrument(this.operations, "prepare", this.telemetry, "sandbar.prepare", { phase: true });
-    instrument(this.operations, "observe", this.telemetry, "sandbar.observe", { phase: true });
+    instrument(this.images, "build", this.telemetry, "beachside.image.build", {
+      effect: "applied",
+    });
+    instrument(this.operations, "inventory", this.telemetry, "beachside.sandbox.inventory");
+    instrument(this.sandboxes, "list", this.telemetry, "beachside.sandbox.list");
+    instrument(this.operations, "prepare", this.telemetry, "beachside.prepare", { phase: true });
+    instrument(this.operations, "observe", this.telemetry, "beachside.observe", { phase: true });
   }
   isClosed() {
     return this.closed || this.signal.aborted;
   }
   ensureOpen() {
-    if (this.isClosed()) throw new SandbarError("CLIENT_CLOSED", "Client is closed");
+    if (this.isClosed()) throw new BeachsideError("CLIENT_CLOSED", "Client is closed");
   }
   async capabilities(
     target: { sandbox?: Sandbox; create?: AdapterCreateInput } = {},
@@ -2405,7 +2467,7 @@ export class AdapterDirectClient {
     } catch (error) {
       assertSignal(options.signal);
 
-      if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+      if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
       throw error;
     }
 
@@ -2486,7 +2548,7 @@ export class AdapterDirectClient {
       (request.environment.binding.provider !== this.provider ||
         canonicalScope(request.environment.binding.scope) !== canonicalScope(this.scope))
     )
-      throw new SandbarError("FORBIDDEN", "Prepared image scope differs from this connection");
+      throw new BeachsideError("FORBIDDEN", "Prepared image scope differs from this connection");
   }
   async submitCreate(
     input?: CreateInput,
@@ -2515,7 +2577,7 @@ export class AdapterDirectClient {
       assertSignal(options.signal);
 
       if (error instanceof AdapterError && error.code === "TIMEOUT")
-        throw new SandbarError(error.code, error.message);
+        throw new BeachsideError(error.code, error.message);
       throw error;
     }
 
@@ -2525,7 +2587,8 @@ export class AdapterDirectClient {
     if (evaluation.status === "unsupported")
       throw new UnsupportedFeatureError("create", [evaluation.reason]);
 
-    if (evaluation.status !== "supported") throw new SandbarError("UNAVAILABLE", evaluation.reason);
+    if (evaluation.status !== "supported")
+      throw new BeachsideError("UNAVAILABLE", evaluation.reason);
 
     return this.submit(
       "create",
@@ -2564,10 +2627,10 @@ export class AdapterDirectClient {
       reference = validateResourceReference(reference);
 
       if (reference.kind !== "sandbox")
-        throw new SandbarError("INVALID_ARGUMENT", "Expected sandbox reference");
+        throw new BeachsideError("INVALID_ARGUMENT", "Expected sandbox reference");
       assertResourceScope(reference, { provider: this.provider, scope: this.scope });
     } catch (error) {
-      if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+      if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
       throw error;
     }
 
@@ -2592,17 +2655,17 @@ export class AdapterDirectClient {
     } catch (error) {
       assertSignal(options.signal);
 
-      if (timeout.aborted) throw new SandbarError("TIMEOUT", "Sandbox reopen timed out");
+      if (timeout.aborted) throw new BeachsideError("TIMEOUT", "Sandbox reopen timed out");
 
-      if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+      if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
       throw error;
     }
 
     if (!info.reference)
-      throw new SandbarError("INVALID_RESPONSE", "Provider did not verify sandbox identity");
+      throw new BeachsideError("INVALID_RESPONSE", "Provider did not verify sandbox identity");
     assertSandboxReference(info.reference, reference);
 
-    if (info.state === "destroyed") throw new SandbarError("NOT_FOUND", "Sandbox is destroyed");
+    if (info.state === "destroyed") throw new BeachsideError("NOT_FOUND", "Sandbox is destroyed");
 
     return new AdapterSandbox(this, reference.nativeId, reference);
   }
@@ -2625,7 +2688,7 @@ export class AdapterDirectClient {
   }
   /** Decode a confirmed build; a missing adapter reference is never promoted to verified. */
   private builtImage(
-    value: import("@sandbar-sdk/adapter").ImageBuildValue,
+    value: import("@beachside/adapter").ImageBuildValue,
     ref: RecoveryReference,
   ): ImageBuildResult {
     // The runtime parsed adapter references with a literal "image" kind.
@@ -2670,7 +2733,7 @@ export class AdapterDirectClient {
       sandboxReference?: SandboxReference;
       resource?: ResourceReference;
       capture?: z.infer<typeof CaptureExpectation>;
-      mounts?: import("@sandbar-sdk/adapter").MountSpec[];
+      mounts?: import("@beachside/adapter").MountSpec[];
       networkPolicy?: string;
       file?: { path: string; bytes: number };
       fileMutation?: RecoveryReference["fileMutation"];
@@ -2727,7 +2790,7 @@ export class AdapterDirectClient {
             },
           })
           .then((value) => {
-            if (!value) throw new SandbarError("CONFLICT", "Submission was cancelled");
+            if (!value) throw new BeachsideError("CONFLICT", "Submission was cancelled");
 
             return value;
           }),
@@ -2754,7 +2817,7 @@ export class AdapterDirectClient {
       if (error instanceof BeforeSubmitError) throw error.original;
 
       if (error instanceof AdapterCheckpointError && error.outcome)
-        throw new SandbarError(
+        throw new BeachsideError(
           "REFERENCE_SAVE_FAILED",
           error.message,
           "possible",
@@ -2767,7 +2830,11 @@ export class AdapterDirectClient {
         ["sandbox_renew", "sandbox_suspend", "sandbox_resume"].includes(kind) &&
         !dispatchedLifecycles.has(prepared)
       ) {
-        throw new SandbarError("WAIT_ABORTED", "Waiting stopped before lifecycle dispatch", "none");
+        throw new BeachsideError(
+          "WAIT_ABORTED",
+          "Waiting stopped before lifecycle dispatch",
+          "none",
+        );
       }
 
       if (waiting.aborted) abortWaiting(reference, waiting.reason);
@@ -2778,8 +2845,8 @@ export class AdapterDirectClient {
   }
   checkedOutcome(
     reference: RecoveryReference,
-    outcome?: import("@sandbar-sdk/adapter").OperationOutcome,
-  ): import("@sandbar-sdk/adapter").OperationOutcome | undefined {
+    outcome?: import("@beachside/adapter").OperationOutcome,
+  ): import("@beachside/adapter").OperationOutcome | undefined {
     if (!outcome) return undefined;
     const parsed = OperationOutcome.safeParse(outcome);
 
@@ -2899,7 +2966,7 @@ export class AdapterDirectClient {
     if (!reference.sandboxReference) return;
 
     if (reference.sandboxReference.nativeId !== reference.sandboxId)
-      throw new SandbarError("INVALID_ARGUMENT", "Recovery sandbox identity differs");
+      throw new BeachsideError("INVALID_ARGUMENT", "Recovery sandbox identity differs");
 
     try {
       assertResourceScope(reference.sandboxReference, {
@@ -2907,7 +2974,7 @@ export class AdapterDirectClient {
         scope: this.scope,
       });
     } catch (error) {
-      if (error instanceof AdapterError) throw new SandbarError(error.code, error.message);
+      if (error instanceof AdapterError) throw new BeachsideError(error.code, error.message);
       throw error;
     }
   }
@@ -2920,7 +2987,10 @@ export class AdapterDirectClient {
       reference.provider !== this.provider ||
       canonicalScope(reference.scope) !== canonicalScope(this.connection.scope)
     )
-      throw new SandbarError("FORBIDDEN", "Recovery scope does not match the verified connection");
+      throw new BeachsideError(
+        "FORBIDDEN",
+        "Recovery scope does not match the verified connection",
+      );
 
     if (
       ["snapshot_restore", "snapshot_delete", "volume_delete", "image_delete"].includes(
@@ -2928,13 +2998,13 @@ export class AdapterDirectClient {
       ) &&
       !reference.resource
     )
-      throw new SandbarError("INVALID_ARGUMENT", "Recovery resource is missing");
+      throw new BeachsideError("INVALID_ARGUMENT", "Recovery resource is missing");
 
     if (reference.kind === "snapshot_capture" && !reference.capture)
-      throw new SandbarError("INVALID_ARGUMENT", "Recovery capture expectations are missing");
+      throw new BeachsideError("INVALID_ARGUMENT", "Recovery capture expectations are missing");
 
     if (reference.kind === "sandbox_renew" && (!reference.renewal || !reference.sandboxReference))
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_ARGUMENT",
         "Recovery renewal intent and identity are missing",
       );
@@ -2945,13 +3015,13 @@ export class AdapterDirectClient {
         reference.kind !== `sandbox_${reference.lifecycle.action}` ||
         !reference.sandboxReference)
     )
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_ARGUMENT",
         "Lifecycle recovery requires saved intent and identity",
       );
 
     if (["file_mkdir", "file_remove"].includes(reference.kind) && !reference.fileMutation)
-      throw new SandbarError("INVALID_ARGUMENT", "Recovery filesystem intent is missing");
+      throw new BeachsideError("INVALID_ARGUMENT", "Recovery filesystem intent is missing");
 
     this.assertRecoverySandbox(reference);
     assertRecoveryResourceKind(reference.kind, reference.resource);
@@ -2974,7 +3044,7 @@ export class AdapterDirectClient {
       ].includes(reference.kind) &&
       reference.sandboxId
     )
-      throw new SandbarError("INVALID_ARGUMENT", "Create reference cannot have a sandbox");
+      throw new BeachsideError("INVALID_ARGUMENT", "Create reference cannot have a sandbox");
 
     if (
       [
@@ -2990,7 +3060,7 @@ export class AdapterDirectClient {
       ].includes(reference.kind) &&
       !reference.sandboxId
     )
-      throw new SandbarError("INVALID_ARGUMENT", "Recovery sandbox is missing");
+      throw new BeachsideError("INVALID_ARGUMENT", "Recovery sandbox is missing");
 
     const completed = (result: RuntimeResult, ref: RecoveryReference) => {
       if (result.kind !== "completed") throw asUnknown(ref);
@@ -3201,10 +3271,10 @@ export type AdapterConnectOptions<
 export function connectDirect(
   adapter: BoundAdapter,
   options?: ConnectOptions,
-): Promise<SandbarClient<true>>;
+): Promise<BeachsideClient<true>>;
 export function connectDirect<C extends z.ZodType, K extends z.ZodType, S extends RuntimeSession>(
   options: AdapterConnectOptions<C, K, S>,
-): Promise<SandbarClient<true>>;
+): Promise<BeachsideClient<true>>;
 
 export async function connectDirect<
   C extends z.ZodType,
@@ -3213,14 +3283,22 @@ export async function connectDirect<
 >(
   options: AdapterConnectOptions<C, K, S> | BoundAdapter,
   observability: ConnectOptions = {},
-): Promise<SandbarClient<true>> {
+): Promise<BeachsideClient<true>> {
+  // JavaScript callers can pass a provider factory such as `vercel` where a definition belongs.
+  if (options instanceof Function || ("adapter" in options && options.adapter instanceof Function))
+    throw new BeachsideError(
+      "INVALID_ARGUMENT",
+      "Expected an adapter definition, got a function: pass the definition (`adapter: vercelAdapter`) or call the provider factory (`Beachside.connect(vercel({ ... }))`)",
+      "none",
+    );
+
   const cleanup = z
     .strictObject({ storage: z.enum(["require-durable", "allow-unconfirmed"]).optional() })
     .optional()
     .safeParse(("bound" in options ? observability : options).cleanup);
 
   if (!cleanup.success)
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid cleanup configuration", "none");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid cleanup configuration", "none");
   const storage = cleanup.data?.storage ?? "require-durable";
 
   const telemetry = new Telemetry(
@@ -3232,7 +3310,7 @@ export async function connectDirect<
   const budget = connectionBudget("bound" in options ? observability : options, "connect");
 
   try {
-    return await telemetry.run("sandbar.connect", async () => {
+    return await telemetry.run("beachside.connect", async () => {
       if ("bound" in options) {
         const connection = await connectAdapter(options, {
           config: {},

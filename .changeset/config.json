@@ -3,22 +3,22 @@
   "changelog": [
     "@changesets/changelog-github",
     {
-      "repo": "pandemicsyn/sandbar"
+      "repo": "pandemicsyn/beachside"
     }
   ],
   "commit": false,
   "fixed": [
     [
-      "@sandbar-sdk/adapter",
-      "sandbar-sdk",
-      "@sandbar-sdk/daytona",
-      "@sandbar-sdk/e2b",
-      "@sandbar-sdk/boxd",
-      "@sandbar-sdk/boat",
-      "@sandbar-sdk/runloop",
-      "@sandbar-sdk/modal",
-      "@sandbar-sdk/vercel",
-      "@sandbar-sdk/cli"
+      "@beachside/adapter",
+      "beachside",
+      "@beachside/daytona",
+      "@beachside/e2b",
+      "@beachside/boxd",
+      "@beachside/boat",
+      "@beachside/runloop",
+      "@beachside/modal",
+      "@beachside/vercel",
+      "@beachside/cli"
     ]
   ],
   "linked": [],

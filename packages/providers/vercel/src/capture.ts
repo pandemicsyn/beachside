@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import { AdapterError, type ExecInput } from "@sandbar-sdk/adapter";
+import { AdapterError, type ExecInput } from "@beachside/adapter";
 
 // Executed by the managed Node 24 image. User argv is JSON data, never interpolated code.
 // A private directory and exclusive receipt prevent concurrent executions from colliding.
@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const spec = JSON.parse(process.argv[1]);
-const dir = fs.mkdtempSync('/tmp/sandbar-exec-');
+const dir = fs.mkdtempSync('/tmp/beachside-exec-');
 fs.chmodSync(dir, 0o700);
 const path = dir + '/receipt.json';
 console.log(path);
@@ -50,7 +50,7 @@ child.on('error', () => { failure = true; });
 child.on('close', (code, signal) => {
   clearTimeout(timer);
   if (Number.isInteger(code) && !failure && !timedOut)
-    console.log(JSON.stringify({ sandbarExit: 1, exitCode: code }));
+    console.log(JSON.stringify({ beachsideExit: 1, exitCode: code }));
   const receipt = { version: 1, exitCode: code, signal, timedOut, failure, truncated,
     stdout: Buffer.concat(output.stdout).toString('base64'),
     stderr: Buffer.concat(output.stderr).toString('base64') };

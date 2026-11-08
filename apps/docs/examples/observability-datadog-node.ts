@@ -1,17 +1,17 @@
 import tracer from "dd-trace";
 
-tracer.init({ service: "sandbar-demo" });
+tracer.init({ service: "beachside-demo" });
 
 const provider = new tracer.TracerProvider();
 
 provider.register();
 
 // Import the SDK after registering the application's existing Datadog tracer.
-const { Sandbar, Image } = await import("sandbar-sdk");
+const { Beachside, Image } = await import("beachside");
 
-const { daytona } = await import("@sandbar-sdk/daytona");
+const { daytona } = await import("@beachside/daytona");
 
-const client = await Sandbar.connect(
+const client = await Beachside.connect(
   daytona({
     apiKey: process.env.DAYTONA_API_KEY!,
     target: process.env.DAYTONA_TARGET ?? "us",
@@ -21,7 +21,7 @@ const client = await Sandbar.connect(
 );
 
 try {
-  await tracer.trace("sandbar-demo", async () => {
+  await tracer.trace("beachside-demo", async () => {
     const box = await client.sandboxes.create({
       environment: Image.prepared("daytona-small"),
     });

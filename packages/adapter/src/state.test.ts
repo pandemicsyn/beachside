@@ -247,15 +247,15 @@ test("snapshot list capabilities retain managed-only coverage and unknown declar
       throw new Error("No effects");
     },
     async snapshotList() {
-      return { items: [], coverage: "sandbar-managed" };
+      return { items: [], coverage: "managed" };
     },
-    snapshotListCoverage: "sandbar-managed",
+    snapshotListCoverage: "managed",
   };
 
   const context = { signal: new AbortController().signal, deadline: Date.now() + 1000 };
   expect((await stateCapabilities(session, {}, context)).snapshots.list).toEqual({
     status: "supported",
-    value: { coverage: "sandbar-managed" },
+    value: { coverage: "managed" },
   });
   delete session.snapshotListCoverage;
   expect((await stateCapabilities(session, {}, context)).snapshots.list.status).toBe("unknown");

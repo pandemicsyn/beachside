@@ -1,4 +1,4 @@
-import { AdapterError, type Command } from "@sandbar-sdk/adapter";
+import { AdapterError, type Command } from "@beachside/adapter";
 
 /**
  * Runloop runs one shell string and returns stdout/stderr as text, with an undocumented
@@ -8,7 +8,7 @@ import { AdapterError, type Command } from "@sandbar-sdk/adapter";
  * larger ones stay in the guest for a binary download. User output is never read as a
  * control record.
  */
-export const EXEC_RECORD = "SANDBAR-EXEC-1";
+export const EXEC_RECORD = "BEACHSIDE-EXEC-1";
 
 /** Combined bound for results returned inline instead of downloaded. */
 export const INLINE_BYTES = 32 * 1024;
@@ -62,19 +62,19 @@ export function wrapperScript(input: WrapperInput): string {
   const bound = Math.max(0, Math.floor(input.maxBytes));
 
   return [
-    "sandbar_d=$(mktemp -d /tmp/sandbar-exec.XXXXXXXX) || exit 97",
-    `(${body}) <${stdin} >"$sandbar_d/stdout.raw" 2>"$sandbar_d/stderr.raw"`,
-    "sandbar_c=$?",
-    `sandbar_ol=$(($(wc -c <"$sandbar_d/stdout.raw"))); sandbar_el=$(($(wc -c <"$sandbar_d/stderr.raw")))`,
-    `head -c ${bound} "$sandbar_d/stdout.raw" >"$sandbar_d/stdout"; head -c ${bound} "$sandbar_d/stderr.raw" >"$sandbar_d/stderr"`,
-    `rm -f "$sandbar_d/stdout.raw" "$sandbar_d/stderr.raw"${removeStdin}`,
-    `if [ $(($(wc -c <"$sandbar_d/stdout") + $(wc -c <"$sandbar_d/stderr"))) -le ${INLINE_BYTES} ]; then`,
-    `printf '${EXEC_RECORD} inline %s %s %s\\n' "$sandbar_c" "$sandbar_ol" "$sandbar_el"`,
-    `base64 <"$sandbar_d/stdout" | tr -d '\\n'; printf '\\n'`,
-    `base64 <"$sandbar_d/stderr" | tr -d '\\n'; printf '\\n'`,
-    `rm -rf "$sandbar_d"`,
+    "beachside_d=$(mktemp -d /tmp/beachside-exec.XXXXXXXX) || exit 97",
+    `(${body}) <${stdin} >"$beachside_d/stdout.raw" 2>"$beachside_d/stderr.raw"`,
+    "beachside_c=$?",
+    `beachside_ol=$(($(wc -c <"$beachside_d/stdout.raw"))); beachside_el=$(($(wc -c <"$beachside_d/stderr.raw")))`,
+    `head -c ${bound} "$beachside_d/stdout.raw" >"$beachside_d/stdout"; head -c ${bound} "$beachside_d/stderr.raw" >"$beachside_d/stderr"`,
+    `rm -f "$beachside_d/stdout.raw" "$beachside_d/stderr.raw"${removeStdin}`,
+    `if [ $(($(wc -c <"$beachside_d/stdout") + $(wc -c <"$beachside_d/stderr"))) -le ${INLINE_BYTES} ]; then`,
+    `printf '${EXEC_RECORD} inline %s %s %s\\n' "$beachside_c" "$beachside_ol" "$beachside_el"`,
+    `base64 <"$beachside_d/stdout" | tr -d '\\n'; printf '\\n'`,
+    `base64 <"$beachside_d/stderr" | tr -d '\\n'; printf '\\n'`,
+    `rm -rf "$beachside_d"`,
     "else",
-    `printf '${EXEC_RECORD} files %s %s %s %s\\n' "$sandbar_c" "$sandbar_ol" "$sandbar_el" "$sandbar_d"`,
+    `printf '${EXEC_RECORD} files %s %s %s %s\\n' "$beachside_c" "$beachside_ol" "$beachside_el" "$beachside_d"`,
     "fi",
   ].join("\n");
 }
@@ -99,7 +99,7 @@ const Inline = new RegExp(
 );
 
 const Files = new RegExp(
-  `^${EXEC_RECORD} files (\\d{1,3}) (\\d{1,15}) (\\d{1,15}) (/tmp/sandbar-exec\\.[A-Za-z0-9]{8})\\n$`,
+  `^${EXEC_RECORD} files (\\d{1,3}) (\\d{1,15}) (\\d{1,15}) (/tmp/beachside-exec\\.[A-Za-z0-9]{8})\\n$`,
 );
 
 /** Decode the wrapper record, or null when it is missing or malformed. */

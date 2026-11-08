@@ -7,9 +7,9 @@ import {
   createAttemptContext,
   operationParts,
   type Json,
-} from "@sandbar-sdk/adapter";
-import { adapterSuite, snapshotSuite } from "@sandbar-sdk/adapter/testing";
-import { Image, Preserve, Sandbar, type ExecInput } from "sandbar-sdk";
+} from "@beachside/adapter";
+import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
+import { Image, Preserve, Beachside, type ExecInput } from "beachside";
 import { createVercelAdapter } from "./adapter";
 import type { VercelTransport } from "./transport";
 
@@ -73,7 +73,7 @@ export function fixture() {
   let mutationFailure: { suffix: string; status: number | "lost" } | undefined;
   let loseWait = false;
   let confirmedExit: number | undefined;
-  let receiptPath = "/tmp/sandbar-exec-Fixture/receipt.json";
+  let receiptPath = "/tmp/beachside-exec-Fixture/receipt.json";
   const json = (value: Json, status = 200) => Response.json(value, { status });
 
   const factory = (): VercelTransport => ({
@@ -126,7 +126,7 @@ export function fixture() {
         if (createStatus !== 200) return json(createError, createStatus);
         const input = JSON.parse(String(init.body));
         expect(input).toMatchObject({ projectId: "project-fixture" });
-        expect(input.tags.sandbarSubmission).toBeString();
+        expect(input.tags.beachsideSubmission).toBeString();
 
         const session = {
           id: `session-${effects.create}`,
@@ -385,7 +385,7 @@ export function fixture() {
               "\n" +
               (confirmedExit === undefined
                 ? ""
-                : JSON.stringify({ sandbarExit: 1, exitCode: confirmedExit }) + "\n"),
+                : JSON.stringify({ beachsideExit: 1, exitCode: confirmedExit }) + "\n"),
           }) + "\n",
         );
 
@@ -538,7 +538,7 @@ test("Vercel native HTTP boundary passes managed adapter suite", async () => {
 
 test("Vercel files preserve binary bytes and destroy confirms stopped compute", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create({
@@ -570,7 +570,7 @@ test("Vercel mutations dispatch once after rate limits and server errors", async
   for (const status of [429, 500, 503]) {
     const native = fixture();
     native.setCreateStatus(status);
-    const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+    const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
     try {
       const op = await client.sandboxes.submitCreate({
@@ -602,7 +602,7 @@ test.each([
     native.setCreateStatus(status, {
       error: { code: "limit", message: "Concurrent sandbox limit reached\n(fixture-token)" },
     });
-    const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+    const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
     try {
       const error = await client.sandboxes
@@ -630,7 +630,7 @@ test.each([
 test.each([409, 500, 503])("Vercel create HTTP %i stays an unknown outcome", async (status) => {
   const native = fixture();
   native.setCreateStatus(status, { error: { code: "busy", message: "try later" } });
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     await expect(
@@ -661,7 +661,7 @@ test("failed identity verification releases the native transport once", async ()
 test("Vercel exec collects binary receipts and recovers acknowledged commands without replay", async () => {
   const native = fixture();
   native.files.set(
-    "/tmp/sandbar-exec-Fixture/receipt.json",
+    "/tmp/beachside-exec-Fixture/receipt.json",
     Buffer.from(
       JSON.stringify({
         version: 1,
@@ -675,7 +675,7 @@ test("Vercel exec collects binary receipts and recovers acknowledged commands wi
       }),
     ),
   );
-  let client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  let client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create({
@@ -708,7 +708,7 @@ test("Vercel exec collects binary receipts and recovers acknowledged commands wi
     ).length;
 
     await client.close();
-    client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+    client = await Beachside.connect({ adapter: native.adapter, config, credentials });
     const recovered = await (await client.recover(reference)).observe();
     expect(recovered).toMatchObject({
       stdout: Uint8Array.from([0, 255]),
@@ -728,7 +728,7 @@ test("Vercel exec collects binary receipts and recovers acknowledged commands wi
 test("Vercel exec refuses log paths outside the private capture receipt directory", async () => {
   const native = fixture();
   native.setReceiptPath("/tmp/user-selected-file");
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create({
@@ -753,7 +753,7 @@ test("Vercel exec refuses log paths outside the private capture receipt director
 test("malformed acknowledged create preserves session identity without trusting configuration", async () => {
   const native = fixture();
   native.corruptCreateAcknowledgment();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const op = await client.sandboxes.submitCreate({
@@ -800,7 +800,7 @@ test("raw sessions must belong to the verified project before native access", as
 test("create acknowledgements for another sandbox name retain an unvalidated recovery identity", async () => {
   const native = fixture();
   native.corruptCreateName();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const op = await client.sandboxes.submitCreate({
@@ -819,7 +819,7 @@ test("create acknowledgements for another sandbox name retain an unvalidated rec
 
 test("invalid execution strings fail before any native command submission", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create({
@@ -850,7 +850,7 @@ test("uploads, commands and stop each dispatch once on lost responses, rate limi
   for (const suffix of ["/fs/write", "/cmd", "/stop"] as const) {
     for (const status of ["lost", 429, 500, 503] as const) {
       const native = fixture();
-      const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+      const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
       try {
         const box = await client.sandboxes.create({
@@ -884,7 +884,7 @@ test("uploads, commands and stop each dispatch once on lost responses, rate limi
 
 test("directory file paths fail before upload and native mutations receive cancellation signals", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create({
@@ -917,7 +917,7 @@ test("directory file paths fail before upload and native mutations receive cance
 
 test("a fresh OS process reopens the saved SDK reference using current credentials and only session reads", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
   let saved: string;
   let originalId: string;
 
@@ -953,14 +953,14 @@ test("a fresh OS process reopens the saved SDK reference using current credentia
   expect(reopened.pid).not.toBe(process.pid);
   expect(reopened.paths).toContain(`/api/v2/sandboxes/sessions/${originalId}`);
   expect(reopened.paths).toContain("/api/v2/sandboxes/sessions");
-  expect(reopened.paths.every((path: string) => !path.includes("sandbar-"))).toBe(true);
+  expect(reopened.paths.every((path: string) => !path.includes("beachside-"))).toBe(true);
   expect(native.effects.create).toBe(1);
 });
 
 test("acknowledged pending creation reaches readiness through session reads without resubmission", async () => {
   const native = fixture();
   native.acknowledgePendingCreate();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const creation = await client.sandboxes.submitCreate({
@@ -988,7 +988,7 @@ test("omitted create options use the configured image and network policy default
   for (const networkPolicy of ["vercel-deny-all", "vercel-allow-all"] as const) {
     const native = fixture();
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: native.adapter,
       config: { teamId: config.teamId, projectId: config.projectId, networkPolicy },
       credentials,
@@ -1027,7 +1027,7 @@ test("portable network names configure Vercel and deprecated names still resolve
     const portable = mode === "deny-all" ? "blocked" : "internet";
     const legacy = mode === "deny-all" ? "vercel-deny-all" : "vercel-allow-all";
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: native.adapter,
       config: { ...config, ...setup },
       credentials,
@@ -1054,7 +1054,7 @@ test("portable network names configure Vercel and deprecated names still resolve
   }
 
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter: fixture().adapter,
       config: { ...config, network: "internet", networkPolicy: "vercel-allow-all" },
       credentials,
@@ -1064,7 +1064,7 @@ test("portable network names configure Vercel and deprecated names still resolve
 
 test("native output-read failures preserve the user exit evidence from helper logs", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create({
@@ -1118,7 +1118,7 @@ test("native output-read failures preserve the user exit evidence from helper lo
 
 test("public exec failures retain confirmed exit evidence in the recovery token without replay", async () => {
   const native = fixture();
-  let client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  let client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create();
@@ -1139,7 +1139,7 @@ test("public exec failures retain confirmed exit evidence in the recovery token 
     ).length;
 
     await client.close();
-    client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+    client = await Beachside.connect({ adapter: native.adapter, config, credentials });
     const recovered = await client.recover(reference);
     await expect(recovered.observe()).rejects.toMatchObject({
       code: "OUTCOME_UNKNOWN",
@@ -1163,7 +1163,7 @@ test("public exec failures retain confirmed exit evidence in the recovery token 
 
 test("failed confirmed-exit checkpoint persistence prevents reading the receipt", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create();
@@ -1223,7 +1223,7 @@ test("failed confirmed-exit checkpoint persistence prevents reading the receipt"
 
 test("Vercel filesystem snapshot capture/restore/delete retains independent exact identities", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const source = await client.sandboxes.create();
@@ -1270,14 +1270,18 @@ test("Vercel filesystem snapshot capture/restore/delete retains independent exac
 test("Vercel passes the shared snapshot suite", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, snapshots: { preserve: Preserve.FILESYSTEM } },
     credentials,
   });
 
   try {
-    await snapshotSuite({ client, path: "/tmp/sandbar-suite.bin", preserve: Preserve.FILESYSTEM });
+    await snapshotSuite({
+      client,
+      path: "/tmp/beachside-suite.bin",
+      preserve: Preserve.FILESYSTEM,
+    });
   } finally {
     await client.close();
   }
@@ -1290,7 +1294,7 @@ test("Vercel snapshot retention sets the native expiration and the retention gua
   ] as const) {
     const native = fixture();
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: native.adapter,
       config: { ...config, snapshots: { retentionSeconds } },
       credentials,
@@ -1308,7 +1312,7 @@ test("Vercel snapshot retention sets the native expiration and the retention gua
     }
   }
 
-  const persistent = Sandbar.connect({
+  const persistent = Beachside.connect({
     adapter: fixture().adapter,
     config: { ...config, persistent: true, snapshots: { retentionSeconds: 60 } },
     credentials,
@@ -1321,7 +1325,7 @@ test("Vercel accepts filesystem-only preserve and rejects memory at connect befo
   const native = fixture();
 
   const connect = (preserve: Preserve) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: native.adapter,
       config: { ...config, snapshots: { preserve } },
       credentials,
@@ -1345,7 +1349,7 @@ test("Vercel accepts filesystem-only preserve and rejects memory at connect befo
 test("Vercel scoped configuration, renewal and public previews use original sessions", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, region: "fra1", vcpus: 4, ports: [3000], image: "vercel/sandbox/node:22" },
     credentials,
@@ -1388,7 +1392,7 @@ test("Vercel scoped configuration, renewal and public previews use original sess
 test("Vercel resources pick the smallest vCPU count and inspect reports the session size", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, resources: { vcpus: 3, memoryMiB: 4096 } },
     credentials,
@@ -1409,7 +1413,7 @@ test("Vercel resources pick the smallest vCPU count and inspect reports the sess
   const before = native.requests.length;
 
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter: native.adapter,
       config: { ...config, resources: { memoryMiB: 131072 } },
       credentials,
@@ -1419,7 +1423,7 @@ test("Vercel resources pick the smallest vCPU count and inspect reports the sess
     message: expect.stringContaining("largest is 32 vCPU / 65536 MiB"),
   });
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter: native.adapter,
       config: { ...config, vcpus: 2, resources: { vcpus: 2 } },
       credentials,
@@ -1435,7 +1439,7 @@ test("Vercel session lifetime comes from lifecycle, the deprecated timeoutSecond
   ) => {
     const native = fixture();
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: native.adapter,
       config: { ...config, ...setup },
       credentials,
@@ -1462,7 +1466,7 @@ test("Vercel session lifetime comes from lifecycle, the deprecated timeoutSecond
   expect(await timeouts({}, 1800, 20)).toEqual([1_800_000, 60_000]);
 
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter: fixture().adapter,
       config: { ...config, timeoutSeconds: 600, lifecycle: { lifetimeSeconds: 600 } },
       credentials,
@@ -1470,7 +1474,7 @@ test("Vercel session lifetime comes from lifecycle, the deprecated timeoutSecond
   ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 
   // Resumed persistent sessions are checked against the setup lifetime, so no override.
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: fixture().adapter,
     config: { ...config, persistent: true },
     credentials,
@@ -1485,7 +1489,7 @@ test("Vercel session lifetime comes from lifecycle, the deprecated timeoutSecond
 
 test("Vercel incremental writes publish exact bytes once and retain no-clobber collisions", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const box = await client.sandboxes.create();
@@ -1518,7 +1522,7 @@ test("Vercel incremental writes publish exact bytes once and retain no-clobber c
 
 test("incomplete snapshot acknowledgements retain owned artifact custody without replay", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const source = await client.sandboxes.create();
@@ -1538,13 +1542,13 @@ test("incomplete snapshot acknowledgements retain owned artifact custody without
 
 test("fresh connections require validated creation recovery before capturing reopened sessions", async () => {
   const native = fixture();
-  const first = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const first = await Beachside.connect({ adapter: native.adapter, config, credentials });
   const creation = await first.sandboxes.submitCreate();
   const box = await creation.wait();
   const saved = creation.reference;
   const reference = box.reference!;
   await first.close();
-  const second = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const second = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const reopened = await second.sandboxes.get(reference);
@@ -1564,11 +1568,11 @@ test("fresh connections require validated creation recovery before capturing reo
 test("persistent sandbox keeps its identity and files across explicit fresh execution resume", async () => {
   const native = fixture();
   const options = { adapter: native.adapter, config: { ...config, persistent: true }, credentials };
-  let client = await Sandbar.connect(options);
+  let client = await Beachside.connect(options);
   const box = await client.sandboxes.create();
   const ref = box.reference!;
   expect(ref.generation).toBeString();
-  expect(box.id).toStartWith("sandbar-");
+  expect(box.id).toStartWith("beachside-");
   const first = await box.inspect();
   await box.writeFile("/saved", new Uint8Array([0, 255, 1]));
   await box.suspend();
@@ -1576,7 +1580,7 @@ test("persistent sandbox keeps its identity and files across explicit fresh exec
   await expect(box.readFile("/saved")).rejects.toBeDefined();
   expect(native.resumeCount).toBe(0);
   await client.close();
-  client = await Sandbar.connect(options);
+  client = await Beachside.connect(options);
   const reopened = await client.sandboxes.get(ref);
   expect((await reopened.inspect()).state).toBe("suspended");
   const result = await reopened.resume();
@@ -1602,7 +1606,7 @@ test("persistent sandbox keeps its identity and files across explicit fresh exec
 test("persistent stale creation references reject a same-name replacement before resume", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, persistent: true },
     credentials,
@@ -1610,7 +1614,7 @@ test("persistent stale creation references reject a same-name replacement before
 
   const box = await client.sandboxes.create();
   await box.suspend();
-  native.logical.get(box.id)!.tags = { sandbarSubmission: "replacement-submission" };
+  native.logical.get(box.id)!.tags = { beachsideSubmission: "replacement-submission" };
   await expect(box.resume()).rejects.toBeDefined();
   expect(native.resumeCount).toBe(0);
   await expect(box.inspect()).rejects.toBeDefined();
@@ -1620,7 +1624,7 @@ test("persistent stale creation references reject a same-name replacement before
 test("lost persistent resume response is never replayed by recovery or inspection", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, persistent: true },
     credentials,
@@ -1640,7 +1644,7 @@ test("lost persistent resume response is never replayed by recovery or inspectio
 test("persistent deletion recovery preserves snapshot IDs and confirms absence without replay", async () => {
   const native = fixture();
   const options = { adapter: native.adapter, config: { ...config, persistent: true }, credentials };
-  let client = await Sandbar.connect(options);
+  let client = await Beachside.connect(options);
   const box = await client.sandboxes.create();
   native.snapshots.set("snap-failed", {
     id: "snap-failed",
@@ -1654,7 +1658,7 @@ test("persistent deletion recovery preserves snapshot IDs and confirms absence w
   await expect(deletion.wait()).rejects.toBeDefined();
   const saved = deletion.reference;
   await client.close();
-  client = await Sandbar.connect(options);
+  client = await Beachside.connect(options);
   const recovered = await client.recover(saved);
   expect(await recovered.wait()).toMatchObject({
     computeStopped: true,
@@ -1667,12 +1671,12 @@ test("persistent deletion recovery preserves snapshot IDs and confirms absence w
 test("lost persistent create acknowledgement recovers its deterministic name without resubmission", async () => {
   const native = fixture();
   const options = { adapter: native.adapter, config: { ...config, persistent: true }, credentials };
-  let client = await Sandbar.connect(options);
+  let client = await Beachside.connect(options);
   native.loseNextCreateResponse();
   const operation = await client.sandboxes.submitCreate();
   const saved = operation.reference;
   await client.close();
-  client = await Sandbar.connect(options);
+  client = await Beachside.connect(options);
   const recovered = await client.recover(saved);
   const box = await recovered.wait();
   expect(box).toMatchObject({ id: [...native.logical.keys()][0] });
@@ -1683,7 +1687,7 @@ test("lost persistent create acknowledgement recovers its deterministic name wit
 test("persistent inspection and resume reject a stale checkpoint from another execution", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, persistent: true },
     credentials,
@@ -1703,7 +1707,7 @@ test("persistent inspection and resume reject a stale checkpoint from another ex
 test("persistent resume validates the actual restored checkpoint without replay", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, persistent: true },
     credentials,
@@ -1721,7 +1725,7 @@ test("persistent resume validates the actual restored checkpoint without replay"
 test("persistent destroy refuses named deletion if execution changes during snapshot inventory", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, persistent: true },
     credentials,
@@ -1739,7 +1743,7 @@ test("persistent destroy refuses named deletion if execution changes during snap
 test("persistent references reject unsupported mount changes on the same native generation", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config: { ...config, persistent: true },
     credentials,
@@ -1760,7 +1764,7 @@ test("persistent references reject unsupported mount changes on the same native 
 
 test("session-mode listing pages project sessions with references that reopen", async () => {
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     const boxes = [await client.sandboxes.create(), await client.sandboxes.create()];
@@ -1812,7 +1816,7 @@ test("session-mode listing pages project sessions with references that reopen", 
 test("persistent listing carries native generation evidence and no creation receipt", async () => {
   const native = fixture();
   const options = { adapter: native.adapter, config: { ...config, persistent: true }, credentials };
-  const client = await Sandbar.connect(options);
+  const client = await Beachside.connect(options);
 
   try {
     const box = await client.sandboxes.create({ labels: { run: "42" } });
@@ -1823,7 +1827,7 @@ test("persistent listing carries native generation evidence and no creation rece
     });
 
     const page = await client.sandboxes.list();
-    expect(page.coverage).toBe("sandbar-managed");
+    expect(page.coverage).toBe("managed");
     expect(page.items.map((item) => item.id)).toEqual([box.id]);
     // Create labels come back from the tags without the adapter's own marker.
     expect(page.items[0]!.labels).toEqual({ run: "42" });
@@ -1850,7 +1854,7 @@ test("Vercel sends create env as native session defaults and never saves or echo
   const native = fixture();
   const saved: Json[] = [];
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: native.adapter,
     config,
     credentials,
@@ -1890,7 +1894,7 @@ test("Vercel redacts multi-line and long create env values before shortening nat
   const multiline = "CANARY-first-line\nCANARY-second-line";
   const long = `CANARY-${"x".repeat(400)}`;
   const native = fixture();
-  const client = await Sandbar.connect({ adapter: native.adapter, config, credentials });
+  const client = await Beachside.connect({ adapter: native.adapter, config, credentials });
 
   try {
     for (const secret of [multiline, long]) {

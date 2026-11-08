@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, OutcomeUnknownError, Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
+import { Image, OutcomeUnknownError, Beachside, type AdapterRecoveryReference } from "beachside";
 import { createE2BAdapter } from "./index";
 import {
   createSdkTransport,
@@ -163,7 +163,7 @@ function fixture() {
   const saved: AdapterRecoveryReference[] = [];
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createE2BAdapter(() => transport),
       config: { teamId: "team_one" },
       credentials: { apiKey: "fixture-key" },

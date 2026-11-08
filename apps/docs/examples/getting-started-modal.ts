@@ -1,5 +1,5 @@
-import { Image, Sandbar } from "sandbar-sdk";
-import { modalAdapter } from "@sandbar-sdk/modal";
+import { Image, Beachside } from "beachside";
+import { modalAdapter } from "@beachside/modal";
 
 const tokenId = process.env.MODAL_TOKEN_ID;
 
@@ -12,24 +12,24 @@ const imageId = process.env.MODAL_IMAGE_ID;
 if (!tokenId || !tokenSecret || !appName || !imageId)
   throw new Error("Set MODAL_TOKEN_ID, MODAL_TOKEN_SECRET, MODAL_APP_NAME, and MODAL_IMAGE_ID");
 
-const sandbar = await Sandbar.connect({
+const beachside = await Beachside.connect({
   adapter: modalAdapter,
-  config: { appName, environment: "main", timeoutSeconds: 300 },
   credentials: { tokenId, tokenSecret },
+  config: { appName, environment: "main", lifecycle: { lifetimeSeconds: 300 } },
 });
 
 try {
-  const box = await sandbar.sandboxes.create({
+  const box = await beachside.sandboxes.create({
     environment: Image.prepared(imageId),
     network: "blocked",
   });
 
   try {
-    const output = await box.exec(["/bin/sh", "-c", "printf 'Hello from Sandbar!\n'"]);
+    const output = await box.exec(["/bin/sh", "-c", "printf 'Hello from Beachside!\n'"]);
     console.log(output.stdoutText());
   } finally {
     await box.destroy();
   }
 } finally {
-  await sandbar.close();
+  await beachside.close();
 }

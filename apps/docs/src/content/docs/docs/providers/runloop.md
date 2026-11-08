@@ -3,13 +3,13 @@ title: Runloop
 description: Use the Runloop adapter for Devboxes with blocked egress, disk snapshots, suspend/resume and previews.
 ---
 
-The `@sandbar-sdk/runloop` package implements the public Sandbar adapter interface for [Runloop](https://runloop.ai) Devboxes. Install it with `npm install sandbar-sdk @sandbar-sdk/runloop`; it is experimental, and Runloop sign-ups are currently by invitation only. Use Node 20+ or Bun. It calls the Runloop REST API v1 (`https://api.runloop.ai`) directly, with no native SDK dependency.
+The `@beachside/runloop` package implements the public Beachside adapter interface for [Runloop](https://runloop.ai) Devboxes. Install it with `npm install beachside @beachside/runloop`; it is experimental, and Runloop sign-ups are currently by invitation only. Use Node 20+ or Bun. It calls the Runloop REST API v1 (`https://api.runloop.ai`) directly, with no native SDK dependency.
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { runloopAdapter } from "@sandbar-sdk/runloop";
+import { Beachside } from "beachside";
+import { runloopAdapter } from "@beachside/runloop";
 
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter: runloopAdapter,
   credentials: { apiKey: process.env.RUNLOOP_API_KEY! },
   config: { network: "blocked" },
@@ -28,11 +28,13 @@ try {
 
 Create an API key in the Runloop dashboard. `connect` verifies it with `GET /v1/accounts/me`, requires an enabled account, and scopes everything to that account id.
 
+The package also exports `runloop()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(runloop({ apiKey }))`. It is the same setup; use whichever reads better.
+
 ## Setup
 
 | Setting                     | Default           | Notes                                                                                                                                                                                                                                      |
 | --------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `network`                   | `blocked`         | `blocked` attaches a deny-all account network policy named `sandbar-blocked`, created on first use and re-checked before each create. `internet` attaches no policy. Allowlists are unsupported.                                           |
+| `network`                   | `blocked`         | `blocked` attaches a deny-all account network policy named `beachside-blocked`, created on first use and re-checked before each create. `internet` attaches no policy. Allowlists are unsupported.                                         |
 | `image`                     | `runloop-default` | Runloop's default Devbox image. Any other value is a blueprint id (when one exists) or a blueprint name. OCI images and image builds are unsupported.                                                                                      |
 | `resources`                 | Runloop default   | Minimum `{ vcpus, memoryMiB }`. Picks the smallest of `X_SMALL` (0.5 vCPU, 1 GiB), `SMALL` (1, 2 GiB), `MEDIUM` (2, 4 GiB), `LARGE` (2, 8 GiB), `X_LARGE` (4, 16 GiB), `XX_LARGE` (8, 32 GiB), or a custom 16 vCPU size with 32 or 64 GiB. |
 | `lifecycle.lifetimeSeconds` | 900               | 60 seconds to 48 hours. Runloop shuts the Devbox down when the time is up. `create({ lifecycle })` can override it per sandbox unless `idleSeconds` is set.                                                                                |
@@ -63,7 +65,7 @@ Everything below is tested against a simulated Runloop API on every change. **No
 
 ## How commands keep bytes and arguments
 
-Runloop runs one shell string and returns stdout/stderr as text. To keep argv as separate arguments and output as exact bytes, the adapter sends a small POSIX `sh` wrapper: arguments are single-quoted, the command's stdout and stderr go to private files under `/tmp`, and the wrapper prints one record with the exit code and byte counts. Results of 32 KiB or less come back inline as base64; larger results are downloaded as binary files and the guest directory is removed afterwards. Finite stdin is uploaded to a `/tmp/sandbar-stdin-*` file first. Your image needs `sh`, `mktemp`, `base64`, `head`, `wc`, `tr` and `env`.
+Runloop runs one shell string and returns stdout/stderr as text. To keep argv as separate arguments and output as exact bytes, the adapter sends a small POSIX `sh` wrapper: arguments are single-quoted, the command's stdout and stderr go to private files under `/tmp`, and the wrapper prints one record with the exit code and byte counts. Results of 32 KiB or less come back inline as base64; larger results are downloaded as binary files and the guest directory is removed afterwards. Finite stdin is uploaded to a `/tmp/beachside-stdin-*` file first. Your image needs `sh`, `mktemp`, `base64`, `head`, `wc`, `tr` and `env`.
 
 A command that passes its deadline is killed through Runloop and reported as `OUTCOME_UNKNOWN`.
 
@@ -71,6 +73,6 @@ A command that passes its deadline is killed through Runloop and reported as `OU
 
 `destroy()` shuts the Devbox down and waits for the `shutdown` status. Runloop refuses shutdown while a disk snapshot is in progress; that is reported as `CONFLICT`. Snapshots survive their source.
 
-Sandbar sends each mutation once and the adapter adds no retries. Creates and snapshot captures carry `sandbar_operation` and `sandbar_submission` metadata, so a create or capture whose response was lost is found by that marker instead of being resent. A refusal Runloop answers with a 4xx is reported as that error; a lost response or 5xx is `OUTCOME_UNKNOWN`. A lost or failed command result is never replayed. Listed Devboxes and snapshots not created through this connection report `ownership: "unknown"`.
+Beachside sends each mutation once and the adapter adds no retries. Creates and snapshot captures carry `beachside_operation` and `beachside_submission` metadata, so a create or capture whose response was lost is found by that marker instead of being resent. A refusal Runloop answers with a 4xx is reported as that error; a lost response or 5xx is `OUTCOME_UNKNOWN`. A lost or failed command result is never replayed. Listed Devboxes and snapshots not created through this connection report `ownership: "unknown"`.
 
-See the [provider research issue](https://github.com/pandemicsyn/sandbar/issues/47) and the [Runloop API reference](https://docs.runloop.ai/docs/api-reference).
+See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/47) and the [Runloop API reference](https://docs.runloop.ai/docs/api-reference).

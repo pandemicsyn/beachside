@@ -6,7 +6,7 @@ const main = fileURLToPath(new URL("../../../packages/cli/src/main.ts", import.m
 
 const target = fileURLToPath(new URL("../src/content/docs/docs/cli/reference.md", import.meta.url));
 
-// The page is rendered from `sandbar schema`, so it cannot drift from the CLI's command table.
+// The page is rendered from `beachside schema`, so it cannot drift from the CLI's command table.
 const schema = JSON.parse(
   execFileSync(process.execPath, [main, "schema"], {
     encoding: "utf8",
@@ -59,10 +59,10 @@ const sections = schema.commands.map((command) =>
 
 const output = `---
 title: Command reference
-description: Every sandbar command, flag and exit code, generated from the CLI.
+description: Every beachside command, flag and exit code, generated from the CLI.
 ---
 
-> Generated from \`sandbar schema\`. Run \`bun run --cwd apps/docs cli:generate\` after changing a command.
+> Generated from \`beachside schema\`. Run \`bun run --cwd apps/docs cli:generate\` after changing a command.
 
 ## Global flags
 

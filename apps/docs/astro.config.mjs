@@ -20,13 +20,13 @@ const openSearchFromQuery = `addEventListener("DOMContentLoaded", () => {
 
 export default defineConfig({
   redirects: { "/docs/providers/live-qualification/": "/docs/providers/support/" },
-  site: "https://sandbarsdk.dev",
+  site: "https://beachside.run",
   output: "static",
   // The tab renderer uses a native parser; keep its platform binding beside its package.
   vite: { ssr: { external: ["satteri"] } },
   integrations: [
     starlight({
-      title: "Sandbar",
+      title: "Beachside",
       description:
         "The TypeScript SDK for sandboxes. Getting started, provider support, guides, and adapter authoring.",
       favicon: "/favicon.svg",
@@ -39,7 +39,9 @@ export default defineConfig({
         { tag: "link", attrs: { rel: "stylesheet", href: fonts } },
         { tag: "script", content: openSearchFromQuery },
       ],
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/pandemicsyn/sandbar" }],
+      social: [
+        { icon: "github", label: "GitHub", href: "https://github.com/pandemicsyn/beachside" },
+      ],
       customCss: ["./src/styles/tokens.css", "./src/styles/docs.css"],
       components: {
         SiteTitle: "./src/components/SiteTitle.astro",
@@ -91,6 +93,7 @@ export default defineConfig({
             { slug: "docs/cli/configuration" },
             { slug: "docs/cli/shell-and-agents" },
             { slug: "docs/cli/ci" },
+            { slug: "docs/cli/rex", badge: "exp" },
             { slug: "docs/cli/reference" },
           ],
         },

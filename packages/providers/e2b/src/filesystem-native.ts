@@ -4,7 +4,7 @@ import {
   AdapterFilesystemError,
   type DirectoryResult,
   type FileStat,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 
 // Python3 is supplied by the supported E2B base image. Paths are arguments, never program text.
@@ -63,8 +63,6 @@ try:
     else: os.rmdir(p)
    else: os.unlink(p)
   except FileNotFoundError: pass
- elif op=='reserve':
-  fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
  elif op=='publish':
   regular(p);publish(p,q);published=True
  elif op=='copy':

@@ -1,5 +1,5 @@
-import { Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
-import { e2b, createE2BAdapter, type E2BTransport } from "@sandbar-sdk/e2b";
+import { Beachside, type AdapterRecoveryReference } from "beachside";
+import { e2b, createE2BAdapter, type E2BTransport } from "@beachside/e2b";
 import { z } from "zod";
 
 export const e2bConfiguration = z.strictObject({
@@ -32,14 +32,14 @@ export function e2bConnection(
     onDiagnostic?: (error: unknown) => void,
   ) =>
     transportFactory
-      ? Sandbar.connect({
+      ? Beachside.connect({
           adapter: createE2BAdapter(transportFactory),
           config,
           credentials: { apiKey },
           onReference,
           onDiagnostic,
         })
-      : Sandbar.connect({
+      : Beachside.connect({
           adapter: e2b({ ...config, apiKey }),
           config: {},
           credentials: {},

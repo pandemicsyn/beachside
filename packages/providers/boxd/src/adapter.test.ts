@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { afterEach, expect, test } from "bun:test";
 import { status } from "@grpc/grpc-js";
-import { adapterSuite, snapshotSuite } from "@sandbar-sdk/adapter/testing";
-import { Sandbar, OutcomeUnknownError, Preserve } from "sandbar-sdk";
+import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
+import { Beachside, OutcomeUnknownError, Preserve } from "beachside";
 import { createBoxdAdapter } from "./adapter";
 import { boxdFixture } from "./fixture.test-support";
 
@@ -18,7 +18,7 @@ async function setup() {
   const adapter = createBoxdAdapter(fixture.factory);
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { org: "main", networkPolicy: "internet" },
       credentials: { apiKey: "fixture-main" },
@@ -30,7 +30,7 @@ async function setup() {
 test("boxd setup takes network internet once, under either name", async () => {
   const { adapter } = await setup();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { org: "main", network: "internet" },
     credentials: { apiKey: "fixture-main" },
@@ -47,14 +47,14 @@ test("boxd setup takes network internet once, under either name", async () => {
     { org: "main", network: "internet", networkPolicy: "internet" },
   ] as const)
     await expect(
-      Sandbar.connect({ adapter, config, credentials: { apiKey: "fixture-main" } }),
+      Beachside.connect({ adapter, config, credentials: { apiKey: "fixture-main" } }),
     ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 });
 
 test("boxd resources pick the smallest size class and inspect reports the real size", async () => {
   const { fixture, adapter } = await setup();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { org: "main", network: "internet", resources: { vcpus: 3, memoryMiB: 4096 } },
     credentials: { apiKey: "fixture-main" },
@@ -76,7 +76,7 @@ test("boxd resources pick the smallest size class and inspect reports the real s
 
   const before = fixture.calls.length;
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { org: "main", network: "internet", resources: { memoryMiB: 65536 } },
       credentials: { apiKey: "fixture-main" },
@@ -88,7 +88,7 @@ test("boxd resources pick the smallest size class and inspect reports the real s
   expect(fixture.calls).toHaveLength(before);
 
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { org: "main", network: "internet", size: 2, resources: { vcpus: 2 } },
       credentials: { apiKey: "fixture-main" },
@@ -335,7 +335,7 @@ test("boxd expiry comes from lifecycle, the deprecated top-level key or a per-cr
     [{ lifecycle: { lifetimeSeconds: 3600 } }, 3600],
     [{ lifetimeSeconds: 600 }, 600],
   ] as const) {
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: { org: "main", network: "internet", ...setup },
       credentials: { apiKey: "fixture-main" },
@@ -349,7 +349,7 @@ test("boxd expiry comes from lifecycle, the deprecated top-level key or a per-cr
     }
   }
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { org: "main", network: "internet" },
     credentials: { apiKey: "fixture-main" },
@@ -366,7 +366,7 @@ test("boxd expiry comes from lifecycle, the deprecated top-level key or a per-cr
   }
 
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: {
         org: "main",
@@ -410,7 +410,7 @@ test("expiry failure preserves an acknowledged UUID and observation never create
   const { fixture } = await setup();
   const refs: unknown[] = [];
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createBoxdAdapter(fixture.factory),
     config: { org: "main", networkPolicy: "internet" },
     credentials: { apiKey: "fixture-main" },
@@ -424,7 +424,7 @@ test("expiry failure preserves an acknowledged UUID and observation never create
     const operation = await client.sandboxes.submitCreate();
     const before = fixture.calls.filter((call) => call.method === "SetDeleteAfter").length;
     expect(JSON.stringify(refs)).toContain([...fixture.machines.keys()][0]);
-    let saved: import("@sandbar-sdk/adapter").ResourceReference<"sandbox"> | undefined;
+    let saved: import("@beachside/adapter").ResourceReference<"sandbox"> | undefined;
 
     try {
       await operation.observe();
@@ -440,9 +440,7 @@ test("expiry failure preserves an acknowledged UUID and observation never create
       });
 
       if (error instanceof OutcomeUnknownError) {
-        const outcome = (await import("@sandbar-sdk/adapter")).OperationOutcome.parse(
-          error.outcome,
-        );
+        const outcome = (await import("@beachside/adapter")).OperationOutcome.parse(error.outcome);
 
         if (outcome.kind === "create") saved = outcome.sandbox;
       }
@@ -534,7 +532,7 @@ test("native empty final exec frame confirms a zero exit without output", async 
 test("checkpoint failure exposes the known sandbox and stops before expiry installation", async () => {
   const { fixture, adapter } = await setup();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { org: "main", networkPolicy: "internet" },
     credentials: { apiKey: "fixture-main" },
@@ -544,7 +542,7 @@ test("checkpoint failure exposes the known sandbox and stops before expiry insta
   });
 
   try {
-    let saved: import("@sandbar-sdk/adapter").ResourceReference<"sandbox"> | undefined;
+    let saved: import("@beachside/adapter").ResourceReference<"sandbox"> | undefined;
 
     try {
       await client.sandboxes.create();
@@ -560,9 +558,7 @@ test("checkpoint failure exposes the known sandbox and stops before expiry insta
       });
 
       if (error instanceof Error && "outcome" in error) {
-        const outcome = (await import("@sandbar-sdk/adapter")).OperationOutcome.parse(
-          error.outcome,
-        );
+        const outcome = (await import("@beachside/adapter")).OperationOutcome.parse(error.outcome);
 
         if (outcome.kind === "create") saved = outcome.sandbox;
       }
@@ -572,7 +568,7 @@ test("checkpoint failure exposes the known sandbox and stops before expiry insta
     expect(fixture.calls.some((call) => call.method === "SetDeleteAfter")).toBe(false);
 
     // Reopen with a fresh persistence path; cleanup uses the normal SDK handle.
-    const fresh = await Sandbar.connect({
+    const fresh = await Beachside.connect({
       adapter,
       config: { org: "main", networkPolicy: "internet" },
       credentials: { apiKey: "fixture-main" },
@@ -599,7 +595,7 @@ test.each(["unavailable", "wrong-org", "wrong-id"] as const)(
       if (fault === "unavailable") fixture.failNextGet();
       else if (fault === "wrong-org") fixture.badOrg();
       else fixture.wrongGetId();
-      let saved: import("@sandbar-sdk/adapter").ResourceReference<"sandbox"> | undefined;
+      let saved: import("@beachside/adapter").ResourceReference<"sandbox"> | undefined;
 
       try {
         await client.sandboxes.create();
@@ -608,7 +604,7 @@ test.each(["unavailable", "wrong-org", "wrong-id"] as const)(
         expect(error).toBeInstanceOf(OutcomeUnknownError);
 
         if (error instanceof OutcomeUnknownError) {
-          const outcome = (await import("@sandbar-sdk/adapter")).OperationOutcome.parse(
+          const outcome = (await import("@beachside/adapter")).OperationOutcome.parse(
             error.outcome,
           );
 
@@ -661,7 +657,7 @@ test("native terminal readiness failure retains expiry acknowledgement and norma
   try {
     fixture.machineStates(["pending", "pending", "failed"]);
     const operation = await client.sandboxes.submitCreate();
-    let saved: import("@sandbar-sdk/adapter").ResourceReference<"sandbox"> | undefined;
+    let saved: import("@beachside/adapter").ResourceReference<"sandbox"> | undefined;
 
     try {
       await operation.observe();
@@ -677,9 +673,7 @@ test("native terminal readiness failure retains expiry acknowledgement and norma
       });
 
       if (error instanceof OutcomeUnknownError) {
-        const outcome = (await import("@sandbar-sdk/adapter")).OperationOutcome.parse(
-          error.outcome,
-        );
+        const outcome = (await import("@beachside/adapter")).OperationOutcome.parse(error.outcome);
 
         if (outcome.kind === "create") saved = outcome.sandbox;
       }
@@ -757,18 +751,18 @@ test("public preview pins configured routes at create, verifies identity and nev
     const box = await defaults.sandboxes.create();
     expect(
       fixture.calls.filter((call) => call.method === "CreateVm").at(-1)?.request,
-    ).toMatchObject({ config: { network: { proxies: [{ name: "sandbar-3000", port: 3000 }] } } });
+    ).toMatchObject({ config: { network: { proxies: [{ name: "beachside-3000", port: 3000 }] } } });
     expect(fixture.machines.get(box.id)?.botProtection).toBe(false);
     expect(await box.preview(3000)).toMatchObject({
       access: "public",
-      url: expect.stringContaining("https://sandbar-3000."),
+      url: expect.stringContaining("https://beachside-3000."),
     });
     await box.destroy();
   } finally {
     await defaults.close();
   }
 
-  const protectedClient = await Sandbar.connect({
+  const protectedClient = await Beachside.connect({
     adapter,
     config: { org: "main", networkPolicy: "internet", preview: { access: "protected" } },
     credentials: { apiKey: "fixture-main" },
@@ -785,7 +779,7 @@ test("public preview pins configured routes at create, verifies identity and nev
     await protectedClient.close();
   }
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {
       org: "main",
@@ -805,8 +799,8 @@ test("public preview pins configured routes at create, verifies identity and nev
         vcpu: 1,
         network: {
           proxies: [
-            { name: "sandbar-3000", port: 3000 },
-            { name: "sandbar-8080", port: 8080 },
+            { name: "beachside-3000", port: 3000 },
+            { name: "beachside-8080", port: 8080 },
           ],
         },
       },
@@ -814,13 +808,13 @@ test("public preview pins configured routes at create, verifies identity and nev
     const before = fixture.calls.length;
     expect(await box.preview(3000)).toMatchObject({
       access: "public",
-      url: expect.stringContaining("https://sandbar-3000."),
+      url: expect.stringContaining("https://beachside-3000."),
     });
     expect(fixture.calls.slice(before).map((call) => call.method)).toEqual([
       "GetVm",
       "ListProxies",
     ]);
-    fixture.machines.get(box.id)?.proxies.push({ name: "sandbar-9000", port: 9000 });
+    fixture.machines.get(box.id)?.proxies.push({ name: "beachside-9000", port: 9000 });
     const unconfigured = fixture.calls.length;
     await expect(box.preview(9000)).rejects.toMatchObject({ code: "UNSUPPORTED" });
     expect(fixture.calls).toHaveLength(unconfigured);
@@ -878,7 +872,7 @@ test("public preview rejects empty/duplicate ports before connecting", async () 
 
   for (const ports of [[], [3000, 3000]])
     await expect(
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: { org: "main", networkPolicy: "internet", preview: { access: "public", ports } },
         credentials: { apiKey: "fixture-main" },
@@ -909,7 +903,7 @@ test("exec retains confirmed exit and captured bytes after a transport failure",
     };
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { org: "main", networkPolicy: "internet" },
     credentials: { apiKey: "fixture-main" },
@@ -1011,7 +1005,7 @@ const snapshotCalls = (fixture: Awaited<ReturnType<typeof boxdFixture>>, method:
 test("boxd passes the shared snapshot suite", async () => {
   const { adapter } = await setup();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {
       org: "main",
@@ -1024,7 +1018,7 @@ test("boxd passes the shared snapshot suite", async () => {
   try {
     await snapshotSuite({
       client,
-      path: "/root/sandbar-suite.bin",
+      path: "/root/beachside-suite.bin",
       preserve: Preserve.FILESYSTEM_AND_MEMORY,
     });
   } finally {
@@ -1045,7 +1039,7 @@ test("snapshots capture memory under a unique name and restore that exact versio
     expect(snapshotCalls(fixture, "CreateSnapshot")).toHaveLength(1);
     expect(snapshotCalls(fixture, "CreateSnapshot")[0]?.request).toMatchObject({
       vm: source.id,
-      name: expect.stringMatching(/^sandbar-snapshot-[0-9a-f]{24}$/),
+      name: expect.stringMatching(/^beachside-snapshot-[0-9a-f]{24}$/),
     });
     expect(snapshot.reference).toMatchObject({
       kind: "snapshot",
@@ -1098,7 +1092,7 @@ test("snapshots capture memory under a unique name and restore that exact versio
   }
 });
 
-test("a snapshot saved again outside Sandbar no longer restores or deletes by its old reference", async () => {
+test("a snapshot saved again outside Beachside no longer restores or deletes by its old reference", async () => {
   const { fixture, connect } = await setup();
   const client = await connect();
 
@@ -1222,7 +1216,7 @@ test("boxd setup accepts memory-keeping depth and rejects filesystem-only before
   const { fixture, adapter } = await setup();
   const base = { org: "main", network: "internet" } as const;
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {
       ...base,
@@ -1240,7 +1234,7 @@ test("boxd setup accepts memory-keeping depth and rejects filesystem-only before
     { ...base, lifecycle: { suspension: { preserve: Preserve.FILESYSTEM } } },
   ])
     await expect(
-      Sandbar.connect({ adapter, config, credentials: { apiKey: "fixture-main" } }),
+      Beachside.connect({ adapter, config, credentials: { apiKey: "fixture-main" } }),
     ).rejects.toMatchObject({ code: "UNSUPPORTED" });
   expect(fixture.calls).toHaveLength(before);
 });

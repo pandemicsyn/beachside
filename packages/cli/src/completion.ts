@@ -231,13 +231,13 @@ export function formatCompletion(completion: Completion): string {
   return `${[...lines, `:${completion.directive}`].join("\n")}\n`;
 }
 
-const zsh = `#compdef sandbar
-# sandbar completion for zsh. Enable with: source <(sandbar completion zsh)
+const zsh = `#compdef beachside
+# beachside completion for zsh. Enable with: source <(beachside completion zsh)
 
-_sandbar() {
+_beachside() {
   local -a lines described plain
   local line value description directive
-  lines=("\${(@f)$(command sandbar __complete -- "\${(@)words[2,CURRENT]}" 2>/dev/null)}")
+  lines=("\${(@f)$(command beachside __complete -- "\${(@)words[2,CURRENT]}" 2>/dev/null)}")
   directive=\${lines[-1]#:}
   lines=("\${(@)lines[1,-2]}")
 
@@ -254,22 +254,22 @@ _sandbar() {
 
   local -a suffix
   (( directive & 1 )) && suffix=(-S '')
-  (( \${#described} )) && _describe -t sandbar sandbar described "\${suffix[@]}"
+  (( \${#described} )) && _describe -t beachside beachside described "\${suffix[@]}"
   (( \${#plain} )) && compadd "\${suffix[@]}" -a plain
   (( directive & 2 )) && _files
   return 0
 }
 
 if [[ $zsh_eval_context[-1] == loadautofunc ]]; then
-  _sandbar "$@"
+  _beachside "$@"
 else
-  compdef _sandbar sandbar
+  compdef _beachside beachside
 fi
 `;
 
-const bash = `# sandbar completion for bash. Enable with: source <(sandbar completion bash)
+const bash = `# beachside completion for bash. Enable with: source <(beachside completion bash)
 
-_sandbar() {
+_beachside() {
   local line current output directive
   local -a words candidates
   # Split the line ourselves so "name:/path" stays one word whatever COMP_WORDBREAKS says.
@@ -277,7 +277,7 @@ _sandbar() {
   read -ra words <<< "$line"
   [[ $line == *" " ]] && words+=("")
   current=\${words[-1]}
-  output=$(command sandbar __complete -- "\${words[@]:1}" 2>/dev/null) || return 0
+  output=$(command beachside __complete -- "\${words[@]:1}" 2>/dev/null) || return 0
   directive=\${output##*:}
   output=\${output%:*}
 
@@ -303,14 +303,14 @@ _sandbar() {
   return 0
 }
 
-complete -F _sandbar sandbar
+complete -F _beachside beachside
 `;
 
-const fish = `# sandbar completion for fish. Enable with: sandbar completion fish | source
+const fish = `# beachside completion for fish. Enable with: beachside completion fish | source
 
-function __sandbar_complete
+function __beachside_complete
     set -l words (commandline -opc)[2..-1] (commandline -ct)
-    set -l output (command sandbar __complete -- $words 2>/dev/null)
+    set -l output (command beachside __complete -- $words 2>/dev/null)
     set -l directive (string replace ':' '' -- $output[-1])
     string join \\n -- $output[1..-2]
     if test (math "bitand($directive, 2)") -ne 0
@@ -318,7 +318,7 @@ function __sandbar_complete
     end
 end
 
-complete -c sandbar -f -a '(__sandbar_complete)'
+complete -c beachside -f -a '(__beachside_complete)'
 `;
 
 const scripts = { zsh, bash, fish };
@@ -331,8 +331,8 @@ export async function completionCommand(session: Session, flags: Flags): Promise
 
   if (flags.positionals.length !== 1 || !script)
     throw usage(
-      `Usage: sandbar completion <${shells.join("|")}>`,
-      "e.g. source <(sandbar completion zsh)",
+      `Usage: beachside completion <${shells.join("|")}>`,
+      "e.g. source <(beachside completion zsh)",
     );
 
   session.ctx.out.streams.stdout(script);

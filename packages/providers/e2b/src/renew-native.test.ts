@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { afterEach, expect, test } from "bun:test";
-import { Image, Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
+import { Image, Beachside, type AdapterRecoveryReference } from "beachside";
 import { createE2BAdapter } from "./index";
 import { createSdkTransport } from "./transport";
 
@@ -153,7 +153,7 @@ function fixture() {
     onReference?: (ref: AdapterRecoveryReference) => void | Promise<void>,
     key = "first-key",
   ) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createE2BAdapter(({ apiKey }) => createSdkTransport(apiKey, fetcher)),
       config: { teamId: "team_one", preview: { access: "protected" }, ...config },
       credentials: { apiKey: key },
@@ -259,7 +259,7 @@ test("E2B bounds/conflicts/identity/state/current credentials reject before POST
 
     f.detail.state = "running";
     const metadata = f.detail.metadata;
-    f.detail.metadata = { ...metadata, sandbar_operation: "forged" };
+    f.detail.metadata = { ...metadata, beachside_operation: "forged" };
     await expect(box.renew()).rejects.toMatchObject({ code: "CONFLICT", effect: "none" });
     f.detail.metadata = metadata;
     f.authStatus(403);

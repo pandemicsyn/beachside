@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { Sandbar, Image } from "sandbar-sdk";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { Beachside, Image } from "beachside";
+import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
 import { artifactFiles, directoryFiles, listChildren } from "./directory-files.js";
 
@@ -110,14 +110,14 @@ const adapter = defineAdapter({
   },
 });
 
-const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
 try {
   const box = await client.sandboxes.create({ environment: Image.prepared("one") });
   assert.deepEqual(await directoryFiles(box), Uint8Array.of(0, 255, 129));
   assert.deepEqual(mutations, [
-    ["mkdir", "/home/user/sandbar-job/results", true],
-    ["remove", "/home/user/sandbar-job", true],
+    ["mkdir", "/home/user/beachside-job/results", true],
+    ["remove", "/home/user/beachside-job", true],
   ]);
   assert.deepEqual(await listChildren(box, "/job"), [
     { name: "a", type: "symlink" },

@@ -4,9 +4,9 @@ import {
   observeOperation,
   prepareOperation,
   submitOperation,
-} from "@sandbar-sdk/adapter";
-import { Sandbar, Image } from "sandbar-sdk";
-import { e2b } from "@sandbar-sdk/e2b";
+} from "@beachside/adapter";
+import { Beachside, Image } from "beachside";
+import { e2b } from "@beachside/e2b";
 import { createE2BAdapter } from "./index";
 import { createSdkTransport, type E2BRecord, type E2BTransport } from "./transport";
 
@@ -103,7 +103,7 @@ test("API-key-only defaults reopen the same scope and bind canonical base resour
   expect(e2b({ apiKey: "fixture" }).bound).toBe(true);
   const f = fixture();
   const options = { adapter: f.adapter, config: {}, credentials: { apiKey: "first-key" } };
-  const client = await Sandbar.connect(options);
+  const client = await Beachside.connect(options);
   expect(client.scope).toMatchObject({
     authority: { kind: "api-key" },
     partition: { template: "base" },
@@ -118,8 +118,8 @@ test("API-key-only defaults reopen the same scope and bind canonical base resour
   expect(f.records.get(box.id)?.templateId).toBe("canonical_base");
   const reference = creation.reference;
   await client.close();
-  const reopened = await Sandbar.connect(options);
-  const rotated = await Sandbar.connect({ ...options, credentials: { apiKey: "rotated-key" } });
+  const reopened = await Beachside.connect(options);
+  const rotated = await Beachside.connect({ ...options, credentials: { apiKey: "rotated-key" } });
 
   try {
     expect(reopened.scope).toEqual(client.scope);
@@ -177,7 +177,7 @@ test("lost base create recovers by exact native markers after reconnect without 
     await connection.close();
     connection = await connectAdapter(f.adapter, options);
     const record = f.records.get("sb_1")!;
-    record.metadata.sandbar_operation = "op_other";
+    record.metadata.beachside_operation = "op_other";
     expect(
       await observeOperation(
         connection.session,
@@ -186,7 +186,7 @@ test("lost base create recovers by exact native markers after reconnect without 
         signal,
       ),
     ).toBeNull();
-    record.metadata.sandbar_operation = identity.operationId;
+    record.metadata.beachside_operation = identity.operationId;
     expect(
       await observeOperation(
         connection.session,
@@ -208,7 +208,7 @@ test("lost base create recovers by exact native markers after reconnect without 
 test("owned aliases resolve to canonical IDs and explicit team scope survives key rotation", async () => {
   const f = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: f.adapter,
     config: { templateId: "my-template" },
     credentials: { apiKey: "fixture" },
@@ -216,7 +216,7 @@ test("owned aliases resolve to canonical IDs and explicit team scope survives ke
 
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared("my-template") });
-    expect(f.records.get(box.id)?.metadata.sandbar_template).toBe("template_one");
+    expect(f.records.get(box.id)?.metadata.beachside_template).toBe("template_one");
     await expect(
       client.sandboxes.create({ environment: Image.prepared("public-alias") }),
     ).rejects.toThrow();
@@ -227,7 +227,7 @@ test("owned aliases resolve to canonical IDs and explicit team scope survives ke
   }
 
   const connect = (apiKey: string) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: f.adapter,
       config: { teamId: "team_one" },
       credentials: { apiKey },
@@ -245,7 +245,7 @@ test("owned aliases resolve to canonical IDs and explicit team scope survives ke
   }
 
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter: f.adapter,
       config: { teamId: "api-key-id" },
       credentials: { apiKey: "fixture" },
@@ -313,7 +313,7 @@ test("sandbox references reopen fresh scoped connections without creation and di
   const f = fixture();
 
   const connect = (key: string, templateId = "base") =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: f.adapter,
       config: { teamId: "team_one", templateId },
       credentials: { apiKey: key },
@@ -350,7 +350,7 @@ test("sandbox references reopen fresh scoped connections without creation and di
     record.state = "native-future-state";
     expect((await reopened.inspect()).state).toBe("unknown");
     record.state = "running";
-    record.metadata.sandbar_operation = "different";
+    record.metadata.beachside_operation = "different";
 
     for (const operation of [
       () => reopened.exec(["true"]),
@@ -361,7 +361,7 @@ test("sandbox references reopen fresh scoped connections without creation and di
       await expect(operation()).rejects.toMatchObject({ code: "CONFLICT" });
     expect(f.records.has(box.id)).toBe(true);
     await expect(fresh.sandboxes.get(saved)).rejects.toMatchObject({ code: "CONFLICT" });
-    record.metadata.sandbar_operation = JSON.parse(saved.receipt).operation;
+    record.metadata.beachside_operation = JSON.parse(saved.receipt).operation;
 
     for (const forged of [
       { ...saved, version: 2 },
@@ -388,7 +388,7 @@ test("sandbox references reopen fresh scoped connections without creation and di
 test("sandbox key-scoped references cannot rotate credentials or change template binding", async () => {
   const f = fixture();
 
-  const first = await Sandbar.connect({
+  const first = await Beachside.connect({
     adapter: f.adapter,
     config: {},
     credentials: { apiKey: "first-key" },
@@ -398,7 +398,7 @@ test("sandbox key-scoped references cannot rotate credentials or change template
   await first.close();
 
   for (const config of [{}, { templateId: "my-template" }]) {
-    const fresh = await Sandbar.connect({
+    const fresh = await Beachside.connect({
       adapter: f.adapter,
       config,
       credentials: { apiKey: "other-key" },
@@ -416,13 +416,13 @@ for (const kind of ["exec", "file_write", "destroy"] as const) {
   test(`E2B ${kind} rechecks markers after saving the submission reference`, async () => {
     const f = fixture();
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: f.adapter,
       config: { teamId: "team_one" },
       credentials: { apiKey: "fixture" },
       onReference(ref) {
         if (ref.kind === kind && (kind !== "destroy" || ref.token !== undefined))
-          f.records.get(ref.sandboxId!)!.metadata.sandbar_operation = "changed";
+          f.records.get(ref.sandboxId!)!.metadata.beachside_operation = "changed";
       },
     });
 
@@ -449,7 +449,7 @@ for (const kind of ["exec", "file_write", "destroy"] as const) {
 test("configured E2B defaults reach one native create; explicit invalid templates never fall back", async () => {
   const f = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: f.adapter,
     config: { templateId: "my-template" },
     credentials: { apiKey: "fixture" },
@@ -476,11 +476,11 @@ test("lost default creation recovers confirmed identity without replacement or r
   const f = fixture();
   f.loseNextResponse();
   const options = { adapter: f.adapter, config: {}, credentials: { apiKey: "fixture" } };
-  const client = await Sandbar.connect(options);
+  const client = await Beachside.connect(options);
   const operation = await client.sandboxes.submitCreate();
   await client.close();
   expect(operation.reference.networkPolicy).toBe("blocked");
-  const reopened = await Sandbar.connect({ ...options, config: { networkPolicy: "internet" } });
+  const reopened = await Beachside.connect({ ...options, config: { networkPolicy: "internet" } });
 
   try {
     const recovered = await reopened.recover(operation.reference);
@@ -498,7 +498,7 @@ test.each(["blocked", "internet"] as const)(
   async (networkPolicy) => {
     const f = fixture();
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: f.adapter,
       config: { networkPolicy },
       credentials: { apiKey: "fixture-key" },
@@ -529,7 +529,7 @@ test.each(["blocked", "internet"] as const)(
     const f = fixture();
     const other = network === "internet" ? "blocked" : "internet";
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: f.adapter,
       config: { network },
       credentials: { apiKey: "fixture-key" },
@@ -544,7 +544,7 @@ test.each(["blocked", "internet"] as const)(
     }
 
     await expect(
-      Sandbar.connect({
+      Beachside.connect({
         adapter: f.adapter,
         config: { network, networkPolicy: network },
         credentials: { apiKey: "fixture-key" },

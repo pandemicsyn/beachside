@@ -7,7 +7,7 @@ description: Exported API names generated from the built package declarations.
 
 ## SDK
 
-Import from `sandbar-sdk`.
+Import from `beachside`.
 
 | Export                        | Kind      |
 | ----------------------------- | --------- |
@@ -28,6 +28,9 @@ Import from `sandbar-sdk`.
 | `ArtifactDeletionResult`      | re-export |
 | `assertResourceIdentity`      | re-export |
 | `assertResourceScope`         | re-export |
+| `Beachside`                   | value     |
+| `BeachsideClient`             | type      |
+| `BeachsideError`              | re-export |
 | `Capabilities`                | type      |
 | `CloseOptions`                | type      |
 | `ConnectOptions`              | type      |
@@ -37,14 +40,15 @@ Import from `sandbar-sdk`.
 | `Deadline`                    | type      |
 | `diagnosticContext`           | re-export |
 | `DiagnosticContext`           | type      |
+| `DirectBeachsideClient`       | type      |
 | `DirectCapabilities`          | type      |
 | `DirectConnectOptions`        | type      |
 | `DirectoryResult`             | type      |
-| `DirectSandbarClient`         | type      |
 | `DirectSandboxHandle`         | type      |
 | `ExecInput`                   | type      |
 | `ExecOptions`                 | type      |
 | `ExecOutput`                  | type      |
+| `ExecStdinStream`             | type      |
 | `Fact`                        | type      |
 | `FileEntry`                   | type      |
 | `FileReadOptions`             | type      |
@@ -102,9 +106,6 @@ Import from `sandbar-sdk`.
 | `RestoreInput`                | type      |
 | `RestoreRequest`              | re-export |
 | `ResumeResult`                | type      |
-| `Sandbar`                     | value     |
-| `SandbarClient`               | type      |
-| `SandbarError`                | re-export |
 | `SandboxCleanupError`         | re-export |
 | `SandboxHandle`               | type      |
 | `SandboxInfo`                 | type      |
@@ -143,7 +144,7 @@ Import from `sandbar-sdk`.
 
 ## Daytona adapter
 
-Import from `@sandbar-sdk/daytona`.
+Import from `@beachside/daytona`.
 
 | Export                 | Kind      |
 | ---------------------- | --------- |
@@ -159,7 +160,7 @@ Import from `@sandbar-sdk/daytona`.
 
 ## E2B adapter
 
-Import from `@sandbar-sdk/e2b`.
+Import from `@beachside/e2b`.
 
 | Export             | Kind      |
 | ------------------ | --------- |
@@ -172,18 +173,20 @@ Import from `@sandbar-sdk/e2b`.
 
 ## Experimental Modal adapter
 
-Import from `@sandbar-sdk/modal`.
+Import from `@beachside/modal`.
 
 | Export               | Kind      |
 | -------------------- | --------- |
 | `createModalAdapter` | re-export |
+| `modal`              | re-export |
 | `MODAL_ENDPOINT`     | re-export |
 | `modalAdapter`       | re-export |
+| `ModalOptions`       | type      |
 | `ModalTransport`     | type      |
 
 ## Adapter authoring
 
-Import from `@sandbar-sdk/adapter`.
+Import from `@beachside/adapter`.
 
 | Export                         | Kind      |
 | ------------------------------ | --------- |
@@ -274,7 +277,7 @@ Import from `@sandbar-sdk/adapter`.
 
 ## Adapter test kit
 
-Import from `@sandbar-sdk/adapter/testing`.
+Import from `@beachside/adapter/testing`.
 
 | Export                | Kind     |
 | --------------------- | -------- |

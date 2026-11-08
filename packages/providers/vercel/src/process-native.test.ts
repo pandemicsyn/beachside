@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { AdapterSandbox, Sandbar, type ProcessHandle } from "sandbar-sdk";
+import { AdapterSandbox, Beachside, type ProcessHandle } from "beachside";
 import { createVercelAdapter } from "./adapter";
 import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { processSupervisor, processRpc, pythonCommand } from "./process-helper";
 import { reopenVercelProcess, startVercelProcess, type ProcessExecute } from "./process-native";
-import type { NativeProcess, ProcessOutput, ProcessOutputBytes } from "@sandbar-sdk/adapter";
+import type { NativeProcess, ProcessOutput, ProcessOutputBytes } from "@beachside/adapter";
 
 function fixture() {
   let largestResponse = 0;
@@ -342,7 +342,7 @@ test("Vercel rejects malformed initial status without fabricating running", asyn
 
 test("Vercel cancellation tombstone blocks a bootstrap delayed beyond setup cleanup", async () => {
   const native = fixture();
-  const sentinel = `/tmp/sandbar-late-child-${crypto.randomUUID()}`;
+  const sentinel = `/tmp/beachside-late-child-${crypto.randomUUID()}`;
   let delayedLaunch = "";
   let acknowledgeCleanup!: () => void;
 
@@ -389,8 +389,8 @@ test("Vercel cancellation tombstone blocks a bootstrap delayed beyond setup clea
 });
 
 test("Vercel cancellation between directory creation and socket bind shuts down the helper", async () => {
-  const root = `/tmp/sandbar-bind-race-${crypto.randomUUID()}`;
-  const sentinel = `/tmp/sandbar-bind-child-${crypto.randomUUID()}`;
+  const root = `/tmp/beachside-bind-race-${crypto.randomUUID()}`;
+  const sentinel = `/tmp/beachside-bind-child-${crypto.randomUUID()}`;
 
   const gated = processSupervisor.replace(
     "server=socket.socket",
@@ -678,7 +678,7 @@ test("Vercel explicit PTY owns controlling terminal, exact argv, dimensions, res
 });
 
 test("Vercel expired attachment leases park output, preserve input, and fence all old control", async () => {
-  const root = `/tmp/sandbar-process-${crypto.randomUUID()}`;
+  const root = `/tmp/beachside-process-${crypto.randomUUID()}`;
   const generation = crypto.randomUUID();
   const lease = crypto.randomUUID();
   const nextLease = crypto.randomUUID();
@@ -943,7 +943,7 @@ test("Vercel public process API bridges native command wait/logs with exact byte
     },
   }));
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { teamId: "team", projectId: "project", image: "vercel/sandbox/universal:latest" },
     credentials: { token: "fixture" },

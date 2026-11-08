@@ -1,6 +1,6 @@
 import { expect, test, spyOn } from "bun:test";
 import { Sandbox } from "e2b";
-import { Sandbar, Image } from "sandbar-sdk";
+import { Beachside, Image } from "beachside";
 import { createE2BAdapter } from "./index";
 import { createSdkTransport, type E2BTransport, type E2BRecord } from "./transport";
 
@@ -53,7 +53,7 @@ async function fixture(access?: "protected" | "public") {
     close() {},
   };
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createE2BAdapter(() => transport),
     config: access ? { preview: { access } } : {},
     credentials: { apiKey: "key" },
@@ -111,7 +111,7 @@ test("E2B public verifies current visibility and auto-resume, and needs no guest
     f.record.state = "paused";
     await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "UNAVAILABLE" });
     f.record.state = "running";
-    f.record.metadata.sandbar_operation = "foreign";
+    f.record.metadata.beachside_operation = "foreign";
     await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "CONFLICT" });
   } finally {
     await f.client.close();

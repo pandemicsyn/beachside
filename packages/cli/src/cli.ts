@@ -32,6 +32,7 @@ import { adapterCommand } from "./adapters";
 import { gcCommand } from "./gc";
 import { complete, completionCommand, formatCompletion } from "./completion";
 import type { Env } from "./config";
+import { programStatus } from "./program-status";
 
 type FlagSpec = {
   type: "string" | "boolean";
@@ -55,26 +56,29 @@ type CommandSpec = {
 };
 
 const globalFlags = {
-  json: { type: "boolean", description: "Print one JSON document on stdout (also SANDBAR_JSON=1)" },
+  json: {
+    type: "boolean",
+    description: "Print one JSON document on stdout (also BEACHSIDE_JSON=1)",
+  },
   profile: {
     type: "string",
     value: "name",
-    description: "Profile from sandbar.json (also SANDBAR_PROFILE)",
+    description: "Profile from beachside.json (also BEACHSIDE_PROFILE)",
   },
   provider: {
     type: "string",
     value: "id",
-    description: "Official provider from environment credentials (also SANDBAR_PROVIDER)",
+    description: "Official provider from environment credentials (also BEACHSIDE_PROVIDER)",
   },
   config: {
     type: "string",
     value: "path",
-    description: "Config file (default ~/.config/sandbar/sandbar.json, also SANDBAR_CONFIG)",
+    description: "Config file (default ~/.config/beachside/beachside.json, also BEACHSIDE_CONFIG)",
   },
   "state-dir": {
     type: "string",
     value: "dir",
-    description: "State store folder (default ~/.config/sandbar/state, also SANDBAR_STATE_DIR)",
+    description: "State store folder (default ~/.config/beachside/state, also BEACHSIDE_STATE_DIR)",
   },
   help: { type: "boolean", short: "h", description: "Show help" },
   version: { type: "boolean", short: "V", description: "Print the CLI version" },
@@ -128,7 +132,7 @@ const createFlags = {
   snapshot: {
     type: "string",
     value: "name",
-    description: "Restore a snapshot recorded by `sandbar snapshot create` instead of an image",
+    description: "Restore a snapshot recorded by `beachside snapshot create` instead of an image",
   },
   retry: {
     type: "string",
@@ -194,7 +198,7 @@ export const commands: readonly CommandSpec[] = [
     name: "create",
     summary: "Create a sandbox and print its name",
     usage:
-      "sandbar create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]...",
+      "beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]...",
     flags: {
       ...createFlags,
       "if-not-exists": {
@@ -205,18 +209,18 @@ export const commands: readonly CommandSpec[] = [
     passthrough: false,
     remoteExit: false,
     examples: [
-      "sandbar create --name web --network internet",
-      "sandbar create --name job-42 --if-not-exists --json",
-      "sandbar create --name ci --env-file .env --env API_TOKEN",
-      "sandbar create --name job-42 --ttl 1h",
-      "sandbar create --name job-42 --retry 5m --json",
+      "beachside create --name web --network internet",
+      "beachside create --name job-42 --if-not-exists --json",
+      "beachside create --name ci --env-file .env --env API_TOKEN",
+      "beachside create --name job-42 --ttl 1h",
+      "beachside create --name job-42 --retry 5m --json",
     ],
     run: createCommand,
   },
   {
     name: "ls",
     summary: "List sandboxes in the store with their current state",
-    usage: "sandbar ls [--offline | --remote]",
+    usage: "beachside ls [--offline | --remote]",
     flags: {
       offline: { type: "boolean", description: "Show stored records without asking providers" },
       remote: {
@@ -226,13 +230,13 @@ export const commands: readonly CommandSpec[] = [
     },
     passthrough: false,
     remoteExit: false,
-    examples: ["sandbar ls", "sandbar ls --json", "sandbar ls --remote --provider daytona"],
+    examples: ["beachside ls", "beachside ls --json", "beachside ls --remote --provider daytona"],
     run: lsCommand,
   },
   {
     name: "adopt",
     summary: "Add a sandbox from the provider's listing to the store so other commands reach it",
-    usage: "sandbar adopt <id> [--name <name>]",
+    usage: "beachside adopt <id> [--name <name>]",
     flags: {
       name: {
         type: "string",
@@ -242,23 +246,23 @@ export const commands: readonly CommandSpec[] = [
     },
     passthrough: false,
     remoteExit: false,
-    examples: ["sandbar ls --remote", "sandbar adopt 4f1c2a --name worker"],
+    examples: ["beachside ls --remote", "beachside adopt 4f1c2a --name worker"],
     run: adoptCommand,
   },
   {
     name: "inspect",
     summary: "Show a sandbox's state, expiry and reference",
-    usage: "sandbar inspect <sandbox>",
+    usage: "beachside inspect <sandbox>",
     flags: {},
     passthrough: false,
     remoteExit: false,
-    examples: ["sandbar inspect web --json"],
+    examples: ["beachside inspect web --json"],
     run: inspectCommand,
   },
   {
     name: "rm",
     summary: "Destroy sandboxes and remove their records",
-    usage: "sandbar rm <sandbox>... | --all [--force]",
+    usage: "beachside rm <sandbox>... | --all [--force]",
     flags: {
       all: { type: "boolean", description: "Every sandbox in this store" },
       force: {
@@ -268,13 +272,13 @@ export const commands: readonly CommandSpec[] = [
     },
     passthrough: false,
     remoteExit: false,
-    examples: ["sandbar rm web", "sandbar rm --all"],
+    examples: ["beachside rm web", "beachside rm --all"],
     run: rmCommand,
   },
   {
     name: "gc",
     summary: "Destroy the provider's sandboxes that carry the given labels, such as a killed job's",
-    usage: "sandbar gc --label k=v... [--older-than <duration>] [--dry-run]",
+    usage: "beachside gc --label k=v... [--older-than <duration>] [--dry-run]",
     flags: {
       label: {
         type: "string",
@@ -296,39 +300,39 @@ export const commands: readonly CommandSpec[] = [
     passthrough: false,
     remoteExit: false,
     examples: [
-      "sandbar gc --label run=$GITHUB_RUN_ID",
-      "sandbar gc --label ci=true --older-than 2h --dry-run",
+      "beachside gc --label run=$GITHUB_RUN_ID",
+      "beachside gc --label ci=true --older-than 2h --dry-run",
     ],
     run: gcCommand,
   },
   {
     name: "exec",
     summary: "Run a command in a sandbox; exits with the command's exit code",
-    usage: "sandbar exec <sandbox> [--cwd <dir>] [--env K=V]... [--stdin] -- <command> [args...]",
+    usage: "beachside exec <sandbox> [--cwd <dir>] [--env K=V]... [--stdin] -- <command> [args...]",
     flags: execFlags,
     passthrough: true,
     remoteExit: true,
     examples: [
-      "sandbar exec web -- ls -la /",
-      "sandbar exec web --cwd /work --env CI=1 -- npm test",
+      "beachside exec web -- ls -la /",
+      "beachside exec web --cwd /work --env CI=1 -- npm test",
     ],
     run: execCommand,
   },
   {
     name: "sh",
     summary: "Run a shell script in a sandbox; exits with its exit code",
-    usage: "sandbar sh <sandbox> '<script>' | sandbar sh <sandbox> -- '<script>'",
+    usage: "beachside sh <sandbox> '<script>' | beachside sh <sandbox> -- '<script>'",
     flags: execFlags,
     passthrough: true,
     remoteExit: true,
-    examples: ["sandbar sh web 'cd /work && make test'", "sandbar sh web -- '-n is fine here'"],
+    examples: ["beachside sh web 'cd /work && make test'", "beachside sh web -- '-n is fine here'"],
     run: shCommand,
   },
   {
     name: "run",
     summary: "Create a sandbox, run one command, and always destroy it",
     usage:
-      "sandbar run [create flags] [exec flags] [--keep] [--push <path>] -- <command> [args...]",
+      "beachside run [create flags] [exec flags] [--keep] [--push <path>] -- <command> [args...]",
     flags: {
       ...createFlags,
       ...execFlags,
@@ -343,9 +347,9 @@ export const commands: readonly CommandSpec[] = [
     passthrough: true,
     remoteExit: true,
     examples: [
-      "sandbar run -- python3 -c 'print(2 + 2)'",
-      "sandbar run --network internet -- curl -sI https://example.com",
-      "sandbar run --push . --timeout 15m --ttl 30m -- sh -c 'npm ci && npm test'",
+      "beachside run -- python3 -c 'print(2 + 2)'",
+      "beachside run --network internet -- curl -sI https://example.com",
+      "beachside run --push . --timeout 15m --ttl 30m -- sh -c 'npm ci && npm test'",
     ],
     run: runCommand,
   },
@@ -353,7 +357,7 @@ export const commands: readonly CommandSpec[] = [
     name: "image",
     summary: "Build OCI images for providers that need it, and list, delete or forget the builds",
     usage:
-      "sandbar image build <oci-ref> [--name <name>] [--refresh] | ls [--remote] | inspect <name> | rm <name> [--force] | forget <name>",
+      "beachside image build <oci-ref> [--name <name>] [--refresh] | ls [--remote] | inspect <name> | rm <name> [--force] | forget <name>",
     flags: {
       name: {
         type: "string",
@@ -373,12 +377,12 @@ export const commands: readonly CommandSpec[] = [
     passthrough: false,
     remoteExit: false,
     examples: [
-      "sandbar image build python:3.12 --provider e2b",
-      "sandbar create --image python:3.12 --provider e2b",
-      "sandbar image ls",
-      "sandbar image ls --remote --provider e2b",
-      "sandbar image rm python-3-12",
-      "sandbar image forget python-3-12",
+      "beachside image build python:3.12 --provider e2b",
+      "beachside create --image python:3.12 --provider e2b",
+      "beachside image ls",
+      "beachside image ls --remote --provider e2b",
+      "beachside image rm python-3-12",
+      "beachside image forget python-3-12",
     ],
     run: imageCommand,
   },
@@ -386,7 +390,7 @@ export const commands: readonly CommandSpec[] = [
     name: "snapshot",
     summary: "Capture a sandbox as a snapshot, and list, inspect, delete or forget snapshots",
     usage:
-      "sandbar snapshot create <sandbox> [--name <name> [--replace]] | ls [--remote] | inspect <name> | rm <name> [--force] | forget <name>",
+      "beachside snapshot create <sandbox> [--name <name> [--replace]] | ls [--remote] | inspect <name> | rm <name> [--force] | forget <name>",
     flags: {
       name: {
         type: "string",
@@ -409,19 +413,19 @@ export const commands: readonly CommandSpec[] = [
     passthrough: false,
     remoteExit: false,
     examples: [
-      "sandbar snapshot create web --name deps",
-      "sandbar create --snapshot deps --name web-2",
-      "sandbar run --snapshot deps -- npm test",
-      "sandbar snapshot create web --name deps --replace",
-      "sandbar snapshot ls",
-      "sandbar snapshot rm deps",
+      "beachside snapshot create web --name deps",
+      "beachside create --snapshot deps --name web-2",
+      "beachside run --snapshot deps -- npm test",
+      "beachside snapshot create web --name deps --replace",
+      "beachside snapshot ls",
+      "beachside snapshot rm deps",
     ],
     run: snapshotCommand,
   },
   {
     name: "cp",
     summary: "Copy files or directories to or from a sandbox",
-    usage: "sandbar cp [-r] <src> <dst>   (one side is <sandbox>:/path)",
+    usage: "beachside cp [-r] <src> <dst>   (one side is <sandbox>:/path)",
     flags: {
       "no-clobber": {
         type: "boolean",
@@ -437,60 +441,60 @@ export const commands: readonly CommandSpec[] = [
     passthrough: false,
     remoteExit: false,
     examples: [
-      "sandbar cp ./app.py web:/work/app.py",
-      "sandbar cp web:/work/out.json ./out.json",
-      "sandbar cp -r ./src web:/work --exclude node_modules",
-      "sandbar cp -r web:/work/coverage ./coverage",
+      "beachside cp ./app.py web:/work/app.py",
+      "beachside cp web:/work/out.json ./out.json",
+      "beachside cp -r ./src web:/work --exclude node_modules",
+      "beachside cp -r web:/work/coverage ./coverage",
     ],
     run: cpCommand,
   },
   {
     name: "push",
     summary: "Send a local folder's git-tracked and unignored files into a sandbox",
-    usage: "sandbar push <sandbox>[:/dir] [path]   (default: . to ~/work in the sandbox)",
+    usage: "beachside push <sandbox>[:/dir] [path]   (default: . to ~/work in the sandbox)",
     flags: pushFlags,
     passthrough: false,
     remoteExit: false,
     examples: [
-      "sandbar push ci",
-      "sandbar push ci:/srv/app ./app --exclude '*.log'",
-      "sandbar exec ci --cwd /srv/app -- npm test",
+      "beachside push ci",
+      "beachside push ci:/srv/app ./app --exclude '*.log'",
+      "beachside exec ci --cwd /srv/app -- npm test",
     ],
     run: pushCommand,
   },
   {
     name: "cat",
     summary: "Print a file from a sandbox",
-    usage: "sandbar cat <sandbox>:/path",
+    usage: "beachside cat <sandbox>:/path",
     flags: {},
     passthrough: false,
     remoteExit: false,
-    examples: ["sandbar cat web:/etc/os-release"],
+    examples: ["beachside cat web:/etc/os-release"],
     run: catCommand,
   },
   {
     name: "doctor",
     summary: "Check config, credentials and the provider connection without creating anything",
-    usage: "sandbar doctor",
+    usage: "beachside doctor",
     flags: {},
     passthrough: false,
     remoteExit: false,
-    examples: ["sandbar doctor --provider e2b"],
+    examples: ["beachside doctor --provider e2b"],
     run: doctorCommand,
   },
   {
     name: "adapter",
-    summary: "Install, list or remove the adapters the CLI loads, in ~/.config/sandbar/adapters",
-    usage: "sandbar adapter add <provider|package>[@version]... | ls | rm <provider|package>...",
+    summary: "Install, list or remove the adapters the CLI loads, in ~/.config/beachside/adapters",
+    usage: "beachside adapter add <provider|package>[@version]... | ls | rm <provider|package>...",
     flags: {},
     passthrough: false,
     remoteExit: false,
     examples: [
-      "sandbar adapter add e2b",
-      "sandbar adapter add daytona vercel --json",
-      "sandbar adapter add @acme/sandbar-adapter@1.2.0",
-      "sandbar adapter ls",
-      "sandbar adapter rm e2b",
+      "beachside adapter add e2b",
+      "beachside adapter add daytona vercel --json",
+      "beachside adapter add @acme/beachside-adapter@1.2.0",
+      "beachside adapter ls",
+      "beachside adapter rm e2b",
     ],
     run: adapterCommand,
   },
@@ -498,17 +502,17 @@ export const commands: readonly CommandSpec[] = [
     name: "providers",
     summary:
       "List official providers, whether their adapter is installed and their credentials set",
-    usage: "sandbar providers",
+    usage: "beachside providers",
     flags: {},
     passthrough: false,
     remoteExit: false,
-    examples: ["sandbar providers --json"],
+    examples: ["beachside providers --json"],
     run: providersCommand,
   },
   {
     name: "skill",
     summary: "Print the agent skill for this CLI, or install it for your coding agents",
-    usage: "sandbar skill [install [--project]]",
+    usage: "beachside skill [install [--project]]",
     flags: {
       project: {
         type: "boolean",
@@ -518,20 +522,20 @@ export const commands: readonly CommandSpec[] = [
     },
     passthrough: false,
     remoteExit: false,
-    examples: ["sandbar skill", "sandbar skill install", "sandbar skill install --project"],
+    examples: ["beachside skill", "beachside skill install", "beachside skill install --project"],
     run: skillCommand,
   },
   {
     name: "completion",
     summary: "Print a shell completion script for zsh, bash or fish",
-    usage: "sandbar completion <zsh|bash|fish>",
+    usage: "beachside completion <zsh|bash|fish>",
     flags: {},
     passthrough: false,
     remoteExit: false,
     examples: [
-      "source <(sandbar completion zsh)   # in ~/.zshrc",
-      "source <(sandbar completion bash)  # in ~/.bashrc",
-      "sandbar completion fish > ~/.config/fish/completions/sandbar.fish",
+      "source <(beachside completion zsh)   # in ~/.zshrc",
+      "source <(beachside completion bash)  # in ~/.bashrc",
+      "beachside completion fish > ~/.config/fish/completions/beachside.fish",
     ],
     run: completionCommand,
   },
@@ -586,9 +590,9 @@ function flagLines(flags: Readonly<Record<string, FlagSpec>>): string[] {
 
 function topHelp(): string {
   return [
-    "sandbar: create and manage sandboxes on any Sandbar provider",
+    "beachside: create and manage sandboxes on any Beachside provider",
     "",
-    "Usage: sandbar <command> [flags]",
+    "Usage: beachside <command> [flags]",
     "",
     "Commands:",
     ...commands.map((command) => `  ${command.name.padEnd(10)} ${command.summary}`),
@@ -598,14 +602,14 @@ function topHelp(): string {
     ...flagLines(globalFlags),
     "",
     "Quick start:",
-    "  sandbar adapter add e2b",
-    "  export SANDBAR_PROVIDER=e2b E2B_API_KEY=...",
-    "  sandbar create --name web",
-    "  sandbar exec web -- uname -a",
-    "  sandbar rm web",
-    "  sandbar run -- python3 -c 'print(2 + 2)'   # create, run, destroy",
+    "  beachside adapter add e2b",
+    "  export BEACHSIDE_PROVIDER=e2b E2B_API_KEY=...",
+    "  beachside create --name web",
+    "  beachside exec web -- uname -a",
+    "  beachside rm web",
+    "  beachside run -- python3 -c 'print(2 + 2)'   # create, run, destroy",
     "",
-    "Run `sandbar <command> --help` for details, `sandbar schema` for JSON.",
+    "Run `beachside <command> --help` for details, `beachside schema` for JSON.",
   ].join("\n");
 }
 
@@ -653,11 +657,14 @@ export type Io = {
   env: Env;
   cwd: string;
   streams: Streams;
+  /** Whether stderr is a terminal; terminal tab status (OSC 7501) is only written to one. */
+  stderrTerminal?: boolean;
   signal: AbortSignal;
-  readStdin: () => Promise<Uint8Array>;
+  /** The CLI's own stdin, read as it arrives. */
+  stdin: () => AsyncIterable<Uint8Array>;
 };
 
-/** The shell scripts from `sandbar completion` call `sandbar __complete -- <words>`. */
+/** The shell scripts from `beachside completion` call `beachside __complete -- <words>`. */
 async function completeWords(words: readonly string[], io: Io): Promise<number> {
   const flagValue = (name: string) => {
     const index = words.indexOf(`--${name}`);
@@ -670,7 +677,7 @@ async function completeWords(words: readonly string[], io: Io): Promise<number> 
     cwd: io.cwd,
     out: new Output(false, io.streams),
     signal: io.signal,
-    readStdin: io.readStdin,
+    stdin: io.stdin,
     flags: { json: false, config: flagValue("config"), stateDir: flagValue("state-dir") },
   });
 
@@ -683,6 +690,29 @@ async function completeWords(words: readonly string[], io: Io): Promise<number> 
   return 0;
 }
 
+/** Commands that create, change or wait on sandboxes report tab status; quick reads stay quiet. */
+const statusCommands = new Set(["create", "adopt", "rm", "gc", "exec", "sh", "run", "cp", "push"]);
+
+const statusSubcommands = new Set(["image build", "image rm", "snapshot create", "snapshot rm"]);
+
+/** A short label for the tab, such as "beachside exec web" or "beachside image build". */
+function statusTitle(name: string, flags: Flags): string | undefined {
+  const [first, second] = flags.positionals;
+
+  if (statusSubcommands.has(`${name} ${first}`))
+    return ["beachside", name, first, second].filter(Boolean).join(" ");
+
+  if (!statusCommands.has(name)) return undefined;
+
+  const target = name === "create" ? flags.string("name") : first;
+
+  return ["beachside", name, target].filter(Boolean).join(" ");
+}
+
+function exitMessage(code: number): string {
+  return code === 0 ? "done" : `exit code ${code}`;
+}
+
 /** Run one CLI invocation and return its exit code. */
 export async function main(argv: readonly string[], io: Io): Promise<number> {
   if (argv[0] === "__complete") return completeWords(argv.slice(argv[1] === "--" ? 2 : 1), io);
@@ -692,8 +722,9 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
   const rest = separator === -1 ? null : argv.slice(separator + 1);
   const nameIndex = commandIndex(head);
   const name = nameIndex === -1 ? undefined : head[nameIndex];
-  const jsonFromEnv = io.env.SANDBAR_JSON === "1" || io.env.SANDBAR_JSON === "true";
-  const out = new Output(jsonFromEnv || head.includes("--json"), io.streams);
+  const jsonFromEnv = io.env.BEACHSIDE_JSON === "1" || io.env.BEACHSIDE_JSON === "true";
+  const status = programStatus(io.env, io.stderrTerminal === true, io.streams.stderr);
+  const out = new Output(jsonFromEnv || head.includes("--json"), io.streams, status);
   const command = commands.find((candidate) => candidate.name === name);
 
   try {
@@ -727,7 +758,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
 
       throw usage(
         `Unknown command ${name}`,
-        close ? `did you mean \`sandbar ${close.name}\`?` : "run `sandbar --help`",
+        close ? `did you mean \`beachside ${close.name}\`?` : "run `beachside --help`",
       );
     }
 
@@ -767,7 +798,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
       cwd: io.cwd,
       out,
       signal: io.signal,
-      readStdin: io.readStdin,
+      stdin: io.stdin,
       flags: {
         json: out.json,
         profile: flags.string("profile"),
@@ -778,9 +809,18 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     };
 
     const session = new Session(context);
+    const title = statusTitle(command.name, flags);
 
     try {
-      return await command.run(session, flags);
+      if (title) status.report("working", title);
+      const code = await command.run(session, flags);
+
+      if (title) status.report(code === 0 ? "done" : "error", `${title}: ${exitMessage(code)}`);
+
+      return code;
+    } catch (cause) {
+      if (title) status.report("error", `${title}: ${describeError(cause).message}`);
+      throw cause;
     } finally {
       await session.close();
     }

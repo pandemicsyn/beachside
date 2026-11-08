@@ -1,12 +1,12 @@
 import {
   Image,
-  SandbarError,
+  BeachsideError,
   SandboxCleanupError,
-  type SandbarClient,
+  type BeachsideClient,
   type SandboxHandle,
-} from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
-import { e2b } from "@sandbar-sdk/e2b";
+} from "beachside";
+import { daytona } from "@beachside/daytona";
+import { e2b } from "@beachside/e2b";
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
@@ -64,7 +64,7 @@ export function cancellation() {
 
 // Cleanup has its own deadline because the workflow signal may already be aborted.
 export async function cleanup(
-  client: Pick<SandbarClient, "close">,
+  client: Pick<BeachsideClient, "close">,
   box: Pick<SandboxHandle, "id" | "destroy"> | undefined,
   failed: boolean,
 ) {
@@ -110,7 +110,7 @@ export function reportFailure(error: unknown) {
 
     if (
       error.callbackOutcome.status === "failed" &&
-      error.callbackOutcome.error instanceof SandbarError &&
+      error.callbackOutcome.error instanceof BeachsideError &&
       error.callbackOutcome.error.reference
     ) {
       console.error(
@@ -120,7 +120,7 @@ export function reportFailure(error: unknown) {
     }
   }
 
-  if (error instanceof SandbarError && error.reference) {
+  if (error instanceof BeachsideError && error.reference) {
     console.error("Recovery reference (do not blindly retry):", JSON.stringify(error.reference));
   }
 

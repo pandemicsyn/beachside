@@ -1,37 +1,37 @@
 ---
 title: Build a provider integration
-description: A copyable prompt to get your coding agent implementing a Sandbar provider adapter.
+description: A copyable prompt to get your coding agent implementing a Beachside provider adapter.
 ---
 
-An adapter connects a provider's native API to Sandbar. Install `@sandbar-sdk/adapter` from npm to build and test it.
+An adapter connects a provider's native API to Beachside. Install `@beachside/adapter` from npm to build and test it.
 
 If your agent supports skills, install the `add-provider` skill in the adapter's repository instead; it carries the same guidance and loads when the agent needs it:
 
 ```sh
-npx skills add pandemicsyn/sandbar --skill add-provider
+npx skills add pandemicsyn/beachside --skill add-provider
 ```
 
 Otherwise, replace the bracketed fields and copy this prompt into an agent with access to the integration repository.
 
 ```text wrap title="Provider integration prompt"
-Implement a Sandbar adapter for [provider] in [repository or package].
+Implement a Beachside adapter for [provider] in [repository or package].
 The requested operations are [create, destroy, inspect, exec, files, etc.].
 Distribution: [a separately installed official or third-party adapter package].
 
-Read the current Sandbar authoring docs and tested examples:
-- https://sandbarsdk.dev/docs/guides/write-an-adapter/
-- https://sandbarsdk.dev/docs/guides/adapter-capabilities/
-- https://sandbarsdk.dev/docs/guides/adapter-recovery/
-- https://sandbarsdk.dev/docs/contributing/drivers/
-- https://github.com/pandemicsyn/sandbar/tree/main/apps/docs/examples
+Read the current Beachside authoring docs and tested examples:
+- https://beachside.run/docs/guides/write-an-adapter/
+- https://beachside.run/docs/guides/adapter-capabilities/
+- https://beachside.run/docs/guides/adapter-recovery/
+- https://beachside.run/docs/contributing/drivers/
+- https://github.com/pandemicsyn/beachside/tree/main/apps/docs/examples
 
-If working in the Sandbar repository, follow AGENTS.md and the
+If working in the Beachside repository, follow AGENTS.md and the
 .agents/skills/add-provider/SKILL.md workflow. Use current exported types
 and tests as the implementation authority, not archived proposals.
 
 Inspect the provider's official API documentation and the exact native
-SDK version. Implement defineAdapter from "@sandbar-sdk/adapter". Keep the
-adapter independent of Sandbar internals. Separate configuration from
+SDK version. Implement defineAdapter from "@beachside/adapter". Keep the
+adapter independent of Beachside internals. Separate configuration from
 credentials, verify native identity with authenticated read-only IO,
 and include identity-relevant routing partitions in the returned scope.
 
@@ -42,7 +42,7 @@ compute termination before reporting success. Release owned clients on
 close without implying that close destroys compute.
 
 When snapshot capture is in scope, follow the current state-portability
-spec at https://github.com/pandemicsyn/sandbar/blob/main/specs/provider-state-portability.md:
+spec at https://github.com/pandemicsyn/beachside/blob/main/specs/provider-state-portability.md:
 no-argument snapshot() uses sensible native defaults, with required
 lifecycle orchestration owned by the adapter. Expose options only for real
 choices. Document each provider's capture scope, memory inclusion, source
@@ -56,7 +56,7 @@ failure. Recovery must never replay a mutation. Keep secrets and native
 logs out of public errors, tokens, and committed evidence.
 
 Build an injectable native boundary and deterministic tests. Run
-adapterSuite from "@sandbar-sdk/adapter/testing" and verify actual outbound
+adapterSuite from "@beachside/adapter/testing" and verify actual outbound
 attempt counts, scope separation, binary fidelity, uncertain outcomes,
 cleanup, and supported recovery. Qualify packed artifacts with an external
 TypeScript consumer and the supported runtimes.
@@ -71,4 +71,4 @@ Finish with the implementation, usage example, validation results,
 and a precise list of unsupported or untested behavior.
 ```
 
-For a separately distributed adapter, consumers install its package alongside `sandbar-sdk` and pass the exported definition to `Sandbar.connect({ adapter, config, credentials })`. Official adapters use the same public contract with convenience factories imported from their separately installed packages.
+For a separately distributed adapter, consumers install its package alongside `beachside` and pass the exported definition to `Beachside.connect({ adapter, config, credentials })`. Official adapters use the same contract and form; each also exports an optional factory, built with `bindAdapter`, that takes credentials and config in one object.

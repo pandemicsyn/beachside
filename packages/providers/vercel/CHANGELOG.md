@@ -1,4 +1,25 @@
-# @sandbar-sdk/vercel
+# @beachside/vercel
+
+## 0.8.0
+
+### Minor Changes
+
+- [#152](https://github.com/pandemicsyn/beachside/pull/152) [`f9a0bb7`](https://github.com/pandemicsyn/beachside/commit/f9a0bb737f748b4114672fd070a4bf995e27248d) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - `sandboxes.list()` items now carry `labels` (the labels set at create, without adapter markers; `null` where the provider keeps none) and `createdAt` (the provider's creation time, or `null`). Daytona, E2B, Vercel and Modal report labels; Daytona, E2B (start time), Vercel, boxd and Runloop report creation time. Adapters add them with the new `listedLabels` and `listedTime` helpers. The CLI's `ls --remote` shows both, and the new `beachside gc --label k=v [--older-than 2h] [--dry-run]` destroys provider-listed sandboxes whose labels match, such as those a killed CI job left behind, and drops their store records. Durations also accept days, like `1d`.
+
+- [#146](https://github.com/pandemicsyn/beachside/pull/146) [`e513d9a`](https://github.com/pandemicsyn/beachside/commit/e513d9a81fdd57f62d85bc027e9a9db3e91b9883) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Set the sandbox lifetime the same way everywhere. Every adapter now takes `lifecycle: { lifetimeSeconds }` in setup, defaulting to 900 seconds; E2B, Vercel and Modal `timeoutSeconds`, Daytona `ttlMinutes` and boxd's top-level `lifetimeSeconds` still work but are deprecated. `create({ lifecycle: { lifetimeSeconds } })` overrides it for one sandbox, and `capabilities().lifetime` reports the accepted range. The CLI adds `create --ttl` and `run --ttl`.
+
+- [#156](https://github.com/pandemicsyn/beachside/pull/156) [`47f5b61`](https://github.com/pandemicsyn/beachside/commit/47f5b617a4749bf94c7c6dee2686fc90aa487c8b) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Rename the project to Beachside. Packages are `beachside` and `@beachside/*`; the exports are `Beachside`, `BeachsideClient`, `DirectBeachsideClient` and `BeachsideError`; list coverage `"sandbar-managed"` is now `"managed"`; telemetry spans and attributes use `beachside.*`. The CLI command is `beachside`, with settings in `~/.config/beachside/beachside.json` and `BEACHSIDE_*` environment variables. Labels, metadata and names written onto provider resources now use the `beachside` prefix, so resources created by earlier releases are no longer recognized.
+
+- [#150](https://github.com/pandemicsyn/beachside/pull/150) [`e566711`](https://github.com/pandemicsyn/beachside/commit/e56671186220a2c0345bdd8f9540af0de8b7d69e) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - `snapshot.restore()` takes the create options `env`, `labels` and `lifecycle: { lifetimeSeconds }`. Adapters declare which they apply in `snapshotRestore.options` (shown in `capabilities().snapshots.restore`); anything else rejects before allocation. The CLI now accepts `--env`, `--label` and `--ttl` with `--snapshot`.
+
+- [#148](https://github.com/pandemicsyn/beachside/pull/148) [`29f6896`](https://github.com/pandemicsyn/beachside/commit/29f689625b95d054f6c291cf60f34f8c97a53484) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Add `snapshots: { retentionSeconds }` to the Vercel and Modal adapters to set how long snapshots are kept (`0` keeps them until deleted). Vercel sends native `expiration`, counted from last use, and accepts it in disposable mode only. Modal sends `ttlMs`, counted from capture. `snapshot({ retention: { minimumSeconds } })` is checked against the configured value.
+
+- [#148](https://github.com/pandemicsyn/beachside/pull/148) [`29f6896`](https://github.com/pandemicsyn/beachside/commit/29f689625b95d054f6c291cf60f34f8c97a53484) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Accept the `snapshots: { preserve }` setup option on the Vercel and Runloop adapters, so the same setting works on every adapter with snapshots. `Preserve.FILESYSTEM` matches their filesystem-only snapshots; `Preserve.FILESYSTEM_AND_MEMORY` rejects at connect with `UNSUPPORTED` before any provider call.
+
+### Patch Changes
+
+- Updated dependencies [[`29f6896`](https://github.com/pandemicsyn/beachside/commit/29f689625b95d054f6c291cf60f34f8c97a53484), [`f9a0bb7`](https://github.com/pandemicsyn/beachside/commit/f9a0bb737f748b4114672fd070a4bf995e27248d), [`e513d9a`](https://github.com/pandemicsyn/beachside/commit/e513d9a81fdd57f62d85bc027e9a9db3e91b9883), [`47f5b61`](https://github.com/pandemicsyn/beachside/commit/47f5b617a4749bf94c7c6dee2686fc90aa487c8b), [`e566711`](https://github.com/pandemicsyn/beachside/commit/e56671186220a2c0345bdd8f9540af0de8b7d69e), [`4a074ab`](https://github.com/pandemicsyn/beachside/commit/4a074ab86d513b4b923a387692479f9011f0ba0e)]:
+  - @beachside/adapter@0.8.0
 
 ## 0.7.0
 

@@ -84,7 +84,7 @@ Buffered argv/shell and captured nonzero exit passed in the fcb59d4 baseline wit
 
 ### Process streams and terminals
 
-Native execution stream cancellation kills the process group; it cannot satisfy Sandbar detach/disconnect. Sustained process/terminal IO unsupported.
+Native execution stream cancellation kills the process group; it cannot satisfy Beachside detach/disconnect. Sustained process/terminal IO unsupported.
 
 <a id="boxd-finiteStdin"></a>
 
@@ -108,7 +108,7 @@ Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/e
 
 ### OCI image builds
 
-OCI images boot directly; no Sandbar image-build hook or retained image artifact.
+OCI images boot directly; no Beachside image-build hook or retained image artifact.
 
 <a id="boxd-network"></a>
 

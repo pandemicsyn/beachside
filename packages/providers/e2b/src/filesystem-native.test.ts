@@ -17,7 +17,7 @@ async function helper(op: string, path: string, destination = "", flag = false, 
 }
 
 test("E2B guest helper preserves unusual names, dangling links and nonrecursive directory protection", async () => {
-  const root = await mkdtemp(join(tmpdir(), "sandbar-e2b-fs-"));
+  const root = await mkdtemp(join(tmpdir(), "beachside-e2b-fs-"));
 
   try {
     const name = "quote'\n雪";
@@ -54,7 +54,7 @@ test("E2B guest helper preserves unusual names, dangling links and nonrecursive 
 });
 
 test("E2B staged copy keeps destination and source on collision, refuses links, and copies 32 MiB incrementally", async () => {
-  const root = await mkdtemp(join(tmpdir(), "sandbar-e2b-copy-"));
+  const root = await mkdtemp(join(tmpdir(), "beachside-e2b-copy-"));
 
   try {
     const source = join(root, "source");
@@ -92,7 +92,7 @@ test("E2B staged copy keeps destination and source on collision, refuses links, 
       expect(await readFile(join(newDirectory, "child"), "utf8")).toBe("directory bytes");
 
       if ((await fsStat(root)).dev !== (await fsStat("/dev/shm")).dev) {
-        const otherFilesystem = await mkdtemp("/dev/shm/sandbar-e2b-move-");
+        const otherFilesystem = await mkdtemp("/dev/shm/beachside-e2b-move-");
 
         try {
           expect(await helper("move", source, join(otherFilesystem, "moved"))).toMatchObject({

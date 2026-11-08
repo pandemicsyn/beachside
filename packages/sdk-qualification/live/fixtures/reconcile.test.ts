@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { Image } from "sandbar-sdk";
+import { Image } from "beachside";
 import { fixture, disposeFixtures } from "./offline";
 import { cleanupLedger } from "./reconcile";
 import { recordLegacyReference } from "../../provider-qualification/ledger";

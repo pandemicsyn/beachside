@@ -63,11 +63,11 @@ jobs:
       - name: Archive fresh outputs for this commit and run
         run: |
           shopt -s nullglob
-          tar -czf "$RUNNER_TEMP/sandbar-build.tar.gz" packages/*/dist packages/providers/*/dist
+          tar -czf "$RUNNER_TEMP/beachside-build.tar.gz" packages/*/dist packages/providers/*/dist
       - uses: actions/upload-artifact@v4
         with:
           name: built-${{ github.sha }}
-          path: ${{ runner.temp }}/sandbar-build.tar.gz
+          path: ${{ runner.temp }}/beachside-build.tar.gz
           overwrite: true
           retention-days: 1
           if-no-files-found: error
@@ -89,7 +89,7 @@ jobs:
           name: built-${{ github.sha }}
           path: ${{ runner.temp }}
       - name: Restore this run's build outputs
-        run: tar -xzf "$RUNNER_TEMP/sandbar-build.tar.gz"
+        run: tar -xzf "$RUNNER_TEMP/beachside-build.tar.gz"
       - name: SDK, adapter and offline provider contracts
         run: bun run test:sdk:built
   packed:
@@ -111,7 +111,7 @@ jobs:
           name: built-${{ github.sha }}
           path: ${{ runner.temp }}
       - name: Restore this run's build outputs
-        run: tar -xzf "$RUNNER_TEMP/sandbar-build.tar.gz"
+        run: tar -xzf "$RUNNER_TEMP/beachside-build.tar.gz"
       - parallel:
           - name: Packed Node and Bun consumers
             run: bun run package:smoke:built
@@ -135,7 +135,7 @@ jobs:
           name: built-${{ github.sha }}
           path: ${{ runner.temp }}
       - name: Restore this run's build outputs
-        run: tar -xzf "$RUNNER_TEMP/sandbar-build.tar.gz"
+        run: tar -xzf "$RUNNER_TEMP/beachside-build.tar.gz"
       - name: Documentation checks, generated references, site and examples
         run: bun run docs:check:built
   verify:

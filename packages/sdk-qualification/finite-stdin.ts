@@ -1,6 +1,6 @@
 import { expect } from "bun:test";
-import { NonzeroExitError } from "sandbar-sdk";
-import type { DirectSandboxHandle, ExecInput, ExecOutput } from "sandbar-sdk";
+import { NonzeroExitError } from "beachside";
+import type { DirectSandboxHandle, ExecInput, ExecOutput } from "beachside";
 
 export const finiteStdinInput = "λ\0💜";
 

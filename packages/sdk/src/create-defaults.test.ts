@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter, type CreateInput as NativeCreateInput } from "@sandbar-sdk/adapter";
-import { Image, Sandbar, type ImageInput } from "./index";
+import { defineAdapter, type CreateInput as NativeCreateInput } from "@beachside/adapter";
+import { Image, Beachside, type ImageInput } from "./index";
 
 async function fixture(defaultImage?: ImageInput) {
   const requests: NativeCreateInput[] = [];
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: defineAdapter({
       name: "fixture.defaults",
       config: z.strictObject({}),

@@ -3,8 +3,8 @@ import {
   AdapterFilesystemError,
   type ReadContext,
   type FileTransferContext,
-} from "@sandbar-sdk/adapter";
-import { SandbarError, raceAbort } from "./resource";
+} from "@beachside/adapter";
+import { BeachsideError, raceAbort } from "./resource";
 
 export type TransferPolicy = {
   setupTimeoutMs?: number;
@@ -20,7 +20,7 @@ export type FileWriteOptions = FileReadOptions & { overwrite?: boolean };
 
 export type FileStreamWriteOptions = FileStreamOptions & { overwrite?: boolean };
 
-export class FilesystemError extends SandbarError {
+export class FilesystemError extends BeachsideError {
   constructor(
     code: string,
     message: string,
@@ -33,10 +33,16 @@ export class FilesystemError extends SandbarError {
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Adapter and producer failures can throw arbitrary values; preserve Error instances and retain other failures as the cause.
 export function filesystemError(error: unknown): Error {
-  if (error instanceof AdapterFilesystemError)
-    return new FilesystemError(error.code, error.message, error.details);
+  if (error instanceof AdapterError) {
+    const mapped =
+      error instanceof AdapterFilesystemError
+        ? new FilesystemError(error.code, error.message, error.details)
+        : new BeachsideError(error.code, error.message);
 
-  if (error instanceof AdapterError) return new SandbarError(error.code, error.message);
+    if (error.cause !== undefined) mapped.cause = error.cause;
+
+    return mapped;
+  }
 
   return error instanceof Error
     ? error
@@ -47,18 +53,29 @@ export function byteLimit(value: number | undefined, defaultValue?: number): num
   const limit = value ?? defaultValue;
 
   if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 0))
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid file byte limit");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid file byte limit");
 
   return limit;
 }
 
+/**
+ * The effective limit of one buffered adapter read or write: the caller's optional `maxBytes`
+ * guard, bounded by the adapter's own buffered limit. Larger files use the adapter's streams.
+ */
 export function bufferedLimit(value: number | undefined, adapterLimit: number): number {
-  const limit = byteLimit(value, 1_048_576)!;
+  const limit = byteLimit(value);
+  const adapter = byteLimit(adapterLimit)!;
 
-  if (limit > 16_777_216)
-    throw new SandbarError("INVALID_ARGUMENT", "Buffered file limit exceeds 16 MiB; use streams");
+  return limit === undefined ? adapter : Math.min(limit, adapter);
+}
 
-  return Math.min(limit, byteLimit(adapterLimit)!);
+/** The error for a file larger than an adapter without file streams can move in one call. */
+export function adapterFileLimit(adapterLimit: number, code: "CAPACITY" | "OUTPUT_CAPACITY") {
+  return new BeachsideError(
+    code,
+    `File exceeds this adapter's ${adapterLimit}-byte file limit; it has no file streams`,
+    code === "OUTPUT_CAPACITY" ? "unknown" : "none",
+  );
 }
 
 class Transfer {
@@ -66,9 +83,9 @@ class Transfer {
   private timer?: ReturnType<typeof setTimeout>;
   private overall?: ReturnType<typeof setTimeout>;
   private readonly cancel = () =>
-    this.controller.abort(new SandbarError("WAIT_ABORTED", "File transfer cancelled"));
+    this.controller.abort(new BeachsideError("WAIT_ABORTED", "File transfer cancelled"));
   private readonly close = () =>
-    this.controller.abort(new SandbarError("CLIENT_CLOSED", "Client is closed"));
+    this.controller.abort(new BeachsideError("CLIENT_CLOSED", "Client is closed"));
   readonly setup: number;
   readonly inactivity: number;
   constructor(
@@ -85,7 +102,7 @@ class Transfer {
         value !== undefined &&
         (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647)
       )
-        throw new SandbarError("INVALID_ARGUMENT", "Invalid transfer timeout");
+        throw new BeachsideError("INVALID_ARGUMENT", "Invalid transfer timeout");
     }
 
     options.signal?.addEventListener("abort", this.cancel, { once: true });
@@ -97,7 +114,7 @@ class Transfer {
     if (overall !== undefined) this.overall = setTimeout(() => this.timeout(), overall);
   }
   private timeout() {
-    this.controller.abort(new SandbarError("TIMEOUT", "File transfer timed out"));
+    this.controller.abort(new BeachsideError("TIMEOUT", "File transfer timed out"));
   }
   arm(ms: number) {
     this.pause();
@@ -162,11 +179,11 @@ export async function* streamFile(
       if (part.done) return;
 
       if (!(part.value instanceof Uint8Array))
-        throw new SandbarError("INVALID_RESPONSE", "Invalid file stream chunk");
+        throw new BeachsideError("INVALID_RESPONSE", "Invalid file stream chunk");
       total += part.value.byteLength;
 
       if (limit !== undefined && total > limit)
-        throw new SandbarError("OUTPUT_CAPACITY", "File exceeds byte limit");
+        throw new BeachsideError("OUTPUT_CAPACITY", "File exceeds byte limit");
 
       for (let offset = 0; offset < part.value.length; offset += 65_536) {
         transfer.controller.signal.throwIfAborted();
@@ -215,10 +232,10 @@ export async function writeStream(
       }
 
       if (!(part.value instanceof Uint8Array))
-        throw new SandbarError("INVALID_ARGUMENT", "Expected byte stream chunks");
+        throw new BeachsideError("INVALID_ARGUMENT", "Expected byte stream chunks");
 
       if (limit !== undefined && total + part.value.length > limit)
-        throw new SandbarError("OUTPUT_CAPACITY", "File exceeds byte limit");
+        throw new BeachsideError("OUTPUT_CAPACITY", "File exceeds byte limit");
 
       for (let offset = 0; offset < part.value.length; offset += 65_536) {
         transfer.controller.signal.throwIfAborted();
@@ -236,7 +253,7 @@ export async function writeStream(
     const result = await transfer.wait(write(bytes, { ...transfer.context(), retain }));
 
     if (!complete || result.bytesWritten !== total)
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_RESPONSE",
         "File transfer completion was not confirmed",
         "unknown",

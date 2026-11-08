@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar } from "sandbar-sdk";
+import { Image, Beachside } from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 const snapshot = (name: string) => ({
@@ -50,7 +50,7 @@ function fixture(input: { create?: Response; build?: Response }) {
   );
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createDaytonaAdapter(fetchImpl),
       config: { target: "us", network: "blocked" },
       credentials: { apiKey: "fixture-key" },

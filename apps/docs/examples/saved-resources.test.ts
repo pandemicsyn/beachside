@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { Image, ResourceReference } from "sandbar-sdk";
+import { Image, ResourceReference } from "beachside";
 import {
   fixture,
   disposeFixtures,

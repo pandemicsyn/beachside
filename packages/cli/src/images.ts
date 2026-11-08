@@ -2,13 +2,13 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
   Image,
-  SandbarError,
+  BeachsideError,
   type ImageBuildResult,
   type ImageInfo,
   type ImageInput,
   type ResourceReference,
-  type SandbarClient,
-} from "sandbar-sdk";
+  type BeachsideClient,
+} from "beachside";
 import type { Flags } from "./commands";
 import { CliError, describeError, usage } from "./output";
 import type { ResolvedProfile } from "./providers";
@@ -85,7 +85,7 @@ async function claim(store: StateStore, record: Omit<ImageRecord, "name">, reque
         throw new CliError(
           "CONFLICT",
           `Image name ${name} is already in use`,
-          "choose another --name, or `sandbar image forget` the old record",
+          "choose another --name, or `beachside image forget` the old record",
         );
     }
   }
@@ -99,7 +99,7 @@ type Built = { entry: Entry; built: boolean };
  */
 async function buildImage(
   session: Session,
-  client: SandbarClient<true>,
+  client: BeachsideClient<true>,
   profile: ResolvedProfile,
   source: string,
   options: { name?: string; refresh?: boolean },
@@ -111,7 +111,7 @@ async function buildImage(
     throw new CliError(
       "CONFLICT",
       `${source} is already built for profile ${profile.name} as ${existing.record.name}`,
-      "use that name, or `sandbar image forget` it first",
+      "use that name, or `beachside image forget` it first",
     );
 
   if (existing && !options.refresh) return { entry: existing, built: false };
@@ -158,7 +158,7 @@ async function buildImage(
     }
 
     const recovery = report.known?.recovery;
-    let kept = `the store keeps ${claimed.record.name}; \`sandbar image inspect ${claimed.record.name}\` checks the build again`;
+    let kept = `the store keeps ${claimed.record.name}; \`beachside image inspect ${claimed.record.name}\` checks the build again`;
 
     if (existing)
       kept = `${existing.record.name} still holds the previous build; the new one may exist on the provider`;
@@ -212,7 +212,7 @@ async function buildImage(
  */
 export async function imageEnvironment(
   session: Session,
-  client: SandbarClient<true>,
+  client: BeachsideClient<true>,
   profile: ResolvedProfile,
   source: string,
   build: boolean,
@@ -229,8 +229,8 @@ export async function imageEnvironment(
   if (!build && !autoBuild)
     throw new CliError(
       "UNSUPPORTED",
-      `image ${source} is not built for profile ${profile.name}; run: sandbar image build ${source}`,
-      `pass --build to build it during this command, or set images.autoBuild in sandbar.json`,
+      `image ${source} is not built for profile ${profile.name}; run: beachside image build ${source}`,
+      `pass --build to build it during this command, or set images.autoBuild in beachside.json`,
     );
 
   const { entry } = await buildImage(session, client, profile, source, {});
@@ -266,7 +266,7 @@ async function findImage(store: StateStore, name: string): Promise<Entry> {
     throw new CliError(
       "NOT_FOUND",
       `No image record named ${name}`,
-      "list them with `sandbar image ls`",
+      "list them with `beachside image ls`",
     );
 
   return found;
@@ -284,7 +284,7 @@ async function recoverBuild(session: Session, store: StateStore, entry: Entry): 
   try {
     value = await (await client.recover(record.recovery)).observe();
   } catch (cause) {
-    if (cause instanceof SandbarError && cause.effect !== "none") return entry;
+    if (cause instanceof BeachsideError && cause.effect !== "none") return entry;
     throw cause;
   }
 
@@ -304,7 +304,10 @@ async function recoverBuild(session: Session, store: StateStore, entry: Entry): 
 
 async function buildCommand(session: Session, flags: Flags, args: readonly string[]) {
   if (args.length !== 1)
-    throw usage("Expected exactly one OCI image reference", "e.g. sandbar image build python:3.12");
+    throw usage(
+      "Expected exactly one OCI image reference",
+      "e.g. beachside image build python:3.12",
+    );
   const profile = await session.profile();
   const client = await session.connect(profile);
 
@@ -341,7 +344,7 @@ async function lsImages(session: Session) {
           `${"NAME".padEnd(20)} ${"PROFILE".padEnd(12)} ${"STATUS".padEnd(9)} SOURCE`,
           ...lines,
         ].join("\n")
-      : "no image records; build one with `sandbar image build <oci-ref>`",
+      : "no image records; build one with `beachside image build <oci-ref>`",
   );
 
   return 0;
@@ -385,7 +388,7 @@ async function forgetImage(session: Session, args: readonly string[]) {
 
   if (record.retainedResources.length)
     lines.push(
-      `${record.provider} still holds these; forget never deletes them (\`sandbar image rm\` does, where the provider supports it):`,
+      `${record.provider} still holds these; forget never deletes them (\`beachside image rm\` does, where the provider supports it):`,
       ...retainedLines(record),
     );
 
@@ -461,7 +464,7 @@ async function rmImage(session: Session, args: readonly string[], force: boolean
       throw new CliError(
         "OUTCOME_UNKNOWN",
         `${record.name} has no saved delete to check`,
-        `the store keeps ${record.name} as built; check the provider (\`sandbar image ls --remote\`) before running \`sandbar image rm ${record.name}\` again, which sends a new delete`,
+        `the store keeps ${record.name} as built; check the provider (\`beachside image ls --remote\`) before running \`beachside image rm ${record.name}\` again, which sends a new delete`,
         { image: record.name },
       );
     }
@@ -471,7 +474,7 @@ async function rmImage(session: Session, args: readonly string[], force: boolean
     try {
       value = await (await client.recover(record.recovery)).observe();
     } catch (cause) {
-      if (!(cause instanceof SandbarError)) throw cause;
+      if (!(cause instanceof BeachsideError)) throw cause;
 
       // The check failed, not the delete: the SDK never certifies a recovered delete as having
       // no effect, so the record keeps `deleting` and its recovery for a later check.
@@ -479,7 +482,7 @@ async function rmImage(session: Session, args: readonly string[], force: boolean
         throw new CliError(
           cause.code,
           cause.message,
-          `the store keeps ${record.name} deleting; run \`sandbar image rm ${record.name}\` again with profile ${record.profile} connected to the account the delete was sent from`,
+          `the store keeps ${record.name} deleting; run \`beachside image rm ${record.name}\` again with profile ${record.profile} connected to the account the delete was sent from`,
           { image: record.name, recovery: record.recovery },
         );
     }
@@ -488,7 +491,7 @@ async function rmImage(session: Session, args: readonly string[], force: boolean
       throw new CliError(
         "OUTCOME_UNKNOWN",
         `The delete of ${record.name} is still unconfirmed`,
-        `the store keeps ${record.name}; run \`sandbar image rm ${record.name}\` again later`,
+        `the store keeps ${record.name}; run \`beachside image rm ${record.name}\` again later`,
         { image: record.name, recovery: record.recovery },
       );
     await forgetDeleted(store, entry);
@@ -502,7 +505,7 @@ async function rmImage(session: Session, args: readonly string[], force: boolean
     throw new CliError(
       "CONFLICT",
       `${record.name} has no confirmed build to delete`,
-      "`sandbar image inspect` checks an uncertain build; `sandbar image forget` drops the record",
+      "`beachside image inspect` checks an uncertain build; `beachside image forget` drops the record",
     );
 
   if (reference.ownership !== "verified-created" && !force)
@@ -518,8 +521,8 @@ async function rmImage(session: Session, args: readonly string[], force: boolean
   if (capabilities.imageManagement.delete.status !== "supported")
     throw new CliError(
       "UNSUPPORTED",
-      `${record.provider} cannot delete images through Sandbar`,
-      "`sandbar image forget` drops the record; delete the image with the provider's own tools",
+      `${record.provider} cannot delete images through Beachside`,
+      "`beachside image forget` drops the record; delete the image with the provider's own tools",
     );
 
   const shared = (await listAll(store, "image")).find(
@@ -556,10 +559,10 @@ async function rmImage(session: Session, args: readonly string[], force: boolean
       throw new CliError(
         "OUTCOME_UNKNOWN",
         report.message,
-        `the store keeps ${record.name} as built and there is no saved delete to check; check the provider (\`sandbar image ls --remote\`) before running \`sandbar image rm ${record.name}\` again, which sends a new delete`,
+        `the store keeps ${record.name} as built and there is no saved delete to check; check the provider (\`beachside image ls --remote\`) before running \`beachside image rm ${record.name}\` again, which sends a new delete`,
         { image: record.name },
       );
-    let kept = `the store keeps ${record.name}; run \`sandbar image rm ${record.name}\` again to check`;
+    let kept = `the store keeps ${record.name}; run \`beachside image rm ${record.name}\` again to check`;
 
     try {
       await store.update(
@@ -607,8 +610,8 @@ async function lsRemote(session: Session) {
   if (capabilities.imageManagement.list.status !== "supported")
     throw new CliError(
       "UNSUPPORTED",
-      `${profile.provider} cannot list images through Sandbar`,
-      "`sandbar image ls` shows the builds this store recorded",
+      `${profile.provider} cannot list images through Beachside`,
+      "`beachside image ls` shows the builds this store recorded",
     );
 
   const records = (await listAll(await session.store(), "image")).filter(
@@ -660,13 +663,13 @@ export async function imageCommand(session: Session, flags: Flags): Promise<numb
   const [action, ...args] = flags.positionals;
 
   if ((flags.string("name") || flags.bool("refresh")) && action !== "build")
-    throw usage("--name and --refresh only apply to `sandbar image build`");
+    throw usage("--name and --refresh only apply to `beachside image build`");
 
   if (flags.bool("remote") && action !== "ls")
-    throw usage("--remote only applies to `sandbar image ls`");
+    throw usage("--remote only applies to `beachside image ls`");
 
   if (flags.bool("force") && action !== "rm")
-    throw usage("--force only applies to `sandbar image rm`");
+    throw usage("--force only applies to `beachside image rm`");
 
   switch (action) {
     case "build":

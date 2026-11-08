@@ -115,7 +115,7 @@ export async function adapterSuite<
         "create",
         {
           ...fixture.createInput,
-          networkPolicy: "__sandbar_unsupported__",
+          networkPolicy: "__beachside_unsupported__",
         },
         connection.signal,
       );
@@ -365,7 +365,7 @@ type SuiteSandbox = {
   destroy(): Promise<object>;
 };
 
-/** The public client surface `snapshotSuite` drives; a connected `sandbar-sdk` client satisfies it. */
+/** The public client surface `snapshotSuite` drives; a connected `beachside` client satisfies it. */
 export type SnapshotSuiteClient<I = never> = {
   sandboxes: { create(input?: I): Promise<SuiteSandbox> };
   snapshots: {

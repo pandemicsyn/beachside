@@ -36,7 +36,7 @@ import {
   type SnapshotProfile,
   type VolumeInfo,
   listedTime,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   BOXD_ENDPOINT,
   MAX_BYTES,
@@ -159,7 +159,7 @@ const Generation = z.number().int().positive().safe();
 
 /** The deterministic per-attempt name is checkpointed before capture so a lost response can be found. */
 const CaptureToken = z.strictObject({
-  name: z.string().regex(/^sandbar-snapshot-[0-9a-f]{24}$/),
+  name: z.string().regex(/^beachside-snapshot-[0-9a-f]{24}$/),
   source: Id,
   id: SnapshotId.optional(),
   version: Generation.optional(),
@@ -201,7 +201,7 @@ function machineSize(machine: Machine): Fact<SandboxResources> {
 }
 
 function nativeName(submission: string): string {
-  return `sandbar-${createHash("sha256").update(submission).digest("hex").slice(0, 24)}`;
+  return `beachside-${createHash("sha256").update(submission).digest("hex").slice(0, 24)}`;
 }
 
 /**
@@ -209,7 +209,7 @@ function nativeName(submission: string): string {
  * the reference also pins the captured version as its generation.
  */
 function snapshotName(submission: string): string {
-  return `sandbar-snapshot-${createHash("sha256").update(submission).digest("hex").slice(0, 24)}`;
+  return `beachside-snapshot-${createHash("sha256").update(submission).digest("hex").slice(0, 24)}`;
 }
 
 /** Memory and disk are captured together during a brief pause; the source keeps running. */
@@ -556,7 +556,7 @@ export function createBoxdAdapter(
 
         const proxies =
           config.preview.access === "public"
-            ? config.preview.ports.map((port) => ({ name: `sandbar-${port}`, port }))
+            ? config.preview.ports.map((port) => ({ name: `beachside-${port}`, port }))
             : undefined;
 
         let machine: Machine;
@@ -913,8 +913,8 @@ export function createBoxdAdapter(
       const session: AdapterSession<
         CreateInput,
         DestroyPrepared,
-        import("@sandbar-sdk/adapter").ExecInput,
-        import("@sandbar-sdk/adapter").FileWriteInput,
+        import("@beachside/adapter").ExecInput,
+        import("@beachside/adapter").FileWriteInput,
         "argv" | "shell",
         Created
       > = {
@@ -988,7 +988,7 @@ export function createBoxdAdapter(
           const listed = page(machines, input);
 
           return {
-            // boxd lists every machine in the verified org and records no Sandbar creation
+            // boxd lists every machine in the verified org and records no Beachside creation
             // correlation, so listed references claim no ownership.
             coverage: "provider-scope" as const,
             items: listed.items.map((machine) => ({
@@ -1167,7 +1167,7 @@ export function createBoxdAdapter(
 
           const route = proxies.find(
             (route) =>
-              route.name === `sandbar-${input.port}` &&
+              route.name === `beachside-${input.port}` &&
               route.port === input.port &&
               route.portMode === "locked",
           );
@@ -1515,7 +1515,7 @@ export function createBoxdAdapter(
           );
 
           return {
-            // Listed snapshots carry no Sandbar creation evidence.
+            // Listed snapshots carry no Beachside creation evidence.
             items: listed.items.map((snapshot) => snapshotInfo(snapshot)),
             nextCursor: listed.nextCursor,
             coverage: "provider-scope" as const,

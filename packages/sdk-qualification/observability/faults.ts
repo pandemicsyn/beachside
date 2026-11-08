@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type { SpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { Sandbar, Image, OutcomeUnknownError } from "sandbar-sdk";
+import { Beachside, Image, OutcomeUnknownError } from "beachside";
 import { fixtureAdapter } from "./adapter";
 import { startOpenTelemetry } from "./recipes";
 
@@ -22,7 +22,7 @@ for (const boundary of ["start", "end"] as const) {
   const provider = new NodeTracerProvider({ spanProcessors: [processor] });
   const fixture = fixtureAdapter();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: fixture.adapter,
     config: {},
     credentials: {},
@@ -57,7 +57,7 @@ const setup = startOpenTelemetry(`http://127.0.0.1:${address.port}/v1/traces`);
 
 try {
   const fixture = fixtureAdapter({ lost: true });
-  const client = await Sandbar.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
 
   const error = await client.sandboxes
     .create({ environment: Image.prepared("fixture") })

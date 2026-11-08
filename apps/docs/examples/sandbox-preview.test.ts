@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter } from "@sandbar-sdk/adapter";
-import { Sandbar, Image } from "sandbar-sdk";
+import { defineAdapter } from "@beachside/adapter";
+import { Beachside, Image } from "beachside";
 import { previewResponse } from "./sandbox-preview";
 
 async function clientFixture(access: "public" | "protected") {
@@ -27,7 +27,7 @@ async function clientFixture(access: "public" | "protected") {
     },
   });
 
-  return Sandbar.connect({ adapter, config: {}, credentials: {} });
+  return Beachside.connect({ adapter, config: {}, credentials: {} });
 }
 
 for (const access of ["public", "protected"] as const) {

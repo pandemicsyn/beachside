@@ -13,8 +13,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import type { Json } from "@sandbar-sdk/adapter";
-import { startFakeProviderServer } from "@sandbar/provider-fake/server";
+import type { Json } from "@beachside/adapter";
+import { startFakeProviderServer } from "@beachside-internal/provider-fake/server";
 import { readTar } from "../src/tar";
 import { defaultPushDir, scripts, shellQuote } from "../src/transfer";
 
@@ -31,7 +31,7 @@ let server: Awaited<ReturnType<typeof startFakeProviderServer>>;
 let dir: string;
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "sandbar-cli-"));
+  root = await mkdtemp(join(tmpdir(), "beachside-cli-"));
   server = await startFakeProviderServer({
     hostname: "127.0.0.1",
     port: 0,
@@ -53,7 +53,7 @@ beforeEach(async () => {
 });
 
 async function writeConfig(config: Json) {
-  await writeFile(join(dir, "sandbar.json"), JSON.stringify(config));
+  await writeFile(join(dir, "beachside.json"), JSON.stringify(config));
 }
 
 async function control(path: string, body: Json) {
@@ -110,10 +110,10 @@ async function cli(
     env: {
       PATH: process.env.PATH ?? "",
       HOME: dir,
-      SANDBAR_CONFIG: join(dir, "sandbar.json"),
-      SANDBAR_STATE_DIR: join(dir, "state"),
-      SANDBAR_FAKE_URL: server.url.origin,
-      SANDBAR_FAKE_TOKEN: token,
+      BEACHSIDE_CONFIG: join(dir, "beachside.json"),
+      BEACHSIDE_STATE_DIR: join(dir, "state"),
+      BEACHSIDE_FAKE_URL: server.url.origin,
+      BEACHSIDE_FAKE_TOKEN: token,
       ...env,
     },
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
@@ -138,18 +138,18 @@ function envelope(result: Result) {
   return JSON.parse(lines[0]!);
 }
 
-/** A stand-in adapter package `@acme/sandbar-fake` that re-exports the test fixture. */
+/** A stand-in adapter package `@acme/beachside-fake` that re-exports the test fixture. */
 async function adapterPackage(
   root: string,
   exports: Json,
   source = `export * from ${JSON.stringify(fixture)};\n`,
   entry = "index.js",
 ) {
-  const directory = join(root, "@acme", "sandbar-fake");
+  const directory = join(root, "@acme", "beachside-fake");
   await mkdir(join(directory, dirname(entry)), { recursive: true });
   await writeFile(
     join(directory, "package.json"),
-    JSON.stringify({ name: "@acme/sandbar-fake", type: "module", exports }),
+    JSON.stringify({ name: "@acme/beachside-fake", type: "module", exports }),
   );
   await writeFile(join(directory, entry), source);
 }
@@ -162,7 +162,7 @@ async function storeNames() {
   }
 }
 
-describe("sandbar CLI against the fake provider", () => {
+describe("beachside CLI against the fake provider", () => {
   test("create, ls, inspect and rm keep the store and provider in step", async () => {
     const created = await cli(["create", "--name", "web", "--prepared", "fake-starter"]);
 
@@ -468,7 +468,7 @@ describe("sandbar CLI against the fake provider", () => {
     const unknownCommand = await cli(["creat"]);
 
     expect(unknownCommand.code).toBe(2);
-    expect(unknownCommand.stderr).toContain("sandbar create");
+    expect(unknownCommand.stderr).toContain("beachside create");
 
     expect((await cli(["exec", "box"])).code).toBe(125);
   });
@@ -543,14 +543,14 @@ describe("sandbar CLI against the fake provider", () => {
     const help = await cli(["exec", "--help"]);
 
     expect(help.code).toBe(0);
-    expect(help.stdout).toContain("Usage: sandbar exec");
+    expect(help.stdout).toContain("Usage: beachside exec");
     expect((await cli(["--help"])).stdout).toContain("Quick start");
   });
 
-  test("adapters load from ~/.config/sandbar/adapters, including nested conditional exports", async () => {
+  test("adapters load from ~/.config/beachside/adapters, including nested conditional exports", async () => {
     await writeConfig({
       default: "acme",
-      profiles: { acme: { module: "@acme/sandbar-fake", export: "fake" } },
+      profiles: { acme: { module: "@acme/beachside-fake", export: "fake" } },
     });
 
     const missing = await cli(["doctor", "--json"]);
@@ -559,7 +559,7 @@ describe("sandbar CLI against the fake provider", () => {
     expect(envelope(missing).error.code).toBe("ADAPTER_NOT_INSTALLED");
 
     await adapterPackage(
-      join(dir, ".config", "sandbar", "adapters", "node_modules"),
+      join(dir, ".config", "beachside", "adapters", "node_modules"),
       { ".": { node: { import: { types: "./lib/entry.d.ts", default: "./lib/entry.js" } } } },
       undefined,
       "lib/entry.js",
@@ -571,10 +571,10 @@ describe("sandbar CLI against the fake provider", () => {
   test("an installed adapter that fails to load is not reported as missing", async () => {
     await writeConfig({
       default: "acme",
-      profiles: { acme: { module: "@acme/sandbar-fake", export: "fake" } },
+      profiles: { acme: { module: "@acme/beachside-fake", export: "fake" } },
     });
     await adapterPackage(
-      join(dir, ".config", "sandbar", "adapters", "node_modules"),
+      join(dir, ".config", "beachside", "adapters", "node_modules"),
       "./index.js",
       'import "@acme/not-installed-dependency";\n',
     );
@@ -586,8 +586,8 @@ describe("sandbar CLI against the fake provider", () => {
     expect(envelope(result).error.message).toContain("@acme/not-installed-dependency");
   });
 
-  test("SANDBAR_JSON=1 switches every command to JSON", async () => {
-    const result = await cli(["ls"], { SANDBAR_JSON: "1" });
+  test("BEACHSIDE_JSON=1 switches every command to JSON", async () => {
+    const result = await cli(["ls"], { BEACHSIDE_JSON: "1" });
 
     expect(envelope(result)).toEqual({ ok: true, data: { sandboxes: [] } });
   });
@@ -636,7 +636,7 @@ describe("sandbar CLI against the fake provider", () => {
 
   test("ls --remote lists provider sandboxes and adopt records one without owning it", async () => {
     await cli(["create", "--name", "web", "--prepared", "fake-starter"]);
-    const elsewhere = { SANDBAR_STATE_DIR: join(dir, "elsewhere") };
+    const elsewhere = { BEACHSIDE_STATE_DIR: join(dir, "elsewhere") };
     const create = ["create", "--prepared", "fake-starter", "--json"];
     const other = envelope(await cli(create, elsewhere)).data.id;
     const gone = envelope(await cli(create, elsewhere)).data.id;
@@ -705,7 +705,7 @@ describe("sandbar CLI against the fake provider", () => {
   });
 
   test("gc destroys provider-listed sandboxes by label and age, then forgets their records", async () => {
-    const elsewhere = { SANDBAR_STATE_DIR: join(dir, "elsewhere") };
+    const elsewhere = { BEACHSIDE_STATE_DIR: join(dir, "elsewhere") };
     const create = ["create", "--prepared", "fake-starter", "--json"];
     await cli(["create", "--name", "web", "--prepared", "fake-starter", "--label", "run=1"]);
     // A killed job's sandbox: its own store is gone, only the provider still lists it.
@@ -851,9 +851,9 @@ describe("sandbar CLI against the fake provider", () => {
     expect(await storeNames()).toEqual(["job.json"]);
   });
 
-  test("a relative SANDBAR_STATE_DIR is relative to the working directory", async () => {
+  test("a relative BEACHSIDE_STATE_DIR is relative to the working directory", async () => {
     await cli(["create", "--name", "web", "--prepared", "fake-starter"], {
-      SANDBAR_STATE_DIR: "./run1",
+      BEACHSIDE_STATE_DIR: "./run1",
     });
 
     expect(await readdir(join(dir, "run1", "sandboxes"))).toEqual(["web.json"]);
@@ -885,12 +885,12 @@ describe("sandbar CLI against the fake provider", () => {
   test("project node_modules supply adapters only when opted in", async () => {
     await writeConfig({
       default: "acme",
-      profiles: { acme: { module: "@acme/sandbar-fake", export: "fake" } },
+      profiles: { acme: { module: "@acme/beachside-fake", export: "fake" } },
     });
     await adapterPackage(join(dir, "node_modules"), "./index.js");
 
     expect((await cli(["doctor", "--json"])).code).toBe(4);
-    expect((await cli(["doctor", "--json"], { SANDBAR_PROJECT_ADAPTERS: "1" })).code).toBe(0);
+    expect((await cli(["doctor", "--json"], { BEACHSIDE_PROJECT_ADAPTERS: "1" })).code).toBe(0);
   });
 
   describe("password-manager credentials", () => {
@@ -964,11 +964,11 @@ describe("sandbar CLI against the fake provider", () => {
 
   describe("skill", () => {
     const installed = (base: string, agent: string) =>
-      join(base, agent, "skills", "sandbar-cli", "SKILL.md");
+      join(base, agent, "skills", "beachside-cli", "SKILL.md");
 
     test("prints the bundled skill", async () => {
       const bundled = await readFile(
-        join(import.meta.dir, "..", "..", "..", "skills", "sandbar-cli", "SKILL.md"),
+        join(import.meta.dir, "..", "..", "..", "skills", "beachside-cli", "SKILL.md"),
         "utf8",
       );
 
@@ -984,7 +984,7 @@ describe("sandbar CLI against the fake provider", () => {
         "written",
         "written",
       ]);
-      expect(await readFile(installed(dir, ".claude"), "utf8")).toContain("name: sandbar-cli");
+      expect(await readFile(installed(dir, ".claude"), "utf8")).toContain("name: beachside-cli");
 
       const again = envelope(await cli(["skill", "install", "--json"]));
 
@@ -1019,7 +1019,7 @@ describe("sandbar CLI against the fake provider", () => {
 
       expect(result.code).toBe(0);
       expect(await readFile(installed(project, ".agents"), "utf8")).toContain(
-        "sandbar skill install",
+        "beachside skill install",
       );
     });
   });
@@ -1059,13 +1059,13 @@ describe("sandbar CLI against the fake provider", () => {
       expect((await values("exec", "web", "--", "")).directive).toBe(":2");
     });
 
-    test("profile names come from sandbar.json", async () => {
+    test("profile names come from beachside.json", async () => {
       expect((await values("--profile", "")).values).toEqual(["fake"]);
     });
 
     test("prints a script for each shell", async () => {
       for (const shell of ["zsh", "bash", "fish"])
-        expect((await cli(["completion", shell])).stdout).toContain("sandbar __complete");
+        expect((await cli(["completion", shell])).stdout).toContain("beachside __complete");
       expect((await cli(["completion", "tcsh"])).code).toBe(2);
     });
   });
@@ -1154,10 +1154,10 @@ describe("sandbar CLI against the fake provider", () => {
           env: {
             PATH: process.env.PATH ?? "",
             HOME: dir,
-            SANDBAR_CONFIG: join(dir, "sandbar.json"),
-            SANDBAR_STATE_DIR: join(dir, "state"),
-            SANDBAR_FAKE_URL: server.url.origin,
-            SANDBAR_FAKE_TOKEN: token,
+            BEACHSIDE_CONFIG: join(dir, "beachside.json"),
+            BEACHSIDE_STATE_DIR: join(dir, "state"),
+            BEACHSIDE_FAKE_URL: server.url.origin,
+            BEACHSIDE_FAKE_TOKEN: token,
           },
           stdout: "pipe",
           stderr: "pipe",
@@ -1180,7 +1180,7 @@ describe("sandbar CLI against the fake provider", () => {
   });
 
   describe("adapter", () => {
-    const adapters = () => join(dir, ".config", "sandbar", "adapters");
+    const adapters = () => join(dir, ".config", "beachside", "adapters");
 
     const version = async (): Promise<string> =>
       JSON.parse(await readFile(join(import.meta.dir, "..", "package.json"), "utf8")).version;
@@ -1219,7 +1219,7 @@ describe("sandbar CLI against the fake provider", () => {
         dir: adapters(),
         adapters: [
           {
-            package: "@sandbar-sdk/e2b",
+            package: "@beachside/e2b",
             provider: "e2b",
             version: cliVersion,
             previous: null,
@@ -1238,21 +1238,21 @@ describe("sandbar CLI against the fake provider", () => {
             "--no-audit",
             "--no-fund",
             "--save-exact",
-            `@sandbar-sdk/e2b@${cliVersion}`,
+            `@beachside/e2b@${cliVersion}`,
           ],
           cwd: adapters(),
         },
       ]);
       expect(JSON.parse(await readFile(join(adapters(), "package.json"), "utf8"))).toMatchObject({
         private: true,
-        dependencies: { "@sandbar-sdk/e2b": cliVersion },
+        dependencies: { "@beachside/e2b": cliVersion },
       });
 
       const again = await cli(["adapter", "add", "e2b"], env);
 
       expect(again).toMatchObject({
         code: 0,
-        stdout: `unchanged @sandbar-sdk/e2b@${cliVersion} (e2b)\n`,
+        stdout: `unchanged @beachside/e2b@${cliVersion} (e2b)\n`,
       });
       expect(await npmCalls()).toHaveLength(1);
     });
@@ -1261,16 +1261,16 @@ describe("sandbar CLI against the fake provider", () => {
       const env = await fakeNpm();
       await writeConfig({
         default: "acme",
-        profiles: { acme: { module: "@acme/sandbar-fake", export: "fake" } },
+        profiles: { acme: { module: "@acme/beachside-fake", export: "fake" } },
       });
 
       expect((await cli(["doctor", "--json"], env)).code).toBe(4);
 
-      const added = await cli(["adapter", "add", "@acme/sandbar-fake@1.2.0"], env);
+      const added = await cli(["adapter", "add", "@acme/beachside-fake@1.2.0"], env);
 
       expect(added.code).toBe(0);
-      expect(added.stdout).toMatch(/^installed @acme\/sandbar-fake@1\.2\.0 exports .*\bfake\b/);
-      expect((await npmCalls())[0]!.args.at(-1)).toBe("@acme/sandbar-fake@1.2.0");
+      expect(added.stdout).toMatch(/^installed @acme\/beachside-fake@1\.2\.0 exports .*\bfake\b/);
+      expect((await npmCalls())[0]!.args.at(-1)).toBe("@acme/beachside-fake@1.2.0");
       expect((await cli(["doctor", "--json"], env)).code).toBe(0);
     });
 
@@ -1286,8 +1286,8 @@ describe("sandbar CLI against the fake provider", () => {
       expect(envelope(refused).error.hint).toContain("npm:e2bb");
       expect(await npmCalls()).toEqual([]);
 
-      expect((await cli(["adapter", "add", "npm:acme-sandbar"], env)).code).toBe(0);
-      expect((await npmCalls())[0]!.args.at(-1)).toBe("acme-sandbar");
+      expect((await cli(["adapter", "add", "npm:acme-beachside"], env)).code).toBe(0);
+      expect((await npmCalls())[0]!.args.at(-1)).toBe("acme-beachside");
     });
 
     test("a package without an adapter export fails verification", async () => {
@@ -1299,7 +1299,7 @@ describe("sandbar CLI against the fake provider", () => {
       expect(result.code).toBe(4);
       expect(envelope(result).error).toMatchObject({
         code: "ADAPTER_LOAD_FAILED",
-        message: "@acme/not-an-adapter exports no Sandbar adapter",
+        message: "@acme/not-an-adapter exports no Beachside adapter",
       });
     });
 
@@ -1333,20 +1333,20 @@ describe("sandbar CLI against the fake provider", () => {
 
       expect(old.code).toBe(0);
       expect(old.stderr).toContain("differs from this CLI");
-      await cli(["adapter", "add", "@acme/sandbar-fake"], env);
+      await cli(["adapter", "add", "@acme/beachside-fake"], env);
 
       const listed = await cli(["adapter", "ls", "--json"], env);
 
       expect(envelope(listed).data.adapters).toEqual([
         {
-          package: "@acme/sandbar-fake",
+          package: "@acme/beachside-fake",
           provider: null,
           requested: "9.9.9",
           version: "9.9.9",
           status: "ok",
         },
         {
-          package: "@sandbar-sdk/daytona",
+          package: "@beachside/daytona",
           provider: "daytona",
           requested: "0.0.1",
           version: "0.0.1",
@@ -1359,8 +1359,8 @@ describe("sandbar CLI against the fake provider", () => {
       const removed = await cli(["adapter", "rm", "daytona", "e2b", "--json"], env);
 
       expect(envelope(removed).data.adapters).toEqual([
-        { package: "@sandbar-sdk/daytona", provider: "daytona", result: "removed" },
-        { package: "@sandbar-sdk/e2b", provider: "e2b", result: "absent" },
+        { package: "@beachside/daytona", provider: "daytona", result: "removed" },
+        { package: "@beachside/e2b", provider: "e2b", result: "absent" },
       ]);
       expect((await npmCalls()).at(-1)!.args).toEqual([
         "uninstall",
@@ -1368,13 +1368,13 @@ describe("sandbar CLI against the fake provider", () => {
         adapters(),
         "--no-audit",
         "--no-fund",
-        "@sandbar-sdk/daytona",
+        "@beachside/daytona",
       ]);
 
       const calls = (await npmCalls()).length;
 
       expect((await cli(["adapter", "rm", "daytona"], env)).stdout).toBe(
-        "absent  @sandbar-sdk/daytona\n",
+        "absent  @beachside/daytona\n",
       );
       expect(await npmCalls()).toHaveLength(calls);
     });
@@ -1394,7 +1394,7 @@ describe("sandbar CLI against the fake provider", () => {
       });
     });
 
-    const image = (args: string[]) => cli(args, { SANDBAR_FAKE_BUILDS: builds });
+    const image = (args: string[]) => cli(args, { BEACHSIDE_FAKE_BUILDS: builds });
 
     async function buildLog() {
       try {
@@ -1412,7 +1412,7 @@ describe("sandbar CLI against the fake provider", () => {
         code: "UNSUPPORTED",
         outcome: "rejected",
         message:
-          "image python:3.12 is not built for profile builder; run: sandbar image build python:3.12",
+          "image python:3.12 is not built for profile builder; run: beachside image build python:3.12",
       });
       expect(envelope(result).error.hint).toContain("--build");
       expect(await buildLog()).toEqual([]);
@@ -1778,7 +1778,7 @@ describe("sandbar CLI against the fake provider", () => {
       const listed = await image(["image", "ls", "--remote", "--profile", "plain", "--json"]);
 
       expect(listed.code).toBe(4);
-      expect(envelope(listed).error.message).toBe("plain cannot list images through Sandbar");
+      expect(envelope(listed).error.message).toBe("plain cannot list images through Beachside");
 
       expect((await image(["image", "ls", "py", "--remote"])).code).toBe(2);
       expect((await image(["image", "inspect", "py", "--remote"])).code).toBe(2);
@@ -1992,11 +1992,11 @@ describe("streaming exec output", () => {
       env: {
         PATH: process.env.PATH ?? "",
         HOME: dir,
-        SANDBAR_CONFIG: join(dir, "sandbar.json"),
-        SANDBAR_STATE_DIR: join(dir, "state"),
-        SANDBAR_FAKE_URL: server.url.origin,
-        SANDBAR_FAKE_TOKEN: token,
-        SANDBAR_FAKE_TERMINATIONS: terminations,
+        BEACHSIDE_CONFIG: join(dir, "beachside.json"),
+        BEACHSIDE_STATE_DIR: join(dir, "state"),
+        BEACHSIDE_FAKE_URL: server.url.origin,
+        BEACHSIDE_FAKE_TOKEN: token,
+        BEACHSIDE_FAKE_TERMINATIONS: terminations,
       },
       stdin: "ignore",
       stdout: "pipe",
@@ -2045,7 +2045,7 @@ describe("streaming exec output", () => {
     await seedExec(["serve"], 0, "listening\n");
 
     const result = await cli(["exec", "box", "--timeout", "1s", "--", "serve"], {
-      SANDBAR_FAKE_TERMINATIONS: terminations,
+      BEACHSIDE_FAKE_TERMINATIONS: terminations,
     });
 
     expect(result.code).toBe(125);
@@ -2067,7 +2067,7 @@ describe("streaming exec output", () => {
     await seedExec(["serve"], 0, "listening ✓\n", "warming up\n");
 
     const result = await cli(["exec", "box", "--timeout", "1s", "--", "serve"], {
-      SANDBAR_FAKE_TERMINATIONS: terminations,
+      BEACHSIDE_FAKE_TERMINATIONS: terminations,
     });
 
     expect(result.code).toBe(125);
@@ -2137,7 +2137,7 @@ describe("streaming exec output", () => {
 });
 
 describe("directory transfer", () => {
-  const staging = "/tmp/sandbar.fixture";
+  const staging = "/tmp/beachside.fixture";
 
   async function seedCommand(
     command: Json,
@@ -2372,6 +2372,224 @@ describe("directory transfer", () => {
 
     expect(result.code).toBe(125);
     expect(await fakeResources()).toEqual([]);
+  });
+});
+
+describe("large files and input", () => {
+  const staging = "/tmp/beachside.fixture";
+  const big = (size: number) => Buffer.alloc(size, "abcdefghij");
+
+  async function seedScript(script: string, exitCode: number, stdout: string, stderr = "") {
+    await control("/_test/seed", {
+      submissionId: "*",
+      action: "exec",
+      command: {
+        command: { kind: "shell", script },
+        exitCode,
+        stdoutBase64: Buffer.from(stdout).toString("base64"),
+        stderrBase64: Buffer.from(stderr).toString("base64"),
+      },
+    });
+  }
+
+  /** The fake sandbox's files, as path → base64. */
+  async function sandboxFiles(): Promise<Record<string, string>> {
+    const response = await fetch(new URL("/_test/state", server.url), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    return (await response.json()).resources[0].files;
+  }
+
+  test("cp sends a file larger than one buffered write in parts the sandbox joins", async () => {
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    const source = big(2_500_000);
+    await writeFile(join(dir, "big.bin"), source);
+    await seedScript(scripts.stage(), 0, `${staging}\n`);
+    await seedScript(scripts.join(staging, "/work/big.bin", true), 0, "/work/big.bin\n");
+
+    const result = await cli(["cp", "big.bin", "box:/work/big.bin", "--json"]);
+
+    expect(envelope(result).data).toEqual({
+      sandbox: "box",
+      path: "/work/big.bin",
+      bytes: 2_500_000,
+    });
+    const files = await sandboxFiles();
+
+    const parts = Object.keys(files)
+      .filter((path) => path.startsWith(`${staging}/part.`))
+      .sort();
+
+    expect(parts).toEqual([
+      `${staging}/part.000000`,
+      `${staging}/part.000001`,
+      `${staging}/part.000002`,
+    ]);
+    expect(Buffer.concat(parts.map((part) => Buffer.from(files[part]!, "base64")))).toEqual(source);
+  });
+
+  test("cp --no-clobber reports a joined file that already exists", async () => {
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    await writeFile(join(dir, "big.bin"), big(1_500_000));
+    await seedScript(scripts.stage(), 0, `${staging}\n`);
+    await seedScript(scripts.join(staging, "/work/big.bin", false), 73, "", "exists\n");
+
+    const result = await cli(["cp", "--no-clobber", "big.bin", "box:/work/big.bin", "--json"]);
+
+    expect(result.code).toBe(1);
+    expect(envelope(result).error).toMatchObject({ code: "CONFLICT" });
+  });
+
+  describe("on a provider that streams files", () => {
+    let remote: string;
+
+    beforeEach(async () => {
+      remote = join(dir, "remote-files");
+      await writeConfig({
+        default: "files",
+        profiles: { files: { module: fixture, export: "fileStreaming" } },
+      });
+    });
+
+    test("cp and cat stream files of any size both ways", async () => {
+      const env = { BEACHSIDE_FAKE_FILES: remote };
+      await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);
+      const source = big(5_000_000);
+      await writeFile(join(dir, "big.bin"), source);
+
+      const up = await cli(["cp", "big.bin", "box:/work/big.bin", "--json"], env);
+
+      expect(envelope(up).data).toEqual({
+        sandbox: "box",
+        path: "/work/big.bin",
+        bytes: 5_000_000,
+      });
+      expect(await readFile(join(remote, "work", "big.bin"))).toEqual(source);
+
+      const down = await cli(["cp", "box:/work/big.bin", "copy.bin", "--json"], env);
+
+      expect(envelope(down).data).toEqual({
+        sandbox: "box",
+        path: join(dir, "copy.bin"),
+        bytes: 5_000_000,
+      });
+      expect(await readFile(join(dir, "copy.bin"))).toEqual(source);
+      expect(await readdir(dir)).not.toContainEqual(expect.stringContaining(".part"));
+
+      const cat = await cli(["cat", "box:/work/big.bin"], env);
+
+      expect(cat.code).toBe(0);
+      expect(cat.stdout.length).toBe(5_000_000);
+    });
+
+    test("a failed download leaves the local file as it was", async () => {
+      const env = { BEACHSIDE_FAKE_FILES: remote };
+      await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);
+      await writeFile(join(dir, "keep.txt"), "original\n");
+
+      const result = await cli(["cp", "box:/work/missing.bin", "keep.txt"], env);
+
+      expect(result.code).not.toBe(0);
+      expect(await readFile(join(dir, "keep.txt"), "utf8")).toBe("original\n");
+      expect((await readdir(dir)).filter((name) => name.includes(".part"))).toEqual([]);
+    });
+
+    test("cp to a local symlink replaces the file it points to", async () => {
+      const env = { BEACHSIDE_FAKE_FILES: remote };
+      await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);
+      await mkdir(join(remote, "work"), { recursive: true });
+      await writeFile(join(remote, "work", "a.txt"), "new\n");
+      await writeFile(join(dir, "target.txt"), "old\n");
+      await symlink("target.txt", join(dir, "link.txt"));
+
+      expect((await cli(["cp", "box:/work/a.txt", "link.txt"], env)).code).toBe(0);
+      expect(await readlink(join(dir, "link.txt"))).toBe("target.txt");
+      expect(await readFile(join(dir, "target.txt"), "utf8")).toBe("new\n");
+    });
+
+    test("cp --no-clobber leaves an existing local file alone", async () => {
+      const env = { BEACHSIDE_FAKE_FILES: remote };
+      await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);
+      await mkdir(join(remote, "work"), { recursive: true });
+      await writeFile(join(remote, "work", "a.txt"), "remote\n");
+      await writeFile(join(dir, "a.txt"), "local\n");
+
+      const result = await cli(["cp", "--no-clobber", "box:/work/a.txt", "a.txt", "--json"], env);
+
+      expect(envelope(result).error).toMatchObject({ code: "CONFLICT" });
+      expect(await readFile(join(dir, "a.txt"), "utf8")).toBe("local\n");
+    });
+  });
+
+  test("exec --stdin streams input larger than 1 MiB where the provider takes it", async () => {
+    await writeConfig({
+      default: "stdin",
+      profiles: { stdin: { module: fixture, export: "stdinStreaming" } },
+    });
+    const log = join(dir, "stdin.log");
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    await seedExec(["wc", "-c"], 0, "done\n");
+    const input = "x".repeat(3_000_000);
+
+    const result = await cli(
+      ["exec", "box", "--stdin", "--", "wc", "-c"],
+      { BEACHSIDE_FAKE_STDIN: log },
+      input,
+    );
+
+    expect(result).toEqual({ code: 0, stdout: "done\n", stderr: "" });
+    expect((await readFile(log, "utf8")).length).toBe(3_000_000);
+  });
+
+  test("exec --stdin fails and stops the command when its input cannot be delivered", async () => {
+    await writeConfig({
+      default: "stdin",
+      profiles: { stdin: { module: fixture, export: "stdinStreaming" } },
+    });
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    await seedExec(["wc", "-c"], 0, "");
+
+    const failed = await cli(
+      ["exec", "box", "--stdin", "--", "wc", "-c"],
+      { BEACHSIDE_FAKE_STDIN_FAIL_AFTER: "100000" },
+      "x".repeat(500_000),
+    );
+
+    expect(failed.code).toBe(125);
+    expect(failed.stderr).toContain("Sending stdin failed");
+  });
+
+  test("exec --stdin --json sends input over 1 MiB through the SDK's streamed stdin", async () => {
+    await writeConfig({
+      default: "stdin",
+      profiles: { stdin: { module: fixture, export: "stdinStreaming" } },
+    });
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    // The fixture's capture reports the input size; no live output is needed.
+    await seedExec(["wc", "-c"], 0, "");
+
+    const result = await cli(
+      ["exec", "box", "--stdin", "--json", "--", "wc", "-c"],
+      {},
+      "x".repeat(3_000_000),
+    );
+
+    expect(envelope(result).data).toMatchObject({ exitCode: 0, stdout: "3000000\n" });
+  });
+
+  test("exec --stdin explains input over 1 MiB on a provider that cannot stream it", async () => {
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+
+    const result = await cli(
+      ["exec", "box", "--stdin", "--json", "--", "wc", "-c"],
+      {},
+      "x".repeat(1_100_000),
+    );
+
+    expect(result.code).toBe(125);
+    expect(envelope(result).error).toMatchObject({ code: "CAPACITY" });
+    expect(envelope(result).error.hint).toContain("beachside cp");
   });
 });
 

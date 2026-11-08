@@ -3,22 +3,22 @@ title: Runnable agent examples
 description: Run OpenCode inside a Daytona or E2B sandbox, capture its answer, or edit a remote file.
 ---
 
-Run two small TypeScript applications from the Sandbar checkout. They use the same public execution and file API with either official provider:
+Run two small TypeScript applications from the Beachside checkout. They use the same public execution and file API with either official provider:
 
-| Workflow | What it does                                                                                                                                | Source                                                                                                     |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `hello`  | Asks OpenCode “What is 2 + 2?” and prints captured stdout/stderr.                                                                           | [Hello application](https://github.com/pandemicsyn/sandbar/blob/main/examples/agent-hello-world/main.ts)   |
-| `edit`   | Uploads `message.txt`, asks OpenCode to replace `NAME` with `Sandbar`, and reads back `Hello, Sandbar!`. The local fixture stays unchanged. | [File-edit application](https://github.com/pandemicsyn/sandbar/blob/main/examples/agent-edit-file/main.ts) |
+| Workflow | What it does                                                                                                                                    | Source                                                                                                       |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `hello`  | Asks OpenCode “What is 2 + 2?” and prints captured stdout/stderr.                                                                               | [Hello application](https://github.com/pandemicsyn/beachside/blob/main/examples/agent-hello-world/main.ts)   |
+| `edit`   | Uploads `message.txt`, asks OpenCode to replace `NAME` with `Beachside`, and reads back `Hello, Beachside!`. The local fixture stays unchanged. | [File-edit application](https://github.com/pandemicsyn/beachside/blob/main/examples/agent-edit-file/main.ts) |
 
-The [examples README](https://github.com/pandemicsyn/sandbar/blob/main/examples/README.md) is the full runbook, including model overrides, bounds, failure handling, and live acceptance provenance.
+The [examples README](https://github.com/pandemicsyn/beachside/blob/main/examples/README.md) is the full runbook, including model overrides, bounds, failure handling, and live acceptance provenance.
 
 ## Set up and run
 
 Use **Bun 1.3.14** on the host. These examples live in the repository, so run them from a checkout:
 
 ```sh
-git clone https://github.com/pandemicsyn/sandbar.git
-cd sandbar
+git clone https://github.com/pandemicsyn/beachside.git
+cd beachside
 bun install --frozen-lockfile
 bun run build:packages
 cp examples/.env.example examples/.env.local
@@ -42,7 +42,7 @@ bun run --cwd examples hello --provider e2b
 bun run --cwd examples edit --provider e2b
 ```
 
-Each invocation creates one sandbox and attempts destruction in `finally`, then closes the client. `hello` normally prints an answer containing `4`; `edit` verifies the exact returned file bytes `Hello, Sandbar!\n`.
+Each invocation creates one sandbox and attempts destruction in `finally`, then closes the client. `hello` normally prints an answer containing `4`; `edit` verifies the exact returned file bytes `Hello, Beachside!\n`.
 
 ## Model and lifetime
 
@@ -57,4 +57,4 @@ Live acceptance passed at `1446cf0a013a6a2b49a65f7c419dabc3b67302bf` on October 
 - Daytona: `daytona-small` snapshot, `us` target, `daytona-default` network.
 - E2B: `base` template, `internet` network.
 
-The harness imported the actual workflows and ran both sequentially in one sandbox per provider; it did not rerun all four standalone CLI invocations. Both answers contained `4` and both edited files matched exactly. All four allocations, including two earlier failed npm-install attempts, were independently confirmed deleted. See the [README acceptance record](https://github.com/pandemicsyn/sandbar/blob/main/examples/README.md#lifecycle-and-validation) for limits and provenance. This evidence covers those configurations and revision; it does not qualify arbitrary images or future model availability.
+The harness imported the actual workflows and ran both sequentially in one sandbox per provider; it did not rerun all four standalone CLI invocations. Both answers contained `4` and both edited files matched exactly. All four allocations, including two earlier failed npm-install attempts, were independently confirmed deleted. See the [README acceptance record](https://github.com/pandemicsyn/beachside/blob/main/examples/README.md#lifecycle-and-validation) for limits and provenance. This evidence covers those configurations and revision; it does not qualify arbitrary images or future model availability.

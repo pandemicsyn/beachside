@@ -1,6 +1,6 @@
-import type { DirectoryResult, FileEntry } from "@sandbar-sdk/adapter";
+import type { DirectoryResult, FileEntry } from "@beachside/adapter";
 import { byteLimit, type FileStreamOptions } from "./file-transfer";
-import { SandbarError, type ReadOptions } from "./resource";
+import { BeachsideError, type ReadOptions } from "./resource";
 
 export type WalkFilesOptions = ReadOptions & {
   maxDepth?: number;
@@ -32,7 +32,10 @@ export function walkFiles(
 
   for (const value of [maxDepth, maxEntries])
     if (!Number.isSafeInteger(value) || value < 1)
-      throw new SandbarError("INVALID_ARGUMENT", "Traversal limits must be positive safe integers");
+      throw new BeachsideError(
+        "INVALID_ARGUMENT",
+        "Traversal limits must be positive safe integers",
+      );
 
   if (
     options.exclude !== undefined &&
@@ -46,7 +49,10 @@ export function walkFiles(
           path.split("/").some((part) => !part || part === "." || part === ".."),
       ))
   )
-    throw new SandbarError("INVALID_ARGUMENT", "Exclusions must be canonical root-relative paths");
+    throw new BeachsideError(
+      "INVALID_ARGUMENT",
+      "Exclusions must be canonical root-relative paths",
+    );
   const excluded = new Set(options.exclude);
 
   return (async function* () {
@@ -62,11 +68,14 @@ export function walkFiles(
       check();
 
       if (directory.completeness !== "complete")
-        throw new SandbarError("INVALID_RESPONSE", `Cannot traverse incomplete directory: ${path}`);
+        throw new BeachsideError(
+          "INVALID_RESPONSE",
+          `Cannot traverse incomplete directory: ${path}`,
+        );
       observed += directory.entries.length;
 
       if (observed > maxEntries)
-        throw new SandbarError("OUTPUT_CAPACITY", "Traversal exceeds entry budget");
+        throw new BeachsideError("OUTPUT_CAPACITY", "Traversal exceeds entry budget");
 
       for (const entry of directory.entries) {
         check();
@@ -119,7 +128,7 @@ export function readTextLines(
 
       // A final CR may become part of a CRLF delimiter in the next chunk.
       if (length > maxLineBytes && !(length === maxLineBytes + 1 && lastByte === 13))
-        throw new SandbarError("OUTPUT_CAPACITY", "Text line exceeds byte limit");
+        throw new BeachsideError("OUTPUT_CAPACITY", "Text line exceeds byte limit");
       const text = decode(bytes);
 
       if (text) parts.push(text);
@@ -154,7 +163,7 @@ export function readTextLines(
     check();
 
     if (length > maxLineBytes)
-      throw new SandbarError("OUTPUT_CAPACITY", "Text line exceeds byte limit");
+      throw new BeachsideError("OUTPUT_CAPACITY", "Text line exceeds byte limit");
     const tail = decode();
 
     if (tail) parts.push(tail);

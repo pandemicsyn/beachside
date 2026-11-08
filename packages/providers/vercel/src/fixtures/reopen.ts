@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { Sandbar } from "sandbar-sdk";
-import { ResourceReference } from "@sandbar-sdk/adapter";
+import { Beachside } from "beachside";
+import { ResourceReference } from "@beachside/adapter";
 import { createVercelAdapter } from "../adapter";
 
 const input = z
@@ -61,7 +61,7 @@ const adapter = createVercelAdapter(() => ({
   },
 }));
 
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter,
   config: { teamId: "team-fixture", projectId: "project-fixture" },
   credentials: input.credentials,

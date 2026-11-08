@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import type { Json } from "@sandbar-sdk/adapter";
+import type { Json } from "@beachside/adapter";
 import { z } from "zod";
 import type { Env } from "./config";
 import { CliError } from "./output";
@@ -76,7 +76,7 @@ function run(command: string, args: string[], env: Env, signal: AbortSignal): Pr
 
 /**
  * Reads password-manager references (`op://...`, `bws://...`, `pass://...`) through the manager's own CLI
- * when a profile connects, so secrets never need to be written into sandbar.json. The CLI uses
+ * when a profile connects, so secrets never need to be written into beachside.json. The CLI uses
  * its own sign-in. Each reference is read at most once per invocation and never stored.
  */
 export class SecretReader {

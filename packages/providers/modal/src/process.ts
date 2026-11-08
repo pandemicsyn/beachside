@@ -7,7 +7,7 @@ import {
   type ProcessStartContext,
   type ProcessStartInput,
   type ReadContext,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import type { ModalTransport } from "./transport";
 
 // The wrapper records the command's PID, then execs it in place, so the PID is the command's own.
@@ -43,7 +43,7 @@ export async function startModalProcess(
 
   const sandboxId = input.sandbox.id;
   const execId = crypto.randomUUID();
-  const pidFile = `/tmp/.sandbar-process-${execId}.pid`;
+  const pidFile = `/tmp/.beachside-process-${execId}.pid`;
 
   const command =
     input.command.kind === "argv" ? input.command.argv : ["/bin/sh", "-c", input.command.script];

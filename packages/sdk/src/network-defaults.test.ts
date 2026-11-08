@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter, type SnapshotInfo, type SnapshotRestoreInput } from "@sandbar-sdk/adapter";
-import { Sandbar, Image, AdapterSnapshot } from "./index";
+import { defineAdapter, type SnapshotInfo, type SnapshotRestoreInput } from "@beachside/adapter";
+import { Beachside, Image, AdapterSnapshot } from "./index";
 
 const scope = { authority: { kind: "account", id: "one" }, partition: {} };
 
@@ -83,7 +83,7 @@ async function fixture(
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   return { client, creates, restores, snapshot: new AdapterSnapshot(client, reference) };
 }

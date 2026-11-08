@@ -5,13 +5,13 @@ import {
   ResourceReference,
   type AdapterSession,
   type ImageInfo,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   AdapterImage,
   Image,
   OutcomeUnknownError,
-  Sandbar,
-  SandbarError,
+  Beachside,
+  BeachsideError,
   UnsupportedFeatureError,
   type RecoveryReference,
 } from "./index";
@@ -72,7 +72,7 @@ async function connect(hooks: Hooks, onReference?: (ref: RecoveryReference) => v
     },
   });
 
-  return Sandbar.connect({ adapter, config: {}, credentials: {}, onReference });
+  return Beachside.connect({ adapter, config: {}, credentials: {}, onReference });
 }
 
 test("a built image exposes its adapter reference and can be inspected and deleted", async () => {
@@ -265,7 +265,7 @@ test("image inventory validates coverage, bounds and scope", async () => {
       code: "INVALID_ARGUMENT",
     });
     foreign = true;
-    await expect(client.images.list({ limit: 5 })).rejects.toBeInstanceOf(SandbarError);
+    await expect(client.images.list({ limit: 5 })).rejects.toBeInstanceOf(BeachsideError);
   } finally {
     await client.close();
   }
@@ -330,7 +330,7 @@ test("a completed delete for another image is not reported as success", async ()
   });
 
   try {
-    await expect(client.images.delete(imageRef("img"))).rejects.toBeInstanceOf(SandbarError);
+    await expect(client.images.delete(imageRef("img"))).rejects.toBeInstanceOf(BeachsideError);
   } finally {
     await client.close();
   }

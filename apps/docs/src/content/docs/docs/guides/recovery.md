@@ -3,7 +3,7 @@ title: Results, errors and saved resources
 description: Save resource references and handle partial or uncertain results without repeating work.
 ---
 
-Save a resource's reference when you need to use it from a later connection. Sandbar returns the reference; your application chooses where to store it and how to handle failures.
+Save a resource's reference when you need to use it from a later connection. Beachside returns the reference; your application chooses where to store it and how to handle failures.
 
 ```ts
 const captured = await sandbox.snapshot();
@@ -26,7 +26,7 @@ Read the returned `capture` for the confirmed guarantees and `source` for the so
 
 E2B and Daytona reject captures with external mounts and reject resource-size overrides during restore. Daytona can restore known filesystem snapshots that start fresh processes with selected volume mounts under `internet` or `daytona-default` networking. Restoring memory together with mounts remains unsupported. Omit mounts or pass an empty array for private filesystem state. The SDK temporarily also accepts the legacy empty-object alias. See [snapshots and volumes](/docs/guides/snapshots-and-volumes/) for the full options and limits.
 
-If `database.save` fails after capture returns, the capture still succeeded and you still have its handle and reference. There is also a crash window between native creation and saving that reference. Sandbar does not guarantee that a create-and-save workflow happens exactly once; your application must choose how to manage that window.
+If `database.save` fails after capture returns, the capture still succeeded and you still have its handle and reference. There is also a crash window between native creation and saving that reference. Beachside does not guarantee that a create-and-save workflow happens exactly once; your application must choose how to manage that window.
 
 ## Partial and unknown outcomes
 
@@ -39,13 +39,13 @@ In both cases, the typed `outcome` preserves the snapshot reference and confirme
 
 `OutcomeUnknownError` means a remote effect may have occurred but its outcome cannot be confirmed, such as after a lost response. Save the error's operation reference and any known resource IDs or partial results. If no snapshot identity was received, the SDK cannot invent one.
 
-Where supported, `sandboxes.list`, `snapshots.list`, `volumes.list`, `get` and `inspect` can help you investigate. A list alone cannot link an artifact to the failed request or prove the request had no effect. E2B and Daytona report snapshot list coverage as `provider-scope`: their inventory is not limited to resources created through Sandbar. A listed entry can still lack details needed to restore or delete it. Check its reference and inspect its supported guarantees.
+Where supported, `sandboxes.list`, `snapshots.list`, `volumes.list`, `get` and `inspect` can help you investigate. A list alone cannot link an artifact to the failed request or prove the request had no effect. E2B and Daytona report snapshot list coverage as `provider-scope`: their inventory is not limited to resources created through Beachside. A listed entry can still lack details needed to restore or delete it. Check its reference and inspect its supported guarantees.
 
 An uncertain restore has outcome kind `snapshot_restore`. It preserves selected mount descriptors in `outcome.mounts` and, when known, the acknowledged sandbox identity in `outcome.sandbox`. Save these with the operation reference. They identify what is known about the original attempt; recovery does not create a replacement or repeat the restore.
 
 If compute cleanup is uncertain, `outcome.retainedVolumes` keeps known volume references. Removing compute and deleting storage are separate operations. Keep those references and follow the [volume deletion safeguards](/docs/guides/snapshots-and-volumes/#save-and-reopen-references) before deleting storage.
 
-The [compiled recovery example](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/recovery-outcomes.ts) shows how to save references, reopen resources and use partial capture results.
+The [compiled recovery example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/recovery-outcomes.ts) shows how to save references, reopen resources and use partial capture results.
 
 ## Reopen compute and recover lifecycle changes
 
@@ -69,6 +69,6 @@ These methods do not repeat mutations. Recovery requires a native identity or co
 
 `WaitAbortedError` stops local waiting and carries the operation reference. It does not cancel provider compute. Closing the client with `close()` stops its waiting without destroying sandboxes. For checked command execution, `NonzeroExitError` and `NoExitCodeError` keep the available command output in `result`.
 
-The legacy `onReference` connection option remains available for applications that save operation checkpoints. Ordinary snapshot and resource-reference persistence does not require it. If the callback fails, Sandbar stops subsequent stage effects and reports `REFERENCE_SAVE_FAILED`. The error preserves any known partial native result and the latest operation `reference`, including the checkpoint that could not be saved. Save that reference again or pass it to `recover()` before deciding whether to continue. Existing native stage guards and saved operation formats remain supported.
+The legacy `onReference` connection option remains available for applications that save operation checkpoints. Ordinary snapshot and resource-reference persistence does not require it. If the callback fails, Beachside stops subsequent stage effects and reports `REFERENCE_SAVE_FAILED`. The error preserves any known partial native result and the latest operation `reference`, including the checkpoint that could not be saved. Save that reference again or pass it to `recover()` before deciding whether to continue. Existing native stage guards and saved operation formats remain supported.
 
-References do not grant access. A fresh connection must use authorized current credentials and the same verified scope. For E2B credential rotation, configure `teamId`; Sandbar verifies it to establish a stable team scope. Daytona's scope includes its organization, target, endpoint and selected network policy.
+References do not grant access. A fresh connection must use authorized current credentials and the same verified scope. For E2B credential rotation, configure `teamId`; Beachside verifies it to establish a stable team scope. Daytona's scope includes its organization, target, endpoint and selected network policy.

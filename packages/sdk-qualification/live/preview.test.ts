@@ -1,20 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { AdapterSandbox } from "sandbar-sdk";
+import type { AdapterSandbox } from "beachside";
 import { liveEnabled, setupLive, finishLive, featureSupported } from "./providers";
 
-const provider = process.env.SANDBAR_QUAL_PROVIDER ?? "daytona";
+const provider = process.env.BEACHSIDE_QUAL_PROVIDER ?? "daytona";
 
 const access = provider === "daytona" ? "protected" : "public";
 
 const enabled =
   liveEnabled &&
   (provider === "daytona" ||
-    (provider === "e2b" && process.env.SANDBAR_E2B_PREVIEW_ACCESS === "public") ||
+    (provider === "e2b" && process.env.BEACHSIDE_E2B_PREVIEW_ACCESS === "public") ||
     (provider === "boxd" &&
       featureSupported("previewPublic") &&
-      process.env.SANDBAR_BOXD_PREVIEW_ACCESS === "public"));
+      process.env.BEACHSIDE_BOXD_PREVIEW_ACCESS === "public"));
 
-describe("Sandbar native HTTP preview", () => {
+describe("Beachside native HTTP preview", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   let box: AdapterSandbox;
   beforeAll(async () => {
@@ -48,7 +48,7 @@ describe("Sandbar native HTTP preview", () => {
 
       // Owned compute cleanup stops this server; no process-control extension is exercised.
       const marker = `preview-${t.ledger.runId}`;
-      const root = `/tmp/sandbar-preview-${t.ledger.runId}`;
+      const root = `/tmp/beachside-preview-${t.ledger.runId}`;
       await box.exec(
         [
           "/bin/sh",

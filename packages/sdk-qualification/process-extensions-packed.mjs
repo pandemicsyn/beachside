@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { Sandbar, Image, createProcessTail, readProcessLines } from "sandbar-sdk";
-import { defineAdapter } from "@sandbar-sdk/adapter";
+import { Beachside, Image, createProcessTail, readProcessLines } from "beachside";
+import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
 
 // Independent adapter demonstrates only portable hooks, with no provider imports.
@@ -109,7 +109,7 @@ const adapter = defineAdapter({
   },
 });
 
-const connect = () => Sandbar.connect({ adapter, config: {}, credentials: {} });
+const connect = () => Beachside.connect({ adapter, config: {}, credentials: {} });
 
 const first = await connect();
 
@@ -133,7 +133,7 @@ const second = await connect();
 
 try {
   // Same scoped sandbox, fresh connection. No Start is performed during reopen.
-  const reopenedBox = new (await import("sandbar-sdk")).AdapterSandbox(second, "box");
+  const reopenedBox = new (await import("beachside")).AdapterSandbox(second, "box");
   const child = await reopenedBox.processes.reopen(saved);
   assert.equal(child.outputGap, true);
   const lines = [];

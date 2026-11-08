@@ -6,7 +6,7 @@ import {
   type ProcessStartContext,
   type ProcessStartInput,
   type ReadContext,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 import { commandLine } from "./exec";
 import { BOAT_API } from "./transport";

@@ -9,12 +9,12 @@ const target = fileURLToPath(
 );
 
 const surfaces = [
-  ["SDK", "sandbar-sdk", "packages/sdk/dist/index.d.ts"],
-  ["Daytona adapter", "@sandbar-sdk/daytona", "packages/providers/daytona/dist/index.d.ts"],
-  ["E2B adapter", "@sandbar-sdk/e2b", "packages/providers/e2b/dist/index.d.ts"],
-  ["Experimental Modal adapter", "@sandbar-sdk/modal", "packages/providers/modal/dist/index.d.ts"],
-  ["Adapter authoring", "@sandbar-sdk/adapter", "packages/adapter/dist/index.d.ts"],
-  ["Adapter test kit", "@sandbar-sdk/adapter/testing", "packages/adapter/dist/testing.d.ts"],
+  ["SDK", "beachside", "packages/sdk/dist/index.d.ts"],
+  ["Daytona adapter", "@beachside/daytona", "packages/providers/daytona/dist/index.d.ts"],
+  ["E2B adapter", "@beachside/e2b", "packages/providers/e2b/dist/index.d.ts"],
+  ["Experimental Modal adapter", "@beachside/modal", "packages/providers/modal/dist/index.d.ts"],
+  ["Adapter authoring", "@beachside/adapter", "packages/adapter/dist/index.d.ts"],
+  ["Adapter test kit", "@beachside/adapter/testing", "packages/adapter/dist/testing.d.ts"],
 ];
 
 const kindOf = (node) => {

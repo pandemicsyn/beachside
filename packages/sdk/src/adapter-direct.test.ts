@@ -6,9 +6,9 @@ import {
   defineAdapter,
   type ExecInput,
   type ExecValue,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { Image } from "./resource";
-import { Sandbar } from "./index";
+import { Beachside } from "./index";
 
 test("plain create/destroy, unsupported local calls, and close once", async () => {
   let creates = 0;
@@ -46,7 +46,7 @@ test("plain create/destroy, unsupported local calls, and close once", async () =
 
   const saved: unknown[] = [];
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { region: "us" },
     credentials: { token: "secret" },
@@ -120,7 +120,7 @@ test("finite exec stdin snapshots subarray bytes before dispatch and rejects uns
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared("image") });
@@ -142,34 +142,26 @@ test("finite exec stdin snapshots subarray bytes before dispatch and rejects uns
     expect(submitted).toEqual(original);
     expect(execCalls).toBe(1);
 
-    for (const invalid of [
+    // SAFETY: The test intentionally passes a runtime value excluded from the public type.
+    const invalid = { type: "bytes", value: Uint8Array.of(1) } as never;
+
+    await expect(
+      box.exec({ command: { kind: "argv", argv: ["cat"] }, stdin: invalid, maxOutputBytes: 16 }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+
+    // Streams and input over 1 MiB need incremental process stdin, which this adapter lacks.
+    for (const streamed of [
       new ReadableStream<Uint8Array>(),
-      { type: "bytes", value: Uint8Array.of(1) },
-    ]) {
-      // SAFETY: The test intentionally passes runtime values excluded from the public type.
+      new Uint8Array(1_048_577),
+      "x".repeat(1_048_577),
+    ])
       await expect(
         box.exec({
           command: { kind: "argv", argv: ["cat"] },
-          stdin: invalid as never,
+          stdin: streamed,
           maxOutputBytes: 16,
         }),
-      ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    }
-
-    await expect(
-      box.exec({
-        command: { kind: "argv", argv: ["cat"] },
-        stdin: new Uint8Array(1_048_577),
-        maxOutputBytes: 16,
-      }),
-    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    await expect(
-      box.exec({
-        command: { kind: "argv", argv: ["cat"] },
-        stdin: "x".repeat(1_048_577),
-        maxOutputBytes: 16,
-      }),
-    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+      ).rejects.toMatchObject({ code: "UNSUPPORTED", effect: "none" });
 
     expect(execCalls).toBe(1);
   } finally {
@@ -220,7 +212,7 @@ test("legacy adapters reject finite stdin before adapter effects", async () => {
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared("image") });
@@ -278,7 +270,7 @@ test("function-form exec hooks can declare finite stdin support", async () => {
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared("image") });
@@ -317,7 +309,7 @@ test("lost response is unknown with reference and recovery never resubmits", asy
 
   let saved: unknown;
 
-  const first = await Sandbar.connect({
+  const first = await Beachside.connect({
     adapter,
     config: { region: "us" },
     credentials: { token: "secret" },
@@ -334,7 +326,7 @@ test("lost response is unknown with reference and recovery never resubmits", asy
   await first.close();
   expect(saved).toBeTruthy();
 
-  const reopened = await Sandbar.connect({
+  const reopened = await Beachside.connect({
     adapter,
     config: { region: "us" },
     credentials: { token: "secret" },
@@ -346,7 +338,7 @@ test("lost response is unknown with reference and recovery never resubmits", asy
   expect(creates).toBe(1);
   await reopened.close();
 
-  const wrong = await Sandbar.connect({
+  const wrong = await Beachside.connect({
     adapter,
     config: { region: "other" },
     credentials: { token: "secret" },
@@ -383,7 +375,7 @@ test("malformed post-dispatch outcome stays unknown with its saved reference", a
 
   let saved: unknown;
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -397,7 +389,7 @@ test("malformed post-dispatch outcome stays unknown with its saved reference", a
   await expect(failed).rejects.toMatchObject({ reference: saved });
   expect(submissions).toBe(1);
   await client.close();
-  const reopened = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const reopened = await Beachside.connect({ adapter, config: {}, credentials: {} });
   // SAFETY: The test fixture controls the saved SDK reference.
   const recovered = await reopened.recover(saved as never);
   await expect(recovered.observe()).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
@@ -424,7 +416,7 @@ test("valid adapter rejection still certifies no effect", async () => {
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   await expect(
     client.sandboxes.create({ environment: Image.prepared("image") }),
   ).rejects.toMatchObject({ code: "CAPACITY", effect: "none" });
@@ -464,12 +456,12 @@ test("pending observation completes without replay and saved reference reopens",
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const op = await client.sandboxes.submitCreate({ environment: Image.prepared("image") });
   expect(await op.observe()).toBeNull();
   const saved = structuredClone(op.reference);
   await client.close();
-  const reopened = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const reopened = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const recovered = await reopened.recover(saved);
   const box = await recovered.observe();
   expect(box).toMatchObject({ id: "box-1" });
@@ -512,7 +504,7 @@ test("recovery accepts reordered distinct Unicode partition keys without resubmi
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const operation = await client.sandboxes.submitCreate({ environment: Image.prepared("image") });
   const reference = structuredClone(operation.reference);
 
@@ -585,7 +577,7 @@ test("provider observation failures retain possible effect and permit read-only 
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
     const op = await client.sandboxes.submitCreate({ environment: Image.prepared("image") });
     expect(await op.observe()).toBeNull();
     const saved = structuredClone(op.reference);
@@ -649,7 +641,7 @@ test("invalid recovery versions fail before submission and late metadata drift s
       },
     });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -702,7 +694,7 @@ test("invalid recovery versions fail before submission and late metadata drift s
 
   let savedReference: unknown;
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -760,7 +752,7 @@ test("reference callback failure prevents provider submission", async () => {
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -799,7 +791,7 @@ test("close stops waiting after dispatch with a recovery reference", async () =>
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const waiting = client.sandboxes.create({ environment: Image.prepared("image") });
 
   while (!started) await Bun.sleep(1);
@@ -835,7 +827,7 @@ test("close wakes an operation waiting on a long polling interval", async () => 
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const op = await client.sandboxes.submitCreate({ environment: Image.prepared("image") });
   expect(await op.observe()).toBeNull();
   const waiting = op.wait({ pollMs: 60_000 });
@@ -889,7 +881,7 @@ test("automatic waits honor first and subsequent provider polling hints", async 
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
     const op = await client.sandboxes.submitCreate({ environment: Image.prepared("image") });
 
     // Consuming pending manually must retain its next automatic observation time.
@@ -957,7 +949,7 @@ test("close and caller abort stop stalled preparation without dispatch", async (
       },
     });
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -1001,7 +993,7 @@ test("close and caller abort stop stalled preparation without dispatch", async (
     stall = false;
 
     const usable =
-      mode === "close" ? await Sandbar.connect({ adapter, config: {}, credentials: {} }) : client;
+      mode === "close" ? await Beachside.connect({ adapter, config: {}, credentials: {} }) : client;
 
     expect(await usable.sandboxes.create({ environment: Image.prepared("image") })).toMatchObject({
       id: "box",
@@ -1050,7 +1042,7 @@ test("preparation deadline settles ordinary and advanced calls without submissio
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -1125,7 +1117,7 @@ test("advanced submit cancellation leaves an unknown outcome and original identi
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
     const prepared = await client.operations.prepare("create", {
       image: { kind: "prepared", value: "image" },
@@ -1163,7 +1155,9 @@ test("advanced submit cancellation leaves an unknown outcome and original identi
     await Bun.sleep(1);
 
     const observer =
-      mode === "caller" ? client : await Sandbar.connect({ adapter, config: {}, credentials: {} });
+      mode === "caller"
+        ? client
+        : await Beachside.connect({ adapter, config: {}, credentials: {} });
 
     expect(
       await observer.operations.observe({
@@ -1220,7 +1214,7 @@ test("in-flight observation stops on caller abort and preserves recovery", async
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const op = await client.sandboxes.submitCreate({ environment: Image.prepared("image") });
   expect(await op.observe()).toBeNull();
   const controller = new AbortController();
@@ -1278,7 +1272,7 @@ test("client close stops an in-flight observation without late completion", asyn
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const op = await client.sandboxes.submitCreate({ environment: Image.prepared("image") });
   expect(await op.observe()).toBeNull();
   const reference = structuredClone(op.reference);
@@ -1339,7 +1333,7 @@ test("advanced observation cancellation returns unknown and permits read-only re
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   const identity = {
     scope: client.scope,
@@ -1394,7 +1388,7 @@ test("advanced lifecycle commits a marker once and cannot replay a prepared atte
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const input = { image: { kind: "prepared" as const, value: "image" }, networkPolicy: "blocked" };
   const prepared = await client.operations.prepare("create", input);
   const id = { operationId: "op-1", submissionId: "sub-1", invocationKey: "key-1" };
@@ -1462,13 +1456,13 @@ test("advanced preparation reports invalid arguments before provider preparation
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   await expect(
     client.operations.prepare("create", {
       image: { kind: "prepared", value: "x".repeat(513) },
       networkPolicy: "blocked",
     }),
-  ).rejects.toMatchObject({ name: "SandbarError", code: "INVALID_ARGUMENT" });
+  ).rejects.toMatchObject({ name: "BeachsideError", code: "INVALID_ARGUMENT" });
   expect(preparations).toBe(0);
   await client.close();
 });
@@ -1506,7 +1500,7 @@ test("cancelling a stalled advanced barrier settles before release without late 
         },
       });
 
-      const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+      const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
       const prepared = await client.operations.prepare("create", {
         image: { kind: "prepared", value: "image" },
@@ -1579,7 +1573,7 @@ test("direct connection accepts a policy-bearing adapter clone", async () => {
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: adapter.withPolicy({ endpoint: "configured" }),
     config: {},
     credentials: {},
@@ -1617,7 +1611,7 @@ test("advanced observation rejects foreign scope before provider reads", async (
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   await expect(
     client.operations.observe({
       scope: { authority: { kind: "account", id: "other" }, partition: { region: "us" } },
@@ -1665,7 +1659,7 @@ test("imported ordinary and advanced recovery tokens are bounded and parsed", as
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const op = await client.sandboxes.submitCreate({ environment: Image.prepared("image") });
   expect(await op.observe()).toBeNull();
   const raw = { ...op.reference, token: { jobId: "ordinary" } };
@@ -1751,7 +1745,7 @@ test("close stops stalled inspect, initial file read, and inventory waits", asyn
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const box = await client.sandboxes.create({ environment: Image.prepared("image") });
   const calls = [box.inspect(), box.readFile("/file"), client.operations.inventory({ limit: 1 })];
   const outcomes = Promise.allSettled(calls);
@@ -1841,7 +1835,7 @@ test("close stops a stalled file stream chunk without awaiting reader cancellati
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const box = await client.sandboxes.create({ environment: Image.prepared("image") });
   const pending = box.readFile("/file");
 
@@ -1897,7 +1891,7 @@ test("oversized streamed file returns capacity error despite stalled or rejected
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
     const box = await client.sandboxes.create({ environment: Image.prepared("image") });
     await expect(
       Promise.race([
@@ -1912,7 +1906,126 @@ test("oversized streamed file returns capacity error despite stalled or rejected
   }
 });
 
-test("file reads enforce the SDK ceiling and reject invalid adapter limits before IO", async () => {
+test("buffered files larger than the adapter limit travel through its streams", async () => {
+  const stored = new Map<string, Uint8Array>();
+  let streamedReads = 0;
+  let streamedWrites = 0;
+
+  const adapter = defineAdapter({
+    name: "example.file-streams",
+    config: z.strictObject({}),
+    credentials: z.strictObject({}),
+    async connect() {
+      return {
+        scope: { authority: { kind: "account", id: "one" }, partition: {} },
+        supports: { images: ["prepared"], network: ["blocked"] },
+        async create() {
+          return { id: "box", state: "running" as const };
+        },
+        async destroy() {
+          return { computeStopped: true, retainedResources: [] };
+        },
+        files: {
+          maxBytes: 1_000,
+          async read(input: { path: string }) {
+            return stored.get(input.path) ?? new Uint8Array();
+          },
+          write: {
+            recovery: { version: 1, token: z.strictObject({}) },
+            async submit() {
+              throw new Error("large writes must stream");
+            },
+            async observe() {
+              return null;
+            },
+          },
+          async readStream(input: { path: string }) {
+            streamedReads++;
+            const bytes = stored.get(input.path)!;
+
+            return new ReadableStream<Uint8Array>({
+              start(controller) {
+                for (let at = 0; at < bytes.length; at += 4_096)
+                  controller.enqueue(bytes.slice(at, at + 4_096));
+                controller.close();
+              },
+            });
+          },
+          async writeStream(input: { path: string; bytes: AsyncIterable<Uint8Array> }) {
+            streamedWrites++;
+            const chunks: Uint8Array[] = [];
+
+            for await (const chunk of input.bytes) chunks.push(chunk);
+            const bytes = new Uint8Array(Buffer.concat(chunks));
+            stored.set(input.path, bytes);
+
+            return { bytesWritten: bytes.length };
+          },
+        },
+      };
+    },
+  });
+
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
+  const box = await client.sandboxes.create({ environment: Image.prepared("image") });
+  const big = new Uint8Array(3_000_000).map((_, index) => index % 251);
+
+  await box.writeFile("/big", big);
+  expect(streamedWrites).toBe(1);
+  expect(await box.readFile("/big")).toEqual(big);
+  expect(streamedReads).toBe(1);
+  await expect(box.readFile("/big", { maxBytes: 2_000_000 })).rejects.toMatchObject({
+    code: "OUTPUT_CAPACITY",
+  });
+  await expect(box.writeFile("/other", big, { maxBytes: 2_000_000 })).rejects.toMatchObject({
+    code: "CAPACITY",
+  });
+  await client.close();
+});
+
+test("writes over the limit of an adapter without file streams name that limit", async () => {
+  const adapter = defineAdapter({
+    name: "example.file-no-streams",
+    config: z.strictObject({}),
+    credentials: z.strictObject({}),
+    async connect() {
+      return {
+        scope: { authority: { kind: "account", id: "one" }, partition: {} },
+        supports: { images: ["prepared"], network: ["blocked"] },
+        async create() {
+          return { id: "box", state: "running" as const };
+        },
+        async destroy() {
+          return { computeStopped: true, retainedResources: [] };
+        },
+        files: {
+          maxBytes: 1_000,
+          write: {
+            recovery: { version: 1, token: z.strictObject({}) },
+            async submit() {
+              throw new Error("must not dispatch");
+            },
+            async observe() {
+              return null;
+            },
+          },
+        },
+      };
+    },
+  });
+
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
+  const box = await client.sandboxes.create({ environment: Image.prepared("image") });
+
+  await expect(box.writeFile("/big", new Uint8Array(1_001))).rejects.toMatchObject({
+    code: "CAPACITY",
+    effect: "none",
+    message: expect.stringContaining("1000-byte file limit"),
+  });
+  await client.close();
+});
+
+test("file reads take the adapter limit as the only default and reject invalid limits before IO", async () => {
   let sequence = 0;
 
   const open = async (maxBytes: number, value: Uint8Array | ReadableStream<Uint8Array>) => {
@@ -1944,21 +2057,32 @@ test("file reads enforce the SDK ceiling and reject invalid adapter limits befor
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
     const box = await client.sandboxes.create({ environment: Image.prepared("image") });
 
     return { box, client, reads: () => reads };
   };
 
+  // No default SDK ceiling: a buffered read takes whatever the adapter's own limit allows.
   const over = new Uint8Array(1_048_577);
   const buffered = await open(2_000_000, over);
-  expect((await buffered.client.capabilities()).maxFileBytes).toBe(1_048_576);
-  await expect(buffered.box.readFile("/over")).rejects.toMatchObject({ code: "OUTPUT_CAPACITY" });
-  expect(buffered.reads()).toBe(1);
+  expect((await buffered.client.capabilities()).maxFileBytes).toBe(2_000_000);
+  expect((await buffered.box.readFile("/over")).length).toBe(1_048_577);
+  await expect(buffered.box.readFile("/over", { maxBytes: 1_048_576 })).rejects.toMatchObject({
+    code: "OUTPUT_CAPACITY",
+  });
   await buffered.client.close();
 
+  const beyond = await open(1_000_000, over);
+  await expect(beyond.box.readFile("/over")).rejects.toMatchObject({
+    code: "OUTPUT_CAPACITY",
+    message: expect.stringContaining("no file streams"),
+  });
+  expect(beyond.reads()).toBe(1);
+  await beyond.client.close();
+
   const streamed = await open(
-    2_000_000,
+    1_000_000,
     new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(over);
@@ -2041,7 +2165,7 @@ test("stale observation cannot replace a continued dispatch checkpoint or replay
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -2112,7 +2236,7 @@ test("reference persistence recovers after one failed observation save before co
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -2175,7 +2299,7 @@ test("advanced checkpointing submissions require a persistence callback before e
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const input = { image: { kind: "prepared" as const, value: "image" }, networkPolicy: "blocked" };
   const identity = { operationId: "op", submissionId: "submission", invocationKey: "invocation" };
 
@@ -2248,7 +2372,7 @@ test.each(["snapshot_restore", "snapshot_delete", "volume_delete"] as const)(
       },
     });
 
-    const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+    const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
     try {
       const seed = await client.sandboxes.submitCreate({ environment: Image.prepared("base") });

@@ -1,8 +1,8 @@
-import { type SandbarClient, type SandboxReference, type SandboxInfo } from "sandbar-sdk";
+import { type BeachsideClient, type SandboxReference, type SandboxInfo } from "beachside";
 
 /** Applications store the reference in their own trusted persistence. */
 export async function saveSandbox(
-  client: SandbarClient,
+  client: BeachsideClient,
   template: string,
   save: (reference: SandboxReference) => Promise<void>,
 ) {
@@ -19,7 +19,7 @@ export async function saveSandbox(
 }
 
 /** Configure a new connection using the saved provider and original native scope. */
-export async function reopenSandbox(freshClient: SandbarClient, saved: SandboxReference) {
+export async function reopenSandbox(freshClient: BeachsideClient, saved: SandboxReference) {
   const sandbox = await freshClient.sandboxes.get(saved);
   const info: SandboxInfo = await sandbox.inspect();
 
@@ -33,7 +33,7 @@ export async function reopenSandbox(freshClient: SandbarClient, saved: SandboxRe
 }
 
 /** Page through the listing and reopen running sandboxes that carry a verified reference. */
-export async function reopenListed(client: SandbarClient) {
+export async function reopenListed(client: BeachsideClient) {
   const reopened = [];
   let cursor: string | undefined;
 

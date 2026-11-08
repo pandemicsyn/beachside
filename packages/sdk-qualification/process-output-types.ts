@@ -5,7 +5,7 @@ import type {
   StartProcessInput,
   ProcessReference,
   TerminalHandle,
-} from "sandbar-sdk";
+} from "beachside";
 
 /** Compile the public byte/text inference independently of the implementation. */
 export async function processOutputTypes(box: DirectSandboxHandle): Promise<void> {

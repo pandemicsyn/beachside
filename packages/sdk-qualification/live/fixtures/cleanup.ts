@@ -8,8 +8,8 @@ import {
   ResourceReference,
   type AdapterDirectClient,
   type AdapterRecoveryReference,
-} from "sandbar-sdk";
-import { SnapshotInfo, assertResourceScope } from "@sandbar-sdk/adapter";
+} from "beachside";
+import { SnapshotInfo, assertResourceScope } from "@beachside/adapter";
 import { LedgerStore } from "../../provider-qualification/ledger";
 
 const SavedResource = z.union([

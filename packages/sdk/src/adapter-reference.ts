@@ -6,7 +6,7 @@ import {
   MountSpec,
   SnapshotProfile,
   SandboxState,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 
 export const CaptureExpectation = z.strictObject({
   profile: SnapshotProfile,

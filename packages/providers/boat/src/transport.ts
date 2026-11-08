@@ -1,5 +1,5 @@
 import { BoatApi, Configuration, FetchError, ResponseError, type FetchAPI } from "@boatdev/sdk";
-import { AdapterError, type AdapterErrorCode } from "@sandbar-sdk/adapter";
+import { AdapterError, type AdapterErrorCode } from "@beachside/adapter";
 import { z } from "zod";
 
 /** Fixed Boat Public API v1 origin; it is not a project-controlled setting. */

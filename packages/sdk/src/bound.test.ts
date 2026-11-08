@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter } from "@sandbar-sdk/adapter";
-import { Sandbar, Image } from "./index";
+import { defineAdapter } from "@beachside/adapter";
+import { Beachside, Image } from "./index";
 import { bindAdapter } from "./bound";
 
 test("bound first-party factory uses the public connection validation and lifetime", async () => {
@@ -36,7 +36,7 @@ test("bound first-party factory uses the public connection validation and lifeti
   const bound = bindAdapter(definition, { target: "us" }, { token: "secret" });
   expect(connects).toBe(0);
 
-  const client = await Sandbar.connect(bound);
+  const client = await Beachside.connect(bound);
 
   try {
     expect(connects).toBe(1);
@@ -49,4 +49,18 @@ test("bound first-party factory uses the public connection validation and lifeti
   }
 
   expect(releases).toBe(1);
+});
+
+test("a provider factory passed where a definition belongs fails with a pointer to both forms", async () => {
+  const factory = () => ({ name: "example" });
+
+  // SAFETY: The test intentionally passes a runtime value excluded from the public type.
+  const error = await Beachside.connect({
+    adapter: factory as never,
+    config: {},
+    credentials: {},
+  }).catch((cause: Error) => cause);
+
+  expect(error).toMatchObject({ code: "INVALID_ARGUMENT" });
+  expect(error.message).toContain("adapter: vercelAdapter");
 });

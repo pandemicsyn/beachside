@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { SandbarError } from "sandbar-sdk";
+import { BeachsideError } from "beachside";
 import { liveEnabled, setupLive, finishLive, configuredProvider } from "./providers";
 import type { TestResources } from "./fixtures/resources";
 
@@ -45,11 +45,11 @@ export function checkStartup(
   expect(expected.priorNonces).not.toContain(report.nonce);
 }
 
-const configPath = "/tmp/sandbar-storage-config.json";
+const configPath = "/tmp/beachside-storage-config.json";
 
-const reportPath = "/tmp/sandbar-storage-report.json";
+const reportPath = "/tmp/beachside-storage-report.json";
 
-const startedPath = "/tmp/sandbar-storage-started.json";
+const startedPath = "/tmp/beachside-storage-started.json";
 
 /** Wait only for atomic publication; the first available report is final evidence. */
 export async function readPublishedReport(
@@ -64,7 +64,7 @@ export async function readPublishedReport(
     try {
       return await read(publicationSignal);
     } catch (error) {
-      if (!(error instanceof SandbarError) || error.code !== "NOT_FOUND") throw error;
+      if (!(error instanceof BeachsideError) || error.code !== "NOT_FOUND") throw error;
     }
 
     await delay(250, undefined, { signal: publicationSignal });
@@ -204,7 +204,7 @@ export async function storageComposition(
     );
 
     await writeFile(
-      join(process.env.SANDBAR_LIVE_REPORT_DIR!, `${role.split("/")[1]}.startup.json`),
+      join(process.env.BEACHSIDE_LIVE_REPORT_DIR!, `${role.split("/")[1]}.startup.json`),
       rawReport,
       { mode: 0o600, flag: "wx" },
     );
@@ -244,20 +244,20 @@ export async function storageComposition(
   // Existing teardown deletes the captured snapshot and both owned volumes after compute.
 }
 
-const enabled = liveEnabled && process.env.SANDBAR_STORAGE_COMPOSITION === "1";
+const enabled = liveEnabled && process.env.BEACHSIDE_STORAGE_COMPOSITION === "1";
 
-describe("Sandbar storage composition", () => {
+describe("Beachside storage composition", () => {
   let live: Awaited<ReturnType<typeof setupLive>> | undefined;
   let fixture: z.infer<typeof storageFixture>;
   beforeAll(async () => {
     if (!enabled) return;
-    fixture = storageFixture.parse(JSON.parse(process.env.SANDBAR_STORAGE_FIXTURE ?? "null"));
+    fixture = storageFixture.parse(JSON.parse(process.env.BEACHSIDE_STORAGE_FIXTURE ?? "null"));
 
     if (
-      process.env.SANDBAR_QUAL_PROVIDER !== "daytona" ||
-      process.env.SANDBAR_DAYTONA_TARGET !== "us" ||
-      process.env.SANDBAR_DAYTONA_NETWORK_POLICY !== "daytona-default" ||
-      fixture.imageId !== process.env.SANDBAR_DAYTONA_SNAPSHOT_ID
+      process.env.BEACHSIDE_QUAL_PROVIDER !== "daytona" ||
+      process.env.BEACHSIDE_DAYTONA_TARGET !== "us" ||
+      process.env.BEACHSIDE_DAYTONA_NETWORK_POLICY !== "daytona-default" ||
+      fixture.imageId !== process.env.BEACHSIDE_DAYTONA_SNAPSHOT_ID
     )
       throw new Error(
         "Storage acceptance requires the confirmed existing Daytona sentinel image and explicit daytona-default",
@@ -267,7 +267,7 @@ describe("Sandbar storage composition", () => {
     const response = await fetch(
       `https://app.daytona.io/api/snapshots/${encodeURIComponent(fixture.imageId)}`,
       {
-        headers: { Authorization: `Bearer ${process.env.SANDBAR_DAYTONA_API_KEY}` },
+        headers: { Authorization: `Bearer ${process.env.BEACHSIDE_DAYTONA_API_KEY}` },
         redirect: "error",
         signal: AbortSignal.timeout(30000),
       },
@@ -311,7 +311,7 @@ describe("Sandbar storage composition", () => {
         const response = await fetch(
           `https://app.daytona.io/api/sandbox/${encodeURIComponent(id)}`,
           {
-            headers: { Authorization: `Bearer ${process.env.SANDBAR_DAYTONA_API_KEY}` },
+            headers: { Authorization: `Bearer ${process.env.BEACHSIDE_DAYTONA_API_KEY}` },
             signal: live!.resources.signal,
           },
         );
@@ -342,7 +342,7 @@ describe("Sandbar storage composition", () => {
             const snapshot = await fetch(
               `https://app.daytona.io/api/snapshots/${encodeURIComponent(selector)}`,
               {
-                headers: { Authorization: `Bearer ${process.env.SANDBAR_DAYTONA_API_KEY}` },
+                headers: { Authorization: `Bearer ${process.env.BEACHSIDE_DAYTONA_API_KEY}` },
                 redirect: "error",
                 signal: live!.resources.signal,
               },

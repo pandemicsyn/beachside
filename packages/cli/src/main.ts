@@ -19,24 +19,46 @@ for (const [name, code] of Object.entries(signalExitCodes))
     controller.abort(new Error(`Interrupted by ${name}`));
   });
 
-async function readStdin(): Promise<Uint8Array> {
-  const chunks: Uint8Array[] = [];
+/** Wait for a full output buffer to drain, or for the stream to close (a closed pipe). */
+function ready(name: "stdout" | "stderr"): Promise<void> {
+  const stream = process[name];
 
-  for await (const chunk of process.stdin) chunks.push(new Uint8Array(chunk));
+  if (!stream.writableNeedDrain) return Promise.resolve();
 
-  return new Uint8Array(Buffer.concat(chunks));
+  return new Promise((resolve) => {
+    const done = () => {
+      stream.off("drain", done);
+      stream.off("close", done);
+      stream.off("error", done);
+      resolve();
+    };
+
+    stream.on("drain", done);
+    stream.on("close", done);
+    stream.on("error", done);
+  });
+}
+
+async function* stdin(): AsyncIterable<Uint8Array> {
+  for await (const chunk of process.stdin) yield new Uint8Array(chunk);
 }
 
 const code = await main(process.argv.slice(2), {
   env: process.env,
   cwd: process.cwd(),
   signal: controller.signal,
-  readStdin,
+  stdin,
+  stderrTerminal: process.stderr.isTTY === true,
   streams: {
     stdout: (text) => process.stdout.write(text),
     stderr: (text) => process.stderr.write(text),
+    ready,
   },
 });
+
+// A command can exit while stdin is still open (a tunnel, a terminal); stop reading it so the
+// CLI exits too.
+process.stdin.destroy();
 
 // An interrupted run reports 128 + signal like other CLIs, whatever happened before it.
 process.exitCode = interrupted ? exitCode : code;

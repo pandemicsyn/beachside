@@ -2,10 +2,10 @@ import { z } from "zod";
 import { expect, test } from "bun:test";
 import {
   Image,
-  Sandbar,
+  Beachside,
   type AdapterRecoveryReference,
   type AdvancedObservation,
-} from "sandbar-sdk";
+} from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 function expectedPreservation(action: "suspend" | "resume") {
@@ -180,7 +180,7 @@ function fixture() {
       onReference?: (ref: AdapterRecoveryReference) => void | Promise<void>,
       key = "first-key",
     ) =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: { target: "us", networkPolicy: "blocked", ...config },
         credentials: { apiKey: key },
@@ -297,7 +297,7 @@ test("Daytona renewal validation, identity, state and credential gates precede t
     }
 
     f.native.state = "started";
-    f.native.labels["sandbar.operation"] = "forged";
+    f.native.labels["beachside.operation"] = "forged";
     await expect(box.renew()).rejects.toMatchObject({ code: "CONFLICT", effect: "none" });
     expect(f.windows).toEqual([]);
   } finally {

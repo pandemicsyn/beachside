@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { AdapterSandbox, Sandbar } from "sandbar-sdk";
+import { AdapterSandbox, Beachside } from "beachside";
 import { artifactFiles } from "../../../../apps/docs/examples/directory-files";
 import { createE2BAdapter } from "./index";
 import { createSdkTransport } from "./transport";
@@ -61,10 +61,10 @@ function fixture(version = "0.5.7", shortUpload = false, nativeFilesystem = fals
           state: "running",
           metadata: nativeFilesystem
             ? {
-                sandbar_scope: "team:base",
-                sandbar_template: "base",
-                sandbar_operation: "op_seed",
-                sandbar_submission: "sub_seed",
+                beachside_scope: "team:base",
+                beachside_template: "base",
+                beachside_operation: "op_seed",
+                beachside_submission: "sub_seed",
               }
             : {},
           envdVersion: version,
@@ -213,13 +213,13 @@ function fixture(version = "0.5.7", shortUpload = false, nativeFilesystem = fals
 test.skipIf(process.platform !== "linux")(
   "E2B public SDK runs the shared artifact recipe through native guest transport",
   async () => {
-    const root = mkdtempSync(join(tmpdir(), "sandbar-e2b-artifacts-"));
-    let client: Awaited<ReturnType<typeof Sandbar.connect>> | undefined;
+    const root = mkdtempSync(join(tmpdir(), "beachside-e2b-artifacts-"));
+    let client: Awaited<ReturnType<typeof Beachside.connect>> | undefined;
 
     try {
       const f = fixture("0.5.7", false, true);
 
-      client = await Sandbar.connect({
+      client = await Beachside.connect({
         adapter: createE2BAdapter(() => f.transport),
         config: { teamId: "team", preview: { access: "protected" } },
         credentials: { apiKey: "fixture" },
@@ -290,7 +290,8 @@ test("E2B native streams transfer 32 MiB with incremental octet-stream upload an
   ).toEqual({ bytesWritten: 32 * 1024 * 1024 });
   const expectedDigest = expected.digest("hex");
   expect(f.digest()).toBe(expectedDigest);
-  expect(f.commands()).toBe(2);
+  // Only publish runs a helper: envd creates the stage, so uploads into sticky /tmp work.
+  expect(f.commands()).toBe(1);
 
   const stream = await f.transport.readStream!(
     "box",
@@ -366,6 +367,6 @@ test("E2B short acknowledged upload never publishes the staging artifact", async
       temporaryPaths: [],
     },
   });
-  // The only helper calls reserve and clean the correlated stage; no publish occurs.
-  expect(f.commands()).toBe(2);
+  // The only helper call cleans the correlated stage; no publish occurs.
+  expect(f.commands()).toBe(1);
 });

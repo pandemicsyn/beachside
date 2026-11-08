@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { Sandbar as DirectSandbar, Image as DirectImage } from "sandbar-sdk";
-import { createFakeAdapter } from "@sandbar/provider-fake";
+import { Beachside as DirectBeachside, Image as DirectImage } from "beachside";
+import { createFakeAdapter } from "@beachside-internal/provider-fake";
 import { ProcessFixture } from "./processes";
 
 const fixtures: ProcessFixture[] = [];
@@ -15,7 +15,7 @@ async function backend() {
   fixtures.push(fixture);
   await fixture.startFake();
 
-  const client = await DirectSandbar.connect({
+  const client = await DirectBeachside.connect({
     adapter: createFakeAdapter({ url: fixture.fakeUrl!, token: fixture.fakeToken }),
     config: {},
     credentials: {},
@@ -109,7 +109,7 @@ describe("public SDK resources", () => {
       { preconnect: fetch.preconnect },
     );
 
-    const client = await DirectSandbar.connect({
+    const client = await DirectBeachside.connect({
       adapter: createFakeAdapter({
         url: fixture.fakeUrl!,
         token: fixture.fakeToken,

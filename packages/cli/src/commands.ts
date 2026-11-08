@@ -1,4 +1,5 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
 import { basename, join, posix, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
@@ -6,18 +7,18 @@ import {
   Image,
   NonzeroExitError,
   ResourceReference,
-  SandbarError,
+  BeachsideError,
   assertResourceScope,
   type CreateInput,
   type ExecInput,
   type ExecOutput,
   type ProcessExit,
   type ProcessHandle,
-  type SandbarClient,
+  type BeachsideClient,
   type SandboxHandle,
   type SandboxList,
   type SandboxListEntry,
-} from "sandbar-sdk";
+} from "beachside";
 import { z } from "zod";
 import { searchProjectAdapters, valueAvailable, type Env, type LoadedConfig } from "./config";
 import {
@@ -47,9 +48,12 @@ import {
   defaultPushDir,
   download,
   Excludes,
+  fileChunks,
   localTree,
+  saveLocalFile,
   shellQuote,
   upload,
+  uploadFile,
   type LocalTree,
 } from "./transfer";
 import { parseDuration, parsePairs, parseSize } from "./units";
@@ -253,7 +257,7 @@ function createInput(request: CreateRequest): CreateInput {
 }
 
 type Created = {
-  client: SandbarClient<true>;
+  client: BeachsideClient<true>;
   box: SandboxHandle<true>;
   record: SandboxRecord;
   existing: boolean;
@@ -283,7 +287,7 @@ async function claimName(
           "CONFLICT",
           cause.message,
           ifNotExists
-            ? "its record is not a confirmed sandbox (still creating, or outcome unknown); check `sandbar inspect`, or drop it with `sandbar rm --force`"
+            ? "its record is not a confirmed sandbox (still creating, or outcome unknown); check `beachside inspect`, or drop it with `beachside rm --force`"
             : "pass --if-not-exists to reuse it, or choose another --name",
         );
     }
@@ -369,7 +373,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
 
         return { client, box, ...current, existing: true };
       } catch (cause) {
-        if (!(cause instanceof SandbarError) || cause.code !== "NOT_FOUND") throw cause;
+        if (!(cause instanceof BeachsideError) || cause.code !== "NOT_FOUND") throw cause;
         await store.remove("sandbox", current.record.name, current.version);
       }
     }
@@ -381,7 +385,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
     throw new CliError(
       "LIMIT_REACHED",
       `The store already holds ${limit} sandboxes (limits.maxSandboxes)`,
-      "remove some with `sandbar rm`, or raise limits.maxSandboxes in sandbar.json",
+      "remove some with `beachside rm`, or raise limits.maxSandboxes in beachside.json",
     );
 
   const claimed = await claimName(
@@ -401,7 +405,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
     request.ifNotExists,
   );
 
-  let client: SandbarClient<true>;
+  let client: BeachsideClient<true>;
   const input = createInput(request);
 
   try {
@@ -500,7 +504,7 @@ function unrecordedError(created: Created): CliError {
   return new CliError(
     "STORE_WRITE_FAILED",
     `Created ${created.record.name} but could not record it in the store: ${created.unrecorded?.message}`,
-    "save the reference below to a file and use `sandbar rm @<file>` to destroy it",
+    "save the reference below to a file and use `beachside rm @<file>` to destroy it",
     { sandbox: created.record.name, reference: created.record.reference },
     "partial",
   );
@@ -575,7 +579,7 @@ export async function findTarget(session: Session, target: string): Promise<Targ
   throw new CliError(
     "NOT_FOUND",
     `No sandbox named ${target} in the store`,
-    "list known sandboxes with `sandbar ls`",
+    "list known sandboxes with `beachside ls`",
   );
 }
 
@@ -602,7 +606,7 @@ export async function createCommand(session: Session, flags: Flags): Promise<num
 async function stateOf(
   session: Session,
   record: SandboxRecord,
-  client: SandbarClient<true> | null,
+  client: BeachsideClient<true> | null,
 ) {
   if (!record.reference || !client)
     return record.status === "created" ? "unreachable" : record.status;
@@ -612,9 +616,9 @@ async function stateOf(
 
     return (await box.inspect({ signal: session.ctx.signal })).state;
   } catch (cause) {
-    if (cause instanceof SandbarError && cause.code === "NOT_FOUND") return "gone";
+    if (cause instanceof BeachsideError && cause.code === "NOT_FOUND") return "gone";
 
-    if (cause instanceof SandbarError && cause.code === "UNSUPPORTED") return "unknown";
+    if (cause instanceof BeachsideError && cause.code === "UNSUPPORTED") return "unknown";
 
     return "unreachable";
   }
@@ -632,7 +636,7 @@ type RemoteListing = {
 
 /** Page through the provider's sandbox listing, stopping early once `until` matches an item. */
 export async function remoteSandboxes(
-  client: SandbarClient<true>,
+  client: BeachsideClient<true>,
   until?: (item: SandboxListEntry) => boolean,
 ): Promise<RemoteListing> {
   const items: SandboxListEntry[] = [];
@@ -653,7 +657,7 @@ export async function remoteSandboxes(
 
 export const coverageNote = {
   "provider-scope": "every sandbox this profile's account and scope can see",
-  "sandbar-managed": "only sandboxes created through Sandbar in this profile's scope",
+  managed: "only sandboxes created through Beachside in this profile's scope",
 } satisfies Record<SandboxList["coverage"], string>;
 
 /** Listed labels as `k=v,k2=v2`; `-` when there are none or the provider records none. */
@@ -751,7 +755,7 @@ export async function adoptCommand(session: Session, flags: Flags): Promise<numb
     throw new CliError(
       "CONFLICT",
       `${id} is already in the store as ${known.record.name}`,
-      `use \`sandbar inspect ${known.record.name}\``,
+      `use \`beachside inspect ${known.record.name}\``,
     );
 
   if (!listed)
@@ -759,7 +763,7 @@ export async function adoptCommand(session: Session, flags: Flags): Promise<numb
       "NOT_FOUND",
       `${profile.provider} does not list a sandbox ${id} for profile ${profile.name}`,
       listing.complete
-        ? "list what it does show with `sandbar ls --remote`"
+        ? "list what it does show with `beachside ls --remote`"
         : "the listing was cut short; check the provider's own tools",
     );
 
@@ -814,7 +818,7 @@ export async function lsCommand(session: Session, flags: Flags): Promise<number>
   );
 
   const offline = flags.bool("offline");
-  const clients = new Map<string, SandbarClient<true> | null>();
+  const clients = new Map<string, BeachsideClient<true> | null>();
 
   if (!offline)
     for (const profile of new Set(entries.map((entry) => entry.record.profile))) {
@@ -910,7 +914,7 @@ function refusal(record: SandboxRecord): CliError | null {
     return new CliError(
       "UNSUPPORTED",
       `${record.name} has no reopenable reference (status ${record.status}); it cannot be destroyed from here`,
-      "check the provider for it, then `sandbar rm --force` to drop the record",
+      "check the provider for it, then `beachside rm --force` to drop the record",
       { sandbox: record.name },
     );
 
@@ -937,7 +941,7 @@ function refusal(record: SandboxRecord): CliError | null {
 export function storesSandbox(
   record: SandboxRecord,
   profile: ResolvedProfile,
-  client: SandbarClient<true>,
+  client: BeachsideClient<true>,
   item: SandboxListEntry,
 ): boolean {
   const stored = record.reference;
@@ -1012,7 +1016,7 @@ async function recoverCreate(session: Session, store: StateStore, target: Target
   try {
     value = await (await client.recover(record.recovery)).observe();
   } catch (cause) {
-    if (cause instanceof SandbarError && cause.effect !== "none") return target;
+    if (cause instanceof BeachsideError && cause.effect !== "none") return target;
     throw cause;
   }
 
@@ -1066,7 +1070,7 @@ async function removeOne(
   try {
     box = await session.reopen(record);
   } catch (cause) {
-    if (!(cause instanceof SandbarError) || cause.code !== "NOT_FOUND") throw cause;
+    if (!(cause instanceof BeachsideError) || cause.code !== "NOT_FOUND") throw cause;
     await forget(store, target);
 
     return { kind: "removed", item: { name: record.name, result: "gone", retainedResources: [] } };
@@ -1162,19 +1166,33 @@ export async function rmCommand(session: Session, flags: Flags): Promise<number>
   return 0;
 }
 
+/**
+ * A command for exec, sh and run. Input is read lazily: streaming providers receive it as it
+ * arrives, so it has no size limit and can stay open (a tunnel or a REPL); the buffered path reads
+ * it whole, up to the SDK's finite stdin limit.
+ */
+type CliExecInput = Omit<ExecInput, "stdin"> & { stdin?: () => AsyncIterable<Uint8Array> };
+
+/** The SDK's limit for finite exec stdin, which the buffered path must fit. */
+const finiteStdinBytes = 1_048_576;
+
 async function execInput(
   session: Session,
   flags: Flags,
   command: ExecInput["command"],
-): Promise<ExecInput> {
+): Promise<CliExecInput> {
   if (flags.bool("stdin") && flags.string("stdin-file"))
     throw usage("Pass either --stdin or --stdin-file");
   const stdinFile = flags.string("stdin-file");
+  const stdinPath = stdinFile ? resolve(session.ctx.cwd, stdinFile) : undefined;
+
+  // A missing --stdin-file fails before anything is created or run.
+  if (stdinPath && !(await stat(stdinPath)).isFile()) throw usage(`${stdinFile} is not a file`);
 
   const stdin = flags.bool("stdin")
-    ? await session.ctx.readStdin()
-    : stdinFile
-      ? new Uint8Array(await readFile(resolve(session.ctx.cwd, stdinFile)))
+    ? session.ctx.stdin
+    : stdinPath
+      ? () => createReadStream(stdinPath)
       : undefined;
 
   const timeout = flags.string("timeout");
@@ -1193,7 +1211,7 @@ async function execInput(
 
 function argvCommand(flags: Flags): ExecInput["command"] {
   if (!flags.rest?.length)
-    throw usage("Give the command after --, e.g. sandbar exec web -- ls -la");
+    throw usage("Give the command after --, e.g. beachside exec web -- ls -la");
 
   return { kind: "argv", argv: [...flags.rest] };
 }
@@ -1209,7 +1227,7 @@ type Executed = ExecOutput | Streamed;
 async function execute(
   session: Session,
   box: SandboxHandle<true>,
-  input: ExecInput,
+  input: CliExecInput,
   flags: Flags,
 ): Promise<Executed> {
   // JSON keeps its one envelope, so only human output streams.
@@ -1219,14 +1237,119 @@ async function execute(
     if (streamed) return streamed;
   }
 
+  const stdin = input.stdin ? await bufferedStdin(input.stdin) : undefined;
+
   try {
-    return await box.exec(input, { signal: session.ctx.signal });
+    return await box.exec({ ...input, stdin }, { signal: session.ctx.signal });
   } catch (cause) {
+    if (
+      stdin &&
+      !(stdin instanceof Uint8Array) &&
+      cause instanceof BeachsideError &&
+      cause.code === "UNSUPPORTED" &&
+      cause.effect === "none"
+    )
+      throw stdinCapacity();
+
     if (!(cause instanceof NonzeroExitError)) throw cause;
 
     return cause.result;
   }
 }
+
+/**
+ * The command's input for the buffered exec path: bytes when it fits the SDK's finite limit, or
+ * else a stream (what was read, then the rest), which the SDK sends incrementally where the
+ * adapter takes process stdin.
+ */
+async function bufferedStdin(
+  source: () => AsyncIterable<Uint8Array>,
+): Promise<Uint8Array | AsyncIterable<Uint8Array>> {
+  const iterator = source()[Symbol.asyncIterator]();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  for (let next = await iterator.next(); !next.done; next = await iterator.next()) {
+    chunks.push(next.value);
+    total += next.value.byteLength;
+
+    if (total > finiteStdinBytes)
+      return (async function* () {
+        yield* chunks;
+
+        for (let rest = await iterator.next(); !rest.done; rest = await iterator.next())
+          yield rest.value;
+      })();
+  }
+
+  return new Uint8Array(Buffer.concat(chunks));
+}
+
+/** The error for input over 1 MiB on a provider without incremental stdin. */
+function stdinCapacity(): CliError {
+  return new CliError(
+    "CAPACITY",
+    "Input over 1 MiB needs a provider that streams stdin (Daytona, E2B or Vercel)",
+    "copy the input in and redirect it instead, e.g. beachside cp input.sql box:/tmp/input.sql && beachside sh box 'psql < /tmp/input.sql'",
+  );
+}
+
+/** Reading the command's input failed locally, so the input is incomplete whatever the process does. */
+class InputReadError extends Error {}
+
+/** Send `source` to the process as it arrives, in writes the SDK accepts, then close stdin. */
+async function feedStdin(
+  running: StreamHandle,
+  source: () => AsyncIterable<Uint8Array>,
+  signal: AbortSignal,
+): Promise<void> {
+  const iterator = source()[Symbol.asyncIterator]();
+
+  for (;;) {
+    let next: IteratorResult<Uint8Array>;
+
+    try {
+      next = await iterator.next();
+    } catch (cause) {
+      throw new InputReadError(cause instanceof Error ? cause.message : String(cause));
+    }
+
+    if (next.done) break;
+    signal.throwIfAborted();
+
+    for (let at = 0; at < next.value.byteLength; at += processWriteBytes)
+      await running.write(next.value.subarray(at, at + processWriteBytes), { signal });
+  }
+
+  await running.closeStdin({ signal });
+}
+
+/**
+ * Decide whether a failed input delivery fails the command. A process that already exited simply
+ * stopped reading; otherwise the input is incomplete, so the process is stopped and the error
+ * returned rather than letting it finish on truncated input.
+ */
+async function inputFailure(
+  running: StreamHandle,
+  cause: unknown,
+  signal: AbortSignal,
+): Promise<Error | undefined> {
+  if (!(cause instanceof InputReadError)) {
+    const state = await running
+      .status({ signal })
+      .then((status) => status.state)
+      .catch(() => "unknown");
+
+    if (state === "exited") return undefined;
+  }
+
+  await running.terminate({ signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
+
+  return cause instanceof Error ? cause : new Error(String(cause));
+}
+
+/** The largest single process write the SDK accepts. */
+const processWriteBytes = 65_536;
 
 /**
  * Write the command's output as it arrives where the provider streams bytes. Returns null when it
@@ -1236,7 +1359,7 @@ async function execute(
 async function streamExec(
   session: Session,
   box: SandboxHandle<true>,
-  input: ExecInput,
+  input: CliExecInput,
 ): Promise<Streamed | null> {
   const { out, signal } = session.ctx;
   const seconds = input.deadlineSeconds ?? defaultTimeoutSeconds;
@@ -1252,22 +1375,45 @@ async function streamExec(
   const stop = AbortSignal.any([signal, deadline]);
 
   const pumped = (async () => {
-    for await (const chunk of running.output({ signal: stop }))
+    for await (const chunk of running.output({ signal: stop })) {
       out.streams[chunk.stream]("bytes" in chunk ? chunk.bytes : chunk.text);
+      await out.streams.ready?.(chunk.stream);
+    }
   })().then(
     () => undefined,
     (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
   );
 
-  try {
-    if (input.stdin) {
-      await running.write(input.stdin, { signal: stop });
-      await running.closeStdin({ signal: stop });
-    }
+  // Input flows while output streams, and the command may exit before its input ends.
+  const feeding = new AbortController();
+  let exited = false;
+  let failing: Promise<Error | undefined> | undefined;
 
-    const exit = await running.wait({ signal: stop });
+  if (input.stdin)
+    void feedStdin(running, input.stdin, AbortSignal.any([stop, feeding.signal])).catch(
+      (cause: unknown) => {
+        if (exited || stop.aborted) return;
+        failing = inputFailure(running, cause, stop);
+      },
+    );
+
+  try {
+    const exit = await running.wait({ signal: stop }).finally(() => {
+      exited = true;
+      feeding.abort();
+    });
 
     await drained(running, pumped, exit, out);
+    const failed = await failing;
+
+    if (failed)
+      throw new CliError(
+        "STDIN_FAILED",
+        `Sending stdin failed: ${failed.message}; the command was stopped`,
+        "the command did not receive all of its input; fix the cause and run it again",
+        undefined,
+        "unknown",
+      );
 
     return { streamed: true, exitCode: exit.exitCode };
   } catch (cause) {
@@ -1279,7 +1425,7 @@ async function streamExec(
       .catch(() => "termination was not acknowledged, so it may still be running");
 
     if (signal.aborted) {
-      out.note(`sandbar: interrupted; ${stopped}`);
+      out.note(`beachside: interrupted; ${stopped}`);
       throw cause;
     }
 
@@ -1300,7 +1446,7 @@ type StreamHandle = ProcessHandle<"bytes"> | ProcessHandle<"text">;
 /** Start a streaming process, or return null when the provider rejects it before dispatch. */
 async function startStream(
   box: SandboxHandle<true>,
-  input: ExecInput,
+  input: CliExecInput,
   signal: AbortSignal,
   format: "bytes" | "text",
 ): Promise<StreamHandle | null> {
@@ -1322,7 +1468,7 @@ async function startStream(
           { signal },
         );
   } catch (cause) {
-    if (cause instanceof SandbarError && cause.code === "UNSUPPORTED" && cause.effect === "none")
+    if (cause instanceof BeachsideError && cause.code === "UNSUPPORTED" && cause.effect === "none")
       return null;
     throw cause;
   }
@@ -1346,7 +1492,7 @@ async function drained(
 
   if (failure === "late" || failure || !(await running.wait()).outputComplete)
     out.note(
-      `sandbar: the command exited ${exit.exitCode} but its output may be incomplete${
+      `beachside: the command exited ${exit.exitCode} but its output may be incomplete${
         failure instanceof Error ? `: ${failure.message}` : ""
       }`,
     );
@@ -1370,7 +1516,7 @@ function printStreams(out: Output, result: Executed): void {
   if (result.stderr.byteLength) out.streams.stderr(result.stderr);
 
   if (result.truncated)
-    out.note("sandbar: output was truncated; raise --max-output to capture more");
+    out.note("beachside: output was truncated; raise --max-output to capture more");
 }
 
 type RunSandbox = { name: string; id: string | null; kept: boolean };
@@ -1413,7 +1559,7 @@ function shScript(flags: Flags): ShScript {
   if (!flags.rest && flags.positionals.length === 2) return { target: target!, script: inline! };
 
   throw usage(
-    "Usage: sandbar sh <sandbox> '<script>' (or put the script after --, as one argument)",
+    "Usage: beachside sh <sandbox> '<script>' (or put the script after --, as one argument)",
   );
 }
 
@@ -1456,11 +1602,15 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
   if (created.unrecorded) failure = unrecordedError(created);
   else
     try {
+      if (tree)
+        out.status.report("working", `beachside run: pushing files to ${created.record.name}`);
+
       const pushed = tree
         ? await upload(created.box, created.record.name, tree, defaultPushDir, null, signal)
         : undefined;
 
       if (pushed) out.note(`pushed ${pushed.files} file(s) to ${pushed.path}`);
+      out.status.report("working", `beachside run: running in ${created.record.name}`);
       // The command runs in the pushed folder unless --cwd says otherwise.
       result = await execute(
         session,
@@ -1481,6 +1631,7 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
   }
 
   try {
+    out.status.report("working", `beachside run: destroying ${created.record.name}`);
     // A fresh signal: cleanup must still run after an interrupt aborted the command.
     await created.box.destroy();
     await store.remove("sandbox", created.record.name);
@@ -1495,7 +1646,7 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
       `Cleanup of ${created.record.name} failed: ${report.message}${
         failure ? `; the command also failed: ${describeError(failure).message}` : ""
       }`,
-      `remove it with \`sandbar rm ${created.record.name}\``,
+      `remove it with \`beachside rm ${created.record.name}\``,
       {
         sandbox: created.record.name,
         reference: created.record.reference,
@@ -1547,7 +1698,7 @@ function remotePath(path: string): string {
 
 export async function cpCommand(session: Session, flags: Flags): Promise<number> {
   if (flags.positionals.length !== 2)
-    throw usage("Usage: sandbar cp [-r] <src> <dst> (one side is <sandbox>:/path)");
+    throw usage("Usage: beachside cp [-r] <src> <dst> (one side is <sandbox>:/path)");
   const recursive = flags.bool("recursive");
   const noClobber = flags.bool("no-clobber");
   const excludes = new Excludes(flags.strings("exclude"));
@@ -1579,14 +1730,11 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
       return 0;
     }
 
-    const bytes = new Uint8Array(await readFile(local));
+    const { size } = await stat(local);
     const { record } = await findTarget(session, to.target);
     const box = await session.reopen(record);
-    await box.writeFile(to.path, bytes, {
-      overwrite: !noClobber,
-      signal: session.ctx.signal,
-    });
-    session.ctx.out.success({ sandbox: record.name, path: to.path, bytes: bytes.byteLength }, "");
+    const bytes = await uploadFile(box, record.name, local, size, to.path, !noClobber, signal);
+    out.success({ sandbox: record.name, path: to.path, bytes }, "");
 
     return 0;
   }
@@ -1603,7 +1751,7 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
 
     if (result.skipped.length)
       out.note(
-        `sandbar: skipped ${result.skipped.length} special file(s) such as devices or fifos`,
+        `beachside: skipped ${result.skipped.length} special file(s) such as devices or fifos`,
       );
     out.success(
       {
@@ -1622,7 +1770,6 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
 
   const { record } = await findTarget(session, from!.target);
   const box = await session.reopen(record);
-  const bytes = await box.readFile(from!.path, { signal: session.ctx.signal });
   let local = resolve(session.ctx.cwd, destination);
 
   try {
@@ -1631,19 +1778,12 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
     // A missing destination is the file to create.
   }
 
-  try {
-    await writeFile(local, bytes, { flag: flags.bool("no-clobber") ? "wx" : "w" });
-  } catch (cause) {
-    if (cause instanceof Error && "code" in cause && cause.code === "EEXIST")
-      throw new CliError(
-        "CONFLICT",
-        `${local} already exists`,
-        "drop --no-clobber to overwrite it",
-      );
-    throw cause;
-  }
-
-  session.ctx.out.success({ sandbox: record.name, path: local, bytes: bytes.byteLength }, "");
+  // Check before transferring anything; the exclusive create below still guards a race.
+  if (noClobber && (await stat(local).catch(() => null)))
+    throw new CliError("CONFLICT", `${local} already exists`, "drop --no-clobber to overwrite it");
+  const chunks = fileChunks(box, record.name, from!.path, signal);
+  const bytes = await saveLocalFile(chunks, local, noClobber);
+  out.success({ sandbox: record.name, path: local, bytes }, "");
 
   return 0;
 }
@@ -1664,7 +1804,7 @@ async function pushTree(session: Session, flags: Flags, path: string): Promise<L
 
 export async function pushCommand(session: Session, flags: Flags): Promise<number> {
   if (flags.positionals.length < 1 || flags.positionals.length > 2)
-    throw usage("Usage: sandbar push <sandbox>[:/dir] [path]");
+    throw usage("Usage: beachside push <sandbox>[:/dir] [path]");
   const [target, path = "."] = [flags.positionals[0]!, flags.positionals[1]];
   const location = remote(target);
   const tree = await pushTree(session, flags, path);
@@ -1688,17 +1828,25 @@ export async function pushCommand(session: Session, flags: Flags): Promise<numbe
 export async function catCommand(session: Session, flags: Flags): Promise<number> {
   const location = remote(onePositional(flags, "<sandbox>:/path"));
 
-  if (!location) throw usage("Usage: sandbar cat <sandbox>:/path");
+  if (!location) throw usage("Usage: beachside cat <sandbox>:/path");
   const { record } = await findTarget(session, location.target);
   const box = await session.reopen(record);
-  const bytes = await box.readFile(location.path, { signal: session.ctx.signal });
-  const { out } = session.ctx;
+  const { out, signal } = session.ctx;
+  const chunks = fileChunks(box, record.name, location.path, signal);
 
   if (!out.json) {
-    out.streams.stdout(bytes);
+    for await (const chunk of chunks) {
+      out.streams.stdout(chunk);
+      await out.streams.ready?.("stdout");
+    }
 
     return 0;
   }
+
+  const parts: Uint8Array[] = [];
+
+  for await (const chunk of chunks) parts.push(chunk);
+  const bytes = new Uint8Array(Buffer.concat(parts));
 
   let text: string | null = null;
 

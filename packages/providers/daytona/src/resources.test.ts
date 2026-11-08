@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { Image, Sandbar } from "sandbar-sdk";
+import { Image, Beachside } from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 const SnapshotBuild = z.object({ name: z.string(), cpu: z.number(), memory: z.number() });
@@ -102,7 +102,7 @@ test("Daytona resources size built snapshots and gate prepared ones before any e
     { preconnect: fetch.preconnect },
   );
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createDaytonaAdapter(fetchImpl),
     config: { target: "us", network: "blocked", resources: { vcpus: 1.5, memoryMiB: 3000 } },
     credentials: { apiKey: "fixture" },

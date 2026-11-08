@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { context, trace } from "@opentelemetry/api";
-import { Sandbar, Image, OutcomeUnknownError } from "sandbar-sdk";
+import { Beachside, Image, OutcomeUnknownError } from "beachside";
 import { fixtureAdapter } from "./adapter";
 import { startOpenTelemetry, startSentry, startDatadog } from "./recipes";
 
@@ -69,7 +69,7 @@ const setup =
 
 try {
   const fixture = fixtureAdapter({ exitCode: 0 });
-  const client = await Sandbar.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
   const tracer = trace.getTracer("application");
   const parents = [tracer.startSpan("request-a"), tracer.startSpan("request-b")];
   await Promise.all(
@@ -90,7 +90,7 @@ try {
   parents.forEach((parent) => parent.end());
   await client.close();
   const failing = fixtureAdapter({ lost: true });
-  const other = await Sandbar.connect({ adapter: failing.adapter, config: {}, credentials: {} });
+  const other = await Beachside.connect({ adapter: failing.adapter, config: {}, credentials: {} });
   const job = tracer.startSpan("failing-job");
   failureTraceId = job.spanContext().traceId;
   await context.with(trace.setSpan(context.active(), job), async () => {
@@ -144,7 +144,7 @@ const spans: ExportedSpan[] = exports.flatMap((body) =>
 
 if (sampleRate === 0) assert.equal(spans.length, 0);
 else {
-  const creates = spans.filter((s) => s.name === "sandbar.sandbox.create");
+  const creates = spans.filter((s) => s.name === "beachside.sandbox.create");
   assert.equal(creates.length, 3);
 
   for (const name of ["request-a", "request-b", "failing-job"]) {
@@ -152,9 +152,9 @@ else {
     assert(creates.some((s) => s.parentSpanId === parent.spanId && s.traceId === parent.traceId));
   }
 
-  assert.equal(spans.filter((s) => s.name === "sandbar.sandbox.submit_create").length, 0);
-  assert(spans.some((s) => s.name === "sandbar.prepare"));
-  assert(spans.some((s) => s.name === "sandbar.submit"));
+  assert.equal(spans.filter((s) => s.name === "beachside.sandbox.submit_create").length, 0);
+  assert(spans.some((s) => s.name === "beachside.prepare"));
+  assert(spans.some((s) => s.name === "beachside.submit"));
 }
 
 if (recipe === "sentry") {
@@ -162,11 +162,11 @@ if (recipe === "sentry") {
   assert.equal(issues.length, 2);
   assert.equal(beforeSendCalls, 2);
 
-  const sandbar = issues.find((event) =>
-    JSON.stringify(event).includes('"message":"Sandbar operation failed"'),
+  const beachside = issues.find((event) =>
+    JSON.stringify(event).includes('"message":"Beachside operation failed"'),
   );
 
-  const serialized = JSON.stringify(sandbar);
+  const serialized = JSON.stringify(beachside);
   assert(!serialized.includes("CANARY"));
   assert(serialized.includes("OUTCOME_UNKNOWN"));
   assert(serialized.includes("operationId"));

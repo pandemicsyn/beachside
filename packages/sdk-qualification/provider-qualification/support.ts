@@ -107,7 +107,7 @@ export const officialSupport: SupportMetadata[] = [
       },
       reopening: {
         support: "conditional",
-        note: "Scoped Sandbar-created compute only; fresh connection/process reopen, state/deadlines and running guest exec/files. Bun lifecycle-reopen passed at 3188e33 with fresh-process scoped attachment, guest exec/files and confirmed owned cleanup; other configurations remain unqualified.",
+        note: "Scoped Beachside-created compute only; fresh connection/process reopen, state/deadlines and running guest exec/files. Bun lifecycle-reopen passed at 3188e33 with fresh-process scoped attachment, guest exec/files and confirmed owned cleanup; other configurations remain unqualified.",
       },
       lifecycle: {
         support: "supported",
@@ -157,7 +157,7 @@ export const officialSupport: SupportMetadata[] = [
     features: {
       storageComposition: {
         support: "unsupported",
-        note: "The Sandbar adapter does not qualify filesystem/fresh restore with selected native volume IDs; memory composition and name-only mount selection remain unsupported.",
+        note: "The Beachside adapter does not qualify filesystem/fresh restore with selected native volume IDs; memory composition and name-only mount selection remain unsupported.",
       },
       suspension: {
         support: "conditional",
@@ -185,7 +185,7 @@ export const officialSupport: SupportMetadata[] = [
       },
       reopening: {
         support: "conditional",
-        note: "Scoped Sandbar-created compute only; fresh connection/process reopen, state/deadlines and running guest exec/files. Bun lifecycle-reopen passed at 3188e33 with fresh-process scoped attachment, guest exec/files and confirmed owned cleanup; other configurations remain unqualified.",
+        note: "Scoped Beachside-created compute only; fresh connection/process reopen, state/deadlines and running guest exec/files. Bun lifecycle-reopen passed at 3188e33 with fresh-process scoped attachment, guest exec/files and confirmed owned cleanup; other configurations remain unqualified.",
       },
       lifecycle: {
         support: "supported",
@@ -312,7 +312,7 @@ const featureEntries = Object.entries(features) as [
 ][];
 
 const evidenceHref =
-  "https://github.com/pandemicsyn/sandbar/blob/main/packages/sdk-qualification/provider-qualification/LIVE-EVIDENCE.md";
+  "https://github.com/pandemicsyn/beachside/blob/main/packages/sdk-qualification/provider-qualification/LIVE-EVIDENCE.md";
 
 function featureMatrix(reports: readonly QualificationReport[], profiles: SupportMetadata[]) {
   const historical = reports.flatMap((report) => parseReport(report).historicalEvidence ?? []);

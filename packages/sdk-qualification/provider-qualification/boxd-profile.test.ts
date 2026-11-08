@@ -3,7 +3,7 @@ import profile from "./boxd-profile";
 import { profileRouting } from "./profile";
 
 test("boxd profile retains explicit internet routing, native expiry and honest unsupported declarations without IO", () => {
-  const routing = profileRouting(profile, { SANDBAR_BOXD_ORG: "team" });
+  const routing = profileRouting(profile, { BEACHSIDE_BOXD_ORG: "team" });
   expect(routing).toEqual({
     org: "team",
     imageId: "ubuntu:24.04",

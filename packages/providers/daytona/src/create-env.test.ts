@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { Image, Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
+import { Image, Beachside, type AdapterRecoveryReference } from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 const SECRET = "CANARY-daytona-env-secret";
@@ -71,7 +71,7 @@ function fixture(create?: (body: CreateBody) => Response) {
   const saved: AdapterRecoveryReference[] = [];
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createDaytonaAdapter(fetchImpl),
       config: { target: "us", network: "blocked", environment: Image.prepared("snap-1") },
       credentials: { apiKey: "fixture-key" },

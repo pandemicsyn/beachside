@@ -1,13 +1,13 @@
 import { readFile, rename, stat, writeFile } from "node:fs/promises";
 import { z } from "zod";
-import { ExecCommand, canonicalJson, intentSha256 } from "@sandbar-sdk/adapter/portable";
+import { ExecCommand, canonicalJson, intentSha256 } from "@beachside/adapter/portable";
 import {
   DriverResult,
   NativeRef,
   NativeScope,
   SandboxRef,
   type InvocationIdentity,
-} from "@sandbar/provider-spi";
+} from "@beachside-internal/provider-spi";
 import {
   FAKE_STARTER_IMAGE,
   FakeImageId,

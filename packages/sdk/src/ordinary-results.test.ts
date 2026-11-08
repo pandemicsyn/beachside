@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AdapterCheckpointError, defineAdapter, type SnapshotProfile } from "@sandbar-sdk/adapter";
+import { AdapterCheckpointError, defineAdapter, type SnapshotProfile } from "@beachside/adapter";
 import {
   Image,
-  Sandbar,
-  SandbarError,
+  Beachside,
+  BeachsideError,
   OutcomeUnknownError,
   WaitAbortedError,
   diagnosticContext,
@@ -201,7 +201,7 @@ function fixture(
   });
 
   const connect = () =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: {},
       credentials: {},
@@ -231,7 +231,7 @@ test("ordinary capture preserves all results and reopens a JSON identity with a 
     expect(reopened.reference.generation).toBe("build-1");
     const reads = f.reads();
     await expect(fresh.snapshots.get({ ...saved, provider: "other" })).rejects.toBeInstanceOf(
-      SandbarError,
+      BeachsideError,
     );
     expect(f.reads()).toBe(reads);
     expect(f.effects()).toBe(1);
@@ -247,12 +247,12 @@ for (const mode of ["failed", "uncertain", "unknown", "checkpoint"] as const) {
 
     try {
       const box = await client.sandboxes.create({ environment: Image.prepared("base") });
-      let failure: SandbarError | undefined;
+      let failure: BeachsideError | undefined;
 
       try {
         await box.snapshot();
       } catch (error) {
-        if (!(error instanceof SandbarError)) throw error;
+        if (!(error instanceof BeachsideError)) throw error;
         failure = error;
       }
 

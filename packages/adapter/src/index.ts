@@ -209,7 +209,7 @@ export type HostContext<P extends Json = Json> = {
   onClose(release: () => void | Promise<void>): void;
 };
 
-const outcomeBrand: unique symbol = Symbol("sandbar.adapter.outcome");
+const outcomeBrand: unique symbol = Symbol("beachside.adapter.outcome");
 
 export type Pending = {
   readonly [outcomeBrand]: "pending";
@@ -415,14 +415,14 @@ export type AdapterSession<
     ctx: ReadContext,
   ) => Promise<import("./resources").SnapshotInfo>;
   /** Inventory coverage established by this adapter; omit when unknown. */
-  snapshotListCoverage?: "provider-scope" | "sandbar-managed";
+  snapshotListCoverage?: "provider-scope" | "managed";
   snapshotList?: (
     input: import("./resources").InventoryInput,
     ctx: ReadContext,
   ) => Promise<{
     items: import("./resources").SnapshotInfo[];
     nextCursor?: string;
-    coverage: "provider-scope" | "sandbar-managed";
+    coverage: "provider-scope" | "managed";
   }>;
   imageDelete?: Mutation<ResourceReference, import("./resources").ArtifactDeletionResult>;
   imageInspect?: (
@@ -430,14 +430,14 @@ export type AdapterSession<
     ctx: ReadContext,
   ) => Promise<import("./resources").ImageInfo>;
   /** Inventory coverage established by this adapter; omit when unknown. */
-  imageListCoverage?: "provider-scope" | "sandbar-managed";
+  imageListCoverage?: "provider-scope" | "managed";
   imageList?: (
     input: import("./resources").InventoryInput,
     ctx: ReadContext,
   ) => Promise<{
     items: import("./resources").ImageInfo[];
     nextCursor?: string;
-    coverage: "provider-scope" | "sandbar-managed";
+    coverage: "provider-scope" | "managed";
   }>;
   volumeCreate?: Mutation<
     import("./resources").VolumeCreateInput,
@@ -454,7 +454,7 @@ export type AdapterSession<
   ) => Promise<{
     items: import("./resources").VolumeInfo[];
     nextCursor?: string;
-    coverage: "provider-scope" | "sandbar-managed";
+    coverage: "provider-scope" | "managed";
   }>;
   resourceCapabilities?: (
     target: { sandbox?: Sandbox; create?: CreateInput },

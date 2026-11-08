@@ -5,7 +5,7 @@ import {
   type ObserveContext,
   type FileWriteInput,
   type RecoveryAttempt,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 
 /** Independent deterministic adapter, no provider IO or telemetry dependency. */
