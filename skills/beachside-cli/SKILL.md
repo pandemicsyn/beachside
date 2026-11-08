@@ -96,6 +96,10 @@ Other commands:
 - **`STORE_WRITE_FAILED`**: the sandbox exists but was not recorded. The reference is in `error.known.reference`; save it to a file and destroy with `beachside rm @file.json`.
 - Interrupting `run` (Ctrl-C, SIGTERM) still destroys its sandbox and exits 130 (143 for SIGTERM) with `INTERRUPTED`. A second signal exits immediately and may leave it running.
 
+## Inside Rex
+
+When `REX_SESSION` is set you are in a Rex terminal. For long work, start the command in a split pane with the Rex CLI instead of blocking your own shell, for example `rex run --split -- beachside run --json -- npm test`. Then read the result with `rex capture` or `rex wait`. The CLI shows its progress on that pane's tab.
+
 ## Discover more
 
 `beachside schema` prints every command, flag and exit code as JSON. `beachside <command> --help` shows usage and examples.

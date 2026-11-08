@@ -47,6 +47,7 @@ import {
 import {
   defaultPushDir,
   download,
+  archiveEstimate,
   Excludes,
   fileChunks,
   localTree,
@@ -56,6 +57,7 @@ import {
   uploadFile,
   type LocalTree,
 } from "./transfer";
+import { meter } from "./program-status";
 import { parseDuration, parsePairs, parseSize } from "./units";
 
 /** Parsed command-line values for one command. */
@@ -1606,7 +1608,19 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
         out.status.report("working", `beachside run: pushing files to ${created.record.name}`);
 
       const pushed = tree
-        ? await upload(created.box, created.record.name, tree, defaultPushDir, null, signal)
+        ? await upload(
+            created.box,
+            created.record.name,
+            tree,
+            defaultPushDir,
+            null,
+            signal,
+            meter(
+              out.status,
+              `beachside run: pushing files to ${created.record.name}`,
+              archiveEstimate(tree),
+            ),
+          )
         : undefined;
 
       if (pushed) out.note(`pushed ${pushed.files} file(s) to ${pushed.path}`);
@@ -1723,7 +1737,16 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
       const { record } = await findTarget(session, to.target);
       const box = await session.reopen(record);
       const dest = shellQuote(remotePath(to.path));
-      const result = await upload(box, record.name, tree, dest, basename(local), signal);
+
+      const result = await upload(
+        box,
+        record.name,
+        tree,
+        dest,
+        basename(local),
+        signal,
+        meter(out.status, `beachside cp: copying to ${record.name}`, archiveEstimate(tree)),
+      );
 
       out.success({ sandbox: record.name, ...result }, "");
 
@@ -1733,7 +1756,18 @@ export async function cpCommand(session: Session, flags: Flags): Promise<number>
     const { size } = await stat(local);
     const { record } = await findTarget(session, to.target);
     const box = await session.reopen(record);
-    const bytes = await uploadFile(box, record.name, local, size, to.path, !noClobber, signal);
+
+    const bytes = await uploadFile(
+      box,
+      record.name,
+      local,
+      size,
+      to.path,
+      !noClobber,
+      signal,
+      meter(out.status, `beachside cp: copying to ${record.name}`, size),
+    );
+
     out.success({ sandbox: record.name, path: to.path, bytes }, "");
 
     return 0;
@@ -1818,6 +1852,11 @@ export async function pushCommand(session: Session, flags: Flags): Promise<numbe
     location ? shellQuote(remotePath(location.path)) : defaultPushDir,
     null,
     session.ctx.signal,
+    meter(
+      session.ctx.out.status,
+      `beachside push: pushing to ${record.name}`,
+      archiveEstimate(tree),
+    ),
   );
 
   session.ctx.out.success({ sandbox: record.name, ...result }, result.path);
