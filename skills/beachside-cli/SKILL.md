@@ -5,7 +5,7 @@ description: Create, use and clean up cloud sandboxes from the shell with the `b
 
 # Use sandboxes with the beachside CLI
 
-`beachside` creates and manages sandboxes on any Beachside provider. It is built for agents: it never prompts, every command has a stable `--json` form, and exit codes tell you what to do next.
+`beachside` creates and manages sandboxes on any Beachside provider. It is built for agents: it never prompts for input, every command has a stable `--json` form, and exit codes clearly indicate what to do next.
 
 ## Check the setup first
 

@@ -1,6 +1,6 @@
 # @beachside/cli
 
-`beachside` creates and manages sandboxes on any Beachside provider from the command line. It is built for agents first: it never prompts, every command has a stable `--json` form, and exit codes say what to do next.
+`beachside` creates and manages sandboxes on any Beachside provider from the command line. It is built for agents first: it never prompts for input, every command has a stable `--json` form, and exit codes clearly indicate what to do next.
 
 Install it with `npm install -g @beachside/cli` (or `bun add -g @beachside/cli`); `beachside --version` prints the installed version. Adapters are installed separately.
 
