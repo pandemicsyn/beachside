@@ -33,10 +33,16 @@ export class FilesystemError extends BeachsideError {
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Adapter and producer failures can throw arbitrary values; preserve Error instances and retain other failures as the cause.
 export function filesystemError(error: unknown): Error {
-  if (error instanceof AdapterFilesystemError)
-    return new FilesystemError(error.code, error.message, error.details);
+  if (error instanceof AdapterError) {
+    const mapped =
+      error instanceof AdapterFilesystemError
+        ? new FilesystemError(error.code, error.message, error.details)
+        : new BeachsideError(error.code, error.message);
 
-  if (error instanceof AdapterError) return new BeachsideError(error.code, error.message);
+    if (error.cause !== undefined) mapped.cause = error.cause;
+
+    return mapped;
+  }
 
   return error instanceof Error
     ? error
