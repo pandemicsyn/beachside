@@ -57,7 +57,7 @@ Using a coding agent? `npx skills add pandemicsyn/beachside --skill beachside -g
 
 ## CLI
 
-Same sandboxes, straight from your shell. `beachside` creates, runs in and removes sandboxes on any provider with an adapter. It never prompts for input, every command has a `--json` form, and exit codes clearly indicate what to do next (fix the command, retry, or inspect before retrying), so your coding agent can drive it as easily as you can.
+Same sandboxes, straight from your shell. `beachside` creates, runs in and removes sandboxes on any provider with an adapter. It never prompts for input, every command has a `--json` form, and exit codes clearly indicate what to do next, so your coding agent can drive it as easily as you can.
 
 ```sh
 npm install -g @beachside/cli

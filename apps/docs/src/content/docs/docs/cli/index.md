@@ -3,7 +3,7 @@ title: Command line
 description: Create, use and clean up sandboxes on any Beachside provider from your shell or your agent.
 ---
 
-`beachside` creates and manages sandboxes from the command line, on any provider with a Beachside adapter. It is built for coding agents first: it never prompts, every command has a stable `--json` form, and exit codes say what to do next. People get readable output by default.
+`beachside` creates and manages sandboxes from the command line, on any provider with a Beachside adapter. It is built for coding agents first: it never prompts for input, every command has a stable `--json` form, and exit codes clearly indicate what to do next. People get readable output by default.
 
 ## Install
 
