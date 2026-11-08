@@ -417,6 +417,25 @@ async function* parts(source: AsyncIterable<Uint8Array>, size: number): AsyncIte
   if (filled) yield part.subarray(0, filled);
 }
 
+/** Pass a byte stream through, telling `onBytes` how much went by. */
+async function* counted(
+  source: AsyncIterable<Uint8Array>,
+  onBytes: ((bytes: number) => void) | undefined,
+): AsyncIterable<Uint8Array> {
+  for await (const chunk of source) {
+    onBytes?.(chunk.byteLength);
+    yield chunk;
+  }
+}
+
+/** Tar adds a header per entry and pads files to 512 bytes; a rough size for progress. */
+export function archiveEstimate(tree: LocalTree): number {
+  return tree.entries.reduce(
+    (total, entry) => total + 1024 + (entry.type === "file" ? entry.size : 0),
+    1024,
+  );
+}
+
 function partName(tmp: string, index: number): string {
   return `${tmp}/part.${String(index).padStart(6, "0")}`;
 }
@@ -467,6 +486,7 @@ export async function upload(
   dest: string,
   nest: string | null,
   signal: AbortSignal,
+  onBytes?: (bytes: number) => void,
 ): Promise<UploadResult> {
   const [tmp, state] = await step(
     box,
@@ -481,7 +501,7 @@ export async function upload(
   const target = nest && state === "directory" ? `${dest}/${shellQuote(nest)}` : dest;
 
   try {
-    const archive = tarStream(entriesOf(tree));
+    const archive = counted(tarStream(entriesOf(tree)), onBytes);
 
     if (box.supports("writeFileStream"))
       await box.writeFileStream(partName(tmp, 0), archive, { overwrite: true, signal });
@@ -600,13 +620,18 @@ export async function uploadFile(
   path: string,
   overwrite: boolean,
   signal: AbortSignal,
+  onBytes?: (bytes: number) => void,
 ): Promise<number> {
   if (box.supports("writeFileStream"))
-    return box.writeFileStream(path, createReadStream(local), { overwrite, signal });
+    return box.writeFileStream(path, counted(createReadStream(local), onBytes), {
+      overwrite,
+      signal,
+    });
 
   if (size <= PartBytes) {
     const bytes = new Uint8Array(await readFile(local));
     await box.writeFile(path, bytes, { overwrite, signal });
+    onBytes?.(bytes.byteLength);
 
     return bytes.byteLength;
   }
@@ -624,14 +649,17 @@ export async function uploadFile(
   let sent = 0;
 
   try {
-    await writeParts(parts(createReadStream(local), PartBytes), async (index, bytes) => {
-      await box.writeFile(partName(tmp, index), bytes, {
-        overwrite: true,
-        maxBytes: PartBytes,
-        signal,
-      });
-      sent += bytes.byteLength;
-    });
+    await writeParts(
+      parts(counted(createReadStream(local), onBytes), PartBytes),
+      async (index, bytes) => {
+        await box.writeFile(partName(tmp, index), bytes, {
+          overwrite: true,
+          maxBytes: PartBytes,
+          signal,
+        });
+        sent += bytes.byteLength;
+      },
+    );
   } catch (cause) {
     await cleanup(box, tmp, signal);
     throw cause;

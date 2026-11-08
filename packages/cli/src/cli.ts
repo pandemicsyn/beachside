@@ -709,6 +709,20 @@ function statusTitle(name: string, flags: Flags): string | undefined {
   return ["beachside", name, target].filter(Boolean).join(" ");
 }
 
+/** Commands that notify when they finish after a long run. */
+const notifyCommands = new Set(["run", "exec", "sh"]);
+
+/** Seconds before a finished command notifies; `BEACHSIDE_NOTIFY_AFTER` overrides, `off` stops it. */
+function notifyAfter(name: string, env: Io["env"]): number | undefined {
+  if (!notifyCommands.has(name)) return undefined;
+  const setting = env.BEACHSIDE_NOTIFY_AFTER?.trim().toLowerCase();
+
+  if (setting === "off") return undefined;
+  const seconds = setting ? Number(setting) : 30;
+
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : 30_000;
+}
+
 function exitMessage(code: number): string {
   return code === 0 ? "done" : `exit code ${code}`;
 }
@@ -811,15 +825,27 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     const session = new Session(context);
     const title = statusTitle(command.name, flags);
 
+    const notifyMs = title ? notifyAfter(command.name, io.env) : undefined;
+    const started = Date.now();
+
+    /** Report the final state, and notify when a long command finishes. */
+    const finish = (state: "done" | "error", message: string) => {
+      if (!title) return;
+      status.report(state, message);
+
+      if (notifyMs !== undefined && Date.now() - started >= notifyMs)
+        status.notify(state === "done" ? "beachside: done" : "beachside: failed", message);
+    };
+
     try {
       if (title) status.report("working", title);
       const code = await command.run(session, flags);
 
-      if (title) status.report(code === 0 ? "done" : "error", `${title}: ${exitMessage(code)}`);
+      finish(code === 0 ? "done" : "error", `${title}: ${exitMessage(code)}`);
 
       return code;
     } catch (cause) {
-      if (title) status.report("error", `${title}: ${describeError(cause).message}`);
+      finish("error", `${title}: ${describeError(cause).message}`);
       throw cause;
     } finally {
       await session.close();

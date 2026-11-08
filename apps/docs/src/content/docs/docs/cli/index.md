@@ -134,9 +134,9 @@ The [command reference](/docs/cli/reference/) lists every exit code, and `beachs
 
 ## Status on terminal tabs
 
-Inside [Rex](https://www.superlogical.com/rex/docs/build/program-status), commands that create, change or wait on sandboxes (`create`, `run`, `exec`, `sh`, `rm`, `gc`, `cp`, `push`, `image build`, `snapshot create`, and others) show their progress on the terminal tab: a spinner while they work, then done or failed. `run` also says which step it is on: pushing files, running the command, or destroying the sandbox.
+Inside [Rex](https://www.superlogical.com/rex/docs/build/program-status), commands that create, change or wait on sandboxes (`create`, `run`, `exec`, `sh`, `rm`, `gc`, `cp`, `push`, `image build`, `snapshot create`, and others) show their progress on the terminal tab: a spinner while they work, then done or failed. `run` also says which step it is on: pushing files, running the command, or destroying the sandbox. `cp` and `push` into a sandbox show a progress bar while the files upload. When `run`, `exec` or `sh` finishes after more than 30 seconds, you also get a desktop notification.
 
-The CLI reports this with the Program Status Protocol (OSC 7501), written to stderr only when stderr is a terminal, so `--json` and piped output are unchanged. Set `BEACHSIDE_PROGRAM_STATUS=on` to report in other terminals that support the protocol, or `off` to turn it off in Rex.
+The CLI reports this with the Program Status Protocol (OSC 7501), written to stderr only when stderr is a terminal, so `--json` and piped output are unchanged. Set `BEACHSIDE_PROGRAM_STATUS=on` to report in other terminals that support the protocol, or `off` to turn it off in Rex. Notifications use OSC 777. Set `BEACHSIDE_NOTIFY_AFTER` to a number of seconds to change when they appear, or to `off` to stop them.
 
 To run a Rex server inside a sandbox and open it from your Mac, see [Remote workspace with Rex](/docs/cli/rex/).
 
