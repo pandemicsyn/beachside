@@ -660,7 +660,8 @@ export type Io = {
   /** Whether stderr is a terminal; terminal tab status (OSC 7501) is only written to one. */
   stderrTerminal?: boolean;
   signal: AbortSignal;
-  readStdin: () => Promise<Uint8Array>;
+  /** The CLI's own stdin, read as it arrives. */
+  stdin: () => AsyncIterable<Uint8Array>;
 };
 
 /** The shell scripts from `beachside completion` call `beachside __complete -- <words>`. */
@@ -676,7 +677,7 @@ async function completeWords(words: readonly string[], io: Io): Promise<number> 
     cwd: io.cwd,
     out: new Output(false, io.streams),
     signal: io.signal,
-    readStdin: io.readStdin,
+    stdin: io.stdin,
     flags: { json: false, config: flagValue("config"), stateDir: flagValue("state-dir") },
   });
 
@@ -797,7 +798,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
       cwd: io.cwd,
       out,
       signal: io.signal,
-      readStdin: io.readStdin,
+      stdin: io.stdin,
       flags: {
         json: out.json,
         profile: flags.string("profile"),

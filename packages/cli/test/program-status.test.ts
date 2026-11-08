@@ -111,7 +111,7 @@ describe("program status from CLI commands", () => {
       },
       cwd: root,
       signal: new AbortController().signal,
-      readStdin: async () => new Uint8Array(),
+      stdin: async function* () {},
       stderrTerminal: terminal,
       streams: {
         stdout: (chunk) => (stdout += text(chunk)),

@@ -57,7 +57,7 @@ A buffered read has a fixed **30-second deadline** for the provider response and
 
 Beachside stops local waiting promptly and asks the adapter to cancel the request. Provider cancellation is best effort: earlier checks may still finish. Cancelling a read does not terminate commands or change the sandbox lifetime.
 
-Buffered reads and writes default to a **1 MiB** limit. Pass `maxBytes` to choose a limit up to **16 MiB**; your adapter may enforce a lower limit. Use the streaming methods below for larger files. The parent directory must already exist and be writable by the provider's file operations.
+Buffered reads and writes work at any size. A file larger than one buffered call to the adapter moves through the adapter's file streams, so you don't need to switch methods. On an adapter without file streams, the adapter's own limit applies and the error names it. Pass `maxBytes` to refuse anything larger, for example to protect memory from an unexpectedly large file. Use the streaming methods below when you want to process data in chunks rather than hold it all in memory. The parent directory must already exist and be writable by the provider's file operations.
 
 `overwrite` defaults to `false`: writing to an existing file fails without replacing it. To replace a file:
 
@@ -205,9 +205,9 @@ For strict UTF-8 validation, use `new TextDecoder("utf-8", { fatal: true }).deco
 
 The same text and preview helpers are available on recovered execution results and on `NonzeroExitError.result` and `NoExitCodeError.result`.
 
-## Supply finite command input
+## Supply command input
 
-`box.exec` accepts a string or byte array as input, then closes the command's stdin to signal that no more data is coming:
+`box.exec` accepts a string, a byte array or a stream as input, then closes the command's stdin to signal that no more data is coming:
 
 ```ts
 const payload = "Ada 🌊\0";
@@ -219,7 +219,20 @@ const result = await box.exec({
 console.log(result.stdoutText());
 ```
 
-Strings are encoded as UTF-8. `Uint8Array` input keeps its exact bytes, including NUL and binary data. The input limit is **1 MiB**; larger input rejects before contacting the provider. Empty or omitted input still closes stdin. Output and exit status use the same result format and capture limit as other executions.
+Strings are encoded as UTF-8. `Uint8Array` input keeps its exact bytes, including NUL and binary data. Empty or omitted input still closes stdin.
+
+For large or ongoing input, pass a stream: any `AsyncIterable<Uint8Array>` (such as a Node `fs.createReadStream`) or a `ReadableStream<Uint8Array>`. It is sent as it arrives while the command runs, with no size limit:
+
+```ts
+import { createReadStream } from "node:fs";
+
+await box.exec({
+  command: { kind: "shell", script: "psql < /dev/stdin" },
+  stdin: createReadStream("dump.sql"),
+});
+```
+
+Streams and input over **1 MiB** need an adapter with incremental process stdin (Daytona, E2B and Vercel). Other adapters reject them before contacting the provider. Streamed input runs on the process transport, so `deadlineSeconds` (default 300) is enforced by the SDK, which requests termination when it passes. If the command exits before the stream ends, the call settles with its result. Output and exit status use the same result format and capture limit as other executions.
 
 An adapter may supply this input through a temporary file rather than a pipe. For ongoing input, use [`processes.start({ command, stdin: "pipe", output: { mode: "stream" } })`](/docs/guides/text-streaming/), then call `write()` and `closeStdin()`. Process stdin defaults to closed. See the complete [finite-input example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/finite-stdin.ts) and [tested provider support](/docs/providers/support/) for provider limits and live test coverage.
 
@@ -227,6 +240,6 @@ An adapter may supply this input through a temporary file rather than a pipe. Fo
 
 A timeout or lost response does not prove that the destination was left unchanged. Keep the error details and check the outcome before retrying.
 
-For buffered `writeFile` and `writeTextFile` calls submitted as operations, an uncertain result can include a recovery reference. Use it with [`recover()`](/docs/guides/recovery/) to inspect the original operation. Buffered writes larger than **1 MiB** use streaming when the adapter supports it, so they follow the streaming error behavior below.
+For buffered `writeFile` and `writeTextFile` calls submitted as operations, an uncertain result can include a recovery reference. Use it with [`recover()`](/docs/guides/recovery/) to inspect the original operation. Buffered writes larger than **1 MiB** (or the adapter's buffered limit) use streaming when the adapter supports it, so they follow the streaming error behavior below.
 
 `writeFileStream` does not return an operation recovery reference. Its `FilesystemError` exposes `effect` and `details`, which can include `source`, `destination`, `temporaryPaths` and `bytesTransferred`. Inspect the destination and only the related temporary files in the original sandbox. An error with `effect: "applied"` means publication was confirmed even if temporary-file cleanup failed.

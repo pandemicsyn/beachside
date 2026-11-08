@@ -4,6 +4,10 @@ Implementation contract · Merged in PR #71 · October 6, 2026
 
 Exact signatures live in the [SDK exports](../packages/sdk/src/index.ts); see the [finite-input example](../apps/docs/examples/finite-stdin.ts) and [files/output guide](../apps/docs/src/content/docs/docs/guides/files-and-output.md). Incremental process input uses the separate [current process IO contract](process-io-dx.md).
 
+## Streamed and large input
+
+`stdin` also accepts an `AsyncIterable<Uint8Array>` or `ReadableStream<Uint8Array>`, and byte or text input over 1 MiB. Those run once on the process transport (`processes.supports.stdin: "bytes"` plus `execCapture: "bytes"`), written in chunks of at most 64 KiB while output is captured with the usual bound. Adapters without incremental stdin reject them as `UNSUPPORTED` before native effects. `deadlineSeconds` (default 300) is enforced locally: when it passes the SDK requests termination and rejects `TIMEOUT` with effect `possible`. A command that exits before the stream ends settles the call; the rest of the stream is not read. Streamed input is never retried or resent, and never enters recovery tokens, diagnostics or telemetry; `submitExec` takes only finite input.
+
 ## Finite input contract
 
 Ordinary `box.exec` accepts an optional finite input payload:
@@ -15,7 +19,7 @@ const result = await box.exec({
 });
 ```
 
-Strings are encoded as UTF-8. `Uint8Array` input is copied from the supplied view and preserves exactly those bytes, including NUL and non-text data. The maximum payload is 1 MiB; validation happens before provider dispatch and before retaining an oversized mutable buffer. Supplying an empty string or byte array still requests input completion. Omitted input also means guest stdin is closed. Every supported adapter delivers the finite bytes and then establishes EOF before it can report confirmed command success. Output remains separate stdout/stderr with the existing capture bound and ordinary exit behavior.
+Strings are encoded as UTF-8. `Uint8Array` input is copied from the supplied view and preserves exactly those bytes, including NUL and non-text data. Finite input up to 1 MiB uses this contract; validation happens before provider dispatch. Supplying an empty string or byte array still requests input completion. Omitted input also means guest stdin is closed. Every supported adapter delivers the finite bytes and then establishes EOF before it can report confirmed command success. Output remains separate stdout/stderr with the existing capture bound and ordinary exit behavior.
 
 This contract does not promise a pipe, seekable file or particular guest descriptor implementation. This finite-exec contract does not define incremental process input or terminal behavior; those use separately implemented process profiles. Applications keep the same `exec` call when changing adapters; provider mechanics and limitations stay in adapter setup/documentation.
 

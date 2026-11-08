@@ -142,34 +142,26 @@ test("finite exec stdin snapshots subarray bytes before dispatch and rejects uns
     expect(submitted).toEqual(original);
     expect(execCalls).toBe(1);
 
-    for (const invalid of [
+    // SAFETY: The test intentionally passes a runtime value excluded from the public type.
+    const invalid = { type: "bytes", value: Uint8Array.of(1) } as never;
+
+    await expect(
+      box.exec({ command: { kind: "argv", argv: ["cat"] }, stdin: invalid, maxOutputBytes: 16 }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+
+    // Streams and input over 1 MiB need incremental process stdin, which this adapter lacks.
+    for (const streamed of [
       new ReadableStream<Uint8Array>(),
-      { type: "bytes", value: Uint8Array.of(1) },
-    ]) {
-      // SAFETY: The test intentionally passes runtime values excluded from the public type.
+      new Uint8Array(1_048_577),
+      "x".repeat(1_048_577),
+    ])
       await expect(
         box.exec({
           command: { kind: "argv", argv: ["cat"] },
-          stdin: invalid as never,
+          stdin: streamed,
           maxOutputBytes: 16,
         }),
-      ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    }
-
-    await expect(
-      box.exec({
-        command: { kind: "argv", argv: ["cat"] },
-        stdin: new Uint8Array(1_048_577),
-        maxOutputBytes: 16,
-      }),
-    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
-    await expect(
-      box.exec({
-        command: { kind: "argv", argv: ["cat"] },
-        stdin: "x".repeat(1_048_577),
-        maxOutputBytes: 16,
-      }),
-    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+      ).rejects.toMatchObject({ code: "UNSUPPORTED", effect: "none" });
 
     expect(execCalls).toBe(1);
   } finally {
@@ -1914,7 +1906,126 @@ test("oversized streamed file returns capacity error despite stalled or rejected
   }
 });
 
-test("file reads enforce the SDK ceiling and reject invalid adapter limits before IO", async () => {
+test("buffered files larger than the adapter limit travel through its streams", async () => {
+  const stored = new Map<string, Uint8Array>();
+  let streamedReads = 0;
+  let streamedWrites = 0;
+
+  const adapter = defineAdapter({
+    name: "example.file-streams",
+    config: z.strictObject({}),
+    credentials: z.strictObject({}),
+    async connect() {
+      return {
+        scope: { authority: { kind: "account", id: "one" }, partition: {} },
+        supports: { images: ["prepared"], network: ["blocked"] },
+        async create() {
+          return { id: "box", state: "running" as const };
+        },
+        async destroy() {
+          return { computeStopped: true, retainedResources: [] };
+        },
+        files: {
+          maxBytes: 1_000,
+          async read(input: { path: string }) {
+            return stored.get(input.path) ?? new Uint8Array();
+          },
+          write: {
+            recovery: { version: 1, token: z.strictObject({}) },
+            async submit() {
+              throw new Error("large writes must stream");
+            },
+            async observe() {
+              return null;
+            },
+          },
+          async readStream(input: { path: string }) {
+            streamedReads++;
+            const bytes = stored.get(input.path)!;
+
+            return new ReadableStream<Uint8Array>({
+              start(controller) {
+                for (let at = 0; at < bytes.length; at += 4_096)
+                  controller.enqueue(bytes.slice(at, at + 4_096));
+                controller.close();
+              },
+            });
+          },
+          async writeStream(input: { path: string; bytes: AsyncIterable<Uint8Array> }) {
+            streamedWrites++;
+            const chunks: Uint8Array[] = [];
+
+            for await (const chunk of input.bytes) chunks.push(chunk);
+            const bytes = new Uint8Array(Buffer.concat(chunks));
+            stored.set(input.path, bytes);
+
+            return { bytesWritten: bytes.length };
+          },
+        },
+      };
+    },
+  });
+
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
+  const box = await client.sandboxes.create({ environment: Image.prepared("image") });
+  const big = new Uint8Array(3_000_000).map((_, index) => index % 251);
+
+  await box.writeFile("/big", big);
+  expect(streamedWrites).toBe(1);
+  expect(await box.readFile("/big")).toEqual(big);
+  expect(streamedReads).toBe(1);
+  await expect(box.readFile("/big", { maxBytes: 2_000_000 })).rejects.toMatchObject({
+    code: "OUTPUT_CAPACITY",
+  });
+  await expect(box.writeFile("/other", big, { maxBytes: 2_000_000 })).rejects.toMatchObject({
+    code: "CAPACITY",
+  });
+  await client.close();
+});
+
+test("writes over the limit of an adapter without file streams name that limit", async () => {
+  const adapter = defineAdapter({
+    name: "example.file-no-streams",
+    config: z.strictObject({}),
+    credentials: z.strictObject({}),
+    async connect() {
+      return {
+        scope: { authority: { kind: "account", id: "one" }, partition: {} },
+        supports: { images: ["prepared"], network: ["blocked"] },
+        async create() {
+          return { id: "box", state: "running" as const };
+        },
+        async destroy() {
+          return { computeStopped: true, retainedResources: [] };
+        },
+        files: {
+          maxBytes: 1_000,
+          write: {
+            recovery: { version: 1, token: z.strictObject({}) },
+            async submit() {
+              throw new Error("must not dispatch");
+            },
+            async observe() {
+              return null;
+            },
+          },
+        },
+      };
+    },
+  });
+
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
+  const box = await client.sandboxes.create({ environment: Image.prepared("image") });
+
+  await expect(box.writeFile("/big", new Uint8Array(1_001))).rejects.toMatchObject({
+    code: "CAPACITY",
+    effect: "none",
+    message: expect.stringContaining("1000-byte file limit"),
+  });
+  await client.close();
+});
+
+test("file reads take the adapter limit as the only default and reject invalid limits before IO", async () => {
   let sequence = 0;
 
   const open = async (maxBytes: number, value: Uint8Array | ReadableStream<Uint8Array>) => {
@@ -1952,15 +2063,26 @@ test("file reads enforce the SDK ceiling and reject invalid adapter limits befor
     return { box, client, reads: () => reads };
   };
 
+  // No default SDK ceiling: a buffered read takes whatever the adapter's own limit allows.
   const over = new Uint8Array(1_048_577);
   const buffered = await open(2_000_000, over);
-  expect((await buffered.client.capabilities()).maxFileBytes).toBe(1_048_576);
-  await expect(buffered.box.readFile("/over")).rejects.toMatchObject({ code: "OUTPUT_CAPACITY" });
-  expect(buffered.reads()).toBe(1);
+  expect((await buffered.client.capabilities()).maxFileBytes).toBe(2_000_000);
+  expect((await buffered.box.readFile("/over")).length).toBe(1_048_577);
+  await expect(buffered.box.readFile("/over", { maxBytes: 1_048_576 })).rejects.toMatchObject({
+    code: "OUTPUT_CAPACITY",
+  });
   await buffered.client.close();
 
+  const beyond = await open(1_000_000, over);
+  await expect(beyond.box.readFile("/over")).rejects.toMatchObject({
+    code: "OUTPUT_CAPACITY",
+    message: expect.stringContaining("no file streams"),
+  });
+  expect(beyond.reads()).toBe(1);
+  await beyond.client.close();
+
   const streamed = await open(
-    2_000_000,
+    1_000_000,
     new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(over);
