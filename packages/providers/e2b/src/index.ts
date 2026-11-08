@@ -2091,7 +2091,16 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             await requireRunning(attempt.sandbox.id, attempt.sandbox.reference);
             const paths = executionPaths(attempt.submissionId);
 
-            return readExecution(attempt.sandbox.id, paths, token.data.maxOutputBytes);
+            const result = await readExecution(
+              attempt.sandbox.id,
+              paths,
+              token.data.maxOutputBytes,
+            );
+
+            // A recovered outcome no longer needs its capture files.
+            if (result) await cleanup(attempt.sandbox.id, paths);
+
+            return result;
           },
         },
         files: {
@@ -2242,6 +2251,9 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
                     failure,
                   ),
                 );
+
+              // The confirmed link keeps the bytes; the stage name is only scaffolding.
+              if (staged) await transport.remove(attempt.sandbox.id, staged).catch(() => {});
 
               return { bytesWritten };
             },

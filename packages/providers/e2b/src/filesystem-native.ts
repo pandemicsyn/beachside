@@ -68,6 +68,7 @@ try:
  elif op=='copy':
   regular(p)
   if os.path.lexists(q) and not stat.S_ISREG(os.lstat(q).st_mode): raise OSError(errno.EINVAL,'regular destination required')
+  os.makedirs(os.path.dirname(stage) or '/',exist_ok=True)
   fd=os.open(stage,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);created=True
   try:
    src=os.open(p,os.O_RDONLY|os.O_NOFOLLOW)

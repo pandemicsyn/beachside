@@ -8,6 +8,7 @@ const { spawnSync } = require('node:child_process');
 const { op, path: p, destination: q, flag, stage } = JSON.parse(process.argv[1]);
 let applied = false, uncertain = false, stageOwned = false;
 const kind = s => s.isSymbolicLink() ? 'symlink' : s.isFile() ? 'file' : s.isDirectory() ? 'directory' : 'unknown';
+const parents = p => fs.mkdirSync(require('node:path').posix.dirname(p),{recursive:true});
 const regular = p => { if (!fs.lstatSync(p).isFile()) throw Object.assign(new Error(), {code:'EINVAL'}); };
 const publish = (a,b) => {
   try { regular(b); } catch(e) { if(e.code !== 'ENOENT') throw e; }
@@ -38,7 +39,7 @@ try {
      else fs.unlinkSync(p);
    } catch(e) { if(e.code !== 'ENOENT') throw e; }
  } else if(op === 'reserve') {
-   fs.closeSync(fs.openSync(p,'wx',0o600));
+   parents(p); fs.closeSync(fs.openSync(p,'wx',0o600));
  } else if(op === 'publish') {
    regular(p); publish(p,q);
  } else if(op === 'append') {
@@ -55,7 +56,7 @@ try {
    let dst;
    try {
      if(!fs.fstatSync(src).isFile()) throw Object.assign(new Error(), {code:'EINVAL'});
-     dst=fs.openSync(stage,'wx',0o600); stageOwned=true;
+     parents(stage); dst=fs.openSync(stage,'wx',0o600); stageOwned=true;
      const b=Buffer.alloc(65536);
      for(let n;(n=fs.readSync(src,b));) { let offset=0; while(offset<n) offset+=fs.writeSync(dst,b,offset,n-offset); }
      fs.closeSync(dst);dst=undefined;

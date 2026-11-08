@@ -57,7 +57,7 @@ def run():
    else: os.rmdir(p)
   else: os.unlink(p)
   return True
- if op=='reserve': os.mkdir(p,0o700); return p
+ if op=='reserve': os.makedirs(os.path.dirname(p),exist_ok=True); os.mkdir(p,0o700); return p
  if op=='cleanup':
   try: os.unlink(p+'/payload')
   except FileNotFoundError: pass
@@ -71,7 +71,7 @@ def run():
   if op=='move': rename(a,b,x['overwrite']); return True
   if not stat.S_ISREG(os.lstat(a).st_mode): raise OSError(errno.EINVAL,'regular source required')
   if os.path.lexists(b) and not stat.S_ISREG(os.lstat(b).st_mode): raise OSError(errno.EINVAL,'regular destination required')
-  d=x['stagingDirectory']; os.mkdir(d,0o700); stage=d+'/payload'; stage_directory=d
+  d=x['stagingDirectory']; os.makedirs(os.path.dirname(d),exist_ok=True); os.mkdir(d,0o700); stage=d+'/payload'; stage_directory=d
   try:
    fd=os.open(a,os.O_RDONLY|os.O_NOFOLLOW)
    with os.fdopen(fd,'rb') as source, open(stage,'xb') as dest:
