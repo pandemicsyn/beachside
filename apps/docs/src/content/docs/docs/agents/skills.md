@@ -23,9 +23,20 @@ npx skills add pandemicsyn/beachside --skill add-provider
 
 `-g` installs the skill for your user. Leave it out to install into the current project instead, so everyone working in the repository gets it; that suits `add-provider`, which belongs in the adapter's repository.
 
-The CLI also carries its own copy of `beachside-cli`, matching its version. `beachside skill install` writes it to `~/.agents/skills` (and `~/.claude/skills` when Claude Code is set up), and `beachside skill install --project` writes it into the current folder. `beachside skill` prints it.
+The CLI also carries its own copy of the `beachside-cli` guide, matching its version. `beachside skill setup` installs a short skill that tells the agent to read that guide with `beachside skill`, so upgrading the CLI updates what your agents are told without rerunning setup:
+
+```sh
+beachside skill setup            # for you, in every project
+beachside skill setup --project  # for this repository only
+beachside skill status           # where it is installed, and whether it is current
+beachside skill remove           # remove what setup installed
+```
+
+Setup writes `.agents/skills/beachside-cli/`, which Codex, OpenCode, Pi and most other agents read, and `.claude/skills/beachside-cli/` when Claude Code is set up (it honors `CLAUDE_CONFIG_DIR`). `--agent claude|codex|opencode|pi` picks agents yourself, and `--dry-run` reports what would change. Setup and remove never touch a `beachside-cli` skill installed another way, such as with `npx skills add`; `setup --force` replaces it.
 
 For an agent without a skill system, copy the `SKILL.md` contents into its project or user instructions.
+
+Agents can also read these docs as Markdown. [`/llms.txt`](https://beachside.run/llms.txt) lists every page, and each page is at its address with `.md` in place of the trailing slash, such as `https://beachside.run/docs/agents/skills.md`.
 
 ## What the skills do not do
 

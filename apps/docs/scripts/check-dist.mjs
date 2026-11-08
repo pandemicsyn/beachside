@@ -4,7 +4,15 @@ import { join } from "node:path";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 
-for (const relative of ["index.html", "docs/index.html", "404.html", "pagefind/pagefind.js"]) {
+for (const relative of [
+  "index.html",
+  "docs/index.html",
+  "404.html",
+  "pagefind/pagefind.js",
+  "llms.txt",
+  "docs.md",
+  "docs/guides/recovery.md",
+]) {
   await stat(dist + relative).catch(() => {
     throw new Error(`Missing static output: ${relative}`);
   });

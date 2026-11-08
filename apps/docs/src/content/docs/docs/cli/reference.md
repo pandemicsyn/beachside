@@ -424,22 +424,27 @@ beachside providers --json
 
 ## skill
 
-Print the agent skill for this CLI, or install it for your coding agents.
+Print the agent skill for this CLI, or set it up for your coding agents.
 
 ```sh
-beachside skill [install [--project]]
+beachside skill [show | setup | status | remove] [--agent <name>]... [--project]
 ```
 
-| Flag        | Description                                                                         |
-| ----------- | ----------------------------------------------------------------------------------- |
-| `--project` | Install into this folder's .agents/skills (and .claude/skills) instead of your home |
+| Flag             | Description                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| `--agent <name>` | Only this agent: claude, codex, opencode or pi (repeatable; default: detected agents) |
+| `--project`      | Use this folder's .agents/skills (and .claude/skills) instead of your home            |
+| `--dry-run`      | Report what setup or remove would change without changing anything                    |
+| `--force`        | Let setup replace a beachside-cli skill that beachside did not install                |
 
 Examples:
 
 ```sh
 beachside skill
-beachside skill install
-beachside skill install --project
+beachside skill setup
+beachside skill setup --project --dry-run
+beachside skill status --json
+beachside skill remove --agent claude
 ```
 
 ## completion

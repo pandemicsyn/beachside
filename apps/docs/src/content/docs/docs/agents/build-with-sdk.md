@@ -19,8 +19,8 @@ Read these docs first:
 - https://github.com/pandemicsyn/beachside/blob/main/examples/README.md
 
 Inspect the project and installed package versions before changing code.
-Install "beachside" and the selected adapter package from npm. Do not
-substitute the unrelated npm package named "beachside".
+Install "beachside" and the selected adapter package from npm at matching
+versions, never a 0.0.0 placeholder.
 
 Use Beachside and Image from "beachside", and the adapter definition from
 the selected package: e2bAdapter from "@beachside/e2b", daytonaAdapter from

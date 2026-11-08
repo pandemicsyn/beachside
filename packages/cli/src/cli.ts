@@ -511,18 +511,38 @@ export const commands: readonly CommandSpec[] = [
   },
   {
     name: "skill",
-    summary: "Print the agent skill for this CLI, or install it for your coding agents",
-    usage: "beachside skill [install [--project]]",
+    summary: "Print the agent skill for this CLI, or set it up for your coding agents",
+    usage: "beachside skill [show | setup | status | remove] [--agent <name>]... [--project]",
     flags: {
+      agent: {
+        type: "string",
+        multiple: true,
+        value: "name",
+        description:
+          "Only this agent: claude, codex, opencode or pi (repeatable; default: detected agents)",
+      },
       project: {
         type: "boolean",
-        description:
-          "Install into this folder's .agents/skills (and .claude/skills) instead of your home",
+        description: "Use this folder's .agents/skills (and .claude/skills) instead of your home",
+      },
+      "dry-run": {
+        type: "boolean",
+        description: "Report what setup or remove would change without changing anything",
+      },
+      force: {
+        type: "boolean",
+        description: "Let setup replace a beachside-cli skill that beachside did not install",
       },
     },
     passthrough: false,
     remoteExit: false,
-    examples: ["beachside skill", "beachside skill install", "beachside skill install --project"],
+    examples: [
+      "beachside skill",
+      "beachside skill setup",
+      "beachside skill setup --project --dry-run",
+      "beachside skill status --json",
+      "beachside skill remove --agent claude",
+    ],
     run: skillCommand,
   },
   {
