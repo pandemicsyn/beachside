@@ -298,6 +298,21 @@ async function liveCount(store: StateStore): Promise<number> {
   return (await listAll(store, "sandbox")).length;
 }
 
+/**
+ * The OCI image a profile's `config.environment` names. It follows the same build rule as
+ * `--image`; passed through raw, an adapter that must build it would start an unrecorded build on
+ * every create.
+ */
+const ProfileImage = z.looseObject({
+  environment: z.looseObject({ kind: z.literal("oci"), value: z.string().min(1) }),
+});
+
+function profileImage(profile: ResolvedProfile): string | undefined {
+  const parsed = ProfileImage.safeParse(profile.config);
+
+  return parsed.success ? parsed.data.environment.value : undefined;
+}
+
 /** Shared by create and run: claim the name, create, then record the reference. */
 /** A restore runs on the profile that captured the snapshot; a different explicit one is a mistake. */
 async function restoreProfile(session: Session, source: SnapshotRecord): Promise<ResolvedProfile> {
@@ -361,6 +376,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
   const store = await session.store();
   const source = request.snapshot ? await snapshotSource(session, request.snapshot) : null;
   const profile = source ? await restoreProfile(session, source) : await session.profile();
+  const image = request.image ?? (source || request.prepared ? undefined : profileImage(profile));
 
   if (request.name && request.ifNotExists) {
     const current = await store.get("sandbox", checkName(request.name));
@@ -398,7 +414,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
       provider: profile.provider,
       createdAt: new Date().toISOString(),
       labels: request.labels,
-      image: source ? `snapshot:${source.name}` : (request.image ?? request.prepared),
+      image: source ? `snapshot:${source.name}` : (image ?? request.prepared),
       reference: null,
     },
     request.name,
@@ -411,14 +427,8 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
   try {
     client = await session.connect(profile);
 
-    if (request.image)
-      input.environment = await imageEnvironment(
-        session,
-        client,
-        profile,
-        request.image,
-        request.build,
-      );
+    if (image)
+      input.environment = await imageEnvironment(session, client, profile, image, request.build);
 
     if (input.environment) {
       const plan = await client.sandboxes.checkCreate(input);
@@ -427,7 +437,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
         throw new CliError(
           "UNSUPPORTED",
           `${profile.provider} cannot create this sandbox: ${plan.reason}`,
-          request.image ? "use --prepared with a provider image instead" : undefined,
+          image ? "use --prepared with a provider image instead" : undefined,
         );
     }
   } catch (cause) {

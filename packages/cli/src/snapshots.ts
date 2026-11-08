@@ -5,6 +5,7 @@ import {
   BeachsideError,
   type BeachsideClient,
   type CreateInput,
+  type RecoveryReference,
   type SandboxHandle,
   type SnapshotInfo,
   type SnapshotResult,
@@ -32,6 +33,37 @@ const CaptureResult = z.looseObject({
 });
 
 const DeleteResult = z.looseObject({ deleted: z.literal(true) });
+
+/**
+ * The recovery reference of a capture whose snapshot exists but whose source restart was never
+ * sent. Daytona leaves a capture this way when it outlives the adapter's own wait; only an
+ * explicit continuation sends the restart.
+ */
+function awaitingRestart(cause: unknown): RecoveryReference | null {
+  if (!(cause instanceof BeachsideError) || !cause.reference) return null;
+
+  const { outcome } = cause;
+
+  return outcome?.kind === "snapshot_capture" && outcome.restart?.status === "not-submitted"
+    ? cause.reference
+    : null;
+}
+
+/** Send the pending restart of such a capture once, then wait for the capture's result. */
+async function continueCapture(
+  session: Session,
+  client: BeachsideClient<true>,
+  reference: RecoveryReference,
+): Promise<SnapshotResult> {
+  const handle = await client.recover(reference);
+
+  if (handle.kind !== "snapshot_capture")
+    throw new Error(`Recovered ${handle.kind}, not a capture`);
+  session.ctx.out.note("the snapshot is ready; restarting the source sandbox");
+  await handle.continue({ signal: session.ctx.signal });
+
+  return handle.wait({ signal: session.ctx.signal });
+}
 
 async function findSnapshot(store: StateStore, name: string): Promise<Entry> {
   const found = await store.get("snapshot", checkName(name));
@@ -100,8 +132,17 @@ async function recoverCapture(session: Session, store: StateStore, entry: Entry)
   try {
     value = await (await client.recover(record.recovery)).observe();
   } catch (cause) {
-    if (cause instanceof BeachsideError && cause.effect !== "none") return entry;
-    throw cause;
+    const pending = awaitingRestart(cause);
+
+    if (pending)
+      try {
+        value = await continueCapture(session, client, pending);
+      } catch (continued) {
+        if (continued instanceof BeachsideError && continued.effect !== "none") return entry;
+        throw continued;
+      }
+    else if (cause instanceof BeachsideError && cause.effect !== "none") return entry;
+    else throw cause;
   }
 
   const parsed = CaptureResult.safeParse(value);
@@ -217,7 +258,14 @@ async function createCommand(session: Session, flags: Flags, args: readonly stri
   let result: SnapshotResult;
 
   try {
-    result = await box.snapshot({}, { signal: session.ctx.signal });
+    try {
+      result = await box.snapshot({}, { signal: session.ctx.signal });
+    } catch (cause) {
+      const pending = awaitingRestart(cause);
+
+      if (!pending) throw cause;
+      result = await continueCapture(session, client, pending);
+    }
   } catch (cause) {
     const report = describeError(cause);
 
