@@ -203,7 +203,9 @@ export async function waitHealthy(
     ready.throwIfAborted();
 
     try {
-      const response = await request(new URL("/global/health", url), {
+      // OpenCode 2's web UI answers any other path with HTML, so probe the API, which
+      // checks the password.
+      const response = await request(new URL("/api/config", url), {
         headers: { ...headers, authorization: basicAuth(password) },
         redirect: "error",
         signal: ready,
@@ -211,7 +213,7 @@ export async function waitHealthy(
 
       await response.body?.cancel();
 
-      if (response.ok) return;
+      if (response.ok && response.headers.get("content-type")?.includes("application/json")) return;
     } catch (error) {
       if (ready.aborted) throw error;
     }
@@ -260,6 +262,8 @@ export function previewProxy(target: string, headers: Record<string, string>) {
         headers: forwarded,
         body: request.body,
         redirect: "error",
+        // Pass encoded bodies through untouched; the client decodes them once.
+        decompress: false,
       }).catch(() => new Response("Box unreachable or redirected", { status: 502 }));
     },
     websocket: {

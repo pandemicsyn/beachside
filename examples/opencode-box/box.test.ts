@@ -230,17 +230,23 @@ test("health checks send preview headers and basic auth and refuse redirects", a
     // SAFETY: the test double implements the fetch call signature waitHealthy uses.
     (async (url: URL, init: RequestInit) => {
       seen.push(init);
-      expect(String(url)).toBe("https://box.example/global/health");
+      expect(String(url)).toBe("https://box.example/api/config");
       attempts += 1;
 
       if (attempts === 1) throw new Error("not listening yet");
 
-      return new Response("{}");
+      // The web UI's catch-all page is not readiness.
+      if (attempts === 2)
+        return new Response("<html></html>", { headers: { "content-type": "text/html" } });
+
+      if (attempts === 3) return new Response("unauthorized", { status: 401 });
+
+      return Response.json([]);
     }) as typeof fetch,
   );
 
-  expect(attempts).toBe(2);
-  expect(seen[1]).toMatchObject({
+  expect(attempts).toBe(4);
+  expect(seen[3]).toMatchObject({
     redirect: "error",
     headers: { "x-preview-token": "t", authorization: basicAuth("pw") },
   });
@@ -261,6 +267,11 @@ test("the preview proxy adds preview headers to HTTP and WebSocket traffic", asy
           : new Response("no", { status: 400 });
 
       if (url.pathname === "/redirect") return Response.redirect("https://elsewhere.example/", 302);
+
+      if (url.pathname === "/compressed")
+        return new Response(Bun.gzipSync(new TextEncoder().encode("compressed body")), {
+          headers: { "content-encoding": "gzip", "content-type": "text/plain" },
+        });
 
       return Response.json({ path: url.pathname + url.search, token, auth });
     },
@@ -288,6 +299,11 @@ test("the preview proxy adds preview headers to HTTP and WebSocket traffic", asy
     });
 
     expect(redirected.status).toBe(502);
+
+    // Decoded once by the client, not also by the proxy.
+    const compressed = await fetch(`http://127.0.0.1:${proxy.port}/compressed`);
+
+    expect(await compressed.text()).toBe("compressed body");
 
     // SAFETY: Bun's WebSocket client accepts { headers }; the DOM type omits it.
     const Socket = WebSocket as typeof WebSocket &
