@@ -129,45 +129,97 @@ function utf8Bytes(text: string): number {
   return new TextEncoder().encode(text).byteLength;
 }
 
-/** Input that must travel incrementally as byte chunks, or undefined for finite input. */
-export function streamedStdin(stdin: ExecInput["stdin"]): AsyncIterable<Uint8Array> | undefined {
+/**
+ * Input that must travel incrementally, read one chunk at a time. `cancel` stops the source when
+ * the command no longer needs it, releasing a web stream's reader even while a read is pending.
+ */
+export type StdinSource = { next(): Promise<Uint8Array | null>; cancel(): void };
+
+/** The streamed source for `stdin`, or undefined for finite input that fits the bound. */
+export function streamedStdin(stdin: ExecInput["stdin"]): StdinSource | undefined {
   if (stdin === undefined || !stdinNeedsStream(stdin)) return undefined;
 
-  if (isStdinStream(stdin)) return stdinChunks(stdin);
+  if (stdin instanceof ReadableStream) return readableSource(stdin);
 
-  const bytes =
+  if (isStdinStream(stdin)) return iterableSource(stdin);
+
+  let bytes: Uint8Array | null =
     stdin instanceof Uint8Array ? Uint8Array.from(stdin) : new TextEncoder().encode(stdin);
 
-  return (async function* () {
-    yield bytes;
-  })();
+  return {
+    async next() {
+      const chunk = bytes;
+      bytes = null;
+
+      return chunk;
+    },
+    cancel() {
+      bytes = null;
+    },
+  };
 }
 
-async function* stdinChunks(stream: ExecStdinStream): AsyncIterable<Uint8Array> {
-  const source: AsyncIterable<unknown> =
-    stream instanceof ReadableStream ? readableChunks(stream) : stream;
+/** Callers' stream chunks are checked at runtime, since JavaScript can pass anything. */
+function stdinChunk(value: Uint8Array): Uint8Array {
+  // SAFETY: Widened only for the runtime check; untyped callers may yield non-byte chunks.
+  if (!((value as object) instanceof Uint8Array))
+    throw new BeachsideError("INVALID_ARGUMENT", "Expected stdin stream byte chunks");
 
-  for await (const chunk of source) {
-    if (!(chunk instanceof Uint8Array))
-      throw new BeachsideError("INVALID_ARGUMENT", "Expected stdin stream byte chunks");
-    yield chunk;
-  }
+  return value;
 }
 
-async function* readableChunks(stream: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
-  const reader = stream.getReader();
+function readableSource(stream: ReadableStream<Uint8Array>): StdinSource {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let cancelled = false;
 
-  try {
-    for (;;) {
+  return {
+    async next() {
+      if (cancelled) return null;
+      reader ??= stream.getReader();
       const part = await reader.read();
 
-      if (part.done) return;
-      yield part.value;
-    }
-  } finally {
-    void reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
+      return part.done ? null : stdinChunk(part.value);
+    },
+    cancel() {
+      if (cancelled) return;
+      cancelled = true;
+
+      if (!reader) {
+        void stream.cancel().catch(() => undefined);
+
+        return;
+      }
+
+      // Cancelling settles a pending read, after which the lock can be released.
+      const owned = reader;
+      void owned
+        .cancel()
+        .catch(() => undefined)
+        .finally(() => owned.releaseLock());
+    },
+  };
+}
+
+function iterableSource(iterable: AsyncIterable<Uint8Array>): StdinSource {
+  const iterator = iterable[Symbol.asyncIterator]();
+  let cancelled = false;
+
+  return {
+    async next() {
+      if (cancelled) return null;
+      const part = await iterator.next();
+
+      return part.done ? null : stdinChunk(part.value);
+    },
+    cancel() {
+      if (cancelled) return;
+      cancelled = true;
+      // An iterator's return() runs its cleanup (closing a file or socket) once it can.
+      void Promise.resolve()
+        .then(() => iterator.return?.())
+        .catch(() => undefined);
+    },
+  };
 }
 
 export type ValidatedExecInput = Required<

@@ -103,22 +103,30 @@ export const scripts = {
   stage(): string {
     return ["set -e", makeTemp, 'echo "$tmp"'].join("\n");
   },
-  /** Join staged parts into the file at `path`, remove the staging folder, and print `path`. */
+  /**
+   * Join staged parts into the file at `path`, remove the staging folder, and print `path`. The
+   * file is assembled beside the destination and published in one step: `mv` to replace, or a
+   * hard link when `overwrite` is false, which fails atomically if the destination appeared.
+   */
   join(tmp: string, path: string, overwrite: boolean): string {
     const dest = shellQuote(path);
+    const dir = shellQuote(posix.dirname(path));
 
     return [
       "set -e",
       `tmp=${shellQuote(tmp)}`,
-      `trap 'rm -rf "$tmp"' EXIT`,
-      `if [ -d ${dest} ]; then echo "${path} is a directory" >&2; exit 1; fi`,
+      'part=""',
+      `trap 'rm -rf "$tmp"; [ -z "$part" ] || rm -f "$part"' EXIT`,
+      `if [ -d ${dest} ]; then echo "the destination is a directory" >&2; exit 1; fi`,
+      `part=$(mktemp ${dir}/.beachside.XXXXXX)`,
+      `cat "$tmp"/part.* > "$part"`,
+      // mktemp makes the file private; give it the mode a new file would get.
+      `chmod "$(printf '%o' $((0666 & ~0$(umask))))" "$part"`,
       ...(overwrite
-        ? []
+        ? [`mv -f "$part" ${dest}`, 'part=""']
         : [
-            `if [ -e ${dest} ] || [ -L ${dest} ]; then echo "${path} already exists" >&2; exit ${Exists}; fi`,
+            `if ! ln "$part" ${dest} 2>/dev/null; then if [ -e ${dest} ] || [ -L ${dest} ]; then echo "the destination already exists" >&2; exit ${Exists}; fi; echo "could not publish the file" >&2; exit 1; fi`,
           ]),
-      `cat "$tmp"/part.* > "$tmp/joined"`,
-      `mv -f "$tmp/joined" ${dest}`,
       `echo ${dest}`,
     ].join("\n");
   },

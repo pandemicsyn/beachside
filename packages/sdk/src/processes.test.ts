@@ -1163,6 +1163,74 @@ test("streamed exec stdin settles on exit even if the stream never ends", async 
   await f.client.close();
 });
 
+test("streamed exec stdin cancels a web stream the command no longer reads", async () => {
+  const f = await fixture({ interactive: true, capture: true });
+  let cancelled = 0;
+
+  const stdin = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(Uint8Array.of(1));
+    },
+    cancel() {
+      cancelled++;
+    },
+  });
+
+  const running = f.box.exec({ ...input, stdin });
+  await Bun.sleep(0);
+  f.capture.resolve({
+    exitCode: 0,
+    stdout: new Uint8Array(),
+    stderr: new Uint8Array(),
+    truncated: false,
+  });
+  f.exit.resolve({ exitCode: 0 });
+  f.outputEnd.resolve();
+  expect((await running).exitCode).toBe(0);
+  await Bun.sleep(0);
+  expect(cancelled).toBe(1);
+  expect(stdin.locked).toBe(false);
+  await f.client.close();
+});
+
+test("streamed exec stdin returns an async iterator the command no longer reads", async () => {
+  const f = await fixture({ interactive: true, capture: true });
+  let returned = 0;
+  let pulls = 0;
+
+  const stdin: AsyncIterable<Uint8Array> = {
+    [Symbol.asyncIterator]: () => ({
+      next: async () => {
+        pulls++;
+
+        return pulls === 1
+          ? { done: false, value: Uint8Array.of(1) }
+          : new Promise<IteratorResult<Uint8Array>>(() => {});
+      },
+      return: async () => {
+        returned++;
+
+        return { done: true, value: undefined };
+      },
+    }),
+  };
+
+  const running = f.box.exec({ ...input, stdin });
+  await Bun.sleep(0);
+  f.capture.resolve({
+    exitCode: 0,
+    stdout: new Uint8Array(),
+    stderr: new Uint8Array(),
+    truncated: false,
+  });
+  f.exit.resolve({ exitCode: 0 });
+  f.outputEnd.resolve();
+  expect((await running).exitCode).toBe(0);
+  await Bun.sleep(0);
+  expect(returned).toBe(1);
+  await f.client.close();
+});
+
 test("streamed exec stdin enforces deadlineSeconds locally and requests termination", async () => {
   const f = await fixture({ interactive: true, capture: true });
   let terminated = 0;

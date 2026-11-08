@@ -2,7 +2,12 @@ import { createReadStream, createWriteStream } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { AdapterFilesystemError, bindAdapter, defineAdapter } from "@beachside/adapter";
+import {
+  AdapterError,
+  AdapterFilesystemError,
+  bindAdapter,
+  defineAdapter,
+} from "@beachside/adapter";
 import { AdapterImage } from "beachside";
 import { createFakeAdapter } from "@beachside-internal/provider-fake";
 import { z } from "zod";
@@ -291,6 +296,11 @@ export const fileStreaming = bindAdapter(
 
 const stdinLog = process.env.BEACHSIDE_FAKE_STDIN;
 
+/** With BEACHSIDE_FAKE_STDIN_FAIL_AFTER, writes past that many bytes fail like a dropped link. */
+const failAfter = process.env.BEACHSIDE_FAKE_STDIN_FAIL_AFTER
+  ? Number(process.env.BEACHSIDE_FAKE_STDIN_FAIL_AFTER)
+  : undefined;
+
 /**
  * Streams output and takes incremental stdin, like Daytona, E2B or Vercel. Each command appends
  * its input to BEACHSIDE_FAKE_STDIN and exits once its stdin is closed; a buffered exec captures
@@ -347,10 +357,16 @@ export const stdinStreaming = bindAdapter(
                 truncated: false,
               })),
               detachOutput: () => native.detachOutput!(),
-              terminate: (context: Parameters<NonNullable<typeof native.terminate>>[0]) =>
-                native.terminate!(context),
+              async terminate(context: Parameters<NonNullable<typeof native.terminate>>[0]) {
+                closed = true;
+                open();
+
+                return native.terminate!(context);
+              },
               detach: () => native.detach(),
               async write(bytes: Uint8Array) {
+                if (failAfter !== undefined && received + bytes.byteLength > failAfter)
+                  throw new AdapterError("UNAVAILABLE", "Fake stdin transport dropped");
                 received += bytes.byteLength;
 
                 if (stdinLog) await appendFile(stdinLog, bytes);

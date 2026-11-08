@@ -1294,20 +1294,58 @@ function stdinCapacity(): CliError {
   );
 }
 
+/** Reading the command's input failed locally, so the input is incomplete whatever the process does. */
+class InputReadError extends Error {}
+
 /** Send `source` to the process as it arrives, in writes the SDK accepts, then close stdin. */
 async function feedStdin(
   running: StreamHandle,
   source: () => AsyncIterable<Uint8Array>,
   signal: AbortSignal,
 ): Promise<void> {
-  for await (const chunk of source()) {
+  const iterator = source()[Symbol.asyncIterator]();
+
+  for (;;) {
+    let next: IteratorResult<Uint8Array>;
+
+    try {
+      next = await iterator.next();
+    } catch (cause) {
+      throw new InputReadError(cause instanceof Error ? cause.message : String(cause));
+    }
+
+    if (next.done) break;
     signal.throwIfAborted();
 
-    for (let at = 0; at < chunk.byteLength; at += processWriteBytes)
-      await running.write(chunk.subarray(at, at + processWriteBytes), { signal });
+    for (let at = 0; at < next.value.byteLength; at += processWriteBytes)
+      await running.write(next.value.subarray(at, at + processWriteBytes), { signal });
   }
 
   await running.closeStdin({ signal });
+}
+
+/**
+ * Decide whether a failed input delivery fails the command. A process that already exited simply
+ * stopped reading; otherwise the input is incomplete, so the process is stopped and the error
+ * returned rather than letting it finish on truncated input.
+ */
+async function inputFailure(
+  running: StreamHandle,
+  cause: unknown,
+  signal: AbortSignal,
+): Promise<Error | undefined> {
+  if (!(cause instanceof InputReadError)) {
+    const state = await running
+      .status({ signal })
+      .then((status) => status.state)
+      .catch(() => "unknown");
+
+    if (state === "exited") return undefined;
+  }
+
+  await running.terminate({ signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
+
+  return cause instanceof Error ? cause : new Error(String(cause));
 }
 
 /** The largest single process write the SDK accepts. */
@@ -1347,15 +1385,13 @@ async function streamExec(
   // Input flows while output streams, and the command may exit before its input ends.
   const feeding = new AbortController();
   let exited = false;
+  let failing: Promise<Error | undefined> | undefined;
 
   if (input.stdin)
     void feedStdin(running, input.stdin, AbortSignal.any([stop, feeding.signal])).catch(
       (cause: unknown) => {
         if (exited || stop.aborted) return;
-        out.note(
-          `beachside: stopped sending stdin: ${cause instanceof Error ? cause.message : String(cause)}`,
-        );
-        void running.closeStdin({ signal: stop }).catch(() => undefined);
+        failing = inputFailure(running, cause, stop);
       },
     );
 
@@ -1366,6 +1402,16 @@ async function streamExec(
     });
 
     await drained(running, pumped, exit, out);
+    const failed = await failing;
+
+    if (failed)
+      throw new CliError(
+        "STDIN_FAILED",
+        `Sending stdin failed: ${failed.message}; the command was stopped`,
+        "the command did not receive all of its input; fix the cause and run it again",
+        undefined,
+        "unknown",
+      );
 
     return { streamed: true, exitCode: exit.exitCode };
   } catch (cause) {

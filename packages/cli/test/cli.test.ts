@@ -2529,6 +2529,24 @@ describe("large files and input", () => {
     expect((await readFile(log, "utf8")).length).toBe(3_000_000);
   });
 
+  test("exec --stdin fails and stops the command when its input cannot be delivered", async () => {
+    await writeConfig({
+      default: "stdin",
+      profiles: { stdin: { module: fixture, export: "stdinStreaming" } },
+    });
+    await cli(["create", "--name", "box", "--prepared", "fake-starter"]);
+    await seedExec(["wc", "-c"], 0, "");
+
+    const failed = await cli(
+      ["exec", "box", "--stdin", "--", "wc", "-c"],
+      { BEACHSIDE_FAKE_STDIN_FAIL_AFTER: "100000" },
+      "x".repeat(500_000),
+    );
+
+    expect(failed.code).toBe(125);
+    expect(failed.stderr).toContain("Sending stdin failed");
+  });
+
   test("exec --stdin --json sends input over 1 MiB through the SDK's streamed stdin", async () => {
     await writeConfig({
       default: "stdin",

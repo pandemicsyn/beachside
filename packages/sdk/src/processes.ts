@@ -1597,14 +1597,28 @@ export async function callbackExec(
     streamed ??
     (request.stdin === undefined
       ? undefined
-      : (async function* () {
-          yield request.stdin!;
+      : (() => {
+          let bytes: Uint8Array | null = request.stdin!;
+
+          return {
+            async next() {
+              const chunk = bytes;
+              bytes = null;
+
+              return chunk;
+            },
+            cancel() {
+              bytes = null;
+            },
+          };
         })());
+
+  let delivered = false;
 
   const delivery = (async () => {
     if (source === undefined) return;
 
-    for await (const chunk of source)
+    for (let chunk = await source.next(); chunk; chunk = await source.next())
       for (let offset = 0; offset < chunk.length; offset += 65_536) {
         if (signal.aborted) throw signal.reason;
 
@@ -1614,6 +1628,7 @@ export async function callbackExec(
       }
 
     if (signal.aborted) throw signal.reason;
+    delivered = true;
     await process.closeStdin({ signal });
   })().then(
     () => undefined,
@@ -1694,6 +1709,9 @@ export async function callbackExec(
     throw context;
   } finally {
     clearTimeout(deadline);
+
+    // Stop reading input the command no longer takes, releasing the caller's stream.
+    if (!delivered) source?.cancel();
     await process.detach();
   }
 }
