@@ -1484,7 +1484,7 @@ test("uncertain writes and destroy reconcile after reconnect without replay", as
 
     expect(writes).toBe(2);
     expect(links).toBe(1);
-    expect(files.has("/tmp/.beachside-write-sub_no")).toBe(true);
+    expect(files.has("/tmp/.beachside-write-sub_no")).toBe(false);
 
     const identity = {
       operationId: "op_destroy",

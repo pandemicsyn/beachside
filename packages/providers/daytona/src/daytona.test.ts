@@ -38,6 +38,12 @@ function fixtureFetch(
   );
 }
 
+/** Recognizes the follow-up that drops a recovery receipt once its outcome was delivered. */
+const receiptCleanup = (init?: RequestInit) =>
+  /^rm -rf -- '\/tmp\/\.beachside-(?:exec|write)-[0-9a-f]{64}'$/.test(
+    z.object({ command: z.string() }).parse(JSON.parse(String(init?.body))).command,
+  );
+
 const apiUrl = "https://app.daytona.io/api";
 
 const toolboxOrigin = "https://proxy.app.daytona.io";
@@ -503,6 +509,7 @@ test("verified direct scope, read-only preparation, one create, exact binary exe
     if (url.pathname === "/api/sandbox/native-1") return json(native(createdName));
 
     if (url.pathname.endsWith("/process/execute")) {
+      if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -585,7 +592,8 @@ test("verified direct scope, read-only preparation, one create, exact binary exe
   await sandbox.destroy();
   expect(calls.filter((value) => value === "POST /api/sandbox")).toHaveLength(1);
   expect(snapshotReads).toBe(1);
-  expect(calls.filter((value) => value.endsWith("/process/execute"))).toHaveLength(3);
+  // Reservation, exec and commit, plus one receipt cleanup each after exec and write complete.
+  expect(calls.filter((value) => value.endsWith("/process/execute"))).toHaveLength(5);
   expect(calls.filter((value) => value.endsWith("/files/upload-v2"))).toHaveLength(1);
   await client.close();
 });
@@ -1455,6 +1463,7 @@ test.each(["absent", "file", "directory", "symlink", "missing-exit"] as const)(
       }
 
       if (url.pathname.endsWith("/process/execute")) {
+        if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
         const command = z
           .object({ command: z.string() })
           .parse(JSON.parse(String(init?.body))).command;
@@ -1556,6 +1565,7 @@ test("lost staging upload response is read back and committed without another up
     }
 
     if (url.pathname.endsWith("/process/execute")) {
+      if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -1612,6 +1622,7 @@ test("lost exec and upload responses remain unknown after one submission each", 
       return Response.json(native("beachside-existing"));
 
     if (url.pathname.endsWith("/process/execute")) {
+      if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -1862,6 +1873,7 @@ test("generated capture wrapper isolates utilities from requested PATH and prese
       return Response.json(native("beachside-existing"));
 
     if (url.pathname.endsWith("/process/execute")) {
+      if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
       posts++;
 
       const body = z
@@ -2010,7 +2022,7 @@ test.each([
   async (_name, frame, maxOutputBytes, expectedStatus, truncated) => {
     let posts = 0;
 
-    const fetchImpl = fixtureFetch(async (input: RequestInfo | URL) => {
+    const fetchImpl = fixtureFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
 
       if (url.pathname === "/api/api-keys/current")
@@ -2022,6 +2034,7 @@ test.each([
         return Response.json(native("beachside-existing"));
 
       if (url.pathname.endsWith("/process/execute")) {
+        if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
         posts++;
 
         return Response.json({ exitCode: 0, result: frame });
@@ -2162,6 +2175,7 @@ test("write receipt is atomically published before recovery from a lost response
     }
 
     if (url.pathname.endsWith("/process/execute")) {
+      if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -2776,6 +2790,7 @@ test.each([
   let reservations = 0;
   let uploads = 0;
   let commits = 0;
+  let receiptCleanups = 0;
 
   const fetcher = fixtureFetch(async (input, init) => {
     const url = new URL(String(input));
@@ -2813,6 +2828,16 @@ test.each([
     }
 
     if (url.pathname.endsWith("/process/execute")) {
+      if (receiptCleanup(init)) {
+        receiptCleanups++;
+        const dropped = spawnSync(
+          "sh",
+          ["-c", z.object({ command: z.string() }).parse(JSON.parse(String(init?.body))).command],
+          { encoding: "utf8" },
+        );
+
+        return Response.json({ exitCode: dropped.status, result: "" });
+      }
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -2904,9 +2929,14 @@ test.each([
     } else {
       expect(result.status).toBe(mode === "lost" ? "unknown" : "completed");
       expect(new Uint8Array(readFileSync(target))).toEqual(bytes);
-      expect(
-        (await provider.driver.observeWrite({ sandbox, submissionId, path: target }))?.status,
-      ).toBe("completed");
+
+      // A delivered outcome drops its receipt; a lost one keeps it until recovery reads it.
+      const recovered = await provider.driver.observeWrite({ sandbox, submissionId, path: target });
+
+      if (mode === "lost") expect(recovered?.status).toBe("completed");
+      else expect(recovered).toBeNull();
+      expect(existsSync(receipt)).toBe(false);
+      expect(receiptCleanups).toBe(1);
       expect([reservations, uploads, commits]).toEqual([1, 1, 1]);
     }
   } finally {
@@ -3018,6 +3048,7 @@ test("REST 0.218 exec timeout is separate from HTTP observation and original rec
     if (url.pathname === "/api/sandbox/native-1") return Response.json(native("box"));
 
     if (url.pathname.endsWith("/process/execute")) {
+      if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
       executes++;
       expect(JSON.parse(String(init?.body))).toMatchObject({ cwd: "/tmp", timeout: 7 });
       expect(durations).toContain(17_000);
@@ -3076,7 +3107,9 @@ test("REST 0.218 exec timeout is separate from HTTP observation and original rec
       value: { observation: { exitCode: 0, stdoutBase64: "YQ==" } },
     });
     expect(executes).toBe(1);
+    // The second POST only drops the receipt after its outcome was recovered.
     expect(requests.filter((request) => request.method !== "GET")).toEqual([
+      { method: "POST", path: "/toolbox/native-1/process/execute" },
       { method: "POST", path: "/toolbox/native-1/process/execute" },
     ]);
   } finally {

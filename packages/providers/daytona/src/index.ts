@@ -509,6 +509,20 @@ export class DaytonaDriver implements ProviderDriver {
 
     return this.fetchImpl(url, requestOptions);
   }
+  /** Drops a receipt once its outcome reached the caller; recovery only needs unseen ones. */
+  private async discardReceipt(toolbox: Sandbox, directory: string): Promise<void> {
+    try {
+      await this.json(
+        "POST",
+        "/process/execute",
+        CommandResponse,
+        { command: `rm -rf -- ${quote(directory)}`, timeout: 30 },
+        toolbox,
+      );
+    } catch {
+      // Best effort: a leftover receipt is harmless and still names the completed operation.
+    }
+  }
   private async json<T extends z.ZodType>(
     method: string,
     path: string,
@@ -1694,7 +1708,16 @@ export class DaytonaDriver implements ProviderDriver {
       if (response.exitCode !== 0)
         return unknown(input.identity.submissionId, "Daytona capture wrapper failed");
 
-      return this.parseExecFrame(input.sandbox, input.identity.submissionId, max, response.result);
+      const result = this.parseExecFrame(
+        input.sandbox,
+        input.identity.submissionId,
+        max,
+        response.result,
+      );
+
+      if (result.status === "completed") await this.discardReceipt(native, receiptDirectory);
+
+      return result;
     } catch {
       return unknown(
         input.identity.submissionId,
@@ -1806,12 +1829,17 @@ export class DaytonaDriver implements ProviderDriver {
           observeAfterMs: 500,
         };
 
-      return this.parseExecFrame(
+      const result = this.parseExecFrame(
         input.sandbox,
         input.submissionId,
         input.maxOutputBytes === undefined ? undefined : Math.min(input.maxOutputBytes, 1_048_576),
         frame,
       );
+
+      if (result.status === "completed")
+        await this.discardReceipt(native, path.slice(0, path.lastIndexOf("/")));
+
+      return result;
     } catch {
       return null;
     }
@@ -2222,12 +2250,15 @@ export class DaytonaDriver implements ProviderDriver {
           },
         };
 
+      const parent = quote(input.path.slice(0, input.path.lastIndexOf("/")) || "/");
+
       const reserved = await this.json(
         "POST",
         "/process/execute",
         CommandResponse,
         {
-          command: `mkdir -m 700 -- ${quote(stageDirectory)} || exit 126; mkdir -m 700 -- ${quote(receiptDirectory)} || { rmdir -- ${quote(stageDirectory)}; exit 126; }`,
+          // Missing parent folders are created, matching every adapter's write contract.
+          command: `mkdir -m 700 -- ${quote(stageDirectory)} 2>/dev/null || { mkdir -p -- ${parent} && mkdir -m 700 -- ${quote(stageDirectory)}; } || exit 126; mkdir -m 700 -- ${quote(receiptDirectory)} || { rmdir -- ${quote(stageDirectory)}; exit 126; }${mounted ? `; mkdir -p -- ${parent} || { rmdir -- ${quote(stageDirectory)} ${quote(receiptDirectory)}; exit 126; }` : ""}`,
           timeout: 30,
         },
         native,
@@ -2350,6 +2381,8 @@ export class DaytonaDriver implements ProviderDriver {
           "Daytona file commit bytes could not be verified",
         );
 
+      await this.discardReceipt(native, receiptDirectory);
+
       return {
         status: "completed",
         effect: "applied",
@@ -2420,6 +2453,8 @@ export class DaytonaDriver implements ProviderDriver {
 
     if (actual.length !== receipt.bytesWritten || digest !== receipt.digest)
       return unknown(input.submissionId, "Daytona write receipt and file disagree");
+
+    await this.discardReceipt(native, markerPath.slice(0, markerPath.lastIndexOf("/")));
 
     return {
       status: "completed",
