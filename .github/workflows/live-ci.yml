@@ -36,12 +36,16 @@ jobs:
       # Job-level, so every step and the setup action's cleanup can reach the provider.
       DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
       DAYTONA_TARGET: ${{ vars.DAYTONA_TARGET || 'us' }}
+      # A Daytona snapshot of node:22-bookworm built at 2 vCPU / 4 GiB; see .github/live-ci/README.md.
+      DAYTONA_PREPARED: ${{ vars.DAYTONA_PREPARED }}
       E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
       PROVIDER: ${{ matrix.provider }}
       FROM_CHECKOUT: ${{ inputs.cli-version == '' }}
       # Every sandbox carries both labels: one for this attempt's leak check, one for sweeps.
       RUN_LABEL: beachside-live-ci=${{ github.run_id }}-${{ github.run_attempt }}
       SWEEP_LABEL: ci=beachside-live
+      # Daytona orgs with limited egress refuse `internet`; their default policy reaches GitHub and npm.
+      NETWORK: ${{ matrix.provider == 'daytona' && 'daytona-default' || 'internet' }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -79,13 +83,25 @@ jobs:
           set -eu
           config="$RUNNER_TEMP/beachside.json"
           if [ "$PROVIDER" = daytona ]; then
-            # Daytona's default size is too small to build this monorepo.
-            extra='"config": { "resources": { "vcpus": 2, "memoryMiB": 4096 } }'
+            if [ -z "$DAYTONA_PREPARED" ]; then
+              echo "::error::Set the DAYTONA_PREPARED repository variable to a 2 vCPU / 4 GiB Daytona snapshot (see .github/live-ci/README.md)"
+              exit 1
+            fi
+            # The default size is too small to build this monorepo, so the prepared snapshot must
+            # meet these minimums. The base sandbox is removed right after capture, so it needs no
+            # restart.
+            live=$(jq -n --arg prepared "$DAYTONA_PREPARED" '{
+              provider: "daytona",
+              config: {
+                environment: { kind: "prepared", value: $prepared },
+                resources: { vcpus: 2, memoryMiB: 4096 },
+                snapshots: { restartAfterCapture: false }
+              }
+            }')
           else
-            extra='"config": {}'
+            live='{ "provider": "e2b", "config": {} }'
           fi
-          printf '{ "default": "live", "profiles": { "live": { "provider": "%s", %s } } }\n' \
-            "$PROVIDER" "$extra" > "$config"
+          jq -n --argjson live "$live" '{ default: "live", profiles: { live: $live } }' > "$config"
           echo "BEACHSIDE_CONFIG=$config" >> "$GITHUB_ENV"
 
       - name: Check credentials and adapter
@@ -106,7 +122,7 @@ jobs:
         if: inputs.warm-base && steps.base.outputs.cache-hit != 'true'
         run: |
           set -eu
-          beachside create --name base --network internet --ttl 30m --retry 5m \
+          beachside create --name base --network "$NETWORK" --ttl 30m --retry 5m \
             --label "$RUN_LABEL" --label "$SWEEP_LABEL"
           work=$(beachside push base)
           beachside exec base --cwd "$work" --timeout 15m -- sh .github/live-ci/prepare.sh
@@ -118,7 +134,7 @@ jobs:
           set -eu
           from=""
           if [ "${{ inputs.warm-base }}" = true ]; then from="--snapshot live-base"; fi
-          beachside create --name job $from --network internet --ttl 45m --retry 5m \
+          beachside create --name job $from --network "$NETWORK" --ttl 45m --retry 5m \
             --label "$RUN_LABEL" --label "$SWEEP_LABEL"
           echo "WORK=$(beachside push job)" >> "$GITHUB_ENV"
 

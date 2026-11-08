@@ -16,8 +16,24 @@ Each provider job:
 4. Copies `junit.xml` back and uploads it, removes the job's sandboxes, and runs `gc` on this
    run's label to check nothing was left behind.
 
-It needs these repository secrets: `DAYTONA_API_KEY` and `E2B_API_KEY`. `DAYTONA_TARGET` defaults
-to `us`; set a repository variable to change it.
+It needs these repository secrets: `DAYTONA_API_KEY` and `E2B_API_KEY`, and the repository
+variable `DAYTONA_PREPARED`. `DAYTONA_TARGET` defaults to `us`; set a repository variable to change
+it.
+
+Daytona has no default image, and building this monorepo needs more than its smallest size, so
+build a base image once at 2 vCPU / 4 GiB and save its id as `DAYTONA_PREPARED`:
+
+```sh
+cat > /tmp/live.json <<'JSON'
+{ "default": "live", "profiles": { "live": { "provider": "daytona",
+  "config": { "resources": { "vcpus": 2, "memoryMiB": 4096 } } } } }
+JSON
+BEACHSIDE_CONFIG=/tmp/live.json beachside image build node:22-bookworm --json | jq -r .data.prepared
+```
+
+Daytona jobs use the `daytona-default` network policy, because orgs with limited egress refuse
+`internet`; it still reaches GitHub and npm. The Daytona profile sets
+`snapshots.restartAfterCapture: false`, since the base sandbox is removed right after capture.
 
 Sandboxes are labelled `ci=beachside-live`, so `beachside gc --label ci=beachside-live --older-than 2h`
 sweeps anything a killed runner left. Each provider keeps one `live-base` snapshot between runs;
