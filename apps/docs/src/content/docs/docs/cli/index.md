@@ -132,6 +132,14 @@ Add `--json`, or set `BEACHSIDE_JSON=1`, and stdout holds exactly one JSON docum
 
 The [command reference](/docs/cli/reference/) lists every exit code, and `beachside schema` prints all commands, flags and exit codes as JSON.
 
+## Status on terminal tabs
+
+Inside [Rex](https://www.superlogical.com/rex/docs/build/program-status), commands that create, change or wait on sandboxes (`create`, `run`, `exec`, `sh`, `rm`, `gc`, `cp`, `push`, `image build`, `snapshot create`, and others) show their progress on the terminal tab: a spinner while they work, then done or failed. `run` also says which step it is on: pushing files, running the command, or destroying the sandbox.
+
+The CLI reports this with the Program Status Protocol (OSC 7501), written to stderr only when stderr is a terminal, so `--json` and piped output are unchanged. Set `BEACHSIDE_PROGRAM_STATUS=on` to report in other terminals that support the protocol, or `off` to turn it off in Rex.
+
+To run a Rex server inside a sandbox and open it from your Mac, see [Remote workspace with Rex](/docs/cli/rex/).
+
 ## Cleaning up
 
 `rm` destroys a sandbox and forgets it. It only destroys sandboxes this CLI created; add `--force` for others. `rm --all` removes everything the CLI created and reports what it skipped. If some removals fail, `rm` keeps going and exits 8 with a list of what was removed, skipped and failed.

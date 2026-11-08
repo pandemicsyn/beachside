@@ -1602,11 +1602,15 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
   if (created.unrecorded) failure = unrecordedError(created);
   else
     try {
+      if (tree)
+        out.status.report("working", `beachside run: pushing files to ${created.record.name}`);
+
       const pushed = tree
         ? await upload(created.box, created.record.name, tree, defaultPushDir, null, signal)
         : undefined;
 
       if (pushed) out.note(`pushed ${pushed.files} file(s) to ${pushed.path}`);
+      out.status.report("working", `beachside run: running in ${created.record.name}`);
       // The command runs in the pushed folder unless --cwd says otherwise.
       result = await execute(
         session,
@@ -1627,6 +1631,7 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
   }
 
   try {
+    out.status.report("working", `beachside run: destroying ${created.record.name}`);
     // A fresh signal: cleanup must still run after an interrupt aborted the command.
     await created.box.destroy();
     await store.remove("sandbox", created.record.name);
