@@ -6,14 +6,14 @@ description: Run a Rex server inside a sandbox and open it from Rex on your Mac 
 [Rex](https://www.superlogical.com/rex/docs) is a terminal workspace with a client and a server. If you run the Rex server inside a sandbox, you get a remote workspace: your sessions, tabs and blocks live in the sandbox, and you open them from Rex on your Mac. Nothing listens on a public port. Rex's built-in Tailscale puts the server on your tailnet, and only your tailnet can reach it.
 
 :::caution[Experimental]
-Rex is in beta, and this recipe has only been tried on E2B and on plain Linux hosts. Daytona's lower tiers block the Rex download, because their sandboxes only reach an allowlist of hosts.
+Rex is in beta, and this recipe has only been verified on plain Linux hosts so far. On E2B, Rex installs and runs, but its built-in Tailscale has not joined a tailnet yet: it waits at "needs login" even with a fresh auth key. Daytona's lower tiers block the Rex download, because their sandboxes only reach an allowlist of hosts.
 :::
 
 ## What you need
 
 - Rex beta on your Mac.
 - A Tailscale tailnet with MagicDNS and HTTPS certificates turned on.
-- A provider whose sandboxes can reach the internet. The examples use E2B.
+- A provider whose sandboxes can reach the internet, including Tailscale's control servers.
 
 ## Set up Tailscale once
 
