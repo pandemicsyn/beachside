@@ -26,10 +26,37 @@ type Failure = z.infer<typeof WriteFailure>;
 
 /** Contains classification only; native messages, causes and IDs never enter recovery. */
 export class E2BWriteFailure extends Error {
-  constructor(readonly failure: Failure) {
+  /**
+   * envd answered that it could not open the destination for writing, so no bytes were written.
+   * Overwriting a file directly in a sticky directory such as /tmp fails this way: envd runs as
+   * root, first chowns the existing file to the sandbox user, then reopens it with O_CREAT, which
+   * fs.protected_regular refuses for a file owned by someone other than root or the directory
+   * owner.
+   */
+  readonly openDenied: boolean;
+
+  constructor(
+    readonly failure: Failure,
+    openDenied = false,
+  ) {
     super("E2B native file write failed");
     this.name = "E2BWriteFailure";
+    this.openDenied = openDenied;
   }
+}
+
+// envd's upload handler wraps the open(2) error as "error opening file: open <path>: <errno>".
+const OPEN_DENIED = /error opening file: open .*: permission denied/;
+
+/** True only for envd's definite "could not open the destination" answer; reads the message, never keeps it. */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Native exceptions cross this boundary and only a boolean leaves it.
+export function isOpenDenied(error: unknown, status?: number): boolean {
+  const nativeStatus =
+    error instanceof Error && "statusCode" in error ? error.statusCode : undefined;
+
+  return (
+    (status ?? nativeStatus) === 500 && error instanceof Error && OPEN_DENIED.test(error.message)
+  );
 }
 
 // oxlint-disable anti-slop/no-unknown-parameters -- Native exceptions cross this boundary and only allowlisted classification is retained.

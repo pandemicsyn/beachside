@@ -25,6 +25,7 @@ import { guestFilesystem, directoryValue, statValue } from "./filesystem-native"
 import {
   classifyWriteFailure,
   E2BWriteFailure,
+  isOpenDenied,
   streamFailureReason,
   type StreamStep,
 } from "./write-failure";
@@ -1083,7 +1084,10 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
           requestTimeoutMs: 30_000,
         });
       } catch (error) {
-        throw new E2BWriteFailure(classifyWriteFailure(error, stage, httpStatus));
+        throw new E2BWriteFailure(
+          classifyWriteFailure(error, stage, httpStatus),
+          stage === "upload" && isOpenDenied(error, httpStatus),
+        );
       }
     },
     async directory(id, path, signal) {
