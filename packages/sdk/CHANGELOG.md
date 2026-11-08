@@ -1,5 +1,21 @@
 # beachside
 
+## 0.9.0
+
+### Minor Changes
+
+- [#159](https://github.com/pandemicsyn/beachside/pull/159) [`d137e90`](https://github.com/pandemicsyn/beachside/commit/d137e90e8f7bc271713c8b0776605bf4996196c2) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Make provider setup consistent. Every first-party package now exports its definition as `<provider>Adapter` and a factory named after the provider: `boxd()`, `boat()`, `runloop()`, `modal()` and `vercel()` join `daytona()` and `e2b()`. Docs, examples and skills show the split form, `Beachside.connect({ adapter, credentials, config })`, which works for every adapter.
+
+  Breaking for Vercel: the definition is now `vercelAdapter`, and `vercel` is the factory. Replace `adapter: vercel` with `adapter: vercelAdapter`, or call `Beachside.connect(vercel({ token, teamId, projectId }))`. Passing a factory where a definition belongs now fails with `INVALID_ARGUMENT` and names both forms.
+
+- [#164](https://github.com/pandemicsyn/beachside/pull/164) [`7b9fa24`](https://github.com/pandemicsyn/beachside/commit/7b9fa244f6364b8b6aace7bcd46d80edb71fe993) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Buffered `readFile`/`writeFile` (and the text variants) have no default size limit: files larger than the adapter's buffered limit move through its file streams underneath. `maxBytes` stays as an optional guard and the 16 MiB ceiling is gone. Adapters without file streams keep their own limit, and the error names it. `capabilities().maxFileBytes` now reports the adapter's buffered limit. `exec` `stdin` also accepts an `AsyncIterable<Uint8Array>` or `ReadableStream<Uint8Array>`, and byte or text input over 1 MiB. These are streamed to the command as it runs on adapters with incremental process stdin (Daytona, E2B, Vercel), with `deadlineSeconds` enforced locally.
+
+### Patch Changes
+
+- [#167](https://github.com/pandemicsyn/beachside/pull/167) [`3f414a8`](https://github.com/pandemicsyn/beachside/commit/3f414a8dbb7d9b73259e99a2c70cda59fac75af9) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - E2B streamed writes, and buffered writes over 1 MiB, work in sticky directories such as `/tmp` again; they used to fail there with "stream completion could not be confirmed". When a streamed E2B write fails, the error now names the step that failed and keeps the provider's original error as its `cause`.
+- Updated dependencies [[`d137e90`](https://github.com/pandemicsyn/beachside/commit/d137e90e8f7bc271713c8b0776605bf4996196c2)]:
+  - @beachside/adapter@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes
