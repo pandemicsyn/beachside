@@ -334,3 +334,163 @@ test("unrecognized native names and invalid HTTP status cannot enter diagnostic 
     errorName: "UnknownError",
   });
 });
+
+test("only envd's refused-open answer marks a native write as open-denied", async () => {
+  const previous = globalThis.fetch;
+  let message = "error opening file: open /tmp/existing: permission denied";
+  // SAFETY: All native SDK requests terminate in this offline fixture; unexpected routes throw.
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+
+      if (url.pathname === "/sandboxes/sandbox_private")
+        return Response.json({
+          sandboxID: "sandbox_private",
+          templateID: "base",
+          metadata: {},
+          state: "running",
+          envdVersion: "0.6.10",
+          envdAccessToken: "guest-token",
+          domain: "e2b.app",
+          lifecycle: { autoResume: false },
+        });
+
+      if (url.pathname === "/files") return Response.json({ message }, { status: 500 });
+      throw new Error("Unexpected offline native request");
+    },
+    { preconnect: previous.preconnect },
+  );
+
+  const outcome = async () => {
+    try {
+      await createSdkTransport("secret-key").write("sandbox_private", "/tmp/existing", submitted);
+    } catch (error) {
+      if (error instanceof E2BWriteFailure) return error;
+    }
+
+    throw new Error("Expected native write failure");
+  };
+
+  try {
+    const denied = await outcome();
+    expect(denied.openDenied).toBe(true);
+    expect(denied.failure).toEqual({ stage: "upload", errorName: "SandboxError", httpStatus: 500 });
+    expect(JSON.stringify(denied)).not.toContain("/tmp/existing");
+
+    for (const other of [
+      "error writing file: input/output error",
+      "error changing file ownership: operation not permitted",
+    ]) {
+      message = other;
+      expect((await outcome()).openDenied).toBe(false);
+    }
+  } finally {
+    globalThis.fetch = previous;
+  }
+});
+
+test("overwrites refused by envd in sticky directories are copied in as the sandbox user", async () => {
+  const files = new Map<string, Uint8Array>([["/tmp/existing", original]]);
+  const scripts: string[] = [];
+  const uploads: string[] = [];
+  let copyFails = false;
+
+  let metadata: E2BRecord["metadata"] = {};
+
+  const adapter = createE2BAdapter(() => ({
+    ...createSdkTransport("offline-unused"),
+    async verifyTeam() {},
+    async verifyTemplate(_team, id) {
+      return id;
+    },
+    async create(input) {
+      metadata = input.metadata;
+
+      return "sandbox_1";
+    },
+    async get() {
+      return {
+        id: "sandbox_1",
+        templateId: "template_1",
+        state: "running" as const,
+        allowPublicTraffic: false,
+        metadata,
+      };
+    },
+    async write(_id, path, value) {
+      uploads.push(path);
+
+      // Mirrors fs.protected_regular: envd may create new files in /tmp but not reopen old ones.
+      if (path.startsWith("/tmp/") && path.indexOf("/", 5) === -1 && files.has(path))
+        throw new E2BWriteFailure(
+          { stage: "upload", errorName: "SandboxError", httpStatus: 500 },
+          true,
+        );
+      files.set(path, value);
+    },
+    async run(_id, script) {
+      scripts.push(script);
+      const [, from, to] = /^if cat -- '([^']+)' > '([^']+)'/.exec(script) ?? [];
+
+      if (!from || !to) throw new Error("unexpected command");
+      const staged = files.get(from);
+      files.delete(from);
+
+      if (copyFails || !staged) return "FAILED";
+      files.set(to, staged);
+
+      return "COPIED";
+    },
+    async read(_id, path) {
+      const value = files.get(path);
+
+      if (!value) throw new Error("file absent");
+
+      return { bytes: value, truncated: false };
+    },
+    async remove(_id, path) {
+      files.delete(path);
+    },
+    close() {},
+  }));
+
+  const config = {
+    teamId: "team_one",
+    templateId: "template_1",
+    preview: { access: "protected" as const },
+  };
+
+  const credentials = { apiKey: "offline-unused" };
+  const client = await Beachside.connect({ adapter, config, credentials });
+
+  try {
+    const box = await client.sandboxes.create({
+      environment: Image.prepared("template_1"),
+      networkPolicy: "blocked",
+    });
+
+    await box.writeFile("/tmp/existing", submitted, { overwrite: true });
+    expect(files.get("/tmp/existing")).toEqual(submitted);
+    expect(uploads).toHaveLength(2);
+    expect(uploads[1]).toMatch(/^\/tmp\/\.beachside-write-/);
+    expect(scripts).toHaveLength(1);
+    expect([...files.keys()]).toEqual(["/tmp/existing"]);
+
+    // Overwrites envd can open still take the single direct upload.
+    await box.writeFile("/tmp/sub/existing", submitted, { overwrite: true });
+    expect(uploads).toHaveLength(3);
+    expect(scripts).toHaveLength(1);
+
+    copyFails = true;
+    files.set("/tmp/existing", original);
+    await expect(
+      box.writeFile("/tmp/existing", submitted, { overwrite: true }),
+    ).rejects.toMatchObject({
+      code: "OUTCOME_UNKNOWN",
+      message: expect.stringContaining("stage=link, error=Error"),
+    });
+    expect([...files.keys()].filter((path) => path.includes(".beachside-write-"))).toEqual([]);
+  } finally {
+    await client.close();
+  }
+});
