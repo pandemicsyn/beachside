@@ -195,6 +195,9 @@ const CreateToken = z.strictObject({
 
 const DestroyToken = z.strictObject({ id: Id, acknowledged: z.boolean() });
 
+/** The error body Freestyle's API returns; anything else gets a known fallback. */
+const ApiErrorBody = z.object({ code: z.string().max(256), message: z.string().max(4096) });
+
 const LifecycleToken = z.strictObject({
   id: Id,
   /** When a pause was submitted, in epoch milliseconds. */
@@ -300,6 +303,34 @@ function expiry(vm: VmData): SandboxInfo["expires"] {
         scope: "sandbox",
       };
 }
+
+/**
+ * Root ownership helper for overwrites. `owner PATH` prints `uid:gid` of a regular file (never
+ * through a symlink) or nothing. `restore PATH UID GID SIZE SHA256` opens PATH with O_NOFOLLOW
+ * and `fchown`s that open inode only when it is a regular root-owned file with one link and
+ * exactly the written bytes; it prints `ok` or `skip`.
+ */
+const OWNER_HELPER = `import hashlib,os,stat,sys
+m,p=sys.argv[1],sys.argv[2]
+if m=='owner':
+ try:st=os.lstat(p)
+ except FileNotFoundError:sys.exit(0)
+ if stat.S_ISREG(st.st_mode):print('%d:%d'%(st.st_uid,st.st_gid))
+ sys.exit(0)
+u,g,n,h=int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]),sys.argv[6]
+fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+ st=os.fstat(fd)
+ if not stat.S_ISREG(st.st_mode) or st.st_uid!=0 or st.st_nlink!=1 or st.st_size!=n:print('skip');sys.exit(0)
+ d=hashlib.sha256()
+ while True:
+  b=os.read(fd,1048576)
+  if not b:break
+  d.update(b)
+ if d.hexdigest()!=h:print('skip');sys.exit(0)
+ os.fchown(fd,u,g);print('ok')
+finally:os.close(fd)
+`;
 
 function readContext(signal: AbortSignal, seconds = 30): ReadContext {
   return { signal, deadline: Date.now() + seconds * 1000 };
@@ -801,8 +832,10 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
       /**
        * One verified native PUT. Freestyle creates new files as the default user but replaces an
        * existing one as root, so the previous numeric owner is read first and restored as root;
-       * commands then keep the access they had. Returns false when the bytes were written but
-       * the owner could not be restored.
+       * commands then keep the access they had. The repair opens the path without following
+       * symlinks and changes the owner only of the inode it verified (regular, root-owned, one
+       * link, exactly the bytes written), so a concurrent swap cannot redirect it. Returns false
+       * when the bytes were written but the owner could not be restored.
        */
       const putFile = async (
         vmId: string,
@@ -811,10 +844,13 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         signal: AbortSignal,
       ): Promise<boolean> => {
         const vm = api(callSignal(readContext(signal, 120))).vms.ref(vmId);
-        const target = quote(path);
 
-        const asRoot = async (command: string) => {
-          const result = await vm.exec({ command, linuxUser: "root", timeoutMs: 10_000 });
+        const asRoot = async (args: string[]) => {
+          const result = await vm.exec({
+            command: `python3 -c ${quote(OWNER_HELPER)} ${args.map(quote).join(" ")}`,
+            linuxUser: "root",
+            timeoutMs: 10_000,
+          });
 
           if (result.statusCode !== 0)
             throw new AdapterError("UNAVAILABLE", "Freestyle file owner command failed");
@@ -825,22 +861,30 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         let owner: string;
 
         try {
-          owner = await asRoot(
-            `if [ -f ${target} ] && [ ! -L ${target} ]; then stat -c %u:%g -- ${target}; fi`,
-          );
+          owner = await asRoot(["owner", path]);
         } catch (error) {
           throw error instanceof AdapterError ? error : failure(error).error;
         }
 
-        if (owner && !/^\d{1,10}:\d{1,10}$/.test(owner))
+        const parsed = /^(\d{1,10}):(\d{1,10})$/.exec(owner);
+
+        if (owner && !parsed)
           throw new AdapterError("UNAVAILABLE", "Freestyle file owner is malformed");
 
         await vm.fs.writeFile(path, bytes);
 
-        if (!owner || owner === "0:0") return true;
+        if (!parsed || owner === "0:0") return true;
+        const digest = createHash("sha256").update(bytes).digest("hex");
 
-        return asRoot(`chown -- ${owner} ${target}`).then(
-          () => true,
+        return asRoot([
+          "restore",
+          path,
+          parsed[1] ?? "",
+          parsed[2] ?? "",
+          String(bytes.byteLength),
+          digest,
+        ]).then(
+          (result) => result === "ok",
           () => false,
         );
       };
@@ -875,10 +919,38 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         };
 
       /** VMs this client is pausing or holds paused; their process observers stop polling. */
-      const held = new Set<string>();
+      const held = new Map<string, { inFlight: boolean; checkedAt: number }>();
+
+      /** A confirmed running VM ends a hold that no suspend of this client still owns. */
+      const release = (vmId: string) => {
+        if (!held.get(vmId)?.inFlight) held.delete(vmId);
+      };
+
+      /**
+       * Whether observers should skip a poll. Outside an in-flight suspend the hold is checked
+       * against native state (an API read, which never wakes the VM) every two seconds, so a
+       * VM started elsewhere or woken by traffic resumes observation.
+       */
+      const holding = async (vmId: string) => {
+        const hold = held.get(vmId);
+
+        if (!hold) return false;
+
+        if (hold.inFlight || Date.now() - hold.checkedAt < 2000) return true;
+        hold.checkedAt = Date.now();
+
+        const vm = await find(vmId, readContext(AbortSignal.timeout(10_000), 10)).catch(
+          () => undefined,
+        );
+
+        if (vm?.state !== "running") return true;
+        release(vmId);
+
+        return held.has(vmId);
+      };
 
       const jobOptions = (vmId: string) => ({
-        held: () => held.has(vmId),
+        held: () => holding(vmId),
         run: guest(vmId),
         pollMs: options.processPollMs ?? 250,
         requestSeconds: 60,
@@ -900,7 +972,13 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           }
 
           if (!response.ok && response.status !== 416) {
-            const body = await response.json().catch(() => ({}));
+            // A proxy can answer with plain text; the error keeps its status with a known code.
+            const parsed = ApiErrorBody.safeParse(await response.json().catch(() => undefined));
+
+            const body = parsed.success
+              ? parsed.data
+              : { code: "UNKNOWN_ERROR", message: `HTTP ${response.status}` };
+
             throw failure(new FreestyleApiError(response.status, body, route)).error;
           }
 
@@ -1364,6 +1442,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           },
           async reopen(input, ctx) {
             await requireRunning(input.sandbox, ctx);
+            release(input.sandbox.id);
             const job = ProcessReference.safeParse(input.reference);
             const terminal = TerminalReference.safeParse(input.reference);
 
@@ -1752,7 +1831,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             const token = { id: Id.parse(input.sandbox.id), since: Date.now() };
             await ctx.checkpoint(token);
             // Process observers stop polling first: their guest commands keep the VM running.
-            held.add(token.id);
+            held.set(token.id, { inFlight: true, checkedAt: 0 });
 
             try {
               await api(callSignal(readContext(ctx.signal, 120)))
@@ -1771,7 +1850,11 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
                 return vm?.state === "paused" ? vm : undefined;
               });
 
-              if (paused) return suspended(paused, input.sandbox.reference);
+              if (paused) {
+                held.set(token.id, { inFlight: false, checkedAt: Date.now() });
+
+                return suspended(paused, input.sandbox.reference);
+              }
             } catch {
               /* Pause is acknowledged; completion continues through observation. */
             }
@@ -1792,7 +1875,11 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
               return ctx.unknown("Freestyle VM disappeared while pausing");
             }
 
-            if (vm.state === "paused") return suspended(vm, box.reference);
+            if (vm.state === "paused") {
+              held.set(vm.id, { inFlight: false, checkedAt: Date.now() });
+
+              return suspended(vm, box.reference);
+            }
 
             // An acknowledged pause that leaves the VM running is not waited on forever.
             const waiting =

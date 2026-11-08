@@ -334,3 +334,28 @@ test("an acknowledged pause that leaves the VM running ends as unknown, not a ha
     await client.close();
   }
 });
+
+test("a process reopened after a native resume polls again instead of staying held", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    const first = await box.processes.start({
+      command: { kind: "shell", script: "sleep 0.5; printf after" },
+      output: { mode: "stream" },
+    });
+
+    const reference = JSON.parse(JSON.stringify(first.reference()));
+    await box.suspend();
+
+    // Started outside Beachside, so this client never saw a resume.
+    const vm = fixture.vms.get(box.id);
+
+    if (vm) vm.state = "running";
+
+    const again = await box.processes.reopen(reference);
+    expect((await again.wait()).exitCode).toBe(0);
+    await again.detach();
+  } finally {
+    await client.close();
+  }
+}, 20_000);

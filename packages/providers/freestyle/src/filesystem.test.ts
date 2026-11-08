@@ -1,5 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chownSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { Beachside } from "beachside";
 import { createFreestyleAdapter, MAX_FILE_BYTES } from "./adapter";
@@ -112,6 +120,54 @@ test("an overwrite keeps the file's owner, so commands keep the access they had"
     await box.writeFile(path, new TextEncoder().encode("two"), { overwrite: true });
     expect(fixture.vms.get(box.id)?.owners.get(path)).toBe("1000:1000");
     expect(new TextDecoder().decode(await box.readFile(path))).toBe("two");
+  } finally {
+    await client.close();
+  }
+});
+
+test("a root owner repair changes only the verified written file, never a swapped-in target", async () => {
+  const { fixture, client, box, dir } = await setup();
+
+  try {
+    const path = join(dir, "owned.txt");
+    writeFileSync(path, "one");
+    chownSync(path, 1000, 1000);
+
+    await box.writeFile(path, new TextEncoder().encode("two"), { overwrite: true });
+    expect(statSync(path).uid).toBe(1000);
+    expect(readFileSync(path, "utf8")).toBe("two");
+
+    // A guest process swaps the path for a symlink to a root-owned file between the PUT and
+    // the repair; the repair must not follow it.
+    const victim = join(dir, "victim.txt");
+    writeFileSync(victim, "secret");
+    fixture.afterNextPut((written) => {
+      rmSync(written);
+      symlinkSync(victim, written);
+    });
+
+    await expect(
+      box.writeFile(path, new TextEncoder().encode("three"), { overwrite: true }),
+    ).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
+    expect(statSync(victim).uid).toBe(0);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a plain-text error from a range read surfaces as UNAVAILABLE", async () => {
+  const { fixture, client, box, dir } = await setup();
+
+  try {
+    const path = join(dir, "proxy.bin");
+    writeFileSync(path, "x");
+    fixture.failNextRead(new Response("Internal proxy error", { status: 500 }));
+
+    await expect(
+      (async () => {
+        for await (const _ of box.readFileStream(path));
+      })(),
+    ).rejects.toMatchObject({ code: "UNAVAILABLE" });
   } finally {
     await client.close();
   }

@@ -165,6 +165,10 @@ export function freestyleFixture() {
   let backgroundNextCreate = false;
   /** Forget the next stored background result, as an expired or unknown request id. */
   let forgetNextBackground = false;
+  /** Answer for the next file read instead of the file. */
+  let readFault: Response | undefined;
+  /** Runs once after the next local PUT, as a concurrent guest process could. */
+  let afterPut: ((path: string) => void) | undefined;
   /** Acknowledge the next pause but leave the VM running. */
   let ignorePause = false;
   const background = new Map<string, Response>();
@@ -473,23 +477,32 @@ export function freestyleFixture() {
       effects.exec++;
       commands.push(body.command);
 
-      // Root owner reads and `chown` of map-backed files use the recorded numeric owner.
+      // The root owner helper on map-backed files uses the recorded numeric owner; on local
+      // files it runs for real.
       if (body.linuxUser === "root") {
-        const owned = /^if \[ -f '([^']+)' \]/.exec(body.command);
-        const chown = /^chown -- (\d+:\d+) '([^']+)'$/.exec(body.command);
+        const owned = / 'owner' '([^']+)'$/.exec(body.command);
 
-        if (owned && !(owned[1] ?? "").startsWith(`${workdir}/`)) {
-          const path = owned[1] ?? "";
-          const stdout = vm.files.has(path) ? `${vm.owners.get(path) ?? "1000:1000"}\n` : "";
+        const restore = / 'restore' '([^']+)' '(\d+)' '(\d+)' '\d+' '[0-9a-f]+'$/.exec(
+          body.command,
+        );
 
-          return json(200, { statusCode: 0, stdout, stderr: "" });
+        const path = owned?.[1] ?? restore?.[1] ?? "";
+
+        if (path && vm.files.has(path)) {
+          if (owned)
+            return json(200, {
+              statusCode: 0,
+              stdout: `${vm.owners.get(path) ?? "1000:1000"}\n`,
+              stderr: "",
+            });
+
+          vm.owners.set(path, `${restore?.[2]}:${restore?.[3]}`);
+
+          return json(200, { statusCode: 0, stdout: "ok\n", stderr: "" });
         }
 
-        if (chown && vm.files.has(chown[2] ?? "")) {
-          vm.owners.set(chown[2] ?? "", chown[1] ?? "");
-
+        if (owned && !path.startsWith(`${workdir}/`))
           return json(200, { statusCode: 0, stdout: "", stderr: "" });
-        }
       }
 
       const command = body.command.replaceAll(ENV_FILE, localEnv(vm));
@@ -525,6 +538,13 @@ export function freestyleFixture() {
       file.startsWith(`${workdir}/`);
 
     if (method === "GET" && rest === "fs/read") {
+      if (readFault) {
+        const fault = readFault;
+        readFault = undefined;
+
+        return fault;
+      }
+
       let bytes: Uint8Array | undefined;
 
       if (local)
@@ -561,8 +581,13 @@ export function freestyleFixture() {
       if (url.searchParams.get("sha256") !== sha256) return error(400, "CHECKSUM_MISMATCH");
       effects.write++;
 
-      if (local) writeFileSync(file, raw);
-      else {
+      if (local) {
+        // As observed live, a replaced file is a new inode owned by root.
+        rmSync(file, { force: true });
+        writeFileSync(file, raw);
+        afterPut?.(file);
+        afterPut = undefined;
+      } else {
         // As observed live: a new file belongs to the default user, a replaced one to root.
         vm.owners.set(file, vm.files.has(file) ? "0:0" : "1000:1000");
         vm.files.set(file, new Uint8Array(raw));
@@ -612,6 +637,12 @@ export function freestyleFixture() {
       calls.filter((call) => call.method === method && pattern.test(call.path)).length,
     setBootPolls(value: number) {
       bootPolls = value;
+    },
+    failNextRead(response: Response) {
+      readFault = response;
+    },
+    afterNextPut(action: (path: string) => void) {
+      afterPut = action;
     },
     ignoreNextPause() {
       ignorePause = true;

@@ -65,7 +65,7 @@ export type JobOptions = {
    * True while this client is pausing the VM or holds it paused. Every poll is a guest command,
    * which keeps the VM busy and would wake it, so observation waits instead of polling.
    */
-  held?: () => boolean;
+  held?: () => Promise<boolean>;
 };
 
 function deferred<T>() {
@@ -294,7 +294,7 @@ export async function observeJob(
     while (!controller.signal.aborted) {
       let result: Poll;
 
-      if (options.held?.()) {
+      if (await options.held?.()) {
         await sleep(options.pollMs, controller.signal);
         continue;
       }

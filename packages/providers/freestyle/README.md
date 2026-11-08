@@ -1,6 +1,6 @@
 # @beachside/freestyle
 
-Experimental Freestyle VMs adapter for Beachside. Implementation and offline fixtures are available; no live Freestyle run has been made yet. Install with `npm install beachside @beachside/freestyle`. Requires Node 20+ or Bun and a Freestyle API key. Built on Freestyle's official SDK, pinned to `freestyle@0.2.21` (public API v5).
+Experimental Freestyle VMs adapter for Beachside. Tested on every change against a simulated Freestyle API, and checked by hand against the live service; not yet through the provider qualification suite. Install with `npm install beachside @beachside/freestyle`. Requires Node 20+ or Bun and a Freestyle API key. Built on Freestyle's official SDK, pinned to `freestyle@0.2.21` (public API v5).
 
 ```ts
 import { Beachside } from "beachside";
