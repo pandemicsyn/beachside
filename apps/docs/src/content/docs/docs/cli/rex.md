@@ -6,7 +6,7 @@ description: Run a Rex server inside a sandbox and open it from Rex on your Mac 
 [Rex](https://www.superlogical.com/rex/docs) is a terminal workspace with a client and a server. If you run the Rex server inside a sandbox, you get a remote workspace: your sessions, tabs and blocks live in the sandbox, and you open them from Rex on your Mac. Nothing listens on a public port. Rex's built-in Tailscale puts the server on your tailnet, and only your tailnet can reach it.
 
 :::caution[Experimental]
-Rex is in beta, and this recipe has only been verified on plain Linux hosts so far. On E2B, Rex installs and runs, but its built-in Tailscale has not joined a tailnet yet: it waits at "needs login" even with a fresh auth key. Daytona's lower tiers block the Rex download, because their sandboxes only reach an allowlist of hosts.
+Rex is in beta. This recipe has been verified end to end on plain Linux hosts. On E2B, Tailscale joins with the extra step below. Daytona's lower tiers block the Rex download, because their sandboxes only reach an allowlist of hosts.
 :::
 
 ## What you need
@@ -58,6 +58,12 @@ printf %s "$TAILSCALE_AUTH_KEY" | beachside exec rex --stdin -- \
   sh -c 'umask 077 && mkdir -p ~/.beachside && cat > ~/.beachside/ts.key'
 ```
 
+On E2B, give the sandbox a routable address first. E2B sandboxes only have a link-local IPv4 address, so Tailscale thinks the machine is offline and never logs in ([e2b-dev/runtime#3780](https://github.com/e2b-dev/runtime/issues/3780)):
+
+```sh
+beachside exec rex -- sudo ip addr add 192.0.0.8/32 dev eth0 noprefixroute
+```
+
 Start the server:
 
 ```sh
@@ -97,6 +103,8 @@ Because the key is ephemeral, the device disappears from your tailnet shortly af
 **Rex rejects the connection (403).** A tagged device has no owner, so Rex's default owner-only access admits nobody. Start the server with `--tailscale-allow-tailnet-members`, and rely on the `tag:beachside` grant to decide who gets in. The server logs this warning when the flag is missing: `this node is tagged … owner-only access admits nobody`.
 
 **The server waits at "needs login" or ignores the key.** Rex keeps its Tailscale state in `~/.local/state/rex/tsnet`, whatever hostname you pass. If that state exists, from an earlier start or a sign-in by link, Rex uses it and logs `Ignoring authkey`. Move that directory away before the first start with a key, and don't snapshot a sandbox after Rex has joined your tailnet.
+
+**On E2B, the server waits at "needs login" with no error.** The sandbox only has a link-local address. Add `192.0.0.8/32` to `eth0` as shown above, before the first start.
 
 **The install script can't download Rex.** The sandbox has no internet access. Pass `--network internet`, or use a provider tier that allows it.
 
