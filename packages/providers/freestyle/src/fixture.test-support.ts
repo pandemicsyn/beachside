@@ -482,7 +482,7 @@ export function freestyleFixture() {
       if (body.linuxUser === "root") {
         const owned = / 'owner' '([^']+)'$/.exec(body.command);
 
-        const restore = / 'restore' '([^']+)' '(\d+)' '(\d+)' '\d+' '[0-9a-f]+'$/.exec(
+        const restore = / 'restore' '([^']+)' '(\d+)' '(\d+)' '\d+' '[0-9a-f]+' '0'$/.exec(
           body.command,
         );
 
@@ -503,6 +503,9 @@ export function freestyleFixture() {
 
         if (owned && !path.startsWith(`${workdir}/`))
           return json(200, { statusCode: 0, stdout: "", stderr: "" });
+
+        // Locally, this process stands in for root: its PUT owns the replaced file.
+        if (restore) body.command = body.command.replace(/ '0'$/, ` '${process.getuid?.() ?? 0}'`);
       }
 
       const command = body.command.replaceAll(ENV_FILE, localEnv(vm));

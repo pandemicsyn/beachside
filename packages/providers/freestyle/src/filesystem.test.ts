@@ -129,12 +129,16 @@ test("a root owner repair changes only the verified written file, never a swappe
   const { fixture, client, box, dir } = await setup();
 
   try {
+    // As root the file can belong to another user; otherwise this process stands in for both.
+    const root = process.getuid?.() === 0;
+    const uid = root ? 1000 : (process.getuid?.() ?? 0);
     const path = join(dir, "owned.txt");
     writeFileSync(path, "one");
-    chownSync(path, 1000, 1000);
+
+    if (root) chownSync(path, 1000, 1000);
 
     await box.writeFile(path, new TextEncoder().encode("two"), { overwrite: true });
-    expect(statSync(path).uid).toBe(1000);
+    expect(statSync(path).uid).toBe(uid);
     expect(readFileSync(path, "utf8")).toBe("two");
 
     // A guest process swaps the path for a symlink to a root-owned file between the PUT and
@@ -149,7 +153,8 @@ test("a root owner repair changes only the verified written file, never a swappe
     await expect(
       box.writeFile(path, new TextEncoder().encode("three"), { overwrite: true }),
     ).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
-    expect(statSync(victim).uid).toBe(0);
+    expect(statSync(victim).uid).toBe(process.getuid?.() ?? 0);
+    expect(readFileSync(victim, "utf8")).toBe("secret");
   } finally {
     await client.close();
   }

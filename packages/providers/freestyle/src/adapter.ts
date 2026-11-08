@@ -306,9 +306,10 @@ function expiry(vm: VmData): SandboxInfo["expires"] {
 
 /**
  * Root ownership helper for overwrites. `owner PATH` prints `uid:gid` of a regular file (never
- * through a symlink) or nothing. `restore PATH UID GID SIZE SHA256` opens PATH with O_NOFOLLOW
- * and `fchown`s that open inode only when it is a regular root-owned file with one link and
- * exactly the written bytes; it prints `ok` or `skip`.
+ * through a symlink) or nothing. `restore PATH UID GID SIZE SHA256 REPLACER` opens PATH with
+ * O_NOFOLLOW and `fchown`s that open inode only when it is a regular file owned by REPLACER
+ * (root, which replaced it), with one link and exactly the written bytes; it prints `ok` or
+ * `skip`.
  */
 const OWNER_HELPER = `import hashlib,os,stat,sys
 m,p=sys.argv[1],sys.argv[2]
@@ -317,11 +318,11 @@ if m=='owner':
  except FileNotFoundError:sys.exit(0)
  if stat.S_ISREG(st.st_mode):print('%d:%d'%(st.st_uid,st.st_gid))
  sys.exit(0)
-u,g,n,h=int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]),sys.argv[6]
+u,g,n,h,r=int(sys.argv[3]),int(sys.argv[4]),int(sys.argv[5]),sys.argv[6],int(sys.argv[7])
 fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
 try:
  st=os.fstat(fd)
- if not stat.S_ISREG(st.st_mode) or st.st_uid!=0 or st.st_nlink!=1 or st.st_size!=n:print('skip');sys.exit(0)
+ if not stat.S_ISREG(st.st_mode) or st.st_uid!=r or st.st_nlink!=1 or st.st_size!=n:print('skip');sys.exit(0)
  d=hashlib.sha256()
  while True:
   b=os.read(fd,1048576)
@@ -883,6 +884,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           parsed[2] ?? "",
           String(bytes.byteLength),
           digest,
+          "0",
         ]).then(
           (result) => result === "ok",
           () => false,
