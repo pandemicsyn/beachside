@@ -1097,6 +1097,7 @@ export function createDaytonaAdapter(
           exec: { commands: ["argv", "shell"], maxOutputBytes: caps.maxOutputBytes },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          createLabels: true,
           // Rounded up to whole minutes; inspect reports the native expiry.
           lifetime: { minSeconds: 1, maxSeconds: Number.MAX_SAFE_INTEGER },
         },

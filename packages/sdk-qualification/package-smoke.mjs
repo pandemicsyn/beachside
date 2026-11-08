@@ -22,6 +22,7 @@ const packages = [
   ["@beachside/e2b", "packages/providers/e2b"],
   ["beachside", "packages/sdk"],
   ["@beachside/cli", "packages/cli"],
+  ["@beachside/pi", "packages/pi"],
 ];
 
 const forbidden = new Set([
@@ -79,6 +80,7 @@ async function pack(directory) {
       "@beachside/boat",
       "@beachside/runloop",
       "@beachside/cli",
+      "@beachside/pi",
     ].includes(manifest.name)
   ) {
     for (const path of contents.filter((path) => /\.(?:js|d\.ts)$/.test(path))) {
@@ -1434,6 +1436,218 @@ export const fake = createFakeAdapter({ url: process.env.FAKE_URL, token: proces
       throw new Error(`${runtime}: packed CLI run left a store record`);
     console.log(`${runtime}: packed CLI run passed`);
   }
+
+  const piConsumer = join(temporary, "pi");
+  const piHost = JSON.parse(await readFile(join(root, "packages/pi/package.json"), "utf8"));
+  await consumer(
+    piConsumer,
+    {
+      "@beachside/pi": archiveOverrides["@beachside/pi"],
+      "@beachside-internal/provider-fake": archiveOverrides["@beachside-internal/provider-fake"],
+      "@earendil-works/pi-coding-agent": piHost.devDependencies["@earendil-works/pi-coding-agent"],
+      typebox: piHost.devDependencies.typebox,
+    },
+    archiveOverrides,
+    `import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { createAgentSession, DefaultResourceLoader, SessionManager } from "@earendil-works/pi-coding-agent";
+import { createBeachsideTools } from "@beachside/pi";
+
+assert.equal(typeof createBeachsideTools, "function");
+const cwd = process.cwd();
+const packageDir = join(cwd, "node_modules/@beachside/pi");
+const manifest = JSON.parse(await readFile(join(packageDir, "package.json"), "utf8"));
+const agentDir = join(cwd, "agent");
+await access(join(packageDir, manifest.pi.skills[0], "beachside/SKILL.md"));
+await access(join(packageDir, manifest.pi.skills[0], "beachside-cli/SKILL.md"));
+const tools = ["bash", "edit", "find", "grep", "ls", "read", "write"];
+async function open(sessionManager, profile, sessionStartEvent) {
+  const resourceLoader = new DefaultResourceLoader({
+    cwd, agentDir,
+    additionalExtensionPaths: manifest.pi.extensions.map((file) => join(packageDir, file)),
+  });
+  await resourceLoader.reload();
+  const extensions = resourceLoader.getExtensions();
+  assert.deepEqual(extensions.errors, []);
+  if (profile) extensions.runtime.flagValues.set("beachside", profile);
+  extensions.runtime.flagValues.set("beachside-sync", "none");
+  const { session } = await createAgentSession({ cwd, agentDir, resourceLoader, tools, sessionManager, sessionStartEvent });
+  await session.bindExtensions({
+    mode: "print",
+    onError: (error) => { throw new Error(error.event + ": " + error.error); },
+  });
+  return session;
+}
+async function remoteShell(session, command, excludeFromContext) {
+  const intercepted = await session.extensionRunner.emitUserBash({ type: "user_bash", command, cwd, excludeFromContext });
+  assert.ok(intercepted?.operations);
+  let output = "";
+  const exec = await intercepted.operations.exec(command, cwd, { onData: (data) => { output += data.toString(); } });
+  assert.equal(exec.exitCode, 0);
+  return output.trim();
+}
+function saved(session) {
+  return session.sessionManager.getEntries().filter((entry) =>
+    entry.type === "custom" && entry.customType === "beachside.pi.session" &&
+    entry.data.owner === session.sessionManager.getSessionId());
+}
+const manager = SessionManager.create(cwd, join(cwd, "sessions"));
+let session = await open(manager, "fake");
+try {
+  assert.deepEqual(session.getActiveToolNames().sort(), tools);
+  assert.deepEqual(session.extensionRunner.getAllRegisteredTools().map((item) => item.definition.name).sort(), tools);
+  assert.equal(saved(session).length, 0);
+  if (process.env.INVALID_PROFILE === "1") {
+    const remote = await session.extensionRunner.emitUserBash({ type: "user_bash", command: "touch host-canary", cwd, excludeFromContext: true });
+    assert.ok(remote?.operations);
+    await assert.rejects(
+      remote.operations.exec("touch host-canary", cwd, { onData() {} }),
+      /explicit network policy/,
+    );
+    await assert.rejects(access(join(cwd, "host-canary")));
+  } else {
+    manager.appendMessage({ role: "user", content: "Fixture session", timestamp: Date.now() });
+    const result = await Promise.all([false, true].map((exclude) => remoteShell(session, "echo remote", exclude)));
+    assert.deepEqual(result, ["remote", "remote"]);
+    assert.equal(saved(session).filter((entry) => entry.data.status === "ready").length, 1);
+    const parentId = saved(session).at(-1).data.reference.nativeId;
+    const parentPath = manager.getSessionFile();
+
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "reload" });
+    session.dispose();
+    session = await open(SessionManager.open(parentPath));
+    assert.equal(await remoteShell(session, "echo reopened", false), "reopened");
+    assert.equal(saved(session).at(-1).data.reference.nativeId, parentId);
+
+    const child = SessionManager.open(parentPath);
+    const childPath = child.createBranchedSession(child.getLeafId());
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "fork", targetSessionFile: childPath });
+    session.dispose();
+    const forkStart = { type: "session_start", reason: "fork", previousSessionFile: parentPath };
+    session = await open(child, "other-profile", forkStart);
+    await assert.rejects(remoteShell(session, "echo wrong profile", false), /belongs to Beachside profile fake/);
+    assert.equal(saved(session).length, 0);
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "reload" });
+    session.dispose();
+
+    session = await open(child, undefined, forkStart);
+    assert.equal(await remoteShell(session, "echo forked", false), "forked");
+    assert.notEqual(saved(session).at(-1).data.reference.nativeId, parentId);
+
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+    session.dispose();
+    session = await open(SessionManager.open(parentPath));
+    assert.equal(await remoteShell(session, "echo parent", false), "parent");
+    assert.equal(saved(session).at(-1).data.reference.nativeId, parentId);
+
+    process.env.FAKE_UNKNOWN_SNAPSHOT = "1";
+    const failedChild = SessionManager.open(parentPath);
+    const failedChildPath = failedChild.createBranchedSession(failedChild.getLeafId());
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "fork", targetSessionFile: failedChildPath });
+    session.dispose();
+    const failedHandoff = SessionManager.open(parentPath).getEntries().findLast((entry) =>
+      entry.type === "custom" && entry.customType === "beachside.pi.fork" && entry.data.target === failedChildPath);
+    assert.equal(failedHandoff?.data.recovery?.kind, "snapshot_capture");
+    assert.ok(failedHandoff.data.error.includes(failedHandoff.data.recovery.operationId));
+    session = await open(failedChild, undefined, forkStart);
+    await assert.rejects(remoteShell(session, "echo blocked fork", false), /Recovery reference for operation/);
+
+    await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+    session.dispose();
+    session = await open(SessionManager.open(parentPath));
+    assert.equal(await remoteShell(session, "echo cleanup parent", false), "cleanup parent");
+  }
+} finally {
+  await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+  session.dispose();
+}
+`,
+  );
+  const piGraph = inspectGraph(piConsumer, ["@beachside/pi"]);
+
+  if (
+    piGraph.some(
+      (name) => name.startsWith("@beachside-internal/") || name.startsWith("@earendil-works/"),
+    )
+  )
+    throw new Error(`Pi package leaked private dependencies or bundled its host: ${piGraph}`);
+  await writeFile(
+    join(piConsumer, "adapter.mjs"),
+    `import { createFakeAdapter } from "@beachside-internal/provider-fake/adapter";
+const adapter = createFakeAdapter({ url: process.env.FAKE_URL, token: process.env.FAKE_TOKEN, snapshots: true });
+export const fake = {
+  ...adapter,
+  async connect(input) {
+    const session = await adapter.connect(input);
+    const capture = session.snapshotCapture;
+    return {
+      ...session,
+      defaultImage: { kind: "prepared", value: "fake-starter" },
+      snapshotCapture: {
+        ...capture,
+        submit: (request, ctx) => process.env.FAKE_UNKNOWN_SNAPSHOT === "1"
+          ? ctx.unknown("Fixture lost snapshot acknowledgement")
+          : capture.submit(request, ctx),
+      },
+    };
+  },
+};
+`,
+  );
+  const piConfig = join(piConsumer, "beachside.json");
+
+  const skillsSetup =
+    "mkdir -p /tmp/beachside-pi-skills/beachside /tmp/beachside-pi-skills/beachside-cli";
+
+  for (const [script, stdout] of [
+    ["mkdir -p -- '/tmp/beachside-work'", ""],
+    [skillsSetup, ""],
+    ["exec bash -c 'echo remote'", "remote"],
+    ["exec bash -c 'echo remote'", "remote"],
+    ["exec bash -c 'echo reopened'", "reopened"],
+    [skillsSetup, ""],
+    ["exec bash -c 'echo forked'", "forked"],
+    ["exec bash -c 'echo parent'", "parent"],
+    ["exec bash -c 'echo cleanup parent'", "cleanup parent"],
+  ]) {
+    await fixture.fakeControl("/_test/seed", {
+      submissionId: "*",
+      action: "exec",
+      behavior: "normal",
+      command: {
+        command: { kind: "shell", script },
+        cwd: script.startsWith("exec bash") ? "/tmp/beachside-work" : undefined,
+        exitCode: 0,
+        stdoutBase64: Buffer.from(stdout).toString("base64"),
+      },
+    });
+  }
+
+  for (const invalid of [false, true]) {
+    await writeFile(
+      piConfig,
+      JSON.stringify({
+        profiles: {
+          fake: {
+            module: "./adapter.mjs",
+            export: "fake",
+            network: invalid ? undefined : "blocked",
+          },
+        },
+      }),
+    );
+    run("node", ["consumer.mjs"], piConsumer, {
+      BEACHSIDE_CONFIG: piConfig,
+      FAKE_URL: fixture.fakeUrl,
+      FAKE_TOKEN: fixture.fakeToken,
+      INVALID_PROFILE: invalid ? "1" : "0",
+    });
+  }
+
+  console.log(
+    "Node: packed Pi tools, parallel shell hooks, resume, fork, and fail-closed setup passed",
+  );
 
   console.log(
     `Packed consumer graph: ${inspectGraph(direct, ["beachside", "@beachside-internal/provider-fake"]).join(", ")}`,

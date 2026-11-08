@@ -1,9 +1,24 @@
 import type { BeachsideClient, SandboxHandle } from "beachside";
-import { loadConfig, maxSandboxes, stateDir, type Env, type LoadedConfig } from "./config";
+import {
+  loadConfig,
+  maxSandboxes,
+  stateDir,
+  type Env,
+  type LoadedConfig,
+} from "@beachside-internal/profile/config";
 import { CliError, type Output } from "./output";
-import { connect, descriptor, resolveProfile, type ResolvedProfile } from "./providers";
-import { SecretReader } from "./secrets";
-import { FsStateStore, type SandboxRecord, type StateStore } from "./store";
+import {
+  connect,
+  descriptor,
+  resolveProfile,
+  type ResolvedProfile,
+} from "@beachside-internal/profile/providers";
+import { SecretReader } from "@beachside-internal/profile/secrets";
+import {
+  FsStateStore,
+  type SandboxRecord,
+  type StateStore,
+} from "@beachside-internal/profile/store";
 
 export type GlobalFlags = {
   json: boolean;

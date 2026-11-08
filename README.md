@@ -55,6 +55,8 @@ Switching providers only changes the `adapter`, `credentials` and `config` you p
 
 Using a coding agent? `npx skills add pandemicsyn/beachside --skill beachside -g` teaches it the SDK.
 
+[Beachside for Pi](packages/pi/README.md) runs Pi’s coding tools in a sandbox selected by a Beachside profile.
+
 ## CLI
 
 Same sandboxes, straight from your shell. `beachside` creates, runs in and removes sandboxes on any provider with an adapter. It never prompts for input, every command has a `--json` form, and exit codes clearly indicate what to do next, so your coding agent can drive it as easily as you can.

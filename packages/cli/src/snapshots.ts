@@ -20,7 +20,7 @@ import {
   SnapshotRecord,
   type StateStore,
   type Versioned,
-} from "./store";
+} from "@beachside-internal/profile/store";
 
 type Entry = Versioned<SnapshotRecord>;
 

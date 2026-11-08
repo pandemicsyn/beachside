@@ -1025,6 +1025,9 @@ export const DirectCapabilities = z.strictObject({
   network: z.array(z.string()),
   /** `create({ env })` sets sandbox-wide environment variables on this connection. */
   createEnv: z.boolean().optional(),
+  createLabels: z.boolean().optional(),
+  /** Read-only HTTP preview lookup is exposed by the connection. */
+  preview: z.boolean().optional(),
   /** Per-create `lifecycle.lifetimeSeconds` range on this connection; null when only setup sets it. */
   lifetime: LifetimeLimits.nullable().optional(),
   exec: z.boolean(),

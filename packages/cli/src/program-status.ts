@@ -1,4 +1,4 @@
-import type { Env } from "./config";
+import type { Env } from "@beachside-internal/profile/config";
 
 /**
  * Program Status Protocol (OSC 7501) reports, so terminals such as Rex can show a command's

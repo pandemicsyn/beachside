@@ -25,6 +25,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@beachside-internal/profile": "workspace:*",
     "@beachside/boat": "workspace:*",
     "@beachside/boxd": "workspace:*",
     "@beachside/daytona": "workspace:*",

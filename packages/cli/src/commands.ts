@@ -20,7 +20,12 @@ import {
   type SandboxListEntry,
 } from "beachside";
 import { z } from "zod";
-import { searchProjectAdapters, valueAvailable, type Env, type LoadedConfig } from "./config";
+import {
+  searchProjectAdapters,
+  valueAvailable,
+  type Env,
+  type LoadedConfig,
+} from "@beachside-internal/profile/config";
 import {
   CliError,
   describeError,
@@ -31,7 +36,12 @@ import {
   type Output,
 } from "./output";
 import { imageEnvironment } from "./images";
-import { missingEnv, providers, resolveAdapterModule, type ResolvedProfile } from "./providers";
+import {
+  missingEnv,
+  providers,
+  resolveAdapterModule,
+  type ResolvedProfile,
+} from "@beachside-internal/profile/providers";
 import type { Session } from "./session";
 import { restoreSnapshot, snapshotSource } from "./snapshots";
 import {
@@ -43,7 +53,7 @@ import {
   type SnapshotRecord,
   type StateStore,
   type Versioned,
-} from "./store";
+} from "@beachside-internal/profile/store";
 import {
   defaultPushDir,
   download,
@@ -56,7 +66,7 @@ import {
   upload,
   uploadFile,
   type LocalTree,
-} from "./transfer";
+} from "@beachside-internal/profile/transfer";
 import { meter } from "./program-status";
 import { parseDuration, parsePairs, parseSize } from "./units";
 
@@ -245,10 +255,10 @@ async function envFlags(session: Session, flags: Flags): Promise<Record<string, 
 }
 
 /** The create input; `--image` is resolved after connecting, because it depends on the provider. */
-function createInput(request: CreateRequest): CreateInput {
+function createInput(request: CreateRequest, network?: string): CreateInput {
   return {
     environment: request.prepared ? Image.prepared(request.prepared) : undefined,
-    network: request.network,
+    network: request.network ?? network,
     labels: Object.keys(request.labels).length ? request.labels : undefined,
     env: Object.keys(request.env).length ? request.env : undefined,
     lifecycle:
@@ -424,7 +434,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
   );
 
   let client: BeachsideClient<true>;
-  const input = createInput(request);
+  const input = createInput(request, profile.network);
 
   try {
     client = await session.connect(profile);

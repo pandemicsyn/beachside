@@ -13,8 +13,14 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { archivePath, Extractor, readTar, tarStream, type TarEntry } from "../src/tar";
-import { Excludes, localTree } from "../src/transfer";
+import {
+  archivePath,
+  Extractor,
+  readTar,
+  tarStream,
+  type TarEntry,
+} from "@beachside-internal/profile/tar";
+import { Excludes, localTree } from "@beachside-internal/profile/transfer";
 
 let root: string;
 

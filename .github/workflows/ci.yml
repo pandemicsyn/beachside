@@ -43,6 +43,7 @@ jobs:
               -e '(^|/)(package.json|tsconfig[^/]*\.json|build-assets\.ts|flatten-declarations\.mjs|\.npmignore|\.gitignore)$' \
               -e '^packages/([^/]+|providers/[^/]+)/src/(index|client|server|adapter|portable|testing|bound|factory|process-contract)\.ts$' \
               -e '^packages/([^/]+|providers/[^/]+)/assets/' \
+              -e '^packages/(pi|profile)/|^skills/(beachside|beachside-cli)/' \
               -e '^packages/sdk-qualification/.*\.(ts|mjs|json)$' \
               -e '^apps/docs/examples/recovery-outcomes\.ts$' \
               "$RUNNER_TEMP/changed-files"; then

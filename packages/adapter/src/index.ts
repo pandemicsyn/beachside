@@ -343,6 +343,8 @@ export type Guarantees<C extends Command["kind"] = Command["kind"]> = {
    * and terminal, including after reopen in another process. Absent rejects create `env`.
    */
   createEnv?: boolean;
+  /** Create accepts the portable user label keys, including dotted keys. */
+  createLabels?: boolean;
   /**
    * Per-create `lifetimeSeconds` this connection applies natively, in whole seconds. Absent
    * rejects a per-create lifetime; the setup lifetime still applies.

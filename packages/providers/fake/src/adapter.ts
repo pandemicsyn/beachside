@@ -682,6 +682,7 @@ export function createFakeAdapter(options: {
           exec: { commands: ["argv", "shell"], maxOutputBytes: caps.maxOutputBytes },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          createLabels: true,
           lifetime: { minSeconds: 1, maxSeconds: 86_400 },
         },
         create: {

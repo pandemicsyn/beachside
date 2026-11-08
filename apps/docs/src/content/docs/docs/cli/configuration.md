@@ -94,3 +94,5 @@ Use a different folder with `--state-dir` or `BEACHSIDE_STATE_DIR` (relative to 
 The name is recorded before the provider is called. If a create fails in a way that may still have made a sandbox, the record stays with status `unknown`, so `beachside ls` shows it. The record also keeps the SDK's recovery reference for that create, so `beachside rm <name>` and `beachside inspect <name>` first ask the provider how the original request ended, without sending it again. If the sandbox exists, `rm` destroys it. If the provider still cannot say, check it yourself; `beachside rm --force <name>` then drops the record.
 
 Concurrent `beachside` processes on one machine can share a state folder safely.
+
+The [Beachside Pi extension](/docs/agents/pi/) reads these same profiles. A profile-level `network` sets the sandbox policy for creation and snapshot restore. The CLI accepts `--network` to override it for one command.

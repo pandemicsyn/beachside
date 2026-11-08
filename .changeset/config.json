@@ -18,7 +18,8 @@
       "@beachside/runloop",
       "@beachside/modal",
       "@beachside/vercel",
-      "@beachside/cli"
+      "@beachside/cli",
+      "@beachside/pi"
     ]
   ],
   "linked": [],

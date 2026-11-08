@@ -11,7 +11,7 @@ import {
 } from "beachside";
 import type { Flags } from "./commands";
 import { CliError, describeError, usage } from "./output";
-import type { ResolvedProfile } from "./providers";
+import type { ResolvedProfile } from "@beachside-internal/profile/providers";
 import type { Session } from "./session";
 import {
   checkName,
@@ -20,7 +20,7 @@ import {
   RecordName,
   type StateStore,
   type Versioned,
-} from "./store";
+} from "@beachside-internal/profile/store";
 
 type Entry = Versioned<ImageRecord>;
 

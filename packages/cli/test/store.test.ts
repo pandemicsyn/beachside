@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { forget } from "../src/commands";
-import { FsStateStore, type SandboxRecord } from "../src/store";
+import { FsStateStore, type SandboxRecord } from "@beachside-internal/profile/store";
 
 let dir: string;
 

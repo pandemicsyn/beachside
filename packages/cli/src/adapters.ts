@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import manifest from "../package.json" with { type: "json" };
 import type { Flags } from "./commands";
-import type { Env } from "./config";
+import type { Env } from "@beachside-internal/profile/config";
 import { CliError, usage, type Output } from "./output";
 import {
   adaptersDir,
@@ -15,7 +15,7 @@ import {
   PackageName,
   providers,
   type ProviderDescriptor,
-} from "./providers";
+} from "@beachside-internal/profile/providers";
 import type { Session } from "./session";
 
 export const adapterActions = ["add", "ls", "rm"] as const;
