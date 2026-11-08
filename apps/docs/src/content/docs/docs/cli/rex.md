@@ -51,13 +51,6 @@ beachside create --name rex --network internet --ttl 2h
 beachside exec rex -- sh -c 'curl -fsSL https://pkgs.superlogical.com/rex/install.sh | sh'
 ```
 
-Send the key over stdin, so it never shows up in a command line or in the sandbox's env:
-
-```sh
-printf %s "$TAILSCALE_AUTH_KEY" | beachside exec rex --stdin -- \
-  sh -c 'umask 077 && mkdir -p ~/.beachside && cat > ~/.beachside/ts.key'
-```
-
 boxd needs nothing more: its sandboxes have a private IPv4 address and passwordless sudo, so Rex installs and logs in as is. Set `BOXD_ORG` and `BOXD_NETWORK=internet` along with `BOXD_API_KEY` (see [configuration](/docs/cli/configuration/)).
 
 On E2B, give the sandbox a routable address first. E2B sandboxes only have a link-local IPv4 address, so Tailscale thinks the machine is offline and never logs in ([e2b-dev/runtime#3780](https://github.com/e2b-dev/runtime/issues/3780)):
@@ -66,17 +59,19 @@ On E2B, give the sandbox a routable address first. E2B sandboxes only have a lin
 beachside exec rex -- sudo ip addr add 192.0.0.8/32 dev eth0 noprefixroute
 ```
 
-Start the server:
+Start the server, then turn on Tailscale with the key sent over stdin. The key never touches the sandbox's disk, command line or env:
 
 ```sh
-beachside exec rex -- rex server start \
-  --tailscale \
-  --tailscale-hostname rex-sandbox \
-  --tailscale-auth-key-file ~/.beachside/ts.key \
-  --tailscale-allow-tailnet-members
+beachside exec rex -- rex server start --tailscale-hostname rex-sandbox
+
+printf %s "$TAILSCALE_AUTH_KEY" | beachside exec rex --stdin -- \
+  rex server tailscale on \
+  --hostname rex-sandbox \
+  --auth-key-file - \
+  --allow-tailnet-members
 ```
 
-The server keeps running after `exec` returns. It joins your tailnet as `rex-sandbox`, and the first HTTPS certificate takes up to a minute. To watch it start, run `beachside exec rex -- rex server logs`. It's ready when you see `tailnet https listener ready`.
+It takes two steps because `rex server start` runs in the background and can't read the key from stdin. The server keeps running after `exec` returns, joins your tailnet as `rex-sandbox`, and logs in within a few seconds. The first HTTPS certificate takes up to a minute. To watch it start, run `beachside exec rex -- rex server logs`. It's ready when you see `tailnet https listener ready`.
 
 ## Open it from your Mac
 
@@ -107,6 +102,8 @@ Because the key is ephemeral, the device disappears from your tailnet shortly af
 **The server waits at "needs login" or ignores the key.** Rex keeps its Tailscale state in `~/.local/state/rex/tsnet`, whatever hostname you pass. If that state exists, from an earlier start or a sign-in by link, Rex uses it and logs `Ignoring authkey`. Move that directory away before the first start with a key, and don't snapshot a sandbox after Rex has joined your tailnet.
 
 **On E2B, the server waits at "needs login" with no error.** The sandbox only has a link-local address. Add `192.0.0.8/32` to `eth0` as shown above, before the first start.
+
+**The first connection fails with "TLS handshake did not finish in time".** The certificate wasn't ready yet, and Rex's client gives up on the handshake after a few seconds. Wait for `tailnet https listener ready`, or warm the endpoint once with `curl -s -m 60 -o /dev/null https://rex-sandbox.<your-tailnet>.ts.net`, then connect again.
 
 **The install script can't download Rex.** The sandbox has no internet access. Pass `--network internet`, or use a provider tier that allows it.
 
