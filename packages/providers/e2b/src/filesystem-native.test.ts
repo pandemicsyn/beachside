@@ -109,3 +109,25 @@ test("E2B staged copy keeps destination and source on collision, refuses links, 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("E2B guest helper copies into missing parent folders", async () => {
+  const root = await mkdtemp(join(tmpdir(), "beachside-e2b-copy-parents-"));
+
+  try {
+    await writeFile(join(root, "source"), "bytes");
+    const destination = join(root, "a", "b", "copy");
+
+    expect(
+      await helper(
+        "copy",
+        join(root, "source"),
+        destination,
+        false,
+        join(root, "a", "b", ".stage"),
+      ),
+    ).toMatchObject({ ok: true });
+    expect(await readFile(destination, "utf8")).toBe("bytes");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
