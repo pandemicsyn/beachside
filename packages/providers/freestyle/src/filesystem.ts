@@ -151,7 +151,7 @@ export type RangeReader = (
 
 /**
  * Decode a native range response. A `206` carries `bytes a-b/total`; a `416` for a range that
- * starts exactly at the end of the file (`bytes * /total`, including an empty file) is EOF;
+ * starts exactly at the end of the file (including an empty file) is EOF;
  * a `200` is the whole file, valid only for a read from offset 0.
  */
 export async function rangeResult(
@@ -163,6 +163,11 @@ export async function rangeResult(
 
   if (response.status === 416) {
     await response.body?.cancel().catch(() => undefined);
+
+    // Live Freestyle sends no `Content-Range` with a 416. Reads only continue past a full
+    // chunk, so an unsatisfiable range always starts at the end: an empty file at offset 0, or
+    // a length that is an exact chunk multiple.
+    if (!header) return { bytes: new Uint8Array(), total: offset };
     const match = /^bytes \*\/(\d{1,15})$/.exec(header);
     const total = match ? Number(match[1]) : undefined;
 

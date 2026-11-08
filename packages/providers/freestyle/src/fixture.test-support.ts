@@ -24,7 +24,7 @@ type FixtureVm = {
   createdAt: string;
   polls: number;
   files: Map<string, Uint8Array>;
-  /** `owner:group` of each file in `files`, as Freestyle's filesystem API reports it. */
+  /** Numeric `uid:gid` of each file in `files`. */
   owners: Map<string, string>;
   tls: { id: string; domain: string; port: number }[];
 };
@@ -456,13 +456,23 @@ export function freestyleFixture() {
       if (vm.state !== "running") return error(409, "VM_NOT_RUNNING");
       effects.exec++;
       commands.push(body.command);
-      // A root `chown` of a map-backed file changes its recorded owner.
-      const chown = /^chown -- '([a-z0-9_-]+:[a-z0-9_-]+)' '([^']+)'$/.exec(body.command);
+      // Root owner reads and `chown` of map-backed files use the recorded numeric owner.
+      if (body.linuxUser === "root") {
+        const owned = /^if \[ -f '([^']+)' \]/.exec(body.command);
+        const chown = /^chown -- (\d+:\d+) '([^']+)'$/.exec(body.command);
 
-      if (body.linuxUser === "root" && chown && vm.files.has(chown[2] ?? "")) {
-        vm.owners.set(chown[2] ?? "", chown[1] ?? "");
+        if (owned && !(owned[1] ?? "").startsWith(`${workdir}/`)) {
+          const path = owned[1] ?? "";
+          const stdout = vm.files.has(path) ? `${vm.owners.get(path) ?? "1000:1000"}\n` : "";
 
-        return json(200, { statusCode: 0, stdout: "", stderr: "" });
+          return json(200, { statusCode: 0, stdout, stderr: "" });
+        }
+
+        if (chown && vm.files.has(chown[2] ?? "")) {
+          vm.owners.set(chown[2] ?? "", chown[1] ?? "");
+
+          return json(200, { statusCode: 0, stdout: "", stderr: "" });
+        }
       }
 
       const command = body.command.replaceAll(ENV_FILE, localEnv(vm));
@@ -516,11 +526,8 @@ export function freestyleFixture() {
         const end = Math.min(range[2] ? Number(range[2]) + 1 : bytes.length, bytes.length);
 
         // As documented: a range starting at or past the end of the file is unsatisfiable.
-        if (start >= bytes.length)
-          return new Response(null, {
-            status: 416,
-            headers: { "content-range": `bytes */${bytes.length}` },
-          });
+        // As observed live: no Content-Range header, a JSON error body.
+        if (start >= bytes.length) return error(416, "RANGE_NOT_SATISFIABLE");
 
         return new Response(bytes.slice(start, end), {
           status: 206,
@@ -540,31 +547,13 @@ export function freestyleFixture() {
       if (local) writeFileSync(file, raw);
       else {
         // As observed live: a new file belongs to the default user, a replaced one to root.
-        vm.owners.set(file, vm.files.has(file) ? "root:root" : "ubuntu:ubuntu");
+        vm.owners.set(file, vm.files.has(file) ? "0:0" : "1000:1000");
         vm.files.set(file, new Uint8Array(raw));
       }
 
       if (file === ENV_FILE) writeFileSync(localEnv(vm), raw);
 
       return new Response(null, { status: 204 });
-    }
-
-    if (method === "GET" && rest === "fs/stat") {
-      const bytes = vm.files.get(file);
-
-      if (local || !bytes) return error(404, "FILE_NOT_FOUND");
-      const [owner, group] = (vm.owners.get(file) ?? "ubuntu:ubuntu").split(":");
-
-      return json(200, {
-        size: bytes.length,
-        isFile: true,
-        isDirectory: false,
-        isSymlink: false,
-        permissions: "0644",
-        owner: owner ?? "",
-        group: group ?? "",
-        modified: new Date().toISOString(),
-      });
     }
 
     if (method === "GET" && rest === "fs/dir" && local)

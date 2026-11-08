@@ -795,33 +795,50 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
       };
 
       /**
-       * One verified native PUT. Freestyle creates new files as the default user, but replaces
-       * an existing one as root, so the previous owner is restored (best effort, as root) and
-       * commands keep the access they had.
+       * One verified native PUT. Freestyle creates new files as the default user but replaces an
+       * existing one as root, so the previous numeric owner is read first and restored as root;
+       * commands then keep the access they had. Returns false when the bytes were written but
+       * the owner could not be restored.
        */
       const putFile = async (
         vmId: string,
         path: string,
         bytes: Uint8Array,
         signal: AbortSignal,
-      ) => {
+      ): Promise<boolean> => {
         const vm = api(callSignal(readContext(signal, 120))).vms.ref(vmId);
-        const before = await vm.fs.stat(path).catch(() => undefined);
+        const target = quote(path);
+
+        const asRoot = async (command: string) => {
+          const result = await vm.exec({ command, linuxUser: "root", timeoutMs: 10_000 });
+
+          if (result.statusCode !== 0)
+            throw new AdapterError("UNAVAILABLE", "Freestyle file owner command failed");
+
+          return (result.stdout ?? "").trim();
+        };
+
+        let owner: string;
+
+        try {
+          owner = await asRoot(
+            `if [ -f ${target} ] && [ ! -L ${target} ]; then stat -c %u:%g -- ${target}; fi`,
+          );
+        } catch (error) {
+          throw error instanceof AdapterError ? error : failure(error).error;
+        }
+
+        if (owner && !/^\d{1,10}:\d{1,10}$/.test(owner))
+          throw new AdapterError("UNAVAILABLE", "Freestyle file owner is malformed");
 
         await vm.fs.writeFile(path, bytes);
 
-        if (
-          before?.isFile &&
-          !before.isSymlink &&
-          (before.owner !== "root" || before.group !== "root")
-        )
-          await vm
-            .exec({
-              command: `chown -- ${quote(`${before.owner}:${before.group}`)} ${quote(path)}`,
-              linuxUser: "root",
-              timeoutMs: 10_000,
-            })
-            .catch(() => undefined);
+        if (!owner || owner === "0:0") return true;
+
+        return asRoot(`chown -- ${owner} ${target}`).then(
+          () => true,
+          () => false,
+        );
       };
 
       /** One guest control command; anything but a clean exit is an error. */
@@ -1487,8 +1504,13 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
               try {
                 // One request, verified by sha256 and replaced atomically in the guest.
-                await putFile(input.sandbox.id, input.path, input.bytes, ctx.signal);
+                if (!(await putFile(input.sandbox.id, input.path, input.bytes, ctx.signal)))
+                  return ctx.unknown(
+                    "Freestyle wrote the file but could not restore its owner; inspect it",
+                  );
               } catch (error) {
+                if (error instanceof AdapterError) return ctx.reject(error.code, error.message);
+
                 return rejection(ctx, error, "Freestyle file write was not confirmed");
               }
 
@@ -1550,13 +1572,27 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
             if (ended) {
               try {
-                await putFile(
+                const restored = await putFile(
                   input.sandbox.id,
                   input.path,
                   new Uint8Array(Buffer.concat(head)),
                   ctx.signal,
                 );
+
+                if (!restored)
+                  throw new AdapterFilesystemError(
+                    "UNAVAILABLE",
+                    "Freestyle wrote the file but could not restore its owner; inspect it",
+                    {
+                      effect: "applied",
+                      source: input.path,
+                      destination: input.path,
+                      temporaryPaths: [],
+                    },
+                  );
               } catch (error) {
+                if (error instanceof AdapterError) throw error;
+
                 const native = failure(error);
 
                 if (refusedBeforeEffect(native)) throw native.error;

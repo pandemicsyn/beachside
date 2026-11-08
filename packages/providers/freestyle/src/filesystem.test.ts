@@ -107,10 +107,10 @@ test("an overwrite keeps the file's owner, so commands keep the access they had"
   try {
     const path = "/home/ubuntu/notes.txt";
     await box.writeFile(path, new TextEncoder().encode("one"), { overwrite: true });
-    expect(fixture.vms.get(box.id)?.owners.get(path)).toBe("ubuntu:ubuntu");
+    expect(fixture.vms.get(box.id)?.owners.get(path)).toBe("1000:1000");
 
     await box.writeFile(path, new TextEncoder().encode("two"), { overwrite: true });
-    expect(fixture.vms.get(box.id)?.owners.get(path)).toBe("ubuntu:ubuntu");
+    expect(fixture.vms.get(box.id)?.owners.get(path)).toBe("1000:1000");
     expect(new TextDecoder().decode(await box.readFile(path))).toBe("two");
   } finally {
     await client.close();
