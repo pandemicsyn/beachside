@@ -1136,6 +1136,9 @@ test("exec streams stdin of any size and form without a callback", async () => {
     f.exit.resolve({ exitCode: 0 });
     f.outputEnd.resolve();
     expect((await running).stdout).toEqual(Uint8Array.of(42));
+
+    // A fully read web stream is handed back unlocked.
+    if (form.stdin instanceof ReadableStream) expect(form.stdin.locked).toBe(false);
     await f.client.close();
   }
 });

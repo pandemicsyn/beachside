@@ -19,6 +19,26 @@ for (const [name, code] of Object.entries(signalExitCodes))
     controller.abort(new Error(`Interrupted by ${name}`));
   });
 
+/** Wait for a full output buffer to drain, or for the stream to close (a closed pipe). */
+function ready(name: "stdout" | "stderr"): Promise<void> {
+  const stream = process[name];
+
+  if (!stream.writableNeedDrain) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const done = () => {
+      stream.off("drain", done);
+      stream.off("close", done);
+      stream.off("error", done);
+      resolve();
+    };
+
+    stream.on("drain", done);
+    stream.on("close", done);
+    stream.on("error", done);
+  });
+}
+
 async function* stdin(): AsyncIterable<Uint8Array> {
   for await (const chunk of process.stdin) yield new Uint8Array(chunk);
 }
@@ -31,6 +51,7 @@ const code = await main(process.argv.slice(2), {
   streams: {
     stdout: (text) => process.stdout.write(text),
     stderr: (text) => process.stderr.write(text),
+    ready,
   },
 });
 

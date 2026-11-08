@@ -7,6 +7,7 @@ import {
   readdir,
   readFile,
   readlink,
+  realpath,
   rename,
   rm,
   stat,
@@ -106,7 +107,8 @@ export const scripts = {
   /**
    * Join staged parts into the file at `path`, remove the staging folder, and print `path`. The
    * file is assembled beside the destination and published in one step: `mv` to replace, or a
-   * hard link when `overwrite` is false, which fails atomically if the destination appeared.
+   * hard link when `overwrite` is false, which fails atomically if the destination appeared. A
+   * destination that became a directory in between is caught afterwards and reported.
    */
   join(tmp: string, path: string, overwrite: boolean): string {
     const dest = shellQuote(path);
@@ -122,11 +124,14 @@ export const scripts = {
       `cat "$tmp"/part.* > "$part"`,
       // mktemp makes the file private; give it the mode a new file would get.
       `chmod "$(printf '%o' $((0666 & ~0$(umask))))" "$part"`,
+      'name=$(basename "$part")',
       ...(overwrite
-        ? [`mv -f "$part" ${dest}`, 'part=""']
+        ? [`mv -f "$part" ${dest}`]
         : [
             `if ! ln "$part" ${dest} 2>/dev/null; then if [ -e ${dest} ] || [ -L ${dest} ]; then echo "the destination already exists" >&2; exit ${Exists}; fi; echo "could not publish the file" >&2; exit 1; fi`,
           ]),
+      // A destination that became a directory meanwhile received the file inside it instead.
+      `if [ -d ${dest} ]; then rm -f ${dest}/"$name"; echo "the destination is a directory" >&2; exit 1; fi`,
       `echo ${dest}`,
     ].join("\n");
   },
@@ -734,17 +739,28 @@ export async function saveLocalFile(
     return bytes;
   }
 
+  // A symlink keeps working: the copy replaces the file it points to, as a direct write would.
+  const link = (await lstat(local).catch(() => null))?.isSymbolicLink();
+  const target = link ? await realpath(local).catch(() => null) : local;
+
+  // A dangling link has no file to replace beside; write through it as before.
+  if (!target) {
+    await pipeline(counted(), createWriteStream(local, { flags: "w" }));
+
+    return bytes;
+  }
+
   const part = join(
-    dirname(local),
-    `.${basename(local)}.beachside-${crypto.randomUUID().slice(0, 8)}.part`,
+    dirname(target),
+    `.${basename(target)}.beachside-${crypto.randomUUID().slice(0, 8)}.part`,
   );
 
   try {
     await pipeline(counted(), createWriteStream(part, { flags: "wx" }));
-    const existing = await stat(local).catch(() => null);
+    const existing = await stat(target).catch(() => null);
 
     if (existing?.isFile()) await chmod(part, existing.mode & 0o7777);
-    await rename(part, local);
+    await rename(part, target);
   } catch (cause) {
     await rm(part, { force: true });
     throw cause;

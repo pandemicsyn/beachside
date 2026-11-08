@@ -178,7 +178,12 @@ function readableSource(stream: ReadableStream<Uint8Array>): StdinSource {
       reader ??= stream.getReader();
       const part = await reader.read();
 
-      return part.done ? null : stdinChunk(part.value);
+      if (!part.done) return stdinChunk(part.value);
+      // The stream ended: hand it back to the caller unlocked.
+      cancelled = true;
+      reader.releaseLock();
+
+      return null;
     },
     cancel() {
       if (cancelled) return;

@@ -2495,6 +2495,19 @@ describe("large files and input", () => {
       expect((await readdir(dir)).filter((name) => name.includes(".part"))).toEqual([]);
     });
 
+    test("cp to a local symlink replaces the file it points to", async () => {
+      const env = { BEACHSIDE_FAKE_FILES: remote };
+      await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);
+      await mkdir(join(remote, "work"), { recursive: true });
+      await writeFile(join(remote, "work", "a.txt"), "new\n");
+      await writeFile(join(dir, "target.txt"), "old\n");
+      await symlink("target.txt", join(dir, "link.txt"));
+
+      expect((await cli(["cp", "box:/work/a.txt", "link.txt"], env)).code).toBe(0);
+      expect(await readlink(join(dir, "link.txt"))).toBe("target.txt");
+      expect(await readFile(join(dir, "target.txt"), "utf8")).toBe("new\n");
+    });
+
     test("cp --no-clobber leaves an existing local file alone", async () => {
       const env = { BEACHSIDE_FAKE_FILES: remote };
       await cli(["create", "--name", "box", "--prepared", "fake-starter"], env);

@@ -1375,8 +1375,10 @@ async function streamExec(
   const stop = AbortSignal.any([signal, deadline]);
 
   const pumped = (async () => {
-    for await (const chunk of running.output({ signal: stop }))
+    for await (const chunk of running.output({ signal: stop })) {
       out.streams[chunk.stream]("bytes" in chunk ? chunk.bytes : chunk.text);
+      await out.streams.ready?.(chunk.stream);
+    }
   })().then(
     () => undefined,
     (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
@@ -1828,7 +1830,10 @@ export async function catCommand(session: Session, flags: Flags): Promise<number
   const chunks = fileChunks(box, record.name, location.path, signal);
 
   if (!out.json) {
-    for await (const chunk of chunks) out.streams.stdout(chunk);
+    for await (const chunk of chunks) {
+      out.streams.stdout(chunk);
+      await out.streams.ready?.("stdout");
+    }
 
     return 0;
   }

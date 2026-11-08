@@ -167,6 +167,8 @@ export function commandExitCode(): 125 {
 
 export type Streams = {
   stdout: (text: string | Uint8Array) => void;
+  /** Resolves once the stream can take more; streaming writers await it so output stays bounded. */
+  ready?: (stream: "stdout" | "stderr") => Promise<void>;
   stderr: (text: string | Uint8Array) => void;
 };
 
