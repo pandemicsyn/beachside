@@ -16,6 +16,7 @@
       "@beachside/boxd",
       "@beachside/boat",
       "@beachside/runloop",
+      "@beachside/freestyle",
       "@beachside/modal",
       "@beachside/vercel",
       "@beachside/cli"

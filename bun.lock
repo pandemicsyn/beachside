@@ -38,6 +38,7 @@
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/freestyle": "workspace:*",
         "@beachside/modal": "workspace:*",
         "@beachside/runloop": "workspace:*",
         "beachside": "workspace:*",
@@ -79,6 +80,7 @@
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/freestyle": "workspace:*",
         "@beachside/modal": "workspace:*",
         "@beachside/runloop": "workspace:*",
         "@beachside/vercel": "workspace:*",
@@ -150,6 +152,18 @@
         "zod": "4.6.5",
       },
     },
+    "packages/providers/freestyle": {
+      "name": "@beachside/freestyle",
+      "version": "0.8.0",
+      "dependencies": {
+        "@beachside/adapter": "workspace:*",
+        "freestyle": "0.2.21",
+        "zod": "4.6.5",
+      },
+      "devDependencies": {
+        "beachside": "workspace:*",
+      },
+    },
     "packages/providers/modal": {
       "name": "@beachside/modal",
       "version": "0.8.0",
@@ -215,6 +229,7 @@
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/freestyle": "workspace:*",
         "@beachside/runloop": "workspace:*",
         "@beachside/vercel": "workspace:*",
       },
@@ -294,6 +309,8 @@
     "@beachside/daytona": ["@beachside/daytona@workspace:packages/providers/daytona"],
 
     "@beachside/e2b": ["@beachside/e2b@workspace:packages/providers/e2b"],
+
+    "@beachside/freestyle": ["@beachside/freestyle@workspace:packages/providers/freestyle"],
 
     "@beachside/modal": ["@beachside/modal@workspace:packages/providers/modal"],
 
@@ -1091,6 +1108,8 @@
 
     "forwarded-parse": ["forwarded-parse@2.1.2", "", {}, "sha512-alTFZZQDKMporBH77856pXgzhEzaUVmLCDk+egLgIgHst3Tpndzz8MnKe+GzRJRfvVdn69HhpW7cmXzvtLvJAw=="],
 
+    "freestyle": ["freestyle@0.2.21", "", { "dependencies": { "dotenv": "^17.4.2", "ws": "^8.18.0", "yargs": "^17.7.2" }, "optionalDependencies": { "undici": "^7.16.0 || ^8.0.0" }, "bin": { "freestyle": "dist/cli/index.js" } }, "sha512-/RjHww36gz+t0976SgfiCzFtT/NAR3V2lGTfoazbkaZyDSg5x4ucuYQ1luBu37vGPpUpxNBluCxcrBN0cf6mEg=="],
+
     "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
 
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
@@ -1636,6 +1655,8 @@
     "csso/css-tree": ["css-tree@2.2.1", "", { "dependencies": { "mdn-data": "2.0.28", "source-map-js": "^1.0.1" } }, "sha512-OA0mILzGc1kCOCSJerOeqDxDQ4HOh+G8NbOJFOTgOCzpw7fCBubk0fEyxp8AgOL/jvLgYA/uV0cMbe43ElF1JA=="],
 
     "e2b/@bufbuild/protobuf": ["@bufbuild/protobuf@2.15.0", "", {}, "sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA=="],
+
+    "freestyle/undici": ["undici@8.11.2", "", {}, "sha512-u4UB2/IrKdU6lFxumHmmo1a3fCQO5tzQllRorfoRS63txhrB7xTpSn1PftwC4qEHkOaqP95fCWW4lJzwErwzhQ=="],
 
     "import-in-the-middle/es-module-lexer": ["es-module-lexer@3.0.2", "", {}, "sha512-BuIB67FngDSyQ/dpQNOZybwdEBDUGJQvOqwWr4ha/ufYiqzuEwPkKO2zLhRAgay28tStRIHUeWmszZAJo3GCOg=="],
 

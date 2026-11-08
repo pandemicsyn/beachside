@@ -2,7 +2,7 @@
 
 **[Read the docs →](https://beachside.run/docs/)**
 
-Beachside is a TypeScript SDK for creating sandboxes, running commands, and moving files across providers. Daytona, E2B, boxd, Boat, Runloop and Vercel are separately installed adapters; custom providers use the same adapter API. Run it in Node.js or Bun.
+Beachside is a TypeScript SDK for creating sandboxes, running commands, and moving files across providers. Daytona, E2B, boxd, Boat, Runloop, Freestyle and Vercel are separately installed adapters; custom providers use the same adapter API. Run it in Node.js or Bun.
 
 Create a sandbox, run a command, and clean up:
 

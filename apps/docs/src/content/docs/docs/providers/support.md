@@ -19,11 +19,12 @@ A live pass covers the image, region and network setting it ran with, not every 
 | [Vercel Sandbox](/docs/providers/vercel/) | Experimental | None yet                              | Not yet tested against the live Vercel service.                                                                          |
 | [Boat](/docs/providers/boat/)             | Experimental | None yet                              | Not yet tested against the live Boat service.                                                                            |
 | [Runloop](/docs/providers/runloop/)       | Experimental | None yet                              | Not yet tested against the live Runloop service; sign-ups are invitation only.                                           |
+| [Freestyle](/docs/providers/freestyle/)   | Experimental | None yet                              | Not yet tested against the live Freestyle service.                                                                       |
 | Modal                                     | Experimental | None yet                              | Not yet tested against the live Modal service.                                                                           |
 
 ## What has been tested live
 
-This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, and Modal are experimental; see the notes above and each provider's guide.
+This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, Freestyle, and Modal are experimental; see the notes above and each provider's guide.
 
 | Feature                               | Daytona         | E2B                  |
 | ------------------------------------- | --------------- | -------------------- |

@@ -485,6 +485,13 @@ export const providerStatus: ProviderStatus[] = [
     note: "Not yet tested against the live Runloop service; sign-ups are invitation only.",
   },
   {
+    id: "freestyle",
+    name: "Freestyle",
+    href: "/docs/providers/freestyle/",
+    experimental: true,
+    note: "Not yet tested against the live Freestyle service.",
+  },
+  {
     id: "modal",
     name: "Modal",
     experimental: true,
