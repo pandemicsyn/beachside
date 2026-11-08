@@ -6,14 +6,14 @@ description: Run a Rex server inside a sandbox and open it from Rex on your Mac 
 [Rex](https://www.superlogical.com/rex/docs) is a terminal workspace with a client and a server. If you run the Rex server inside a sandbox, you get a remote workspace: your sessions, tabs and blocks live in the sandbox, and you open them from Rex on your Mac. Nothing listens on a public port. Rex's built-in Tailscale puts the server on your tailnet, and only your tailnet can reach it.
 
 :::caution[Experimental]
-Rex is in beta. This recipe has been verified end to end on E2B (with the extra step below) and on plain Linux hosts. Daytona's lower tiers block the Rex download, because their sandboxes only reach an allowlist of hosts.
+Rex is in beta. This recipe has been verified end to end on boxd, on E2B (with the extra step below) and on plain Linux hosts. Daytona's lower tiers block the Rex download, because their sandboxes only reach an allowlist of hosts.
 :::
 
 ## What you need
 
 - Rex beta on your Mac.
 - A Tailscale tailnet with MagicDNS and HTTPS certificates turned on.
-- A provider whose sandboxes can reach the internet, including Tailscale's control servers.
+- A provider whose sandboxes can reach the internet, including Tailscale's control servers. boxd and E2B both work, and the examples use whichever profile is your default.
 
 ## Set up Tailscale once
 
@@ -57,6 +57,8 @@ Send the key over stdin, so it never shows up in a command line or in the sandbo
 printf %s "$TAILSCALE_AUTH_KEY" | beachside exec rex --stdin -- \
   sh -c 'umask 077 && mkdir -p ~/.beachside && cat > ~/.beachside/ts.key'
 ```
+
+boxd needs nothing more: its sandboxes have a private IPv4 address and passwordless sudo, so Rex installs and logs in as is. Set `BOXD_ORG` and `BOXD_NETWORK=internet` along with `BOXD_API_KEY` (see [configuration](/docs/cli/configuration/)).
 
 On E2B, give the sandbox a routable address first. E2B sandboxes only have a link-local IPv4 address, so Tailscale thinks the machine is offline and never logs in ([e2b-dev/runtime#3780](https://github.com/e2b-dev/runtime/issues/3780)):
 
