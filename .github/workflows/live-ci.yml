@@ -1,0 +1,179 @@
+# A real CI job on real providers, started by hand: it runs this repository's own lint, build and
+# CLI tests inside a sandbox, the way the "Run CI jobs" guide describes. It creates paid sandboxes
+# and keeps one base snapshot per provider, so it never runs on push or pull requests.
+name: Live CI
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Provider to run on
+        type: choice
+        options: [both, daytona, e2b]
+        default: both
+      cli-version:
+        description: Released CLI version to use through setup-beachside; empty builds the CLI and adapters from this commit
+        type: string
+        default: ""
+      warm-base:
+        description: Start from a cached base snapshot with dependencies installed
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: live-ci-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  live:
+    name: live (${{ matrix.provider }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: ${{ fromJSON(inputs.provider == 'both' && '["daytona","e2b"]' || format('["{0}"]', inputs.provider)) }}
+    env:
+      # Job-level, so every step and the setup action's cleanup can reach the provider.
+      DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+      DAYTONA_TARGET: ${{ vars.DAYTONA_TARGET || 'us' }}
+      # A Daytona snapshot of node:22-bookworm built at 2 vCPU / 4 GiB; see .github/live-ci/README.md.
+      DAYTONA_PREPARED: ${{ vars.DAYTONA_PREPARED }}
+      E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+      PROVIDER: ${{ matrix.provider }}
+      FROM_CHECKOUT: ${{ inputs.cli-version == '' }}
+      # Every sandbox carries both labels: one for this attempt's leak check, one for sweeps.
+      RUN_LABEL: beachside-live-ci=${{ github.run_id }}-${{ github.run_attempt }}
+      SWEEP_LABEL: ci=beachside-live
+      # Daytona orgs with limited egress refuse `internet`; their default policy reaches GitHub and npm.
+      NETWORK: ${{ matrix.provider == 'daytona' && 'daytona-default' || 'internet' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Either build the CLI and adapter from this commit...
+      - name: Build the CLI and adapter from this commit
+        if: env.FROM_CHECKOUT == 'true'
+        run: |
+          set -eu
+          bun install --frozen-lockfile
+          bun run build:packages
+          config="$RUNNER_TEMP/beachside-config"
+          bin=$(sh .github/live-ci/install-from-checkout.sh "$PROVIDER" "$RUNNER_TEMP/beachside-cli" "$config/beachside/adapters")
+          echo "$bin" >> "$GITHUB_PATH"
+          echo "XDG_CONFIG_HOME=$config" >> "$GITHUB_ENV"
+          echo "BEACHSIDE_STATE_DIR=$RUNNER_TEMP/beachside/state" >> "$GITHUB_ENV"
+          # The adapter is already installed; this checks it loads and matches the CLI.
+          PATH="$bin:$PATH" XDG_CONFIG_HOME="$config" beachside adapter add "$PROVIDER"
+
+      # ...or install a released one exactly as users do.
+      - name: Set up a released CLI
+        if: env.FROM_CHECKOUT != 'true'
+        uses: ./actions/setup-beachside
+        with:
+          version: ${{ inputs.cli-version }}
+          adapters: ${{ matrix.provider }}
+
+      - name: Write the job's profile
+        run: |
+          set -eu
+          config="$RUNNER_TEMP/beachside.json"
+          if [ "$PROVIDER" = daytona ]; then
+            if [ -z "$DAYTONA_PREPARED" ]; then
+              echo "::error::Set the DAYTONA_PREPARED repository variable to a 2 vCPU / 4 GiB Daytona snapshot (see .github/live-ci/README.md)"
+              exit 1
+            fi
+            # The default size is too small to build this monorepo, so the prepared snapshot must
+            # meet these minimums. The base sandbox is removed right after capture, so it needs no
+            # restart.
+            live=$(jq -n --arg prepared "$DAYTONA_PREPARED" '{
+              provider: "daytona",
+              config: {
+                environment: { kind: "prepared", value: $prepared },
+                resources: { vcpus: 2, memoryMiB: 4096 },
+                snapshots: { restartAfterCapture: false }
+              }
+            }')
+          else
+            live='{ "provider": "e2b", "config": {} }'
+          fi
+          jq -n --argjson live "$live" '{ default: "live", profiles: { live: $live } }' > "$config"
+          echo "BEACHSIDE_CONFIG=$config" >> "$GITHUB_ENV"
+
+      - name: Check credentials and adapter
+        run: |
+          beachside --version
+          beachside doctor
+
+      - name: Restore the base snapshot record
+        if: inputs.warm-base
+        id: base
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/beachside/state/snapshots
+          key: beachside-live-base-${{ matrix.provider }}-${{ hashFiles('bun.lock', '.github/live-ci/prepare.sh') }}
+          restore-keys: beachside-live-base-${{ matrix.provider }}-
+
+      - name: Build the base snapshot
+        if: inputs.warm-base && steps.base.outputs.cache-hit != 'true'
+        run: |
+          set -eu
+          beachside create --name base --network "$NETWORK" --ttl 30m --retry 5m \
+            --label "$RUN_LABEL" --label "$SWEEP_LABEL"
+          work=$(beachside push base)
+          beachside exec base --cwd "$work" --timeout 15m -- sh .github/live-ci/prepare.sh
+          beachside snapshot create base --name live-base --replace
+          beachside rm base
+
+      - name: Create the job sandbox
+        run: |
+          set -eu
+          from=""
+          if [ "${{ inputs.warm-base }}" = true ]; then from="--snapshot live-base"; fi
+          beachside create --name job $from --network "$NETWORK" --ttl 45m --retry 5m \
+            --label "$RUN_LABEL" --label "$SWEEP_LABEL"
+          echo "WORK=$(beachside push job)" >> "$GITHUB_ENV"
+
+      - name: Exit codes pass through
+        run: |
+          set +e
+          beachside exec job -- sh -c 'exit 3'
+          code=$?
+          set -e
+          test "$code" -eq 3 || { echo "::error::exec exited $code, expected 3"; exit 1; }
+
+      - name: Lint, build and test in the sandbox
+        run: beachside exec job --cwd "$WORK" --timeout 25m -- sh .github/live-ci/test.sh
+
+      - name: Copy test results back
+        if: always() && env.WORK != ''
+        run: beachside cp job:"$WORK"/junit.xml junit.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-${{ matrix.provider }}
+          path: junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # A released CLI's setup action removes the job's sandboxes in its post step; the checkout
+      # build has no action, so it cleans up the same way here.
+      - name: Remove this job's sandboxes
+        if: always() && env.FROM_CHECKOUT == 'true'
+        run: beachside rm --all
+
+      - name: Check nothing leaked
+        if: always() && env.FROM_CHECKOUT == 'true'
+        run: |
+          set -eu
+          result=$(beachside gc --label "$RUN_LABEL" --json)
+          echo "$result"
+          left=$(echo "$result" | jq '.data.removed | length')
+          if [ "$left" -ne 0 ]; then
+            echo "::warning::gc found $left sandbox(es) from this run still on $PROVIDER and removed them"
+          fi

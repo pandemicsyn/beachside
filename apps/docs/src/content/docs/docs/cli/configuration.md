@@ -77,7 +77,7 @@ References also work in a provider's environment variable, for example `E2B_API_
 
 ## Image builds
 
-E2B and Daytona build an OCI image into a provider template or snapshot before a sandbox can start from it. By default `create --image` and `run --image` use only builds recorded with `beachside image build`, and fail before creating anything otherwise. `"images": { "autoBuild": true }` builds a missing image on demand instead, once per reference and profile. Leave it off for agents that run `--image` in a loop unattended: each new reference starts a slow build that may cost money and leaves a provider-side resource.
+E2B and Daytona build an OCI image into a provider template or snapshot before a sandbox can start from it. By default `create --image` and `run --image` use only builds recorded with `beachside image build`, and fail before creating anything otherwise. A profile whose `config.environment` names an OCI image follows the same rule when you pass neither flag. `"images": { "autoBuild": true }` builds a missing image on demand instead, once per reference and profile. Leave it off for agents that run `--image` in a loop unattended: each new reference starts a slow build that may cost money and leaves a provider-side resource.
 
 ## Where adapters are loaded from
 

@@ -54,7 +54,12 @@ import {
   type E2BTransport,
 } from "./transport";
 
-import { classifyWriteFailure, WriteFailure, writeFailureReason } from "./write-failure";
+import {
+  classifyWriteFailure,
+  E2BWriteFailure,
+  WriteFailure,
+  writeFailureReason,
+} from "./write-failure";
 
 const CreateToken = z.strictObject({
   allowPublicTraffic: z.boolean(),
@@ -2091,7 +2096,16 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             await requireRunning(attempt.sandbox.id, attempt.sandbox.reference);
             const paths = executionPaths(attempt.submissionId);
 
-            return readExecution(attempt.sandbox.id, paths, token.data.maxOutputBytes);
+            const result = await readExecution(
+              attempt.sandbox.id,
+              paths,
+              token.data.maxOutputBytes,
+            );
+
+            // A recovered outcome no longer needs its capture files.
+            if (result) await cleanup(attempt.sandbox.id, paths);
+
+            return result;
           },
         },
         files: {
@@ -2158,7 +2172,43 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
 
               try {
                 if (input.overwrite) {
-                  await transport.write(input.sandbox.id, input.path, input.bytes);
+                  try {
+                    await transport.write(input.sandbox.id, input.path, input.bytes);
+                  } catch (error) {
+                    // envd refused to open an existing file, typically one directly in /tmp, and
+                    // wrote nothing. Upload a fresh file beside it, which envd can create, then
+                    // copy it over the destination as the sandbox user, who owns the destination
+                    // (envd chowned it before the refused open), so the kernel allows the reopen.
+                    if (!(error instanceof E2BWriteFailure && error.openDenied)) throw error;
+                    const copy = `${parent}/.beachside-write-${ctx.submissionId}`;
+
+                    if (copy === input.path)
+                      return ctx.reject(
+                        "INVALID_ARGUMENT",
+                        "E2B destination conflicts with write staging",
+                      );
+                    await transport.write(input.sandbox.id, copy, input.bytes);
+
+                    if (ctx.signal.aborted) {
+                      await transport.remove(input.sandbox.id, copy).catch(() => {});
+
+                      return ctx.pending(token, { pollAfterMs: 1000 });
+                    }
+
+                    stage = "link";
+
+                    const answer = await transport.run(
+                      input.sandbox.id,
+                      `if cat -- ${shellQuote(copy)} > ${shellQuote(input.path)} 2>/dev/null; then rm -f -- ${shellQuote(copy)}; printf 'COPIED'; else rm -f -- ${shellQuote(copy)}; printf 'FAILED'; fi`,
+                      { timeoutMs: 30_000 },
+                    );
+
+                    if (answer !== "COPIED") {
+                      token.failure = { stage, errorName: "Error" };
+
+                      return ctx.pending(token, { pollAfterMs: 1000 });
+                    }
+                  }
                 } else {
                   await transport.write(input.sandbox.id, staged!, input.bytes);
 
@@ -2242,6 +2292,9 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
                     failure,
                   ),
                 );
+
+              // The confirmed link keeps the bytes; the stage name is only scaffolding.
+              if (staged) await transport.remove(attempt.sandbox.id, staged).catch(() => {});
 
               return { bytesWritten };
             },

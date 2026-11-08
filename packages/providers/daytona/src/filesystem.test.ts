@@ -9,6 +9,7 @@ import {
   readFileSync,
   mkdirSync,
   existsSync,
+  readdirSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -613,6 +614,112 @@ test("Daytona interrupted and malformed helpers retain possible copy effects and
     await expect(driver.filesystem(sandbox, input)).rejects.toMatchObject({ code: "UNSUPPORTED" });
     expect(existsSync(stagingDirectory)).toBe(false);
   } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Daytona writes create missing parent folders and leave no staging or receipts behind", async () => {
+  const root = mkdtempSync(join(tmpdir(), "beachside-daytona-parents-"));
+
+  const receiptsBefore = new Set(
+    readdirSync("/tmp").filter((name) => name.startsWith(".beachside-")),
+  );
+
+  let client: Awaited<ReturnType<typeof Beachside.connect>> | undefined;
+
+  try {
+    const transport: typeof fetch = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+
+        if (url.pathname.endsWith("/api-keys/current"))
+          return Response.json({ organizationId: "org" });
+
+        if (url.pathname.endsWith("/regions"))
+          return Response.json([{ id: "us", name: "us", regionType: "shared" }]);
+
+        if (url.pathname.endsWith("/organizations/org"))
+          return Response.json({ id: "org", sandboxLimitedNetworkEgress: false });
+
+        if (url.pathname === "/api/sandbox/box")
+          return Response.json({
+            id: "box",
+            name: "box",
+            organizationId: "org",
+            target: "us",
+            state: "started",
+            networkBlockAll: true,
+            public: false,
+            toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+          });
+
+        if (url.pathname.endsWith("/process/execute")) {
+          const request = z.object({ command: z.string() }).parse(JSON.parse(String(init?.body)));
+          const execution = spawnSync("sh", ["-c", request.command], { encoding: "utf8" });
+
+          return Response.json({ result: execution.stdout, exitCode: execution.status });
+        }
+
+        if (url.pathname.endsWith("/files/upload-v2")) {
+          const form =
+            init?.body instanceof FormData
+              ? init.body
+              : await new Response(init?.body, {
+                  headers: { "content-type": new Headers(init?.headers).get("content-type")! },
+                }).formData();
+
+          const file = form.get("file");
+
+          if (!(file instanceof Blob)) throw new Error("Expected multipart upload file");
+          const path = url.searchParams.get("path")!;
+          writeFileSync(path, new Uint8Array(await file.arrayBuffer()));
+
+          return Response.json({ path, name: "payload", type: "file" });
+        }
+
+        if (url.pathname.endsWith("/files/download")) {
+          const path = url.searchParams.get("path")!;
+
+          return existsSync(path)
+            ? new Response(readFileSync(path))
+            : new Response(null, { status: 404 });
+        }
+
+        throw new Error(`Unexpected parent fixture route ${url.pathname}`);
+      },
+      { preconnect: fetch.preconnect },
+    );
+
+    client = await Beachside.connect({
+      adapter: createDaytonaAdapter(transport),
+      config: { target: "us", networkPolicy: "blocked" },
+      credentials: { apiKey: "fixture" },
+    });
+
+    const box = new AdapterSandbox(client, "box");
+    const small = new Uint8Array([1, 2, 3]);
+    const large = new Uint8Array(2 * 1024 * 1024).fill(7);
+
+    await box.writeFile(join(root, "a", "b", "small.bin"), small);
+    await box.writeFile(join(root, "c", "overwrite.bin"), small, { overwrite: true });
+    await box.writeFile(join(root, "d", "e", "large.bin"), large);
+    await box.copyFile(join(root, "a", "b", "small.bin"), join(root, "f", "g", "copy.bin"));
+    await box.exec({ command: { kind: "shell", script: "true" } });
+
+    expect(Array.from(readFileSync(join(root, "a", "b", "small.bin")))).toEqual([1, 2, 3]);
+    expect(Array.from(readFileSync(join(root, "c", "overwrite.bin")))).toEqual([1, 2, 3]);
+    expect(readFileSync(join(root, "d", "e", "large.bin")).byteLength).toBe(large.byteLength);
+    expect(Array.from(readFileSync(join(root, "f", "g", "copy.bin")))).toEqual([1, 2, 3]);
+
+    for (const directory of ["a/b", "c", "d/e", "f/g"])
+      expect(readdirSync(join(root, directory)).filter((name) => name.startsWith("."))).toEqual([]);
+    expect(
+      readdirSync("/tmp").filter(
+        (name) => name.startsWith(".beachside-") && !receiptsBefore.has(name),
+      ),
+    ).toEqual([]);
+  } finally {
+    await client?.close();
     rmSync(root, { recursive: true, force: true });
   }
 });

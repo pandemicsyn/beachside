@@ -34,6 +34,8 @@ def publish(a,b):
  if overwrite: os.replace(a,b);published=True
  else:
   os.link(a,b,follow_symlinks=False);published=True;os.unlink(a)
+def parents(path):
+ os.makedirs(os.path.dirname(path) or '/',exist_ok=True)
 def regular(path):
  s=os.lstat(path)
  if not stat.S_ISREG(s.st_mode): raise OSError(errno.EINVAL,'regular file required')
@@ -70,7 +72,7 @@ try:
  elif op=='write':
   data=sys.stdin.buffer.read(1048577)
   if len(data)>1048576: raise OSError(errno.EFBIG,'buffer bound exceeded')
-  fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600);published=True
+  parents(p);fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600);published=True
   with os.fdopen(fd,'wb') as f: f.write(data)
   result={'bytesWritten':len(data)}
  elif op=='exists':
@@ -92,13 +94,13 @@ try:
    f.write(data)
   result={'bytesWritten':len(data)}
  elif op=='reserve':
-  fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
+  parents(p);fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
  elif op=='publish':
   regular(p);publish(p,q);published=True
  elif op=='copy':
   regular(p)
   if overwrite and os.path.lexists(q) and not stat.S_ISREG(os.lstat(q).st_mode): raise OSError(errno.EINVAL,'regular destination required')
-  fd=os.open(stage,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);created=True
+  parents(stage);fd=os.open(stage,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);created=True
   try:
    src=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
    with os.fdopen(src,'rb') as inp,os.fdopen(fd,'wb') as out:

@@ -398,7 +398,7 @@ test("lost exec, write and destroy responses recover by read-only evidence after
   const files = new Map<string, Uint8Array>();
   let state = "started";
   let execReads = 0;
-  const mutations = { exec: 0, upload: 0, write: 0, destroy: 0 };
+  const mutations = { exec: 0, upload: 0, write: 0, destroy: 0, receiptCleanup: 0 };
 
   const fetchImpl = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -470,6 +470,18 @@ test("lost exec, write and destroy responses recover by read-only evidence after
 
         if (command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1"))
           return Response.json({ exitCode: 0, result: "" });
+
+        const dropped = /^rm -rf -- '(\/tmp\/\.beachside-(?:exec|write)-[0-9a-f]{64})'$/.exec(
+          command,
+        );
+
+        if (dropped) {
+          mutations.receiptCleanup++;
+
+          for (const key of files.keys()) if (key.startsWith(`${dropped[1]}/`)) files.delete(key);
+
+          return Response.json({ exitCode: 0, result: "" });
+        }
 
         if (command.includes("BEACHSIDE-EXEC-V1")) {
           mutations.exec++;
@@ -652,7 +664,7 @@ test("lost exec, write and destroy responses recover by read-only evidence after
 
   if (termination?.kind === "completed")
     expect(termination.value).toMatchObject({ retainedResources: ["daytona:snapshot:retained-1"] });
-  expect(mutations).toEqual({ exec: 1, upload: 1, write: 1, destroy: 1 });
+  expect(mutations).toEqual({ exec: 1, upload: 1, write: 1, destroy: 1, receiptCleanup: 2 });
   await afterDestroy.close();
 });
 

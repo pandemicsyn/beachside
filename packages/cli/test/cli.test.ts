@@ -1515,6 +1515,35 @@ describe("beachside CLI against the fake provider", () => {
       expect(await buildLog()).toEqual(["node:24"]);
     });
 
+    test("a profile's OCI environment follows the build rule and reuses the recorded build", async () => {
+      await writeConfig({
+        default: "builder",
+        profiles: {
+          builder: {
+            module: fixture,
+            export: "builderWithImage",
+            config: { environment: { kind: "oci", value: "python:3.12" } },
+          },
+        },
+      });
+
+      const unbuilt = await image(["create", "--json"]);
+
+      expect(unbuilt.code).toBe(4);
+      expect(envelope(unbuilt).error.message).toBe(
+        "image python:3.12 is not built for profile builder; run: beachside image build python:3.12",
+      );
+      expect(await fakeResources()).toEqual([]);
+
+      expect((await image(["image", "build", "python:3.12"])).code).toBe(0);
+
+      const created = await image(["create", "--name", "py", "--json"]);
+
+      expect(created.code).toBe(0);
+      expect(envelope(await image(["inspect", "py", "--json"])).data.image).toBe("python:3.12");
+      expect(await buildLog()).toEqual(["python:3.12"]);
+    });
+
     test("a provider without image builds gets the OCI reference unchanged", async () => {
       const result = await image([
         "create",
@@ -2617,6 +2646,49 @@ describe("snapshots", () => {
     expect((await cli(["create", "--name", "web", "--prepared", "fake-starter"])).code).toBe(0);
     expect((await cli(["cp", "state.txt", "web:/work/state.txt"])).code).toBe(0);
   }
+
+  test("a capture left waiting for its source restart is continued and recorded", async () => {
+    await writeConfig({
+      default: "slow",
+      profiles: { slow: { module: fixture, export: "restartPending" } },
+    });
+    expect((await cli(["create", "--name", "web", "--prepared", "fake-starter"])).code).toBe(0);
+
+    const captured = await cli(["snapshot", "create", "web", "--name", "deps", "--json"]);
+
+    expect(captured.code).toBe(0);
+    expect(captured.stderr).toContain("restarting the source sandbox");
+    expect(envelope(captured).data).toMatchObject({
+      name: "deps",
+      status: "captured",
+      reference: { kind: "snapshot" },
+    });
+
+    const removed = await cli(["snapshot", "rm", "deps", "--force", "--json"]);
+
+    expect(removed.code).toBe(0);
+    expect(await snapshotNames()).toEqual([]);
+  });
+
+  test("snapshot rm continues an uncertain capture before deleting it", async () => {
+    await writeConfig({
+      default: "slow",
+      profiles: { slow: { module: fixture, export: "restartPending" } },
+    });
+    expect((await cli(["create", "--name", "web", "--prepared", "fake-starter"])).code).toBe(0);
+
+    const held = await cli(["snapshot", "create", "web", "--name", "deps"], {
+      BEACHSIDE_FAKE_HOLD_RESTART: "1",
+    });
+
+    expect(held.code).toBe(6);
+
+    const removed = await cli(["snapshot", "rm", "deps", "--force", "--json"]);
+
+    expect(removed.code).toBe(0);
+    expect(removed.stderr).toContain("recovered the uncertain capture");
+    expect(await snapshotNames()).toEqual([]);
+  });
 
   test("capture, restore with create and run, list, replace and delete", async () => {
     await warmSandbox();

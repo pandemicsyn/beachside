@@ -515,7 +515,7 @@ const daytonaSource = `
 import { Beachside, Image } from "beachside";
 import { createDaytonaAdapter } from "@beachside/daytona";
 let nativeState = "started";
-let name = "", mutations = 0, snapshotName = "", labels = {}, renewalWindows = [], blockAll = true;
+let name = "", mutations = 0, receiptCleanups = 0, snapshotName = "", labels = {}, renewalWindows = [], blockAll = true;
 const files = new Map([["/file", Uint8Array.from([0,255])]]);
 const origin = "https://proxy.app.daytona.io/toolbox";
 const native = (state = nativeState) => ({ sandboxClass: "container", volumes: [], autoDeleteInterval: -1, labels, id: "native-1", name, organizationId: "org-1", target: "us", state, networkBlockAll: blockAll, public: false, toolboxProxyUrl: origin });
@@ -538,8 +538,10 @@ const mock = async (input, init = {}) => {
   if (url.pathname === "/api/sandbox/native-1" && init.method === "DELETE") { mutations++; return json(native("destroyed")); }
   if (url.pathname === "/api/sandbox/native-1") return json(native());
   if (url.pathname.endsWith("/process/execute")) {
-    mutations++;
     const command = JSON.parse(init.body).command;
+    // Dropping a delivered receipt is cleanup, not a replayed mutation.
+    if (/^rm -rf -- '\\/tmp\\/\\.beachside-(?:exec|write)-[0-9a-f]{64}'$/.test(command)) { receiptCleanups++; return json({ exitCode: 0, result: "" }); }
+    mutations++;
     if ((command.startsWith("mkdir -m 700 -- ") && !command.includes("BEACHSIDE-EXEC-V1"))) return json({ exitCode: 0, result: "" });
     if (command.startsWith("cat ")) {
       const match = /^cat '([^']+)' > '([^']+)'/.exec(command);
@@ -596,6 +598,7 @@ try {
   if (bytes[0] !== 0 || bytes[1] !== 255) throw new Error("Binary file mismatch");
   await box.destroy();
   if (mutations !== 10) throw new Error("Mutation replay in packed consumer: " + mutations);
+  if (receiptCleanups !== 2) throw new Error("Packed Daytona receipts not dropped: " + receiptCleanups);
   if (process.env.PACKED_LIFECYCLE_EXAMPLE) {
     const { saveWorkspace, finishWorkspace, daytonaSetup } = await import("./lifecycle-example.mjs");
   globalThis.fetch = mock;
