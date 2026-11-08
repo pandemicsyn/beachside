@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/bun";
-import { Sandbar, Image } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Beachside, Image } from "beachside";
+import { daytona } from "@beachside/daytona";
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN!,
@@ -9,7 +9,7 @@ Sentry.init({
 });
 
 try {
-  const client = await Sandbar.connect(
+  const client = await Beachside.connect(
     daytona({
       apiKey: process.env.DAYTONA_API_KEY!,
       target: process.env.DAYTONA_TARGET ?? "us",
@@ -19,7 +19,7 @@ try {
   );
 
   try {
-    await Sentry.startSpan({ name: "sandbar-demo" }, async () => {
+    await Sentry.startSpan({ name: "beachside-demo" }, async () => {
       const box = await client.sandboxes.create({
         environment: Image.prepared("daytona-small"),
       });

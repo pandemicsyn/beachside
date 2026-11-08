@@ -1,12 +1,12 @@
-# @sandbar-sdk/boat
+# @beachside/boat
 
-Experimental external Boat adapter for Sandbar. Implementation and offline fixtures are available; no live Boat run has been made yet. Install with `npm install sandbar-sdk @sandbar-sdk/boat`. Requires Node 20+ or Bun and a Boat API key. Native SDK pinned to `@boatdev/sdk@1.9.9` (Boat Public API v1).
+Experimental external Boat adapter for Beachside. Implementation and offline fixtures are available; no live Boat run has been made yet. Install with `npm install beachside @beachside/boat`. Requires Node 20+ or Bun and a Boat API key. Native SDK pinned to `@boatdev/sdk@1.9.9` (Boat Public API v1).
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { boatAdapter } from "@sandbar-sdk/boat";
+import { Beachside } from "beachside";
+import { boatAdapter } from "@beachside/boat";
 
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter: boatAdapter,
   credentials: { apiKey: process.env.BOAT_API_KEY! },
   config: { network: "internet" },
@@ -34,16 +34,16 @@ Scope is the account id from `GET /me` plus the fixed `https://boat.dev/api/v1` 
 
 ## Behavior
 
-- **Create** sends the Sandbar submission id as `Idempotency-Key` and waits for `ready`/`idle`/`running`.
+- **Create** sends the Beachside submission id as `Idempotency-Key` and waits for `ready`/`idle`/`running`.
 - **Exec** supports argv and shell, `cwd`, `env`, finite stdin and deadlines up to 600 s. A small `sh` wrapper keeps arguments quoted and returns stdout/stderr as base64, so bytes survive Boat's UTF-8 text channel. Output is bounded to 1 MiB per stream.
 - **Streaming processes** start the command detached (no 600 s cap) and follow Boat's attach stream, reattaching from byte offsets on Boat's 10-minute reconnect or a dropped connection. Output is UTF-8 text only, so `format: "bytes"` and callback exec are unsupported. `terminate()` uses Boat's stop endpoint. Piped stdin, terminals, signals and reopen are unsupported.
 - **Files** read and overwrite up to 5 MiB under `/home/user` or `/tmp`, as base64. No-clobber writes are unsupported.
 - **Suspend/resume** maps to Boat stop (archive the disk) and resume (fresh machine). Memory and processes are not kept.
 - **Renew** sets a new auto-stop window.
-- **Snapshots** save the disk of a running or archived sandbox as a Boat named snapshot. Each capture gets its own `sandbar-snapshot-*` name, and the reference pins the frozen artifact (`snapshotId`) as its generation, so a name saved again outside Sandbar no longer restores or deletes. Restore creates a sandbox `from` the name on a fresh machine of the captured type; memory and processes are not kept. `snapshots.list()` covers every named snapshot in the account. Named snapshots are kept until deleted.
+- **Snapshots** save the disk of a running or archived sandbox as a Boat named snapshot. Each capture gets its own `beachside-snapshot-*` name, and the reference pins the frozen artifact (`snapshotId`) as its generation, so a name saved again outside Beachside no longer restores or deletes. Restore creates a sandbox `from` the name on a fresh machine of the captured type; memory and processes are not kept. `snapshots.list()` covers every named snapshot in the account. Named snapshots are kept until deleted.
 - **Destroy** permanently deletes with `X-Ascii-Confirm-Delete` and waits for the deletion operation to finish removing the machine. Named snapshots survive.
 - Unsupported: fork, snapshot sharing, restore size overrides, volumes, previews, interactive processes, directory operations, blocked egress, regions and labels.
 
 Every mutation is sent once. Refusals Boat documents as effect-free become ordinary errors; lost responses and ambiguous 5xx become `OUTCOME_UNKNOWN` and are never replayed.
 
-See the [provider page](https://sandbarsdk.dev/docs/providers/boat/) and the [research issue](https://github.com/pandemicsyn/sandbar/issues/40).
+See the [provider page](https://beachside.run/docs/providers/boat/) and the [research issue](https://github.com/pandemicsyn/beachside/issues/40).

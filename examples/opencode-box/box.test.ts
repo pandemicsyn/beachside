@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type ExecInput, type ExecOutput } from "sandbar-sdk";
+import { type ExecInput, type ExecOutput } from "beachside";
 import {
   basicAuth,
   configureGit,
@@ -168,7 +168,7 @@ test("pull unpacks the box's archive over the local checkout", async () => {
 
   expect(await readFile(join(local, "tracked.txt"), "utf8")).toBe("changed by the agent\n");
   expect(argv(calls[0]!)).toContain(local);
-  expect(argv(calls[1]!)).toEqual(["rm", "-f", "/tmp/sandbar-opencode-box.tar.gz"]);
+  expect(argv(calls[1]!)).toEqual(["rm", "-f", "/tmp/beachside-opencode-box.tar.gz"]);
 });
 
 test("git setup passes the local identity as arguments, never in the script", async () => {

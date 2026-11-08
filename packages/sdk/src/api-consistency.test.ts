@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter, ResourceReference, type SnapshotInfo } from "@sandbar-sdk/adapter";
+import { defineAdapter, ResourceReference, type SnapshotInfo } from "@beachside/adapter";
 import {
   AdapterSandbox,
   AdapterSnapshot,
   AdapterVolume,
-  Sandbar,
-  SandbarError,
+  Beachside,
+  BeachsideError,
   UnsupportedFeatureError,
 } from "./index";
 
@@ -91,7 +91,7 @@ async function fixture() {
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
 
   return {
     client,
@@ -127,7 +127,7 @@ test("resource caller errors normalize before provider reads or mutation", async
 
   try {
     for (const action of actions) {
-      await expect(Promise.resolve().then(action)).rejects.toBeInstanceOf(SandbarError);
+      await expect(Promise.resolve().then(action)).rejects.toBeInstanceOf(BeachsideError);
       await expect(Promise.resolve().then(action)).rejects.toMatchObject({
         code: "INVALID_ARGUMENT",
         effect: "none",
@@ -170,7 +170,7 @@ test("restore reports every unmet guarantee and rejects compatibility mount choi
           requireIndependentLifecycle: false,
           mounts: JSON.parse(JSON.stringify({ "/mnt/data": choice })),
         }),
-      ).rejects.toBeInstanceOf(SandbarError);
+      ).rejects.toBeInstanceOf(BeachsideError);
       await expect(
         f.snapshot.restore({
           networkPolicy: "blocked",

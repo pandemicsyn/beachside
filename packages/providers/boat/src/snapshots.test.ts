@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { OutcomeUnknownError, Preserve, Sandbar } from "sandbar-sdk";
-import { snapshotSuite } from "@sandbar-sdk/adapter/testing";
+import { OutcomeUnknownError, Preserve, Beachside } from "beachside";
+import { snapshotSuite } from "@beachside/adapter/testing";
 import { createBoatAdapter } from "./adapter";
 import { boatFixture } from "./fixture.test-support";
 
@@ -18,7 +18,7 @@ function setup() {
   const adapter = createBoatAdapter({ fetch: fixture.fetch, pollIntervalMs: 1, settleSeconds: 1 });
 
   const connect = (apiKey = "fixture-main") =>
-    Sandbar.connect({ adapter, config, credentials: { apiKey } });
+    Beachside.connect({ adapter, config, credentials: { apiKey } });
 
   return { fixture, adapter, connect };
 }
@@ -44,7 +44,7 @@ test("snapshots save the disk under a unique name and restore that exact capture
     const { snapshot } = captured;
     const [name = ""] = fixture.snapshots.keys();
 
-    expect(name).toMatch(/^sandbar-snapshot-[0-9a-f]{24}$/);
+    expect(name).toMatch(/^beachside-snapshot-[0-9a-f]{24}$/);
     expect(fixture.calls.find((call) => call.path === "/named-snapshots")?.body).toEqual({
       sandboxId: source.id,
       name,
@@ -151,7 +151,7 @@ test("unmet capture and restore requests reject before any Boat effect", async (
   }
 });
 
-test("a name saved again outside Sandbar no longer restores or deletes by its old reference", async () => {
+test("a name saved again outside Beachside no longer restores or deletes by its old reference", async () => {
   const { fixture, connect } = setup();
   const client = await connect();
 
@@ -237,7 +237,7 @@ test("Boat accepts filesystem-only preserve and rejects memory at connect before
   type Depth = (typeof Preserve)[keyof typeof Preserve];
 
   const connect = (snapshots: Depth, suspension: Depth) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: {
         ...config,
@@ -268,7 +268,7 @@ test("Boat accepts filesystem-only preserve and rejects memory at connect before
 test("Boat passes the shared snapshot suite", async () => {
   const { fixture } = setup();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createBoatAdapter({ fetch: fixture.fetch, pollIntervalMs: 1, settleSeconds: 1 }),
     config: { ...config, snapshots: { preserve: Preserve.FILESYSTEM } },
     credentials: { apiKey: "fixture-main" },
@@ -277,7 +277,7 @@ test("Boat passes the shared snapshot suite", async () => {
   try {
     await snapshotSuite({
       client,
-      path: "/home/user/sandbar-suite.bin",
+      path: "/home/user/beachside-suite.bin",
       preserve: Preserve.FILESYSTEM,
     });
   } finally {

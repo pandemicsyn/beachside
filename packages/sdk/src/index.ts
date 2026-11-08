@@ -42,12 +42,12 @@ export type {
   SandboxInfo,
 } from "./adapter-direct";
 
-export const Sandbar = { connect: connectDirect };
+export const Beachside = { connect: connectDirect };
 
 export {
   Image,
   outputText,
-  SandbarError,
+  BeachsideError,
   UnsupportedFeatureError,
   OutcomeUnknownError,
   WaitAbortedError,
@@ -62,9 +62,10 @@ export type {
   CreateInput,
   NetworkPolicy,
   ExecInput,
+  ExecStdinStream,
   ExecOutput,
   OutputPreview,
-  DirectSandbarClient,
+  DirectBeachsideClient,
   DirectSandboxHandle,
   SandboxHandle,
   SnapshotHandle,
@@ -73,7 +74,7 @@ export type {
   ReadOptions,
   OperationHandle,
   RecoveryReference,
-  SandbarClient,
+  BeachsideClient,
 } from "./resource";
 
 export {
@@ -85,7 +86,7 @@ export {
   SnapshotRequest,
   SnapshotRequirements,
   Preserve,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 
 export type {
   Support,
@@ -106,7 +107,7 @@ export type {
   ResourceMinimums,
   SandboxResources,
   CreatePlan,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 
 export { AdapterSnapshot, AdapterVolume, AdapterImage } from "./resources";
 
@@ -127,13 +128,13 @@ export {
   RestoreRequest,
   VolumeCreateInput,
   ArtifactDeletionResult,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 
 export type {
   MountCapabilities,
   VolumeCapabilities,
   RestoreCapabilities,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 
 export { diagnosticContext } from "./observability";
 
@@ -149,7 +150,7 @@ export type {
   TransferPolicy,
 } from "./file-transfer";
 
-export type { FileEntry, DirectoryResult, FileStat } from "@sandbar-sdk/adapter";
+export type { FileEntry, DirectoryResult, FileStat } from "@beachside/adapter";
 
 export type {
   WalkFilesOptions,

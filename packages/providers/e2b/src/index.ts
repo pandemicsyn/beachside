@@ -25,7 +25,7 @@ import {
   nativeDeadline,
   type SandboxInfo,
   type SandboxReference,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { createHash } from "node:crypto";
 import { ProcessReference } from "./process-native";
 import {
@@ -38,8 +38,8 @@ import {
   defineAdapter,
   type ExecValue,
   type Json,
-} from "@sandbar-sdk/adapter";
-import { MAX_EXEC_STDIN_BYTES } from "@sandbar-sdk/adapter/portable";
+} from "@beachside/adapter";
+import { MAX_EXEC_STDIN_BYTES } from "@beachside/adapter/portable";
 import {
   E2BCreateRejected,
   E2BLifecycleRejected,
@@ -246,7 +246,7 @@ function destroyToken(record: E2BRecord, sandboxId: string): z.infer<typeof Dest
     token.retainedVolumeNames = record.volumeMounts.map((mount) => mount.name);
   }
 
-  if (record.metadata.sandbar_build) token.retainedTemplateId = record.templateId;
+  if (record.metadata.beachside_build) token.retainedTemplateId = record.templateId;
 
   const rejected: z.infer<typeof DestroyToken> = {
     ...token,
@@ -266,8 +266,8 @@ function destroyToken(record: E2BRecord, sandboxId: string): z.infer<typeof Dest
 
 function destroyValue(
   token: z.infer<typeof DestroyToken>,
-): import("@sandbar-sdk/adapter").DestroyValue {
-  const value: import("@sandbar-sdk/adapter").DestroyValue = {
+): import("@beachside/adapter").DestroyValue {
+  const value: import("@beachside/adapter").DestroyValue = {
     computeStopped: true,
     retainedResources: [
       ...(token.retainedTemplateId ? [`e2b-template:${token.retainedTemplateId}`] : []),
@@ -297,16 +297,16 @@ function destroyOutcome(
 const nativeId = /^[A-Za-z0-9_-]{1,128}$/;
 
 const ownerKeys = [
-  "sandbar_scope",
-  "sandbar_submission",
-  "sandbar_operation",
-  "sandbar_template",
-  "sandbar_build",
-  "sandbar_snapshot",
+  "beachside_scope",
+  "beachside_submission",
+  "beachside_operation",
+  "beachside_template",
+  "beachside_build",
+  "beachside_snapshot",
 ];
 
 function buildName(submissionId: string): string {
-  return `sandbar-${createHash("sha256").update(submissionId).digest("hex").slice(0, 40)}`;
+  return `beachside-${createHash("sha256").update(submissionId).digest("hex").slice(0, 40)}`;
 }
 
 function requirePath(path: string): void {
@@ -317,7 +317,7 @@ function requirePath(path: string): void {
 function executionPaths(submissionId: string) {
   if (!nativeId.test(submissionId))
     throw new AdapterError("INVALID_ARGUMENT", "Invalid submission ID");
-  const base = `/tmp/.sandbar-${submissionId}`;
+  const base = `/tmp/.beachside-${submissionId}`;
 
   return {
     stdout: `${base}.stdout`,
@@ -395,7 +395,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
         : {
             kind: "api-key",
             id: createHash("sha256")
-              .update("sandbar:e2b:api-key-scope:v1\0")
+              .update("beachside:e2b:api-key-scope:v1\0")
               .update(credentials.apiKey)
               .digest("hex"),
           };
@@ -407,16 +407,16 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
       const owned = (record: E2BRecord) =>
         nativeId.test(record.id) &&
         nativeId.test(record.templateId) &&
-        record.metadata.sandbar_scope === scopeMarker &&
-        nativeId.test(record.metadata.sandbar_submission ?? "") &&
-        nativeId.test(record.metadata.sandbar_operation ?? "") &&
-        ((!!record.metadata.sandbar_snapshot &&
-          record.metadata.sandbar_snapshot.startsWith(`${record.templateId}:`) &&
-          z.uuid().safeParse(record.metadata.sandbar_snapshot.slice(record.templateId.length + 1))
+        record.metadata.beachside_scope === scopeMarker &&
+        nativeId.test(record.metadata.beachside_submission ?? "") &&
+        nativeId.test(record.metadata.beachside_operation ?? "") &&
+        ((!!record.metadata.beachside_snapshot &&
+          record.metadata.beachside_snapshot.startsWith(`${record.templateId}:`) &&
+          z.uuid().safeParse(record.metadata.beachside_snapshot.slice(record.templateId.length + 1))
             .success &&
-          record.metadata.sandbar_snapshot === record.metadata.sandbar_template) ||
-          record.metadata.sandbar_template === record.templateId ||
-          (record.metadata.sandbar_template === "base" && !record.metadata.sandbar_build));
+          record.metadata.beachside_snapshot === record.metadata.beachside_template) ||
+          record.metadata.beachside_template === record.templateId ||
+          (record.metadata.beachside_template === "base" && !record.metadata.beachside_build));
 
       const assertRecordReference = (
         record: E2BRecord,
@@ -428,8 +428,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             throw new AdapterError("CONFLICT", "E2B sandbox identity or scope differs");
           assertSandboxReference(
             sandboxReference("e2b", boundScope, record.id, {
-              operation: record.metadata.sandbar_operation!,
-              submission: record.metadata.sandbar_submission!,
+              operation: record.metadata.beachside_operation!,
+              submission: record.metadata.beachside_submission!,
             }),
             expected,
           );
@@ -472,8 +472,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
           throw new AdapterError("NOT_FOUND", "E2B sandbox is missing, expired, or deleted");
 
         const reference = sandboxReference("e2b", boundScope, record.id, {
-          operation: record.metadata.sandbar_operation!,
-          submission: record.metadata.sandbar_submission!,
+          operation: record.metadata.beachside_operation!,
+          submission: record.metadata.beachside_submission!,
         });
 
         if (expected) assertSandboxReference(reference, expected);
@@ -529,8 +529,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
       };
 
       const lifecycleSource = async (
-        box: import("@sandbar-sdk/adapter").Sandbox,
-        ctx: import("@sandbar-sdk/adapter").ReadContext,
+        box: import("@beachside/adapter").Sandbox,
+        ctx: import("@beachside/adapter").ReadContext,
       ) => {
         if (!box.reference)
           throw new AdapterError("UNSUPPORTED", "Verified sandbox identity required");
@@ -635,13 +635,13 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
       const removeEntry = transport.removeEntry;
 
       const directoryOperations: Partial<
-        NonNullable<import("@sandbar-sdk/adapter").AdapterSession["files"]>
+        NonNullable<import("@beachside/adapter").AdapterSession["files"]>
       > = {};
 
       if (entryExists)
         directoryOperations.exists = async (
-          input: { sandbox: import("@sandbar-sdk/adapter").Sandbox; path: string },
-          ctx: import("@sandbar-sdk/adapter").ReadContext,
+          input: { sandbox: import("@beachside/adapter").Sandbox; path: string },
+          ctx: import("@beachside/adapter").ReadContext,
         ) => {
           requirePath(input.path);
           await requireRunning(input.sandbox.id, input.sandbox.reference);
@@ -652,7 +652,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
 
       if (makeDirectory || mkdir)
         directoryOperations.makeDirectory = {
-          async prepare(input: import("@sandbar-sdk/adapter").FileMutationInput) {
+          async prepare(input: import("@beachside/adapter").FileMutationInput) {
             requirePath(input.path);
 
             if (!input.recursive && !mkdir)
@@ -662,8 +662,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             return input;
           },
           async submit(
-            input: import("@sandbar-sdk/adapter").FileMutationInput,
-            ctx: import("@sandbar-sdk/adapter").AttemptContext,
+            input: import("@beachside/adapter").FileMutationInput,
+            ctx: import("@beachside/adapter").AttemptContext,
           ) {
             let recursiveDispatched = false;
 
@@ -694,7 +694,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
 
       if (removeEntry || unlink)
         directoryOperations.remove = {
-          async prepare(input: import("@sandbar-sdk/adapter").FileMutationInput) {
+          async prepare(input: import("@beachside/adapter").FileMutationInput) {
             requirePath(input.path);
 
             if (!input.recursive && !unlink)
@@ -707,8 +707,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             return input;
           },
           async submit(
-            input: import("@sandbar-sdk/adapter").FileMutationInput,
-            ctx: import("@sandbar-sdk/adapter").AttemptContext,
+            input: import("@beachside/adapter").FileMutationInput,
+            ctx: import("@beachside/adapter").AttemptContext,
           ) {
             let recursiveDispatched = false;
 
@@ -1050,13 +1050,13 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             try {
               const metadata = {
                 ...input.labels,
-                sandbar_scope: scopeMarker,
-                sandbar_submission: ctx.submissionId,
-                sandbar_operation: ctx.operationId,
-                sandbar_template: templateId,
+                beachside_scope: scopeMarker,
+                beachside_submission: ctx.submissionId,
+                beachside_operation: ctx.operationId,
+                beachside_template: templateId,
               };
 
-              if (name) Object.assign(metadata, { sandbar_build: name });
+              if (name) Object.assign(metadata, { beachside_build: name });
 
               const request: Parameters<E2BTransport["create"]>[0] = {
                 templateId,
@@ -1079,8 +1079,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
                 !record ||
                 record.id !== id ||
                 !owned(record) ||
-                record.metadata.sandbar_submission !== ctx.submissionId ||
-                record.metadata.sandbar_operation !== ctx.operationId
+                record.metadata.beachside_submission !== ctx.submissionId ||
+                record.metadata.beachside_operation !== ctx.operationId
               )
                 return ctx.unknown("E2B create identity could not be verified");
 
@@ -1092,8 +1092,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
               return {
                 id,
                 reference: sandboxReference("e2b", boundScope, id, {
-                  operation: record.metadata.sandbar_operation!,
-                  submission: record.metadata.sandbar_submission!,
+                  operation: record.metadata.beachside_operation!,
+                  submission: record.metadata.beachside_submission!,
                 }),
                 mounts: input.mounts,
                 state: record.state === "running" ? ("running" as const) : ("unknown" as const),
@@ -1129,9 +1129,9 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             if (!id) {
               const page = await transport.list(
                 {
-                  sandbar_scope: scopeMarker,
-                  sandbar_submission: attempt.submissionId,
-                  sandbar_operation: attempt.operationId,
+                  beachside_scope: scopeMarker,
+                  beachside_submission: attempt.submissionId,
+                  beachside_operation: attempt.operationId,
                 },
                 2,
               );
@@ -1139,8 +1139,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
               const matches = page.items.filter(
                 (record) =>
                   owned(record) &&
-                  record.metadata.sandbar_submission === attempt.submissionId &&
-                  record.metadata.sandbar_operation === attempt.operationId,
+                  record.metadata.beachside_submission === attempt.submissionId &&
+                  record.metadata.beachside_operation === attempt.operationId,
               );
 
               if (matches.length !== 1 || page.nextToken) {
@@ -1165,8 +1165,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
               !record ||
               record.id !== id ||
               !owned(record) ||
-              record.metadata.sandbar_submission !== attempt.submissionId ||
-              record.metadata.sandbar_operation !== attempt.operationId
+              record.metadata.beachside_submission !== attempt.submissionId ||
+              record.metadata.beachside_operation !== attempt.operationId
             )
               return ctx.unknown("Recovered E2B create identity could not be verified");
 
@@ -1181,8 +1181,8 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             return {
               id: record.id,
               reference: sandboxReference("e2b", boundScope, record.id, {
-                operation: record.metadata.sandbar_operation!,
-                submission: record.metadata.sandbar_submission!,
+                operation: record.metadata.beachside_operation!,
+                submission: record.metadata.beachside_submission!,
               }),
               mounts: attempt.mounts,
               state: record.state === "running" ? ("running" as const) : ("unknown" as const),
@@ -1842,7 +1842,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
           await verifyAuthority();
 
           const page = await transport.list(
-            { sandbar_scope: scopeMarker },
+            { beachside_scope: scopeMarker },
             input.limit,
             input.cursor,
           );
@@ -1858,14 +1858,14 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
           await verifyAuthority();
 
           const page = await transport.list(
-            { sandbar_scope: scopeMarker },
+            { beachside_scope: scopeMarker },
             input.limit,
             input.cursor,
           );
 
           return {
-            // Only sandboxes carrying this binding's Sandbar creation markers are listed.
-            coverage: "sandbar-managed" as const,
+            // Only sandboxes carrying this binding's Beachside creation markers are listed.
+            coverage: "managed" as const,
             items: page.items.filter(owned).map((record) => ({
               id: record.id,
               state:
@@ -1875,11 +1875,11 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
                     ? ("suspended" as const)
                     : ("unknown" as const),
               reference: sandboxReference("e2b", boundScope, record.id, {
-                operation: record.metadata.sandbar_operation!,
-                submission: record.metadata.sandbar_submission!,
+                operation: record.metadata.beachside_operation!,
+                submission: record.metadata.beachside_submission!,
               }),
-              // Create labels are E2B metadata beside the adapter's `sandbar_` markers.
-              labels: listedLabels(record.metadata, (key) => key.startsWith("sandbar_")),
+              // Create labels are E2B metadata beside the adapter's `beachside_` markers.
+              labels: listedLabels(record.metadata, (key) => key.startsWith("beachside_")),
               createdAt: listedTime(record.startedAt),
             })),
             nextCursor: page.nextToken,
@@ -1940,7 +1940,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
 
                 const command =
                   input.command.kind === "argv"
-                    ? `exec /bin/bash -c 'exec "$@"' sandbar ${input.command.argv.map(shellQuote).join(" ")}`
+                    ? `exec /bin/bash -c 'exec "$@"' beachside ${input.command.argv.map(shellQuote).join(" ")}`
                     : `/bin/bash -c ${shellQuote(input.command.script)}`;
 
                 return transport.startText!(
@@ -1989,7 +1989,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
           async submit(input, ctx) {
             await requireRunning(input.sandbox.id, input.sandbox.reference);
             const paths = executionPaths(ctx.submissionId);
-            const stdinDirectory = `/tmp/.sandbar-${ctx.submissionId}.stdin`;
+            const stdinDirectory = `/tmp/.beachside-${ctx.submissionId}.stdin`;
             const stdinPath = `${stdinDirectory}/payload`;
 
             if (ctx.signal.aborted)
@@ -2044,7 +2044,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
 
             const command =
               input.command.kind === "argv"
-                ? `/bin/bash -c 'exec "$@"' sandbar ${input.command.argv.map(shellQuote).join(" ")}`
+                ? `/bin/bash -c 'exec "$@"' beachside ${input.command.argv.map(shellQuote).join(" ")}`
                 : `/bin/bash -c ${shellQuote(input.command.script)}`;
 
             const setup =
@@ -2138,7 +2138,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
 
               const staged = input.overwrite
                 ? undefined
-                : `${parent}/.sandbar-write-${ctx.submissionId}`;
+                : `${parent}/.beachside-write-${ctx.submissionId}`;
 
               if (staged === input.path)
                 return ctx.reject(
@@ -2204,7 +2204,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
               if (staged) {
                 const parent = path.slice(0, path.lastIndexOf("/")) || "/";
 
-                if (staged !== `${parent}/.sandbar-write-${attempt.submissionId}`)
+                if (staged !== `${parent}/.beachside-write-${attempt.submissionId}`)
                   return ctx.unknown("E2B no-clobber stage does not match the submission");
 
                 const same = await transport.run(

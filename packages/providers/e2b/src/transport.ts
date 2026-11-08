@@ -16,7 +16,7 @@ import {
   type FileStat,
   type NativeProcess,
   type ProcessStartContext,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { startProcess } from "./process-native";
@@ -1128,7 +1128,7 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
       )
         throw new AdapterError("UNSUPPORTED", "E2B streaming writes require envd 0.5.7 or later");
       const parent = path.slice(0, path.lastIndexOf("/")) || "/";
-      const stage = `${parent}/.sandbar-stream-${randomUUID()}`;
+      const stage = `${parent}/.beachside-stream-${randomUUID()}`;
       let reserved = false;
       let dispatched = false;
       let published = false;
@@ -1246,7 +1246,7 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
     async transfer(id, source, destination, overwrite, move, signal, retain) {
       const sandbox = await attach(id, undefined, signal);
       const parent = destination.slice(0, destination.lastIndexOf("/")) || "/";
-      const stage = move ? "" : `${parent}/.sandbar-copy-${randomUUID()}`;
+      const stage = move ? "" : `${parent}/.beachside-copy-${randomUUID()}`;
 
       try {
         signal.throwIfAborted();

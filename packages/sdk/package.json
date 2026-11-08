@@ -1,6 +1,6 @@
 {
-  "name": "sandbar-sdk",
-  "version": "0.7.0",
+  "name": "beachside",
+  "version": "0.8.0",
   "private": false,
   "type": "module",
   "files": [
@@ -16,28 +16,28 @@
   },
   "scripts": {
     "check": "tsc -p tsconfig.json",
-    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --splitting --outdir dist --external @sandbar-sdk/adapter --external zod --external @opentelemetry/api && tsc -p tsconfig.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../scripts/rewrite-declarations.mjs"
+    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --splitting --outdir dist --external @beachside/adapter --external zod --external @opentelemetry/api && tsc -p tsconfig.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../scripts/rewrite-declarations.mjs"
   },
   "dependencies": {
-    "@sandbar-sdk/adapter": "workspace:*",
+    "@beachside/adapter": "workspace:*",
     "zod": "4.6.5",
     "@opentelemetry/api": "1.9.1"
   },
   "devDependencies": {
-    "@sandbar/provider-fake": "workspace:*",
-    "@sandbar-sdk/daytona": "workspace:*",
-    "@sandbar-sdk/e2b": "workspace:*"
+    "@beachside-internal/provider-fake": "workspace:*",
+    "@beachside/daytona": "workspace:*",
+    "@beachside/e2b": "workspace:*"
   },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pandemicsyn/sandbar.git",
+    "url": "git+https://github.com/pandemicsyn/beachside.git",
     "directory": "packages/sdk"
   },
   "description": "Provider-neutral SDK for direct sandbox access.",
-  "homepage": "https://sandbarsdk.dev/docs/direct-quickstart/",
+  "homepage": "https://beachside.run/docs/direct-quickstart/",
   "bugs": {
-    "url": "https://github.com/pandemicsyn/sandbar/issues"
+    "url": "https://github.com/pandemicsyn/beachside/issues"
   },
   "publishConfig": {
     "access": "public"

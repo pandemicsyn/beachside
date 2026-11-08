@@ -1,17 +1,21 @@
-import { Sandbar } from "sandbar-sdk";
-import { e2b } from "@sandbar-sdk/e2b";
+import { Beachside } from "beachside";
+import { e2bAdapter } from "@beachside/e2b";
 
 const apiKey = process.env.E2B_API_KEY;
 
 if (!apiKey) throw new Error("Set E2B_API_KEY before running this example");
 
-const sandbar = await Sandbar.connect(e2b({ apiKey }));
+const beachside = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey },
+  config: { network: "blocked" },
+});
 
 try {
-  await sandbar.sandboxes.with({}, async (box) => {
-    const output = await box.exec(["printf", "Hello from Sandbar!\n"]);
+  await beachside.sandboxes.with({}, async (box) => {
+    const output = await box.exec(["printf", "Hello from Beachside!\n"]);
     console.log(output.stdoutText());
   });
 } finally {
-  await sandbar.close();
+  await beachside.close();
 }

@@ -54,8 +54,10 @@ function load() {
         `${manifest.name} lockfile version is stale; regenerate bun.lock after Changesets versioning`,
       );
 
-    if (manifest.repository?.url !== "git+https://github.com/pandemicsyn/sandbar.git")
-      throw new Error(`${manifest.name} needs the exact Sandbar repository URL for npm provenance`);
+    if (manifest.repository?.url !== "git+https://github.com/pandemicsyn/beachside.git")
+      throw new Error(
+        `${manifest.name} needs the exact Beachside repository URL for npm provenance`,
+      );
 
     if (manifest.license !== "Apache-2.0" || manifest.publishConfig?.access !== "public")
       throw new Error(`${manifest.name} needs its Apache-2.0 license and public publish config`);
@@ -84,9 +86,10 @@ function load() {
       ...manifest.peerDependencies,
     })) {
       if (
-        name.startsWith("@sandbar/") ||
-        name.startsWith("@sandbar-sdk/") ||
-        name.startsWith("sandbar-")
+        name.startsWith("@beachside-internal/") ||
+        name.startsWith("@beachside/") ||
+        name === "beachside" ||
+        name.startsWith("beachside-")
       ) {
         if (!names.has(name))
           throw new Error(`${manifest.name} depends on unpublished internal package ${name}`);
@@ -271,7 +274,7 @@ function notes(plan) {
     sections.push(`## ${item.manifest.name}\n\n${body}`);
   }
 
-  return `# Sandbar v${plan.version}\n\n${sections.join("\n\n")}\n`;
+  return `# Beachside v${plan.version}\n\n${sections.join("\n\n")}\n`;
 }
 
 const mode = process.argv[2] ?? "check";
@@ -297,7 +300,8 @@ if (mode === "check") {
 if (real && (process.env.GITHUB_ACTIONS !== "true" || process.env.RELEASE_APPROVED !== "true"))
   throw new Error("Publication must run from the approved GitHub release job");
 
-const directory = process.env.RELEASE_ARTIFACTS || join(tmpdir(), `sandbar-release-${process.pid}`);
+const directory =
+  process.env.RELEASE_ARTIFACTS || join(tmpdir(), `beachside-release-${process.pid}`);
 
 const packed = packAll(plan, directory);
 

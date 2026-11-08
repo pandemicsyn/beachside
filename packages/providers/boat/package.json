@@ -1,6 +1,6 @@
 {
-  "name": "@sandbar-sdk/boat",
-  "version": "0.7.0",
+  "name": "@beachside/boat",
+  "version": "0.8.0",
   "private": false,
   "files": [
     "dist",
@@ -16,25 +16,25 @@
   },
   "scripts": {
     "check": "tsc -p tsconfig.json",
-    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --outdir dist --external @sandbar-sdk/adapter --external @boatdev/sdk --external zod && tsc -p tsconfig.build.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../../scripts/rewrite-declarations.mjs"
+    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --outdir dist --external @beachside/adapter --external @boatdev/sdk --external zod && tsc -p tsconfig.build.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../../scripts/rewrite-declarations.mjs"
   },
   "dependencies": {
     "@boatdev/sdk": "1.9.9",
     "zod": "4.6.5",
-    "@sandbar-sdk/adapter": "workspace:*"
+    "@beachside/adapter": "workspace:*"
   },
   "devDependencies": {
-    "sandbar-sdk": "workspace:*"
+    "beachside": "workspace:*"
   },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pandemicsyn/sandbar.git",
+    "url": "git+https://github.com/pandemicsyn/beachside.git",
     "directory": "packages/providers/boat"
   },
-  "description": "Boat full-VM sandbox provider adapter for Sandbar.",
+  "description": "Boat full-VM sandbox provider adapter for Beachside.",
   "bugs": {
-    "url": "https://github.com/pandemicsyn/sandbar/issues"
+    "url": "https://github.com/pandemicsyn/beachside/issues"
   },
   "publishConfig": {
     "access": "public"

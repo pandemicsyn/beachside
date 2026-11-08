@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { artifactFiles } from "../../../apps/docs/examples/directory-files";
-import type { AdapterSandbox } from "sandbar-sdk";
+import type { AdapterSandbox } from "beachside";
 import { TestResources } from "./fixtures/resources";
 import {
   liveEnabled,
@@ -138,7 +138,7 @@ export async function files(
   root = "/tmp",
   noClobber = true,
 ) {
-  const path = `${root}/sandbar-${t.ledger.runId}`;
+  const path = `${root}/beachside-${t.ledger.runId}`;
   const first = new Uint8Array([0, 255, 1, 128]);
   const second = new Uint8Array([2, 254, 0]);
   await box.writeFile(path, first, { overwrite: true, signal: t.signal });
@@ -182,7 +182,7 @@ export async function finiteStdin(t: TestResources, box: AdapterSandbox) {
 }
 
 export async function directories(t: TestResources, box: AdapterSandbox, fileRoot: string) {
-  const root = `${fileRoot}/sandbar-directories-${t.ledger.runId}`;
+  const root = `${fileRoot}/beachside-directories-${t.ledger.runId}`;
   const options = { recursive: true, signal: t.signal };
   t.at("sandbox/directories");
   await box.makeDirectory(`${root}/nested/results`, options);
@@ -284,7 +284,7 @@ export async function directories(t: TestResources, box: AdapterSandbox, fileRoo
   expect(await box.fileExists(root, { signal: t.signal })).toBe(false);
 }
 
-describe("Sandbar sandbox", () => {
+describe("Beachside sandbox", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   let box: AdapterSandbox;
   beforeAll(async () => {
@@ -348,15 +348,15 @@ describe("Sandbar sandbox", () => {
   );
   (liveEnabled &&
     featureSupported("suspension") &&
-    (process.env.SANDBAR_QUAL_PROVIDER !== "vercel" ||
-      process.env.SANDBAR_VERCEL_PERSISTENT === "true")
+    (process.env.BEACHSIDE_QUAL_PROVIDER !== "vercel" ||
+      process.env.BEACHSIDE_VERCEL_PERSISTENT === "true")
     ? test
     : test.skip)(
     "lifecycle-suspend-resume",
     async () => {
       const configured = fixture!;
       const t = configured.resources;
-      const path = `${configured.fileRoot}/sandbar-suspend-${t.ledger.runId}`;
+      const path = `${configured.fileRoot}/beachside-suspend-${t.ledger.runId}`;
       const nonce = crypto.randomUUID();
       const bytes = new TextEncoder().encode(nonce);
       await box.writeFile(path, bytes, { overwrite: true, signal: t.signal });
@@ -425,7 +425,7 @@ describe("Sandbar sandbox", () => {
       {
         expect(box.reference).not.toBeNull();
         const reference = JSON.parse(JSON.stringify(box.reference));
-        const path = `${configured.fileRoot}/sandbar-reopen-${t.ledger.runId}`;
+        const path = `${configured.fileRoot}/beachside-reopen-${t.ledger.runId}`;
         const bytes = new Uint8Array([0, 255, 31, 128]);
         await box.writeFile(path, bytes, { overwrite: true, signal: t.signal });
         const expires = (await box.inspect({ signal: t.signal })).expires;

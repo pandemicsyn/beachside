@@ -1,6 +1,6 @@
 {
-  "name": "@sandbar-sdk/adapter",
-  "version": "0.7.0",
+  "name": "@beachside/adapter",
+  "version": "0.8.0",
   "private": false,
   "type": "module",
   "files": [
@@ -32,13 +32,13 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pandemicsyn/sandbar.git",
+    "url": "git+https://github.com/pandemicsyn/beachside.git",
     "directory": "packages/adapter"
   },
-  "description": "Public adapter definitions, validation, and conformance testing for Sandbar.",
-  "homepage": "https://sandbarsdk.dev/docs/guides/write-an-adapter/",
+  "description": "Public adapter definitions, validation, and conformance testing for Beachside.",
+  "homepage": "https://beachside.run/docs/guides/write-an-adapter/",
   "bugs": {
-    "url": "https://github.com/pandemicsyn/sandbar/issues"
+    "url": "https://github.com/pandemicsyn/beachside/issues"
   },
   "publishConfig": {
     "access": "public"

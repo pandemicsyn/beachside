@@ -6,7 +6,7 @@ import {
   exportVariable,
   input,
   run,
-  sandbarBin,
+  beachsideBin,
   saveState,
   setOutput,
 } from "./lib.mjs";
@@ -38,7 +38,7 @@ try {
   if (provider && !ProviderId.test(provider)) throw new Error(`${provider} is not a provider id`);
 
   // A prefix in the job's temp folder needs no root and never touches the runner's own Node.
-  const prefix = join(temp, "sandbar-cli");
+  const prefix = join(temp, "beachside-cli");
   run("npm", [
     "install",
     "--global",
@@ -46,27 +46,27 @@ try {
     prefix,
     "--no-fund",
     "--no-audit",
-    `@sandbar-sdk/cli@${version}`,
+    `@beachside/cli@${version}`,
   ]);
 
   addPath(binDir(prefix));
-  const sandbar = sandbarBin(prefix);
+  const beachside = beachsideBin(prefix);
 
-  const stateDir = input("state-dir", join(temp, "sandbar", "state"));
-  exportVariable("SANDBAR_STATE_DIR", stateDir);
+  const stateDir = input("state-dir", join(temp, "beachside", "state"));
+  exportVariable("BEACHSIDE_STATE_DIR", stateDir);
 
-  if (provider) exportVariable("SANDBAR_PROVIDER", provider);
+  if (provider) exportVariable("BEACHSIDE_PROVIDER", provider);
 
   // `adapter add` installs each official adapter at the CLI's version and skips npm when nothing changed.
-  if (adapters.length) run(sandbar, ["adapter", "add", ...adapters]);
+  if (adapters.length) run(beachside, ["adapter", "add", ...adapters]);
 
-  const installed = run(sandbar, ["--version"], true);
+  const installed = run(beachside, ["--version"], true);
   setOutput("version", installed);
   setOutput("state-dir", stateDir);
-  saveState("sandbar", sandbar);
+  saveState("beachside", beachside);
   saveState("stateDir", stateDir);
   saveState("cleanup", input("cleanup", "true") === "true" ? "true" : "false");
-  console.log(`Sandbar CLI ${installed} ready; state in ${stateDir}`);
+  console.log(`Beachside CLI ${installed} ready; state in ${stateDir}`);
 } catch (cause) {
   console.log(`::error::${cause instanceof Error ? cause.message : String(cause)}`);
   process.exitCode = 1;

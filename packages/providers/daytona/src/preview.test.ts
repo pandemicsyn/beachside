@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar, type AdapterRecoveryReference } from "sandbar-sdk";
+import { Image, Beachside, type AdapterRecoveryReference } from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 function fixture() {
@@ -98,7 +98,7 @@ function fixture() {
     calls,
     creates: () => creates,
     connect: (key = "first-key", onReference?: (ref: AdapterRecoveryReference) => void) =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: { target: "us", networkPolicy: "blocked", ttlMinutes: 15 },
         credentials: { apiKey: key },
@@ -209,7 +209,7 @@ test("Daytona public setup rejects before native requests", async () => {
   );
 
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createDaytonaAdapter(fetcher),
       config: { target: "us", networkPolicy: "blocked", preview: { access: "public" } },
       credentials: { apiKey: "key" },

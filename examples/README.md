@@ -1,12 +1,12 @@
-# Run OpenCode with Sandbar
+# Run OpenCode with Beachside
 
 Three small TypeScript applications run OpenCode in a Daytona or E2B sandbox:
 
 - `hello` asks **“What is 2 + 2?”** and prints captured stdout/stderr. It does not create an answer file.
-- `edit` uploads [message.txt](agent-edit-file/message.txt), asks OpenCode to replace `NAME` with `Sandbar`, then reads and displays the changed remote file. The local fixture stays unchanged.
+- `edit` uploads [message.txt](agent-edit-file/message.txt), asks OpenCode to replace `NAME` with `Beachside`, then reads and displays the changed remote file. The local fixture stays unchanged.
 - `box` runs an OpenCode 2 server next to your project in a sandbox and attaches your local OpenCode to it; see [OpenCode 2 in a box](#opencode-2-in-a-box).
 
-All three use Sandbar's public SDK. Provider selection changes setup; the workflows use the same execution and file calls.
+All three use Beachside's public SDK. Provider selection changes setup; the workflows use the same execution and file calls.
 
 ## Setup
 
@@ -25,7 +25,7 @@ Edit `examples/.env.local` with the credentials for your selected sandbox provid
 | Daytona | `DAYTONA_API_KEY`, `DAYTONA_TARGET`, `DAYTONA_SNAPSHOT` | An active Linux snapshot in your target region. `daytona-default` is selected on the connection; your organization's policy must permit GitHub release downloads and model endpoints. |
 | E2B | `E2B_API_KEY`; optional `E2B_TEMPLATE_ID` (default `base`) | A ready Linux template. Creation explicitly requests `internet`. |
 
-The guest image needs glibc-based Linux on x64 or arm64, `curl`, `tar`, `sha256sum`, `/bin/sh`, Python 3 and the adapter's standard shell/file utilities; see the [Daytona](../apps/docs/src/content/docs/docs/providers/daytona.md#image-requirements) and [E2B](../apps/docs/src/content/docs/docs/providers/e2b.md#files-and-commands) guides. The guest working directory is `/tmp/sandbar-agent-example`. OpenCode is installed under its `opencode/` subdirectory. Installation downloads the pinned standalone binary from GitHub releases (the x64 baseline build avoids an AVX2 requirement) and verifies its pinned SHA-256 digest before extraction. It requires outbound GitHub access; model execution needs access to the selected model service.
+The guest image needs glibc-based Linux on x64 or arm64, `curl`, `tar`, `sha256sum`, `/bin/sh`, Python 3 and the adapter's standard shell/file utilities; see the [Daytona](../apps/docs/src/content/docs/docs/providers/daytona.md#image-requirements) and [E2B](../apps/docs/src/content/docs/docs/providers/e2b.md#files-and-commands) guides. The guest working directory is `/tmp/beachside-agent-example`. OpenCode is installed under its `opencode/` subdirectory. Installation downloads the pinned standalone binary from GitHub releases (the x64 baseline build avoids an AVX2 requirement) and verifies its pinned SHA-256 digest before extraction. It requires outbound GitHub access; model execution needs access to the selected model service.
 
 ## Model selection
 
@@ -63,10 +63,10 @@ bun run --cwd examples edit --provider e2b
 Each invocation creates one new sandbox. `hello` prints the agent's answer, normally containing `4`; model wording and CLI decoration can vary. `edit` prints agent output followed by the exact file contents:
 
 ```text
-Hello, Sandbar!
+Hello, Beachside!
 ```
 
-The file example fails if the returned file differs from `Hello, Sandbar!\n`. Captured agent stdout and stderr are forwarded to the corresponding local streams. Installation has a 16 KiB output bound; agent output has a 64 KiB bound, and truncated output fails the example.
+The file example fails if the returned file differs from `Hello, Beachside!\n`. Captured agent stdout and stderr are forwarded to the corresponding local streams. Installation has a 16 KiB output bound; agent output has a 64 KiB bound, and truncated output fails the example.
 
 ## Lifecycle and validation
 
@@ -78,8 +78,8 @@ Live acceptance passed on October 10, 2026 at source revision `1446cf0a013a6a2b4
 
 | Provider | Passing configuration | Verified results |
 | --- | --- | --- |
-| Daytona | Existing `daytona-small` snapshot, `us` target, `daytona-default` network | Answer contained `4`; remote file was exactly `Hello, Sandbar!\n`. |
-| E2B | Existing `base` template, `internet` network | Answer contained `4`; remote file was exactly `Hello, Sandbar!\n`. |
+| Daytona | Existing `daytona-small` snapshot, `us` target, `daytona-default` network | Answer contained `4`; remote file was exactly `Hello, Beachside!\n`. |
+| E2B | Existing `base` template, `internet` network | Answer contained `4`; remote file was exactly `Hello, Beachside!\n`. |
 
 The live harness imported the actual `hello`, `edit`, installation, provider setup and cleanup functions and ran both workflows sequentially in one owned sandbox per provider. It did not rerun all four standalone CLI invocations above. Initial attempts using npm failed because Daytona lacked npm and E2B's npm install exited 137; the corrected standalone installer passed. All four allocated sandboxes, including those initial attempts, were independently confirmed deleted by provider GET responses returning 404. These results qualify these workflows and configurations at that revision. Offline fixtures cover SDK wiring and failure cleanup; future live sandbox runs require separate authorization.
 
@@ -96,7 +96,7 @@ bun run --cwd examples box down
 
 `--project` takes any directory in a git checkout; relative paths resolve from `examples/`, so prefer an absolute path. Pass `--name <name>` to run several boxes, and `--hours <n>` to `up` for a lifetime other than one hour (24 at most).
 
-**Up** creates the sandbox and downloads **OpenCode `2.2.3`** for Linux straight from the npm registry tarball, checking its pinned SHA-256 digest (no Node or npm in the guest). It uploads your project's tracked files, untracked files that are not ignored, and `.git` to the same absolute path in the sandbox, so the local client and the server agree on the directory. It copies your git `user.name` and `user.email`, starts `opencode2 serve` on port 4096 with a random password, and waits for `/global/health` through the provider's preview URL. The sandbox reference and password are saved under `~/.local/state/sandbar-opencode-box/`, readable only by you.
+**Up** creates the sandbox and downloads **OpenCode `2.2.3`** for Linux straight from the npm registry tarball, checking its pinned SHA-256 digest (no Node or npm in the guest). It uploads your project's tracked files, untracked files that are not ignored, and `.git` to the same absolute path in the sandbox, so the local client and the server agree on the directory. It copies your git `user.name` and `user.email`, starts `opencode2 serve` on port 4096 with a random password, and waits for `/global/health` through the provider's preview URL. The sandbox reference and password are saved under `~/.local/state/beachside-opencode-box/`, readable only by you.
 
 **Attach** reopens the sandbox and runs your local `opencode2 --server` against a localhost proxy. The proxy adds the provider's preview headers (Daytona's preview token), which the OpenCode client cannot send itself, and refuses redirects so those headers cannot leak. Install the client with `npm install -g @opencode/cli`.
 
@@ -112,7 +112,7 @@ The server uses `OPENCODE_MODEL` when set, otherwise OpenCode's default. A keyed
 
 ### Requirements and limits
 
-The guest needs Linux on x64 or arm64 with `curl`, `sha256sum`, GNU `tar`, `git`, `setsid` and `/bin/sh`, outbound access to `registry.npmjs.org` and your model service, and `sudo` when the project path does not exist and the sandbox user cannot create it. The host needs `git` and `tar`. The box keeps running until `down` or its lifetime ends, and is billed meanwhile; sandboxes carry the labels `sandbar-example=opencode-box` and `opencode-box=<name>`, so `sandbar gc --label sandbar-example=opencode-box` finds strays.
+The guest needs Linux on x64 or arm64 with `curl`, `sha256sum`, GNU `tar`, `git`, `setsid` and `/bin/sh`, outbound access to `registry.npmjs.org` and your model service, and `sudo` when the project path does not exist and the sandbox user cannot create it. The host needs `git` and `tar`. The box keeps running until `down` or its lifetime ends, and is billed meanwhile; sandboxes carry the labels `beachside-example=opencode-box` and `opencode-box=<name>`, so `beachside gc --label beachside-example=opencode-box` finds strays.
 
 `box` has offline tests only. It has not been run against a live provider yet.
 

@@ -3,13 +3,13 @@ title: boxd
 description: Use the boxd adapter for microVMs booted from OCI images, with suspend/resume, independent disks and public previews.
 ---
 
-The `@sandbar-sdk/boxd` package implements the public Sandbar adapter interface for [boxd](https://docs.boxd.sh) microVMs. Install it with `npm install sandbar-sdk @sandbar-sdk/boxd`; it is experimental, because only the basic workflows have run live. Use Node 20+ or Bun. Native SDK version: `@boxd-sh/sdk@0.2.15`.
+The `@beachside/boxd` package implements the public Beachside adapter interface for [boxd](https://docs.boxd.sh) microVMs. Install it with `npm install beachside @beachside/boxd`; it is experimental, because only the basic workflows have run live. Use Node 20+ or Bun. Native SDK version: `@boxd-sh/sdk@0.2.15`.
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { boxdAdapter } from "@sandbar-sdk/boxd";
+import { Beachside } from "beachside";
+import { boxdAdapter } from "@beachside/boxd";
 
-const client = await Sandbar.connect({
+const client = await Beachside.connect({
   adapter: boxdAdapter,
   credentials: { apiKey: process.env.BOXD_API_KEY! },
   config: { org: "my-org", network: "internet" },
@@ -27,6 +27,8 @@ try {
 ```
 
 Use a member API key. `connect` checks that `org` is the key's authenticated default org (by ID or slug) and reads the cluster zone; everything is scoped to that org. Userless org keys and custom endpoints are not supported.
+
+The package also exports `boxd()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(boxd({ apiKey, org: "my-org", network: "internet" }))`. It is the same setup; use whichever reads better.
 
 ## Setup
 
@@ -69,11 +71,11 @@ Live results cover the tested image, region and network setting; see [Provider s
 
 ## Files and Python
 
-Native reads, overwrite writes, `readDirectory()` and command input need nothing in the image. `listFiles()`, stat/exists, no-clobber writes, mkdir/remove, copy/move and file streams need **Python 3 in your Linux image**; Sandbar does not install it. Each helper call has a 30-second deadline.
+Native reads, overwrite writes, `readDirectory()` and command input need nothing in the image. `listFiles()`, stat/exists, no-clobber writes, mkdir/remove, copy/move and file streams need **Python 3 in your Linux image**; Beachside does not install it. Each helper call has a 30-second deadline.
 
 Use streams for files over 1 MiB; they move 64 KiB chunks with no default size limit, and a streamed read can see concurrent changes. Directory listings are complete or fail with `OUTPUT_CAPACITY`.
 
-Copies and streamed writes without overwrite need hard links in the destination filesystem, and moves without overwrite need Linux `renameat2`. Moves across filesystems fail without touching the source. A failed streamed write can leave a `.sandbar-<uuid>` temporary file beside the destination, named in the error; an interrupted no-clobber buffered write can leave partial contents. See [files and output](/docs/guides/files-and-output/).
+Copies and streamed writes without overwrite need hard links in the destination filesystem, and moves without overwrite need Linux `renameat2`. Moves across filesystems fail without touching the source. A failed streamed write can leave a `.beachside-<uuid>` temporary file beside the destination, named in the error; an interrupted no-clobber buffered write can leave partial contents. See [files and output](/docs/guides/files-and-output/).
 
 ## Public previews
 
@@ -85,7 +87,7 @@ With `preview: { access: "protected" }`, preview lookup fails as unsupported. Th
 
 `box.snapshot()` always saves memory and disk together; boxd has no filesystem-only capture, so `snapshots: { preserve: Preserve.FILESYSTEM }` fails at connect. boxd pauses the machine briefly and it keeps running; a restored machine resumes the captured processes under a new ID, with its own name, URL and private IP. Processes that cached the old hostname or address keep the stale value.
 
-boxd keeps only the latest version under a snapshot name, so every capture gets its own name and the reference remembers the captured version. If someone saves that snapshot again outside Sandbar, `inspect()`, `restore()` and `delete()` fail with `CONFLICT` before changing anything. A restore keeps the captured size and `internet` networking, applies your configured lifetime and preview settings, and cannot attach disks. Snapshots do not expire, so delete them when you are done. See [snapshots and volumes](/docs/guides/snapshots-and-volumes/).
+boxd keeps only the latest version under a snapshot name, so every capture gets its own name and the reference remembers the captured version. If someone saves that snapshot again outside Beachside, `inspect()`, `restore()` and `delete()` fail with `CONFLICT` before changing anything. A restore keeps the captured size and `internet` networking, applies your configured lifetime and preview settings, and cannot attach disks. Snapshots do not expire, so delete them when you are done. See [snapshots and volumes](/docs/guides/snapshots-and-volumes/).
 
 ## Storage and recovery
 
@@ -104,4 +106,4 @@ A refused create carries a matching code and boxd's reason, for example `CAPACIT
 - Buffered command output, stdin and file transfers are limited to 1 MiB; most filesystem operations need Python 3.
 - Disks survive destroy and must be deleted explicitly. Closing the client destroys nothing.
 
-See the [provider research issue](https://github.com/pandemicsyn/sandbar/issues/41), [live test evidence](https://github.com/pandemicsyn/sandbar/blob/main/packages/providers/boxd/qualification/live-qualification.md) and the [boxd TypeScript SDK docs](https://docs.boxd.sh/reference/typescript-sdk).
+See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/41), [live test evidence](https://github.com/pandemicsyn/beachside/blob/main/packages/providers/boxd/qualification/live-qualification.md) and the [boxd TypeScript SDK docs](https://docs.boxd.sh/reference/typescript-sdk).

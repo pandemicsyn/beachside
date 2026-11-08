@@ -3,7 +3,7 @@ title: Images and networking
 description: Choose a sandbox environment, build reusable images, and configure networking.
 ---
 
-Set the default environment and network policy in adapter setup. Your application can then use `sandbar.sandboxes.create()` without repeating those choices. See [Getting started](/docs/direct-quickstart/) for connection examples.
+Set the default environment and network policy in adapter setup. Your application can then use `beachside.sandboxes.create()` without repeating those choices. See [Getting started](/docs/direct-quickstart/) for connection examples.
 
 ## Start from a prepared image
 
@@ -17,22 +17,22 @@ Set the default environment and network policy in adapter setup. Your applicatio
 
 Daytona calls its prepared images snapshots. Selecting one as an image is different from capturing a sandbox's current state. For capture and restore, use the [snapshot APIs](/docs/guides/snapshots-and-volumes/).
 
-boxd starts directly from an OCI image instead of a prepared image. Set `image` in its adapter configuration, or omit it to use the authenticated cluster's default image. Starting from OCI does not create a separate Sandbar image-build artifact. See [boxd defaults](/docs/providers/boxd/#setup).
+boxd starts directly from an OCI image instead of a prepared image. Set `image` in its adapter configuration, or omit it to use the authenticated cluster's default image. Starting from OCI does not create a separate Beachside image-build artifact. See [boxd defaults](/docs/providers/boxd/#setup).
 
-An explicit `environment` on `create()` overrides the connection default if the adapter supports it. An invalid override fails; Sandbar does not silently fall back to another image. Vercel accepts only its configured managed image.
+An explicit `environment` on `create()` overrides the connection default if the adapter supports it. An invalid override fails; Beachside does not silently fall back to another image. Vercel accepts only its configured managed image.
 
 ## Build an OCI image
 
 E2B and Daytona implement `images.build()` to turn an OCI image into a reusable prepared image. Builds are separate provider operations and may incur build and storage charges. boxd boots OCI images directly and does not implement this build API; Vercel supports neither custom OCI images nor builds. `(await client.capabilities()).imageBuild` is `true` on connections that implement the build. Check [tested provider support](/docs/providers/support/) for live coverage.
 
-Start with an E2B or Daytona connection named `sandbar`:
+Start with an E2B or Daytona connection named `beachside`:
 
 ```ts
-import { Image } from "sandbar-sdk";
+import { Image } from "beachside";
 
-const built = await sandbar.images.build({ source: Image.oci("node:24") });
+const built = await beachside.images.build({ source: Image.oci("node:24") });
 console.log(built.retainedResources);
-const box = await sandbar.sandboxes.create({
+const box = await beachside.sandboxes.create({
   environment: Image.prepared(built.prepared),
 });
 try {
@@ -53,12 +53,12 @@ Pass the full `built.prepared` value to `Image.prepared()`: it includes the prov
 `built.reference` is a resource reference of kind `"image"`. Its `ownership` is `"verified-created"` only when the adapter proved this build created the image; a build recovered after a lost response reports `"unknown"`. Persist the whole reference, then reopen and delete the image with it:
 
 ```ts
-const image = await sandbar.images.get(built.reference);
+const image = await beachside.images.get(built.reference);
 console.log(await image.inspect()); // state, visibility, source and known dependencies
-await image.delete(); // or sandbar.images.delete(built.reference)
+await image.delete(); // or beachside.images.delete(built.reference)
 ```
 
-`images.list({ limit: 20, cursor })` returns a bounded page of the provider's images with a `coverage` value, like [snapshot and volume inventory](/docs/guides/snapshots-and-volumes/). Finding an image in a list does not prove you own it, so listed items have unknown ownership. `(await sandbar.capabilities()).imageManagement` reports whether inspect, list and delete are supported; a missing operation rejects with `UNSUPPORTED`.
+`images.list({ limit: 20, cursor })` returns a bounded page of the provider's images with a `coverage` value, like [snapshot and volume inventory](/docs/guides/snapshots-and-volumes/). Finding an image in a list does not prove you own it, so listed items have unknown ownership. `(await beachside.capabilities()).imageManagement` reports whether inspect, list and delete are supported; a missing operation rejects with `UNSUPPORTED`.
 
 Deletion follows the snapshot deletion rules. The reference must match the connection's provider and scope. The adapter refuses public or shared images, captured sandbox snapshots (delete those with `snapshots.delete()`) and images that sandboxes or other native resources still use, rejecting with no effect before it sends anything. Deletion sends one native request and never resends it. If the response is lost and the image is not then observed gone, `delete()` rejects with `OUTCOME_UNKNOWN`; `submitDelete()` returns an operation whose saved reference you can recover later to learn whether the image is gone.
 
@@ -88,7 +88,11 @@ Configure `network` once in adapter setup. Every adapter uses the same names, so
 
 ```ts
 // Only the adapter setup differs between providers.
-const client = await Sandbar.connect(e2b({ apiKey, network: "internet" }));
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey },
+  config: { network: "internet" },
+});
 const box = await client.sandboxes.create();
 ```
 
@@ -117,7 +121,7 @@ await box.exec({ command: { kind: "argv", argv: ["node", "app.js"] }, env: { NOD
 
 The variables belong to the sandbox: they still apply after `sandboxes.get(reference)` reopens it in another process, without passing them again. Names match `[A-Za-z_][A-Za-z0-9_]*`; values are strings without NUL. A request holds at most 128 variables and 64 KiB of names and values. Invalid input rejects with `INVALID_ARGUMENT` before any provider call, and the message never repeats a name or value. An empty `env` asks for nothing.
 
-Values are often secrets, so Sandbar never writes them into operation references, recovery tokens, telemetry or its own error messages, and adapters redact an echoed value from provider error text. The provider still stores them with the sandbox, and any process inside it can read them.
+Values are often secrets, so Beachside never writes them into operation references, recovery tokens, telemetry or its own error messages, and adapters redact an echoed value from provider error text. The provider still stores them with the sandbox, and any process inside it can read them.
 
 | Provider       | Create-time `env`                                                               |
 | -------------- | ------------------------------------------------------------------------------- |

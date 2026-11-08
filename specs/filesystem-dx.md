@@ -70,7 +70,7 @@ Mkdir/remove acknowledgement confirms the call; there is no durable receipt. Pre
 
 ## Transfer limits, cancellation and partial effects
 
-Retain the current 1 MiB buffered defaults for compatibility. Convenience reads/writes accept an explicit bounded `maxBytes` override, with a 16 MiB ceiling; larger data uses streams. Validate the effective limit before dispatch when length is known. A read exceeding its bound rejects instead of returning truncated data. The implementation must address both SDK and native-client buffering, not just remove validation.
+Buffered convenience reads/writes have no default SDK size limit. A write larger than 1 MiB or the adapter's buffered limit goes through the adapter's write stream; a read that hits the adapter's buffered limit is read again through its read stream. Adapters without file streams keep their own buffered limit, and the error names it. `maxBytes` is an optional caller guard with no ceiling. Validate the effective limit before dispatch when length is known. A read exceeding its bound rejects instead of returning truncated data. The implementation must address both SDK and native-client buffering, not just remove validation.
 
 Streams split admitted large chunks to at most 64 KiB with bounded queued bytes/chunks. One producer and one consumer, awaited incremental IO, no unbounded pending writes. No default whole-file size ceiling for streams; callers can set `maxBytes`. This is an application-memory bound, not a promise about remote caches or one native frame allocation. Verify the transport does not secretly buffer the entire file.
 

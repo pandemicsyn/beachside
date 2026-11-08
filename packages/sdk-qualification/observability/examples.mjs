@@ -9,7 +9,7 @@ import { decode } from "@msgpack/msgpack";
 
 const root = new URL("../../../", import.meta.url).pathname;
 
-const temporary = await mkdtemp(join(tmpdir(), "sandbar-observability-examples-"));
+const temporary = await mkdtemp(join(tmpdir(), "beachside-observability-examples-"));
 
 await mkdir(join(root, "packages/sdk-qualification/dist"), { recursive: true });
 
@@ -70,11 +70,11 @@ try {
     await writeFile(
       sdkWrapper,
       `
-      import * as SDK from ${JSON.stringify(import.meta.resolve("sandbar-sdk"))};
+      import * as SDK from ${JSON.stringify(import.meta.resolve("beachside"))};
       export const Image = SDK.Image;
-      export const Sandbar = {
+      export const Beachside = {
         async connect(...args) {
-          const client = await SDK.Sandbar.connect(...args);
+          const client = await SDK.Beachside.connect(...args);
           if (process.env.TEST_MODE === "close_failure") {
             const close = client.close.bind(client);
             client.close = async () => { await close(); throw new Error("DOCUMENTATION_CLOSE_FAILURE"); };
@@ -110,14 +110,14 @@ try {
         {
           name: "local-provider-and-vendor-boundaries",
           setup(builder) {
-            builder.onResolve({ filter: /^@sandbar-sdk\/daytona$/ }, () => {
+            builder.onResolve({ filter: /^@beachside\/daytona$/ }, () => {
               providerReplaced = true;
 
               return {
                 path: join(root, "packages/sdk-qualification/observability/example-daytona.ts"),
               };
             });
-            builder.onResolve({ filter: /^sandbar-sdk$/ }, () => ({ path: sdkWrapper }));
+            builder.onResolve({ filter: /^beachside$/ }, () => ({ path: sdkWrapper }));
             builder.onResolve({ filter: /^@opentelemetry\/sdk-trace-node$/ }, () => ({
               path: providerWrapper,
             }));
@@ -142,7 +142,7 @@ try {
 
         const output = await new Promise((resolve, reject) => {
           const child = spawn(
-            runtime === "node" ? (process.env.SANDBAR_NODE_BINARY ?? "node") : "bun",
+            runtime === "node" ? (process.env.BEACHSIDE_NODE_BINARY ?? "node") : "bun",
             [
               "--input-type=module",
               "--eval",
@@ -215,8 +215,8 @@ try {
         }
 
         if (example === "otel") {
-          assert(output.includes("sandbar-demo"));
-          assert(output.includes("sandbar.sandbox.create"));
+          assert(output.includes("beachside-demo"));
+          assert(output.includes("beachside.sandbox.create"));
         } else if (example.startsWith("sentry")) {
           const envelopes = JSON.parse(await readFile(envelopePath, "utf8"));
 
@@ -226,21 +226,21 @@ try {
             ),
           );
 
-          const parent = spans.find((span) => span.name === "sandbar-demo");
-          const create = spans.find((span) => span.name === "sandbar.sandbox.create");
+          const parent = spans.find((span) => span.name === "beachside-demo");
+          const create = spans.find((span) => span.name === "beachside.sandbox.create");
           assert(parent && create, "Native Sentry exports must contain application and SDK spans");
           assert.equal(create.parent_span_id, parent.span_id);
           assert.equal(create.trace_id, parent.trace_id);
           const serialized = JSON.stringify(envelopes);
-          assert(serialized.includes("sandbar-demo"));
-          assert(serialized.includes("sandbar.sandbox.create"));
+          assert(serialized.includes("beachside-demo"));
+          assert(serialized.includes("beachside.sandbox.create"));
           assert(!serialized.includes("CANARY"));
         } else if (example === "datadog-node") {
           const traces = received.filter((r) => r.path.endsWith("/traces"));
           assert(traces.length > 0, "dd-trace must export to the local Agent stand-in");
           const decoded = traces.flatMap((r) => decode(r.bytes, { useBigInt64: true })).flat();
-          const parent = decoded.find((span) => span.resource === "sandbar-demo");
-          const create = decoded.find((span) => span.resource === "sandbar.sandbox.create");
+          const parent = decoded.find((span) => span.resource === "beachside-demo");
+          const create = decoded.find((span) => span.resource === "beachside.sandbox.create");
           assert(parent && create, "Native Datadog exports must contain application and SDK spans");
           assert.equal(create.parent_id, parent.span_id);
           assert.equal(create.trace_id, parent.trace_id);
@@ -249,8 +249,8 @@ try {
             typeof value === "bigint" ? value.toString() : value,
           );
 
-          assert(serialized.includes("sandbar-demo"));
-          assert(serialized.includes("sandbar.sandbox.create"));
+          assert(serialized.includes("beachside-demo"));
+          assert(serialized.includes("beachside.sandbox.create"));
           assert(!serialized.includes("CANARY"));
         } else {
           const serialized = received
@@ -265,13 +265,13 @@ try {
               ),
             );
 
-          const parent = spans.find((span) => span.name === "sandbar-demo");
-          const create = spans.find((span) => span.name === "sandbar.sandbox.create");
+          const parent = spans.find((span) => span.name === "beachside-demo");
+          const create = spans.find((span) => span.name === "beachside.sandbox.create");
           assert(parent && create);
           assert.equal(create.parentSpanId, parent.spanId);
           assert.equal(create.traceId, parent.traceId);
-          assert(serialized.includes("sandbar-demo"));
-          assert(serialized.includes("sandbar.sandbox.create"));
+          assert(serialized.includes("beachside-demo"));
+          assert(serialized.includes("beachside.sandbox.create"));
           assert(!serialized.includes("CANARY"));
         }
 

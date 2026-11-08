@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { CreateEnv, ExecCommand } from "@sandbar-sdk/adapter/portable";
-import { InvocationIdentity, NativeScope, SandboxRef } from "@sandbar/provider-spi";
+import { CreateEnv, ExecCommand } from "@beachside/adapter/portable";
+import { InvocationIdentity, NativeScope, SandboxRef } from "@beachside-internal/provider-spi";
 
 export const FakeInventoryCursor = z
   .string()

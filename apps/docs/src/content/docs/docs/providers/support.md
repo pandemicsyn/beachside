@@ -67,4 +67,4 @@ The SDK targets server-side Node.js and Bun. Packed package checks run the publi
 
 ## Evidence
 
-The [live test evidence](https://github.com/pandemicsyn/sandbar/blob/main/packages/sdk-qualification/provider-qualification/LIVE-EVIDENCE.md) in the repository lists every recorded run with its date, SDK commit, image, region and network setting, plus the detailed caveats behind each cell above.
+The [live test evidence](https://github.com/pandemicsyn/beachside/blob/main/packages/sdk-qualification/provider-qualification/LIVE-EVIDENCE.md) in the repository lists every recorded run with its date, SDK commit, image, region and network setting, plus the detailed caveats behind each cell above.

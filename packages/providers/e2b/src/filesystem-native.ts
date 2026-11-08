@@ -4,7 +4,7 @@ import {
   AdapterFilesystemError,
   type DirectoryResult,
   type FileStat,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 
 // Python3 is supplied by the supported E2B base image. Paths are arguments, never program text.

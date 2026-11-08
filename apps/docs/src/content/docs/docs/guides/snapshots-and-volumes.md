@@ -7,16 +7,16 @@ Use a **snapshot** to save sandbox state and restore it into another sandbox. Us
 
 Support varies by adapter. Capturing a snapshot, restoring it, managing volumes and mounting volumes are separate features. See [current combinations](#current-combinations) and [tested provider support](/docs/providers/support/) before choosing a workflow.
 
-From the command line, `sandbar snapshot create` and `sandbar create --snapshot` do the same; see [Snapshots in the CLI](/docs/cli/#snapshots).
+From the command line, `beachside snapshot create` and `beachside create --snapshot` do the same; see [Snapshots in the CLI](/docs/cli/#snapshots).
 
-For TypeScript annotations, import `SandbarClient`, `SandboxHandle`, `SnapshotHandle` and `VolumeHandle` from `sandbar-sdk`. See the [TypeScript reference](/docs/reference/typescript/#consumer-vocabulary-and-compatibility) for compatibility types.
+For TypeScript annotations, import `BeachsideClient`, `SandboxHandle`, `SnapshotHandle` and `VolumeHandle` from `beachside`. See the [TypeScript reference](/docs/reference/typescript/#consumer-vocabulary-and-compatibility) for compatibility types.
 
 ## Capture and restore
 
-Start with a connection named `sandbar`, configured with a default environment and network policy as shown in [Getting started](/docs/direct-quickstart/). The adapter must support snapshot capture and restore. Providers keep different kinds of state, described [below](#what-capture-preserves).
+Start with a connection named `beachside`, configured with a default environment and network policy as shown in [Getting started](/docs/direct-quickstart/). The adapter must support snapshot capture and restore. Providers keep different kinds of state, described [below](#what-capture-preserves).
 
 ```ts
-const source = await sandbar.sandboxes.create();
+const source = await beachside.sandboxes.create();
 const check = await source.checkSnapshot();
 if (check.status !== "supported") {
   await source.destroy(); // No capture was submitted.
@@ -27,7 +27,7 @@ const captured = await source.snapshot();
 console.log(captured.capture, captured.source);
 ```
 
-`checkSnapshot()` checks whether this source can be captured. It does not reserve a capture or promise that restore will be supported. Before creating a source for a round trip, check `(await sandbar.capabilities()).snapshots.restore` too.
+`checkSnapshot()` checks whether this source can be captured. It does not reserve a capture or promise that restore will be supported. Before creating a source for a round trip, check `(await beachside.capabilities()).snapshots.restore` too.
 
 Keep `captured` available while saving its reference. If your save fails, you still have the handle and reference to save again or clean up deliberately.
 
@@ -60,7 +60,7 @@ const restored = await snapshot.restore({
 });
 ```
 
-An adapter that can't apply one of them on restore rejects it before allocation with `UnsupportedFeatureError`, and `(await sandbar.capabilities()).snapshots.restore` lists what it accepts under `options`. Environment values never enter references, messages or traces. See [current combinations](#current-combinations) for each adapter.
+An adapter that can't apply one of them on restore rejects it before allocation with `UnsupportedFeatureError`, and `(await beachside.capabilities()).snapshots.restore` lists what it accepts under `options`. Environment values never enter references, messages or traces. See [current combinations](#current-combinations) for each adapter.
 
 Restore uses the connection's configured network policy when you omit `network`. An explicit override must be supported by that connection. By default, restore also requires the new sandbox to have a lifecycle independent of the source and snapshot. Unsupported restore requirements reject before allocation with `UnsupportedFeatureError`; `unmetRequirements` explains why.
 
@@ -83,7 +83,7 @@ Close the connection in an outer `finally`, as in [Getting started](/docs/direct
 | Runloop                                            | Private disk                              | May pause briefly; keeps running          | Fresh processes; RAM is not retained             |
 | Boat                                               | Private disk                              | Keeps running; any pause is undocumented  | Fresh processes; RAM is not retained             |
 
-Daytona captures Linux VMs the same way as containers. It leaves an already-stopped source stopped. Configure `snapshots: { restartAfterCapture: false }` on the adapter to also leave a running source stopped after capture. E2B requires a running source with envd `v0.5.0` or newer. Modal has no snapshot listing, so save the returned reference; see the [Modal adapter notes](https://github.com/pandemicsyn/sandbar/tree/main/packages/providers/modal#snapshots).
+Daytona captures Linux VMs the same way as containers. It leaves an already-stopped source stopped. Configure `snapshots: { restartAfterCapture: false }` on the adapter to also leave a running source stopped after capture. E2B requires a running source with envd `v0.5.0` or newer. Modal has no snapshot listing, so save the returned reference; see the [Modal adapter notes](https://github.com/pandemicsyn/beachside/tree/main/packages/providers/modal#snapshots).
 
 ```ts
 const captured = await source.snapshot({
@@ -94,13 +94,16 @@ const captured = await source.snapshot({
 Choose what capture keeps once, in adapter setup, with `snapshots: { preserve }` and the exported `Preserve` constants. Every adapter with snapshots accepts it, so the setting carries over when you switch providers. The choice is exact: E2B's `Preserve.FILESYSTEM` skips memory, and restored sandboxes boot fresh. Daytona's `Preserve.FILESYSTEM_AND_MEMORY` captures memory from running Linux VMs; containers reject it before any change. boxd always keeps memory, so it rejects `Preserve.FILESYSTEM` at connect; Modal, Vercel, Runloop and Boat keep files only, so they reject `Preserve.FILESYSTEM_AND_MEMORY` at connect. Omit it to keep the provider's default. A choice the adapter cannot honor rejects before any sandbox changes.
 
 ```ts
-import { Preserve } from "sandbar-sdk";
-import { e2b } from "@sandbar-sdk/e2b";
+import { Beachside, Preserve } from "beachside";
+import { e2bAdapter } from "@beachside/e2b";
 
-const adapter = e2b({
-  apiKey: process.env.E2B_API_KEY!,
-  snapshots: { preserve: Preserve.FILESYSTEM },
-  lifecycle: { suspension: { preserve: Preserve.FILESYSTEM } },
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey: process.env.E2B_API_KEY! },
+  config: {
+    snapshots: { preserve: Preserve.FILESYSTEM },
+    lifecycle: { suspension: { preserve: Preserve.FILESYSTEM } },
+  },
 });
 ```
 
@@ -111,7 +114,7 @@ Snapshots cost storage until they are deleted or expire. Where the provider supp
 
 Other adapters reject the setting at connect. Their providers keep snapshots until you delete them, except Daytona, which deactivates snapshots after two weeks without use. `snapshot({ retention: { minimumSeconds } })` checks against the configured expiry before capture.
 
-Pause application writers before capture if you need consistent data. Passing `consistency: "caller-quiesced"` records that you did so; Sandbar does not pause writers for you. Otherwise, consistency remains unknown unless the provider supplies evidence. `captured.capture` describes what was saved, and `captured.source` describes the source after capture.
+Pause application writers before capture if you need consistent data. Passing `consistency: "caller-quiesced"` records that you did so; Beachside does not pause writers for you. Otherwise, consistency remains unknown unless the provider supplies evidence. `captured.capture` describes what was saved, and `captured.source` describes the source after capture.
 
 A restored snapshot does not strengthen the provider's network guarantees. In the maintained E2B test, requested `blocked` networking still allowed direct outbound IPv4 TCP; restored processes may retain outbound access. See [E2B networking](/docs/providers/e2b/#network-and-previews) and the [test evidence](/docs/providers/support/).
 
@@ -122,18 +125,19 @@ A volume stores data separately from compute. `volume.at(path)` describes where 
 The following example uses Daytona. Configure the prepared image and network policy once on the connection:
 
 ```ts
-import { Image, Sandbar } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Image, Beachside } from "beachside";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const sandbar = await Sandbar.connect(
-  daytona({
-    apiKey: process.env.DAYTONA_API_KEY!,
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: {
     target: "us",
     environment: Image.prepared("daytona-small"),
     network: "daytona-default",
-  }),
-  { cleanup: { storage: "allow-unconfirmed" } },
-);
+  },
+  cleanup: { storage: "allow-unconfirmed" },
+});
 ```
 
 The default cleanup policy, `require-durable`, prevents destruction of mounted compute when writable-storage durability cannot be confirmed. Daytona cannot currently confirm that guarantee. `allow-unconfirmed` permits destruction while accepting that writes may not be fully durable. Finish application writes first; a completed write alone does not prove shutdown durability.
@@ -143,12 +147,12 @@ Set the policy once with `cleanup.storage`, as above, or override it on `destroy
 Close this connection in an outer `finally` after handling its resources, as in [Getting started](/docs/direct-quickstart/).
 
 ```ts
-const volume = await sandbar.volumes.create({ name: "workspace-data" });
+const volume = await beachside.volumes.create({ name: "workspace-data" });
 await saveResource(JSON.stringify(volume.reference));
 const info = await volume.inspect();
 if (info.state !== "ready") throw new Error("Volume is not ready");
 
-const box = await sandbar.sandboxes.create({
+const box = await beachside.sandboxes.create({
   mounts: [volume.at("/mnt/workspace")],
 });
 try {
@@ -175,8 +179,8 @@ Mount paths must be absolute, normalized, nonoverlapping and outside reserved pa
 Daytona can combine a filesystem snapshot with volumes you choose at restore time. Capture private code and configuration from a source with no mounts. Save the full snapshot and volume references. A new connection with matching scope can reopen them even after the source has been destroyed:
 
 ```ts
-const snapshot = await sandbar.snapshots.get(saved.snapshot);
-const data = await sandbar.volumes.get(saved.data);
+const snapshot = await beachside.snapshots.get(saved.snapshot);
+const data = await beachside.volumes.get(saved.data);
 const restored = await snapshot.restore({
   mounts: [data.at("/data")],
 });
@@ -190,7 +194,7 @@ Daytona requires a ready snapshot known to have no recorded mounts, with filesys
 
 If restore fails with an uncertain outcome, save the operation reference and the known sandbox and volume references from `error.outcome` with kind `snapshot_restore`. Inspect those resources instead of submitting another restore. Destroying the restored sandbox retains application volumes and still follows the configured storage cleanup policy.
 
-The [compiled storage example](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/storage-composition.ts) covers shared data, separate empty data, private-only restore and reopening full references. See [provider support](/docs/providers/support/) for what has been tested live.
+The [compiled storage example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/storage-composition.ts) covers shared data, separate empty data, private-only restore and reopening full references. See [provider support](/docs/providers/support/) for what has been tested live.
 
 ### Current combinations
 
@@ -202,7 +206,7 @@ The [compiled storage example](https://github.com/pandemicsyn/sandbar/blob/main/
 | Restore with `env`, `labels`, lifetime | All three on Daytona, E2B, Modal and Vercel (Vercel lifetime only in disposable mode; Daytona and E2B env only for filesystem snapshots); Runloop env and lifetime (lifetime unless `idleSeconds` is set); Boat and boxd lifetime only. |
 | Override restore resource sizes        | Unsupported by Daytona, E2B, boxd, Modal and Boat; empty overrides are treated as omitted.                                                                                                                                              |
 | Create a sandbox with volumes          | Daytona writable mounts with optional subpaths; boxd whole-disk read-only or writable mounts.                                                                                                                                           |
-| Manage E2B volumes                     | Private-beta API mapping; live creation was blocked by account HTTP 403. Sandbar create-time mounts are unsupported.                                                                                                                    |
+| Manage E2B volumes                     | Private-beta API mapping; live creation was blocked by account HTTP 403. Beachside create-time mounts are unsupported.                                                                                                                  |
 | Manage Vercel volumes                  | Unsupported.                                                                                                                                                                                                                            |
 | Copy or version a volume               | Unsupported by Daytona, E2B and boxd.                                                                                                                                                                                                   |
 
@@ -217,12 +221,12 @@ Resource references are versioned JSON that your application stores. They includ
 Use current credentials for the same scope when reopening:
 
 ```ts
-import { validateResourceReference } from "sandbar-sdk";
+import { validateResourceReference } from "beachside";
 
 const reference = validateResourceReference(JSON.parse(savedJson));
-const snapshot = await sandbar.snapshots.get(reference);
+const snapshot = await beachside.snapshots.get(reference);
 console.log(await snapshot.inspect());
-// For a saved volume reference, use await sandbar.volumes.get(reference).
+// For a saved volume reference, use await beachside.volumes.get(reference).
 ```
 
 Validation checks the reference's shape; it does not prove that the resource still exists. `get()` checks scope and reads the provider before returning a handle. `inspect()` refreshes the resource's state. Saved history is not current provider state.
@@ -236,7 +240,7 @@ Daytona organization scope supports key rotation. For E2B, configure an authenti
 A successful `snapshot()` returns the snapshot handle, capture details and observed source state. A failed call may still have created a snapshot. For example, if capture succeeds but restarting the source definitively fails, `SOURCE_RESTART_FAILED` includes the saved snapshot in a partial outcome:
 
 ```ts
-import { SandbarError } from "sandbar-sdk";
+import { BeachsideError } from "beachside";
 
 let captured;
 let retainedSnapshot;
@@ -244,7 +248,7 @@ try {
   captured = await source.snapshot();
   retainedSnapshot = captured.snapshot.reference;
 } catch (error) {
-  if (error instanceof SandbarError && error.outcome?.kind === "snapshot_capture") {
+  if (error instanceof BeachsideError && error.outcome?.kind === "snapshot_capture") {
     const outcome = error.outcome;
     retainedSnapshot = outcome.snapshot;
     console.error(outcome.capture, outcome.restart, retainedSnapshot);
@@ -256,9 +260,9 @@ try {
 await saveResource(JSON.stringify(retainedSnapshot));
 ```
 
-An uncertain restart reports `OUTCOME_UNKNOWN` and keeps known capture details. Neither case is a reason to submit another capture. A failure in your save function is separate from capture: keep the returned handle and reference. The [tested recovery examples](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/recovery-outcomes.ts) show this separation.
+An uncertain restart reports `OUTCOME_UNKNOWN` and keeps known capture details. Neither case is a reason to submit another capture. A failure in your save function is separate from capture: keep the returned handle and reference. The [tested recovery examples](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/recovery-outcomes.ts) show this separation.
 
-Capture, restore, volume creation and deletion also have `submit…` methods. Save operation references when a result becomes uncertain or a wait is cancelled, then use `sandbar.recover(reference)` to observe the original operation without repeating it. Some staged operations support explicit `continue()`; see [Results, errors and saved resources](/docs/guides/recovery/) before using it.
+Capture, restore, volume creation and deletion also have `submit…` methods. Save operation references when a result becomes uncertain or a wait is cancelled, then use `beachside.recover(reference)` to observe the original operation without repeating it. Some staged operations support explicit `continue()`; see [Results, errors and saved resources](/docs/guides/recovery/) before using it.
 
 A process can crash after provider creation but before saving the identity. If no identity was received, a list or matching name does not prove which resource belongs to that request. Keep unresolved resources under investigation rather than retrying creation or deleting by name.
 

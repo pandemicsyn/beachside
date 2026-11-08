@@ -1,24 +1,24 @@
 import {
-  Sandbar,
-  SandbarError,
-  type SandbarClient,
+  Beachside,
+  BeachsideError,
+  type BeachsideClient,
   type SandboxHandle,
   type ResourceReference,
   type SnapshotResult,
   type VolumeHandle,
-} from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
-import { e2b } from "@sandbar-sdk/e2b";
+} from "beachside";
+import { daytona } from "@beachside/daytona";
+import { e2b } from "@beachside/e2b";
 
 export type SaveReference = (json: string) => Promise<void>;
 
 export function connectDaytona(config: Parameters<typeof daytona>[0]) {
-  return Sandbar.connect(daytona(config));
+  return Beachside.connect(daytona(config));
 }
 
 /** A verified teamId gives E2B references a stable scope across credential rotation. */
 export function connectE2B(config: Parameters<typeof e2b>[0]) {
-  return Sandbar.connect(e2b(config));
+  return Beachside.connect(e2b(config));
 }
 
 /** Capture and save are separate so a failed application save cannot hide the handle. */
@@ -34,7 +34,7 @@ export async function saveSnapshot(captured: SnapshotResult, save: SaveReference
 }
 
 /** Configure matching provider/scope using current credentials before reopening. */
-export async function reopenSnapshot(freshClient: SandbarClient, saved: ResourceReference) {
+export async function reopenSnapshot(freshClient: BeachsideClient, saved: ResourceReference) {
   const snapshot = await freshClient.snapshots.get(saved);
 
   return snapshot.restore({ network: "blocked" });
@@ -45,7 +45,7 @@ export async function captureWithPartialResult(box: SandboxHandle) {
   try {
     return await box.snapshot();
   } catch (error) {
-    if (error instanceof SandbarError && error.outcome?.kind === "snapshot_capture") {
+    if (error instanceof BeachsideError && error.outcome?.kind === "snapshot_capture") {
       const partial = error.outcome;
 
       if (partial.status === "partial" && partial.snapshot && partial.capture) {
@@ -59,7 +59,7 @@ export async function captureWithPartialResult(box: SandboxHandle) {
 }
 
 /** Keep retained storage across connections; compute cleanup does not delete it. */
-export function createVolume(client: SandbarClient) {
+export function createVolume(client: BeachsideClient) {
   return client.volumes.create({ name: "workspace-data" });
 }
 
@@ -67,7 +67,7 @@ export async function saveVolume(volume: VolumeHandle, save: SaveReference) {
   await save(JSON.stringify(volume.reference));
 }
 
-export async function reopenVolume(freshClient: SandbarClient, saved: ResourceReference) {
+export async function reopenVolume(freshClient: BeachsideClient, saved: ResourceReference) {
   const volume = await freshClient.volumes.get(saved);
   const info = await volume.inspect();
 

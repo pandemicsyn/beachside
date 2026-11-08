@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { link, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ResourceReference, type RecoveryReference } from "sandbar-sdk";
+import { ResourceReference, type RecoveryReference } from "beachside";
 import { z } from "zod";
 import { CliError, usage } from "./output";
 
@@ -20,7 +20,7 @@ export const SandboxRecord = z.strictObject({
   image: z.string().optional(),
   reference: ResourceReference.extend({ kind: z.literal("sandbox") }).nullable(),
   /**
-   * Set by `sandbar adopt`: the record came from a provider listing, not a create by this CLI, so
+   * Set by `beachside adopt`: the record came from a provider listing, not a create by this CLI, so
    * `rm` refuses it without --force and `rm --all` skips it. Absent on created records.
    */
   adopted: z.literal(true).optional(),
@@ -47,7 +47,7 @@ export const ImageRecord = z.strictObject({
   name: RecordName,
   /**
    * `building` claims the name before the provider call; `unknown` keeps an uncertain build;
-   * `deleting` keeps a delete whose outcome is unknown until `sandbar image rm` confirms it.
+   * `deleting` keeps a delete whose outcome is unknown until `beachside image rm` confirms it.
    */
   status: z.enum(["building", "built", "unknown", "deleting"]),
   profile: z.string().min(1),
@@ -64,7 +64,7 @@ export const ImageRecord = z.strictObject({
       scope: ResourceReference.shape.scope,
     })
     .nullable(),
-  /** Provider-side artifacts the build left behind. `sandbar image rm` deletes the built image. */
+  /** Provider-side artifacts the build left behind. `beachside image rm` deletes the built image. */
   retainedResources: z.array(RetainedResource),
   /** The SDK's scoped image reference for the build; absent on records from older CLIs. */
   reference: ResourceReference.extend({ kind: z.literal("image") }).optional(),
@@ -83,7 +83,7 @@ export const SnapshotRecord = z.strictObject({
   name: RecordName,
   /**
    * `capturing` claims the name before the provider call; `unknown` keeps an uncertain capture;
-   * `deleting` keeps a delete whose outcome is unknown until `sandbar snapshot rm` confirms it.
+   * `deleting` keeps a delete whose outcome is unknown until `beachside snapshot rm` confirms it.
    */
   status: z.enum(["capturing", "captured", "unknown", "deleting"]),
   profile: z.string().min(1),

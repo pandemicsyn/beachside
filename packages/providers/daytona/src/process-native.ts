@@ -10,7 +10,7 @@ import {
   type ReadContext,
   type Json,
   type ProcessReopenInput,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   processRpc,
   processSupervisor,
@@ -69,7 +69,7 @@ export async function startDaytonaProcess(
 
   const parsedReference = z
     .object({
-      root: z.string().regex(/^\/tmp\/sandbar-process-[0-9a-f-]{36}$/),
+      root: z.string().regex(/^\/tmp\/beachside-process-[0-9a-f-]{36}$/),
       generation: z.string().uuid(),
       profile: z.enum(["process", "terminal"]),
     })
@@ -82,7 +82,7 @@ export async function startDaytonaProcess(
   const reference =
     reopening === undefined
       ? {
-          root: `/tmp/sandbar-process-${crypto.randomUUID()}`,
+          root: `/tmp/beachside-process-${crypto.randomUUID()}`,
           generation: crypto.randomUUID(),
           profile,
         }

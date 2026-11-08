@@ -7,8 +7,8 @@ import {
   type BoundAdapter,
   type Json,
   type RuntimeSession,
-} from "@sandbar-sdk/adapter";
-import { Sandbar, type SandbarClient } from "sandbar-sdk";
+} from "@beachside/adapter";
+import { Beachside, type BeachsideClient } from "beachside";
 import { z } from "zod";
 import {
   configHome,
@@ -39,7 +39,7 @@ export type ProviderDescriptor = {
 export const providers: readonly ProviderDescriptor[] = [
   {
     id: "daytona",
-    module: "@sandbar-sdk/daytona",
+    module: "@beachside/daytona",
     export: "daytonaAdapter",
     experimental: false,
     credentials: { apiKey: "DAYTONA_API_KEY" },
@@ -47,7 +47,7 @@ export const providers: readonly ProviderDescriptor[] = [
   },
   {
     id: "e2b",
-    module: "@sandbar-sdk/e2b",
+    module: "@beachside/e2b",
     export: "e2bAdapter",
     experimental: false,
     credentials: { apiKey: "E2B_API_KEY" },
@@ -55,7 +55,7 @@ export const providers: readonly ProviderDescriptor[] = [
   },
   {
     id: "boxd",
-    module: "@sandbar-sdk/boxd",
+    module: "@beachside/boxd",
     export: "boxdAdapter",
     experimental: true,
     credentials: { apiKey: "BOXD_API_KEY" },
@@ -67,7 +67,7 @@ export const providers: readonly ProviderDescriptor[] = [
   },
   {
     id: "boat",
-    module: "@sandbar-sdk/boat",
+    module: "@beachside/boat",
     export: "boatAdapter",
     experimental: true,
     credentials: { apiKey: "BOAT_API_KEY" },
@@ -78,7 +78,7 @@ export const providers: readonly ProviderDescriptor[] = [
   },
   {
     id: "runloop",
-    module: "@sandbar-sdk/runloop",
+    module: "@beachside/runloop",
     export: "runloopAdapter",
     experimental: true,
     credentials: { apiKey: "RUNLOOP_API_KEY" },
@@ -87,8 +87,8 @@ export const providers: readonly ProviderDescriptor[] = [
   },
   {
     id: "vercel",
-    module: "@sandbar-sdk/vercel",
-    export: "vercel",
+    module: "@beachside/vercel",
+    export: "vercelAdapter",
     experimental: false,
     credentials: { token: "VERCEL_TOKEN" },
     config: {
@@ -98,7 +98,7 @@ export const providers: readonly ProviderDescriptor[] = [
   },
   {
     id: "modal",
-    module: "@sandbar-sdk/modal",
+    module: "@beachside/modal",
     export: "modalAdapter",
     experimental: true,
     credentials: { tokenId: "MODAL_TOKEN_ID", tokenSecret: "MODAL_TOKEN_SECRET" },
@@ -142,14 +142,14 @@ export type ResolvedProfile = {
   credentials: Record<string, string>;
 };
 
-/** Pick the profile: --profile, SANDBAR_PROFILE, --provider, SANDBAR_PROVIDER, then the config default. */
+/** Pick the profile: --profile, BEACHSIDE_PROFILE, --provider, BEACHSIDE_PROVIDER, then the config default. */
 export function resolveProfile(
   flags: { profile?: string; provider?: string },
   loaded: LoadedConfig,
   env: Env,
 ): ResolvedProfile {
   const profiles = loaded.value.profiles ?? {};
-  const profileName = flags.profile ?? (flags.provider ? undefined : env.SANDBAR_PROFILE);
+  const profileName = flags.profile ?? (flags.provider ? undefined : env.BEACHSIDE_PROFILE);
 
   if (profileName) {
     const profile = profiles[profileName];
@@ -159,13 +159,13 @@ export function resolveProfile(
         `Profile ${profileName} is not defined in ${loaded.path}`,
         Object.keys(profiles).length
           ? `known profiles: ${Object.keys(profiles).join(", ")}`
-          : 'add it under "profiles" in sandbar.json',
+          : 'add it under "profiles" in beachside.json',
       );
 
     return fromProfile(profileName, profile, loaded, env);
   }
 
-  const providerId = flags.provider ?? env.SANDBAR_PROVIDER;
+  const providerId = flags.provider ?? env.BEACHSIDE_PROVIDER;
 
   if (providerId) return fromProfile(providerId, { provider: providerId }, loaded, env);
 
@@ -184,8 +184,8 @@ export function resolveProfile(
   throw usage(
     "No provider selected",
     ready.length
-      ? `credentials found for: ${ready.map((provider) => provider.id).join(", ")}; set SANDBAR_PROVIDER or pass --provider`
-      : "set SANDBAR_PROVIDER and the provider's credentials (see `sandbar providers`), or add a profile to sandbar.json",
+      ? `credentials found for: ${ready.map((provider) => provider.id).join(", ")}; set BEACHSIDE_PROVIDER or pass --provider`
+      : "set BEACHSIDE_PROVIDER and the provider's credentials (see `beachside providers`), or add a profile to beachside.json",
   );
 }
 
@@ -245,7 +245,7 @@ function fromProfile(
     if (missing.length)
       throw usage(
         `${where} (${official.id}) is missing ${missing.join(", ")}`,
-        "set the environment variables, or put the values in the profile in sandbar.json",
+        "set the environment variables, or put the values in the profile in beachside.json",
       );
   }
 
@@ -328,7 +328,7 @@ function rootEntry(manifest: z.infer<typeof PackageManifest>): string {
   return (root === undefined ? null : exportTarget(root)) ?? manifest.main ?? "index.js";
 }
 
-/** The folder `sandbar adapter add` installs into: its own package.json and node_modules. */
+/** The folder `beachside adapter add` installs into: its own package.json and node_modules. */
 export function adaptersDir(env: Env): string {
   return join(configHome(env), "adapters");
 }
@@ -356,7 +356,7 @@ export const PackageName = /^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/;
 
 /**
  * Adapters are installed separately and receive credentials, so they come from
- * `~/.config/sandbar/adapters` or the CLI's own module resolution. The working directory's
+ * `~/.config/beachside/adapters` or the CLI's own module resolution. The working directory's
  * node_modules (walking up) is searched only when adapters.searchProject opts in.
  */
 export async function resolveAdapterModule(
@@ -428,7 +428,7 @@ export async function loadAdapter(
         "ADAPTER_NOT_INSTALLED",
         `Cannot load adapter ${profile.module} for profile ${profile.name}: ${message}`,
         official
-          ? `install it with \`sandbar adapter add ${official.id}\` (into ${adaptersDir(env)}); project installs need adapters.searchProject or SANDBAR_PROJECT_ADAPTERS=1`
+          ? `install it with \`beachside adapter add ${official.id}\` (into ${adaptersDir(env)}); project installs need adapters.searchProject or BEACHSIDE_PROJECT_ADAPTERS=1`
           : "check the profile's module path",
       );
 
@@ -467,6 +467,6 @@ export async function connect(
   cwd: string,
   env: Env,
   secrets: SecretReader,
-): Promise<SandbarClient<true>> {
-  return Sandbar.connect(await loadAdapter(profile, cwd, env, secrets));
+): Promise<BeachsideClient<true>> {
+  return Beachside.connect(await loadAdapter(profile, cwd, env, secrets));
 }

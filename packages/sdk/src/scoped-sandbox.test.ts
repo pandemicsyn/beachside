@@ -1,8 +1,8 @@
 import { expect, spyOn, test } from "bun:test";
-import { defineAdapter, type AttemptContext, type DestroyValue } from "@sandbar-sdk/adapter";
+import { defineAdapter, type AttemptContext, type DestroyValue } from "@beachside/adapter";
 import { z } from "zod";
-import { Sandbar } from "./index";
-import { Image, SandbarError } from "./resource";
+import { Beachside } from "./index";
+import { Image, BeachsideError } from "./resource";
 import { SandboxCleanupError } from "./scoped-sandbox";
 
 async function fixture(
@@ -59,7 +59,7 @@ async function fixture(
     },
   });
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: {},
     credentials: {},
@@ -352,7 +352,7 @@ test("cleanup wrapper preserves checked outcome and retained-resource evidence",
   const sandbox = await f.client.sandboxes.create(input);
   const create = spyOn(f.client.sandboxes, "create").mockResolvedValue(sandbox);
 
-  const original = new SandbarError(
+  const original = new BeachsideError(
     "STORAGE_UNCONFIRMED",
     "cleanup uncertain with retained storage",
     "possible",

@@ -29,18 +29,18 @@ for (const [, loc] of sitemapIndex.matchAll(/<loc>([^<]+)<\/loc>/g)) {
   for (const [, url] of sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)) sitemapUrls.add(url);
 }
 
-for (const url of ["https://sandbarsdk.dev/", "https://sandbarsdk.dev/docs/"]) {
+for (const url of ["https://beachside.run/", "https://beachside.run/docs/"]) {
   if (!sitemapUrls.has(url)) throw new Error(`Sitemap lacks ${url}`);
 }
 
 const robots = await readFile(dist + "robots.txt", "utf8");
 
-if (!robots.includes("Sitemap: https://sandbarsdk.dev/sitemap-index.xml"))
+if (!robots.includes("Sitemap: https://beachside.run/sitemap-index.xml"))
   throw new Error("robots.txt does not point at the sitemap");
 
 if (/^Disallow:\s*\S/m.test(robots)) throw new Error("robots.txt blocks crawlers");
 
-if (!page.includes("<title>") || !page.includes("sandbarsdk.dev"))
+if (!page.includes("<title>") || !page.includes("beachside.run"))
   throw new Error("Docs metadata missing");
 
 const notFound = await readFile(dist + "404.html", "utf8");
@@ -71,7 +71,7 @@ const errors = [];
 for (const [source, html] of pageText) {
   for (const [, raw] of html.matchAll(/\bhref="([^"]+)"/g)) {
     if (!raw.startsWith("/") || raw.startsWith("//")) continue;
-    const url = new URL(raw.replaceAll("&amp;", "&"), "https://sandbarsdk.dev");
+    const url = new URL(raw.replaceAll("&amp;", "&"), "https://beachside.run");
     const relative = decodeURIComponent(url.pathname).replace(/^\//, "");
 
     const target =

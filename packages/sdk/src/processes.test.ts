@@ -9,8 +9,8 @@ import {
   type NativeProcess,
   type Sandbox,
   type ProcessStartContext,
-} from "@sandbar-sdk/adapter";
-import { Sandbar, Image, diagnosticContext, type StartProcessInput } from "./index";
+} from "@beachside/adapter";
+import { Beachside, Image, diagnosticContext, type StartProcessInput } from "./index";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -40,7 +40,7 @@ async function fixture(
 ) {
   const exit = deferred<{ exitCode: number }>();
   const outputEnd = deferred<void>();
-  const capture = deferred<import("@sandbar-sdk/adapter").ExecValue>();
+  const capture = deferred<import("@beachside/adapter").ExecValue>();
   const writes: Uint8Array[] = [];
   let writeGate: Promise<void> | undefined;
   let closeGate: Promise<void> | undefined;
@@ -181,7 +181,7 @@ async function fixture(
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const box = await client.sandboxes.create({ environment: Image.prepared("one") });
 
   return {
@@ -1100,6 +1100,164 @@ test("callback exec splits finite input and closes EOF without starting finite e
   await f.client.close();
 });
 
+test("exec streams stdin of any size and form without a callback", async () => {
+  async function* chunks() {
+    yield new Uint8Array(100_000).fill(1);
+    yield new TextEncoder().encode("tail");
+  }
+
+  const forms = [
+    { stdin: chunks(), bytes: 100_004 },
+    {
+      stdin: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(70_000));
+          controller.close();
+        },
+      }),
+      bytes: 70_000,
+    },
+    { stdin: new Uint8Array(2_000_000), bytes: 2_000_000 },
+  ];
+
+  for (const form of forms) {
+    const f = await fixture({ interactive: true, capture: true });
+    const running = f.box.exec({ ...input, stdin: form.stdin });
+    await Bun.sleep(5);
+    expect(Math.max(...f.writes.map((b) => b.byteLength))).toBeLessThanOrEqual(65_536);
+    expect(f.writes.reduce((total, b) => total + b.byteLength, 0)).toBe(form.bytes);
+    expect(f.closes).toBe(1);
+    f.capture.resolve({
+      exitCode: 0,
+      stdout: Uint8Array.of(42),
+      stderr: new Uint8Array(),
+      truncated: false,
+    });
+    f.exit.resolve({ exitCode: 0 });
+    f.outputEnd.resolve();
+    expect((await running).stdout).toEqual(Uint8Array.of(42));
+
+    // A fully read web stream is handed back unlocked.
+    if (form.stdin instanceof ReadableStream) expect(form.stdin.locked).toBe(false);
+    await f.client.close();
+  }
+});
+
+test("streamed exec stdin settles on exit even if the stream never ends", async () => {
+  const f = await fixture({ interactive: true, capture: true });
+
+  async function* open() {
+    yield Uint8Array.of(1);
+    await new Promise(() => {});
+  }
+
+  const running = f.box.exec({ ...input, stdin: open() });
+  await Bun.sleep(0);
+  f.capture.resolve({
+    exitCode: 0,
+    stdout: new Uint8Array(),
+    stderr: new Uint8Array(),
+    truncated: false,
+  });
+  f.exit.resolve({ exitCode: 0 });
+  f.outputEnd.resolve();
+  expect((await running).exitCode).toBe(0);
+  expect(f.closes).toBe(0);
+  await f.client.close();
+});
+
+test("streamed exec stdin cancels a web stream the command no longer reads", async () => {
+  const f = await fixture({ interactive: true, capture: true });
+  let cancelled = 0;
+
+  const stdin = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(Uint8Array.of(1));
+    },
+    cancel() {
+      cancelled++;
+    },
+  });
+
+  const running = f.box.exec({ ...input, stdin });
+  await Bun.sleep(0);
+  f.capture.resolve({
+    exitCode: 0,
+    stdout: new Uint8Array(),
+    stderr: new Uint8Array(),
+    truncated: false,
+  });
+  f.exit.resolve({ exitCode: 0 });
+  f.outputEnd.resolve();
+  expect((await running).exitCode).toBe(0);
+  await Bun.sleep(0);
+  expect(cancelled).toBe(1);
+  expect(stdin.locked).toBe(false);
+  await f.client.close();
+});
+
+test("streamed exec stdin returns an async iterator the command no longer reads", async () => {
+  const f = await fixture({ interactive: true, capture: true });
+  let returned = 0;
+  let pulls = 0;
+
+  const stdin: AsyncIterable<Uint8Array> = {
+    [Symbol.asyncIterator]: () => ({
+      next: async () => {
+        pulls++;
+
+        return pulls === 1
+          ? { done: false, value: Uint8Array.of(1) }
+          : new Promise<IteratorResult<Uint8Array>>(() => {});
+      },
+      return: async () => {
+        returned++;
+
+        return { done: true, value: undefined };
+      },
+    }),
+  };
+
+  const running = f.box.exec({ ...input, stdin });
+  await Bun.sleep(0);
+  f.capture.resolve({
+    exitCode: 0,
+    stdout: new Uint8Array(),
+    stderr: new Uint8Array(),
+    truncated: false,
+  });
+  f.exit.resolve({ exitCode: 0 });
+  f.outputEnd.resolve();
+  expect((await running).exitCode).toBe(0);
+  await Bun.sleep(0);
+  expect(returned).toBe(1);
+  await f.client.close();
+});
+
+test("streamed exec stdin enforces deadlineSeconds locally and requests termination", async () => {
+  const f = await fixture({ interactive: true, capture: true });
+  let terminated = 0;
+
+  Object.assign(f.native, {
+    terminate: async () => {
+      terminated++;
+
+      return { status: "requested" as const };
+    },
+  });
+
+  async function* open() {
+    await new Promise(() => {});
+    yield Uint8Array.of(1);
+  }
+
+  await expect(f.box.exec({ ...input, stdin: open(), deadlineSeconds: 1 })).rejects.toMatchObject({
+    code: "TIMEOUT",
+  });
+  expect(terminated).toBe(1);
+  await f.client.close();
+});
+
 test("callback failures preserve independently confirmed exit/capture and never replay", async () => {
   const f = await fixture({ interactive: true, capture: true });
   const gate = deferred<void>();
@@ -1781,10 +1939,10 @@ test("cyclic, huge and deeply nested native selectors cannot become persisted re
   for (const kind of ["cycle", "huge", "deep"] as const) {
     const f = await fixture({ interactive: true, extensions: true });
 
-    type CyclicSelector = { self?: import("@sandbar-sdk/adapter").Json };
+    type CyclicSelector = { self?: import("@beachside/adapter").Json };
 
     const cyclic: CyclicSelector = {};
-    let native: import("@sandbar-sdk/adapter").Json = cyclic;
+    let native: import("@beachside/adapter").Json = cyclic;
 
     if (kind === "cycle") cyclic.self = cyclic;
 
@@ -1816,7 +1974,7 @@ test("reopen snapshots nested native selectors before its asynchronous dispatch"
   const p = await f.box.processes.start({ ...input, stdin: "pipe", output: { mode: "stream" } });
   const selector = { tag: "original", generation: { id: "original-generation" } };
   const saved = { ...p.reference(), native: selector };
-  let selected: import("@sandbar-sdk/adapter").Json | undefined;
+  let selected: import("@beachside/adapter").Json | undefined;
   f.client.session.processes!.reopen = async (request) => {
     selected = request.reference;
 

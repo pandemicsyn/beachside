@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Image, Sandbar } from "sandbar-sdk";
+import { Image, Beachside } from "beachside";
 import { createDaytonaAdapter } from "./adapter";
 
 type NativeFixture = {
@@ -24,7 +24,7 @@ function native(id: string, overrides: Partial<NativeFixture> = {}): NativeFixtu
     organizationId: "org-1",
     target: "us",
     state: "started",
-    labels: { "sandbar.submission": `sub-${id}`, "sandbar.operation": `op_${id}` },
+    labels: { "beachside.submission": `sub-${id}`, "beachside.operation": `op_${id}` },
     networkBlockAll: true,
     public: false,
     autoDestroyAt: "2026-10-01T01:00:00Z",
@@ -95,7 +95,7 @@ function fixture(sandboxes: NativeFixture[], listOmitsState = false) {
   return {
     calls,
     connect: () =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter: createDaytonaAdapter(fetcher),
         config: { target: "us", networkPolicy: "blocked", ttlMinutes: 15 },
         credentials: { apiKey: "key" },
@@ -103,13 +103,13 @@ function fixture(sandboxes: NativeFixture[], listOmitsState = false) {
   };
 }
 
-test("Daytona lists only verified Sandbar-labelled sandboxes with reopenable references", async () => {
+test("Daytona lists only verified Beachside-labelled sandboxes with reopenable references", async () => {
   const sandboxes = [
     native("labelled"),
     native("unlabelled", { labels: { team: "a" } }),
     native("foreign-org", { organizationId: "org-2" }),
     native("other-target", { target: "eu" }),
-    native("no-operation", { labels: { "sandbar.submission": "sub-no-operation" } }),
+    native("no-operation", { labels: { "beachside.submission": "sub-no-operation" } }),
     native("archived", { state: "archived" }),
   ];
 
@@ -121,7 +121,7 @@ test("Daytona lists only verified Sandbar-labelled sandboxes with reopenable ref
     f.calls.length = 0;
 
     const first = await client.sandboxes.list({ limit: 4 });
-    expect(first.coverage).toBe("sandbar-managed");
+    expect(first.coverage).toBe("managed");
     expect(first.nextCursor).toBe("4");
     expect(first.items).toEqual([expect.objectContaining({ id: "labelled", state: "running" })]);
     expect(first.items[0]!.reference).toMatchObject({
@@ -168,9 +168,9 @@ test("Daytona lists create labels without its own markers, and the creation time
   const f = fixture([
     native("labelled", {
       labels: {
-        "sandbar.submission": "sub-labelled",
-        "sandbar.operation": "op_labelled",
-        "sandbar.imageSnapshot": "snap",
+        "beachside.submission": "sub-labelled",
+        "beachside.operation": "op_labelled",
+        "beachside.imageSnapshot": "snap",
         run: "42",
       },
       createdAt: "2026-10-23T10:00:00.000Z",

@@ -10,7 +10,7 @@ let dir: string;
 let store: FsStateStore;
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "sandbar-store-"));
+  dir = await mkdtemp(join(tmpdir(), "beachside-store-"));
   store = new FsStateStore(dir);
 });
 

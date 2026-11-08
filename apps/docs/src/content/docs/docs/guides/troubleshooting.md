@@ -5,16 +5,16 @@ description: Resolve package, connection, execution, file, and cleanup issues.
 
 ## Package or import not found
 
-Install `sandbar-sdk` and your adapter package at `0.1.0` or later; `0.0.0` versions are empty placeholders. See [Getting started](/docs/direct-quickstart/). The unrelated `sandbar` npm package is not this SDK.
+Install `beachside` and your adapter package at `0.1.0` or later; `0.0.0` versions are empty placeholders. See [Getting started](/docs/direct-quickstart/). The unrelated `beachside` npm package is not this SDK.
 
-Import the SDK from `sandbar-sdk` and your adapter from its separate package:
+Import the SDK from `beachside` and your adapter from its separate package:
 
-- `@sandbar-sdk/daytona`
-- `@sandbar-sdk/e2b`
-- `@sandbar-sdk/boxd`
-- `@sandbar-sdk/vercel`
+- `@beachside/daytona`
+- `@beachside/e2b`
+- `@beachside/boxd`
+- `@beachside/vercel`
 
-The experimental Modal adapter is `@sandbar-sdk/modal`; `sandbar-sdk/modal` is not an export.
+The experimental Modal adapter is `@beachside/modal`; `beachside/modal` is not an export.
 
 ## Connection rejected
 
@@ -27,13 +27,13 @@ Check that credentials are available to the server process, then check the adapt
 | boxd     | Pass a member API key, your authenticated default organization ID/slug, and `network: "internet"`. |
 | Vercel   | Pass a bearer token with access to the configured `teamId`, `projectId` and sandbox API.           |
 
-`Sandbar.connect` verifies credentials and scope using provider reads. Connecting successfully does not guarantee access to every image, policy or operation. Follow the [provider setup guides](/docs/providers/support/) for account and configuration limits.
+`Beachside.connect` verifies credentials and scope using provider reads. Connecting successfully does not guarantee access to every image, policy or operation. Follow the [provider setup guides](/docs/providers/support/) for account and configuration limits.
 
 ## Daytona creation reports unsupported networking
 
 To use Daytona's organization-managed restrictions, set `network: "daytona-default"` in adapter setup (or `network: "internet"` on Tier 3 and above). Omitted create and restore policies inherit that value; you do not need to repeat it on each call.
 
-Omitting the policy during setup selects `daytona-default`. Strict `blocked` is an explicit opt-in that requires verified organization eligibility and can be unavailable. An explicit per-call policy must match the connection's policy. Sandbar does not silently relax it. See [Daytona networking](/docs/providers/daytona/#network-policy).
+Omitting the policy during setup selects `daytona-default`. Strict `blocked` is an explicit opt-in that requires verified organization eligibility and can be unavailable. An explicit per-call policy must match the connection's policy. Beachside does not silently relax it. See [Daytona networking](/docs/providers/daytona/#network-policy).
 
 ## A command cannot run
 

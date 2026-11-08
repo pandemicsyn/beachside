@@ -1,23 +1,23 @@
-# @sandbar-sdk/vercel
+# @beachside/vercel
 
-Official Vercel Sandbox adapter for Sandbar, installed separately as `@sandbar-sdk/vercel`. Implements disposable sessions, binary execution/stdin, filesystem helpers/streams, snapshots, renewal, optional public previews and universal-image processes/PTYs. Live provider behavior is unverified; deterministic fixtures and packed consumer checks are separate from live qualification.
+Official Vercel Sandbox adapter for Beachside, installed separately as `@beachside/vercel`. Implements disposable sessions, binary execution/stdin, filesystem helpers/streams, snapshots, renewal, optional public previews and universal-image processes/PTYs. Live provider behavior is unverified; deterministic fixtures and packed consumer checks are separate from live qualification.
 
-Install with `npm install sandbar-sdk @sandbar-sdk/vercel`:
+Install with `npm install beachside @beachside/vercel`:
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { vercel } from "@sandbar-sdk/vercel";
+import { Beachside } from "beachside";
+import { vercelAdapter } from "@beachside/vercel";
 
-const client = await Sandbar.connect({
-  adapter: vercel,
+const client = await Beachside.connect({
+  adapter: vercelAdapter,
+  credentials: { token: process.env.VERCEL_TOKEN! },
   config: {
-    teamId: process.env.SANDBAR_VERCEL_TEAM_ID!,
-    projectId: process.env.SANDBAR_VERCEL_PROJECT_ID!,
+    teamId: process.env.VERCEL_TEAM_ID!,
+    projectId: process.env.VERCEL_PROJECT_ID!,
     region: "iad1",
     lifecycle: { lifetimeSeconds: 300 },
     network: "blocked",
   },
-  credentials: { token: process.env.VERCEL_TOKEN! },
 });
 try {
   const box = await client.sandboxes.create();
@@ -33,7 +33,7 @@ try {
 }
 ```
 
-`Sandbar.connect` verifies the team and project ownership with authenticated reads and checks project sandbox access. Scope includes the verified team ID, project ID and region. Tokens stay in credentials. Importing the adapter and constructing a connection definition perform no provider IO. The transport uses source-derived Vercel API routes audited from published SDK 3.6.1, with single-attempt requests (see [native boundary provenance](NATIVE.md)); `createVercelAdapter` accepts host-owned transport injection for deterministic fixtures.
+`Beachside.connect` verifies the team and project ownership with authenticated reads and checks project sandbox access. Scope includes the verified team ID, project ID and region. Tokens stay in credentials. Importing the adapter and constructing a connection definition perform no provider IO. The transport uses source-derived Vercel API routes audited from published SDK 3.6.1, with single-attempt requests (see [native boundary provenance](NATIVE.md)); `createVercelAdapter` accepts host-owned transport injection for deterministic fixtures.
 
 | Configuration | Requirement/default |
 | --- | --- |
@@ -66,7 +66,7 @@ Writes and copies stage in the destination directory, then publish with rename f
 
 `box.snapshot()` captures native filesystem state and **terminates the disposable source session**, dropping processes/connections. It captures no RAM and never creates a replacement source to simulate restart. Only a verified mount-free disposable managed Node/universal source is accepted. Default consistency and minimum retention are unknown; exact memory, uninterrupted/source-unchanged, crash-consistency or minimum-retention requirements reject before capture. Caller-quiesced consistency is retained as a caller assertion. Scheduled deletion is unsupported. Vercel's native retention/expiration policy and billing apply; independently delete owned snapshots. Setup accepts `snapshots: { preserve: Preserve.FILESYSTEM }` (the default); `Preserve.FILESYSTEM_AND_MEMORY` rejects `UNSUPPORTED` at connect. Setup `snapshots: { retentionSeconds }` sends native `expiration` (milliseconds, `0` = never) on capture; Vercel counts it from last use, so it is also the minimum retention guarantee. It rejects `UNSUPPORTED` with `persistent: true`.
 
-Snapshot capture checkpoints the exact artifact ID before parsing full capture evidence. Capture requires a source created, restored or recovered from its validated creation attempt in the current connection, so its observed digest is checked against native metadata. Reopening only a sandbox reference does not retain that evidence. Saved snapshot references retain observed source/image/mount/consistency provenance, separately from authorization; fresh credentials still verify project membership and region by native reads. Capture and restore require the same configured managed image. Restore omits an image selector and requests the native snapshot source, then verifies the configured managed image, resources, policy and new session identity. Restored execution is fresh with an independent lifecycle. Snapshot inspect/list/delete use immutable artifact IDs; deletion requires a native deleted receipt, not absence alone. Native inventory entries without Sandbar's observed capture provenance report unknown mount handling and do not automatically become restorable. Original compute teardown retains named metadata; snapshot references survive it. Lost capture acknowledgement without an artifact ID cannot be safely attributed from source/name matching alone; preserve the source attempt for manual investigation rather than adopting or deleting an unrelated snapshot. No capture/restore/delete mutation is replayed to recover a response.
+Snapshot capture checkpoints the exact artifact ID before parsing full capture evidence. Capture requires a source created, restored or recovered from its validated creation attempt in the current connection, so its observed digest is checked against native metadata. Reopening only a sandbox reference does not retain that evidence. Saved snapshot references retain observed source/image/mount/consistency provenance, separately from authorization; fresh credentials still verify project membership and region by native reads. Capture and restore require the same configured managed image. Restore omits an image selector and requests the native snapshot source, then verifies the configured managed image, resources, policy and new session identity. Restored execution is fresh with an independent lifecycle. Snapshot inspect/list/delete use immutable artifact IDs; deletion requires a native deleted receipt, not absence alone. Native inventory entries without Beachside's observed capture provenance report unknown mount handling and do not automatically become restorable. Original compute teardown retains named metadata; snapshot references survive it. Lost capture acknowledgement without an artifact ID cannot be safely attributed from source/name matching alone; preserve the source attempt for manual investigation rather than adopting or deleting an unrelated snapshot. No capture/restore/delete mutation is replayed to recover a response.
 
 Persistent sandbox mode supports explicit filesystem suspension and fresh-session resume as described below. Drives and mounts remain unsupported: their separate storage lifecycle and name-addressed selection have no established safe mapping. Native sandbox persistence does not preserve RAM.
 
@@ -99,7 +99,7 @@ Append `--check` to verify drift. The empty results file intentionally supplies 
 
 ## Persistent mode
 
-Set `persistent: true` in adapter configuration. A sandbox ID is then Vercel's generated sandbox name, with creation generation evidence from native `createdAt` and the acknowledged `sandbarSubmission` tag. The current VM session is execution identity, not resource identity. `suspend()` checkpoints the filesystem and ends processes/connections; `resume()` starts fresh execution with the saved files and a new session ID. RAM is not preserved. Reopen and inspect use explicit `resume=false`; commands and files require explicit resume before guest IO. Every guest operation pins one exact session; it never follows a changed session midway through an upload or command. Saved references work across fresh connections with current credentials.
+Set `persistent: true` in adapter configuration. A sandbox ID is then Vercel's generated sandbox name, with creation generation evidence from native `createdAt` and the acknowledged `beachsideSubmission` tag. The current VM session is execution identity, not resource identity. `suspend()` checkpoints the filesystem and ends processes/connections; `resume()` starts fresh execution with the saved files and a new session ID. RAM is not preserved. Reopen and inspect use explicit `resume=false`; commands and files require explicit resume before guest IO. Every guest operation pins one exact session; it never follows a changed session midway through an upload or command. Saved references work across fresh connections with current credentials.
 
 Caller serialization includes external lifecycle controllers. Named resume and DELETE have no atomic generation predicate. Checks reject a detected replacement, but cannot prevent a concurrent external replacement between check and dispatch from receiving an effect. Generated names and reserved tags must remain application-controlled. Out-of-band configuration changes are unsupported; named reads reject observed mounts, CPU, image, port or policy mismatches. Lost mutation responses remain unknown and are never replayed.
 

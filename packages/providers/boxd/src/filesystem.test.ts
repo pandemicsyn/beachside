@@ -4,7 +4,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, symlinkSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Sandbar } from "sandbar-sdk";
+import { Beachside } from "beachside";
 import { createBoxdAdapter } from "./adapter";
 import { boxdFixture } from "./fixture.test-support";
 
@@ -20,7 +20,7 @@ async function setup() {
   const root = mkdtempSync(join(tmpdir(), "boxd-files-"));
   roots.push(root);
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createBoxdAdapter(fixture.factory),
     config: { org: "main", networkPolicy: "internet" },
     credentials: { apiKey: "fixture-main" },
@@ -143,7 +143,7 @@ test("incremental transfers preserve bytes above buffered bound and retain inter
       f.box.writeFileStream(join(f.root, "interrupted"), interrupted(), { signal: aborted.signal }),
     ).rejects.toBeDefined();
     expect(await f.box.fileExists(join(f.root, "interrupted"))).toBe(false);
-    expect(readdirSync(f.root).some((name) => name.startsWith(".sandbar-"))).toBe(true);
+    expect(readdirSync(f.root).some((name) => name.startsWith(".beachside-"))).toBe(true);
     const before = f.fixture.calls.length;
     await expect(f.box.statFile(path, { signal: AbortSignal.abort() })).rejects.toBeDefined();
     expect(f.fixture.calls).toHaveLength(before);
@@ -201,7 +201,7 @@ test("failed publication retains staging and uncertain applied publication is ne
         effect: "possible",
         destination: target,
         bytesTransferred: 3,
-        temporaryPaths: [expect.stringContaining(".sandbar-")],
+        temporaryPaths: [expect.stringContaining(".beachside-")],
       },
     });
     expect(readFileSync(target)).toEqual(Buffer.from([0, 255, 128]));
@@ -219,7 +219,7 @@ test("metadata helper uses the published exec codec with an exact argv path", as
     // Local helper runner is covered separately; use a fresh native-only client here.
     const fixture = await boxdFixture();
 
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createBoxdAdapter(fixture.factory),
       config: { org: "main", networkPolicy: "internet" },
       credentials: { apiKey: "fixture-main" },
@@ -274,7 +274,7 @@ test("producer failures and byte-limit failure keep discoverable staging", async
       details: {
         destination: join(f.root, "failed"),
         bytesTransferred: 2,
-        temporaryPaths: [expect.stringContaining(".sandbar-")],
+        temporaryPaths: [expect.stringContaining(".beachside-")],
       },
     });
 
@@ -290,7 +290,7 @@ test("producer failures and byte-limit failure keep discoverable staging", async
       details: {
         destination: join(f.root, "oversized"),
         bytesTransferred: 1,
-        temporaryPaths: [expect.stringContaining(".sandbar-")],
+        temporaryPaths: [expect.stringContaining(".beachside-")],
       },
     });
     const fifo = join(f.root, "fifo");

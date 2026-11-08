@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
-const temporary = mkdtempSync(join(tmpdir(), "sandbar-release-fixture-"));
+const temporary = mkdtempSync(join(tmpdir(), "beachside-release-fixture-"));
 
 let sdkName = "";
 
@@ -97,7 +97,7 @@ try {
 
     manifest.version = "0.1.0";
     manifest.private = false;
-    manifest.repository = { type: "git", url: "git+https://github.com/pandemicsyn/sandbar.git" };
+    manifest.repository = { type: "git", url: "git+https://github.com/pandemicsyn/beachside.git" };
     writeFileSync(file, JSON.stringify(manifest, null, 2) + "\n");
     writeFileSync(
       join(temporary, path, "CHANGELOG.md"),

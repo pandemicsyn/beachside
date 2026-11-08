@@ -5,7 +5,7 @@ import {
   type NativeProcessExit,
   type ProcessStartContext,
   type ProcessStartInput,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import type { BoxdNativeClient, CallContext } from "./transport";
 
 /**

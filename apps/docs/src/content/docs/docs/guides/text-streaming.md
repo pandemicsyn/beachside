@@ -5,7 +5,7 @@ description: Read live process output, send input, check status, and stop a proc
 
 Use `sandbox.processes.start()` when you need live output from a build, worker or server. E2B and Daytona support the process features on this page through the same SDK methods; boxd supports streamed output and termination, Modal supports streamed output, piped input and signals, and Boat and Runloop stream text (see [provider transport facts](#provider-transport-facts)). The examples assume you already have a `sandbox` handle; see [sandboxes and execution](/docs/guides/resources/).
 
-Set `output: { mode: "stream" }` for long-running processes. Sandbar keeps a small queue of unread output, so read it as it arrives. Save chunks to your own log or storage if you need a complete transcript. Output defaults to UTF-8 text, with separate stdout and stderr. Use the [byte format](#original-output-bytes) for binary data, or a [terminal](#signals-and-explicit-terminals) for programs that need terminal behavior.
+Set `output: { mode: "stream" }` for long-running processes. Beachside keeps a small queue of unread output, so read it as it arrives. Save chunks to your own log or storage if you need a complete transcript. Output defaults to UTF-8 text, with separate stdout and stderr. Use the [byte format](#original-output-bytes) for binary data, or a [terminal](#signals-and-explicit-terminals) for programs that need terminal behavior.
 
 ```ts
 const child = await sandbox.processes.start({
@@ -34,13 +34,13 @@ try {
 
 **Sending input.** Set `stdin: "pipe"` to call `write()` and `closeStdin()`. The default, `"closed"`, does not accept input. Strings are encoded as UTF-8; `Uint8Array` values preserve exact bytes, including NUL and invalid UTF-8.
 
-Each write can contain at most 64 KiB. The input queue holds at most 256 KiB, including the write in progress, and at most 256 calls. Split larger input and await each write. Sandbar copies accepted bytes and sends writes in order. An empty write checks that input is still allowed but does not close stdin. `closeStdin()` sends end-of-input (EOF) after earlier writes; repeated successful closes do not send EOF again. Later writes reject locally.
+Each write can contain at most 64 KiB. The input queue holds at most 256 KiB, including the write in progress, and at most 256 calls. Split larger input and await each write. Beachside copies accepted bytes and sends writes in order. An empty write checks that input is still allowed but does not close stdin. `closeStdin()` sends end-of-input (EOF) after earlier writes; repeated successful closes do not send EOF again. Later writes reject locally.
 
-A successful write means the transport accepted it, not that the program read it. Cancelling a queued write before it is sent has no remote effect. If a sent write or EOF is not acknowledged, delivery is unknown and further input is disabled. Sandbar never retries that input. You can still read output, check status, wait or terminate where the connection allows. Each dispatched input request, status check and termination request has a 30-second local timeout; that timeout does not limit the process's runtime or the sandbox's lifetime.
+A successful write means the transport accepted it, not that the program read it. Cancelling a queued write before it is sent has no remote effect. If a sent write or EOF is not acknowledged, delivery is unknown and further input is disabled. Beachside never retries that input. You can still read output, check status, wait or terminate where the connection allows. Each dispatched input request, status check and termination request has a 30-second local timeout; that timeout does not limit the process's runtime or the sandbox's lifetime.
 
 **Reading output.** Each process has one output consumer. In stream mode, leaving the output loop stops reading output but leaves input and process control available. In the default finite mode, leaving the loop detaches the whole local handle.
 
-The unread SDK queue holds at most 64 KiB and 256 chunks. Each delivered chunk is at most 16 KiB. Stream mode has no total output limit over the process's lifetime. If your consumer falls behind and fills the queue, output fails with `OUTPUT_CAPACITY`. Sandbar stops local output observation without silently dropping chunks or killing the process. A native transport can allocate one bounded incoming frame before the SDK checks its queue. Do not depend on an exact ordering between stdout and stderr, or assume a slow reader will make the guest program pause its output.
+The unread SDK queue holds at most 64 KiB and 256 chunks. Each delivered chunk is at most 16 KiB. Stream mode has no total output limit over the process's lifetime. If your consumer falls behind and fills the queue, output fails with `OUTPUT_CAPACITY`. Beachside stops local output observation without silently dropping chunks or killing the process. A native transport can allocate one bounded incoming frame before the SDK checks its queue. Do not depend on an exact ordering between stdout and stderr, or assume a slow reader will make the guest program pause its output.
 
 **Waiting for exit.** `wait({ signal })` waits for a confirmed exit and returns an exit code, including nonzero codes. It has no default timeout; supply an abort signal to limit your wait. Aborting cancels only that waiter.
 
@@ -48,13 +48,13 @@ The result's `outputComplete` is true only after the output stream has ended and
 
 **Checking status.** `status({ signal })` returns `{ state: "running" | "exited" | "unknown", exit?, observedAt }` without downloading a transcript. Unknown means there is not enough evidence to say whether the process is running. Having a local handle alone does not prove it is running. A confirmed exit is preserved.
 
-**Stopping and cleaning up.** `terminate({ signal })` returns `{ status: "requested" | "not-found" | "exited" }`. A successful request does not prove the process has exited: call `wait()` separately. Concurrent callers share one termination request, and cancelling one caller stops only its wait. If the request's acknowledgement is lost, later calls return the saved `OUTCOME_UNKNOWN` failure without sending another request. Termination targets the launched process; [provider limitations](#provider-transport-facts) apply to child processes and cleanup. Sandbar does not escalate automatically or destroy the sandbox as a fallback.
+**Stopping and cleaning up.** `terminate({ signal })` returns `{ status: "requested" | "not-found" | "exited" }`. A successful request does not prove the process has exited: call `wait()` separately. Concurrent callers share one termination request, and cancelling one caller stops only its wait. If the request's acknowledgement is lost, later calls return the saved `OUTCOME_UNKNOWN` failure without sending another request. Termination targets the launched process; [provider limitations](#provider-transport-facts) apply to child processes and cleanup. Beachside does not escalate automatically or destroy the sandbox as a fallback.
 
 `detach()` releases local input and output connections and discards unread output. Calling it again is safe. It does not request a kill, resume compute or extend sandbox lifetime. Disconnecting pipes can still affect the program, so remote continuation is not guaranteed. Destroy a sandbox you own when the workflow finishes. Lifecycle operations submitted through the same client prevent old process handles from sending new control requests; other clients can still cause races.
 
 ## Build, worker and server recipes
 
-The [interactive process examples](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/interactive-processes.ts) show three workflows:
+The [interactive process examples](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/interactive-processes.ts) show three workflows:
 
 - `buildWithProgress`: read build output as it arrives and wait for exit.
 - `interactiveWorker`: send requests while reading output, then close stdin.
@@ -101,7 +101,7 @@ The supervisor tracks the child it launched. Termination does not delete a nativ
 
 **boxd** streams output from its native `Exec` call as the command writes it, with exact bytes and separate stdout and stderr. The call is the process: `terminate()` cancels it, and boxd then sends SIGTERM to the command's process group, followed by SIGKILL after a short grace period. Because closing the call would kill the command, `detach()` stops local observation but keeps the connection open until the command exits. Incremental input, terminals, status checks and reopening are not supported.
 
-**Modal** streams stdout and stderr from its command router as separate byte reads, and accepts piped input at exact offsets. The router has no kill call, so Sandbar launches the command through `/bin/sh`, which records its process ID in `/tmp` and then becomes the command. Signals and `terminate()` run `kill` against that ID in a second command; they reach the launched process, not its children. The image needs `/bin/sh`, `cat`, `kill` and a writable `/tmp`. `detach()` leaves the command running. Terminals, status checks and reopening are not supported.
+**Modal** streams stdout and stderr from its command router as separate byte reads, and accepts piped input at exact offsets. The router has no kill call, so Beachside launches the command through `/bin/sh`, which records its process ID in `/tmp` and then becomes the command. Signals and `terminate()` run `kill` against that ID in a second command; they reach the launched process, not its children. The image needs `/bin/sh`, `cat`, `kill` and a writable `/tmp`. `detach()` leaves the command running. Terminals, status checks and reopening are not supported.
 
 **Boat** starts the command detached and follows Boat's attach stream, which carries UTF-8 text with byte offsets. Boat ends each connection after 10 minutes, and the adapter reattaches from the offsets without losing or repeating output. Byte output, callback exec, input, terminals and signals other than `terminate()` are not supported. `terminate()` uses Boat's stop endpoint; `detach()` leaves the command running.
 
@@ -109,9 +109,9 @@ The supervisor tracks the child it launched. Termination does not delete a nativ
 
 ## Finite compatibility and limits
 
-Choose `output: { mode: "stream" }` for long-running or interactive work and read output promptly. Without it, output uses the default finite mode: at most 1 MiB of cumulative UTF-8 output. Set `maxOutputBytes` to a value from 1 through 1,048,576 to lower that limit. You cannot combine `maxOutputBytes` with stream mode. Adapters without stream or input support reject the requested feature before starting; their existing finite operations remain available. The [finite streaming example](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/text-streaming.ts) demonstrates the default mode.
+Choose `output: { mode: "stream" }` for long-running or interactive work and read output promptly. Without it, output uses the default finite mode: at most 1 MiB of cumulative UTF-8 output. Set `maxOutputBytes` to a value from 1 through 1,048,576 to lower that limit. You cannot combine `maxOutputBytes` with stream mode. Adapters without stream or input support reject the requested feature before starting; their existing finite operations remain available. The [finite streaming example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/text-streaming.ts) demonstrates the default mode.
 
-Process setup has a 30-second local timeout. An abort before dispatch reports `WAIT_ABORTED`. If setup is abandoned after dispatch or its acknowledgement is lost, it reports `OUTCOME_UNKNOWN`. Sandbar never starts the command again to recover from an uncertain result.
+Process setup has a 30-second local timeout. An abort before dispatch reports `WAIT_ABORTED`. If setup is abandoned after dispatch or its acknowledgement is lost, it reports `OUTCOME_UNKNOWN`. Beachside never starts the command again to recover from an uncertain result.
 
 `processes.start()` rejects `deadlineSeconds` before starting because it cannot guarantee a portable runtime deadline. Sandbox lifetime is separate. Programs can also buffer their own output, delaying what you see even when streaming is enabled.
 
@@ -119,7 +119,7 @@ Output replay and cursors are unsupported. See [reopening](#reopen-a-process-aft
 
 ## Live callbacks on bounded exec
 
-Use `await sandbox.exec(input, { onOutput, signal })` when you want live text updates and the usual bounded `ExecOutput` result. Sandbar awaits `onOutput` for each chunk and captures the original bytes from the same command. The adapter must support both exact-byte capture and sustained output; otherwise the call rejects before running. Sandbar never runs the command again as a fallback. Finite stdin is split into writes followed by EOF. Command, working directory, environment, stdin and capture limits keep their usual meanings.
+Use `await sandbox.exec(input, { onOutput, signal })` when you want live text updates and the usual bounded `ExecOutput` result. Beachside awaits `onOutput` for each chunk and captures the original bytes from the same command. The adapter must support both exact-byte capture and sustained output; otherwise the call rejects before running. Beachside never runs the command again as a fallback. Finite stdin is split into writes followed by EOF. Command, working directory, environment, stdin and capture limits keep their usual meanings.
 
 Callback exec rejects an explicit `deadlineSeconds` before starting. Its process transport cannot apply the timeout used by ordinary exec: E2B's process start has no total RPC timeout, and Daytona's supervisor setup timeout does not limit the child. With no `deadlineSeconds`, callback exec has no execution or observation timer. Ordinary exec keeps its provider-specific 300-second default; see [execution and waiting timeouts](/docs/guides/resources/#execution-and-waiting-timeouts). Pass an abort signal to limit local observation. It does not kill the process or change sandbox lifetime.
 
@@ -129,7 +129,7 @@ If Daytona setup is abandoned, the adapter writes a private cancellation marker 
 
 ## Signals and explicit terminals
 
-`await child.signal("SIGTERM")` asks the process to shut down gracefully. A process can ignore SIGTERM, so call `child.wait()` to confirm exit. `"SIGKILL"` requests a forced stop; `terminate()` is the convenience method for that signal. Sandbar does not automatically escalate from SIGTERM to SIGKILL or destroy the sandbox. Descendant processes are not guaranteed to stop.
+`await child.signal("SIGTERM")` asks the process to shut down gracefully. A process can ignore SIGTERM, so call `child.wait()` to confirm exit. `"SIGKILL"` requests a forced stop; `terminate()` is the convenience method for that signal. Beachside does not automatically escalate from SIGTERM to SIGKILL or destroy the sandbox. Descendant processes are not guaranteed to stop.
 
 Use `sandbox.terminals.start({ command, columns: 80, rows: 24 })` for programs that need a terminal. Its one `output()` iterator yields combined stdout/stderr as `Uint8Array` chunks. You can write input, resize with `resize({ columns: 120, rows: 40 })`, check status, wait, send signals and terminate.
 
@@ -153,7 +153,7 @@ E2B selects processes with random tags scoped to the sandbox and connection. Nat
 
 ## Bounded diagnostic lines and tails
 
-Import `readProcessLines` and `createProcessTail` from `sandbar-sdk` to turn output into bounded diagnostic text.
+Import `readProcessLines` and `createProcessTail` from `beachside` to turn output into bounded diagnostic text.
 
 `readProcessLines(child.output(), { maxLineBytes: 16_384, signal })` yields `{ stream, text, partial, truncated }`. It handles UTF-8 characters split across chunks and Windows-style CRLF newlines separately for stdout and stderr. It clips oversized lines, marks them truncated and discards the rest until the next newline. A final line without a newline is marked partial. For a quiet process, the iterator waits for output or cancellation. In stream mode, cancellation releases only output observation.
 

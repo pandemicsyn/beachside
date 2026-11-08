@@ -1,7 +1,13 @@
 {
+  // The worker keeps its original name: it already owns these custom domains, and wrangler
+  // replaces the worker's whole domain list on deploy, so every attached domain must be listed.
   "name": "sandbar-docs",
   "compatibility_date": "2026-09-25",
   "routes": [
+    { "pattern": "beachside.run", "custom_domain": true },
+    { "pattern": "www.beachside.run", "custom_domain": true },
+    { "pattern": "beachside.sh", "custom_domain": true },
+    { "pattern": "www.beachside.sh", "custom_domain": true },
     { "pattern": "sandbarsdk.dev", "custom_domain": true },
     { "pattern": "www.sandbarsdk.dev", "custom_domain": true },
   ],

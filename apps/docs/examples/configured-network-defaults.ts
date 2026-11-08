@@ -1,6 +1,6 @@
-import { Image, Sandbar } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
-import { e2b } from "@sandbar-sdk/e2b";
+import { Image, Beachside } from "beachside";
+import { daytona } from "@beachside/daytona";
+import { e2b } from "@beachside/e2b";
 
 /** Caller supplies a ready Daytona image and explicitly chooses provider networking. */
 export async function configuredWorkflow(
@@ -18,7 +18,7 @@ export async function configuredWorkflow(
         })
       : e2b({ apiKey, templateId: "base", network: "internet" });
 
-  const client = await Sandbar.connect(adapter);
+  const client = await Beachside.connect(adapter);
 
   try {
     const box = await client.sandboxes.create();

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter, type HostContext } from "@sandbar-sdk/adapter";
-import { Sandbar, SandbarError, type ConnectOptions, type CloseOptions } from "./index";
+import { defineAdapter, type HostContext } from "@beachside/adapter";
+import { Beachside, BeachsideError, type ConnectOptions, type CloseOptions } from "./index";
 import { bindAdapter } from "./bound";
 
 function deferred<T>() {
@@ -55,8 +55,8 @@ test("preaborted setup never calls either adapter overload", async () => {
   const signal = AbortSignal.abort("stop");
 
   for (const connect of [
-    () => Sandbar.connect(adapter.bound, { signal }),
-    () => Sandbar.connect({ ...adapter.advanced, signal }),
+    () => Beachside.connect(adapter.bound, { signal }),
+    () => Beachside.connect({ ...adapter.advanced, signal }),
   ]) {
     const pending = connect();
     await expect(pending).rejects.toMatchObject({
@@ -83,7 +83,7 @@ test("hung setup is bounded; host receives cancellation and late resources relea
     return setup.promise;
   });
 
-  await expect(Sandbar.connect(adapter.bound, { timeoutMs: 10 })).rejects.toMatchObject({
+  await expect(Beachside.connect(adapter.bound, { timeoutMs: 10 })).rejects.toMatchObject({
     code: "TIMEOUT",
     effect: "none",
   });
@@ -108,7 +108,7 @@ test("auth failure wins, cleanup and throwing diagnostics do not replace it", as
   });
 
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       ...adapter.advanced,
       onDiagnostic() {
         throw new Error("sink");
@@ -124,7 +124,7 @@ test("failed setup does not wait for a hanging release", async () => {
     throw new Error("auth");
   });
 
-  await expect(Sandbar.connect(adapter.bound)).rejects.toThrow("auth");
+  await expect(Beachside.connect(adapter.bound)).rejects.toThrow("auth");
 });
 
 test("successful connection disconnects setup abort and timeout", async () => {
@@ -142,7 +142,7 @@ test("successful connection disconnects setup abort and timeout", async () => {
   });
 
   const options: ConnectOptions = { signal: controller.signal, timeoutMs: 10 };
-  const client = await Sandbar.connect(adapter.bound, options);
+  const client = await Beachside.connect(adapter.bound, options);
   controller.abort();
   await new Promise((resolve) => setTimeout(resolve, 15));
   expect(host.signal.aborted).toBe(false);
@@ -166,7 +166,7 @@ test("abort wins synchronous resolution triggered by setup cancellation; late re
       return setup.promise;
     });
 
-    const pending = Sandbar.connect(adapter.bound, { signal: controller.signal });
+    const pending = Beachside.connect(adapter.bound, { signal: controller.signal });
     await entered.promise;
     controller.abort("race");
     await expect(pending).rejects.toMatchObject({ code: "WAIT_ABORTED", cause: "race" });
@@ -190,7 +190,7 @@ test("close waits independently on one attempt and immediately blocks new work",
     return session();
   });
 
-  const client = await Sandbar.connect(adapter.bound);
+  const client = await Beachside.connect(adapter.bound);
   const options: CloseOptions = { timeoutMs: 10 };
   const first = client.close(options);
   await expect(client.sandboxes.get("one")).rejects.toThrow("closed");
@@ -223,7 +223,7 @@ test("failed release is diagnosed once, remaining cleanup runs, repeated close s
     return session();
   });
 
-  const client = await Sandbar.connect(adapter.bound, {
+  const client = await Beachside.connect(adapter.bound, {
     onDiagnostic(error) {
       diagnostics.push(error);
       throw new Error("sink");
@@ -248,14 +248,14 @@ test("both overloads and close validate budgets including null and invalid signa
   for (const timeoutMs of [0, -1, 0.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, null]) {
     // SAFETY: Exercise runtime option validation with an intentionally invalid value.
     const options = { timeoutMs } as ConnectOptions;
-    await expect(Sandbar.connect(adapter.bound, options)).rejects.toBeInstanceOf(SandbarError);
-    await expect(Sandbar.connect({ ...adapter.advanced, ...options })).rejects.toMatchObject({
+    await expect(Beachside.connect(adapter.bound, options)).rejects.toBeInstanceOf(BeachsideError);
+    await expect(Beachside.connect({ ...adapter.advanced, ...options })).rejects.toMatchObject({
       code: "INVALID_ARGUMENT",
     });
   }
 
   expect(calls).toBe(0);
-  const client = await Sandbar.connect(adapter.bound, { timeoutMs: Number.MAX_SAFE_INTEGER });
+  const client = await Beachside.connect(adapter.bound, { timeoutMs: Number.MAX_SAFE_INTEGER });
   await expect(client.close({ timeoutMs: 0 })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   // SAFETY: Invalid runtime signal exercises the JavaScript API boundary.
   await expect(client.close({ signal: {} as AbortSignal })).rejects.toMatchObject({
@@ -275,7 +275,7 @@ test("preaborted close still initiates exactly one cleanup attempt", async () =>
     return session();
   });
 
-  const client = await Sandbar.connect(adapter.bound);
+  const client = await Beachside.connect(adapter.bound);
   await expect(client.close({ signal: AbortSignal.abort("stop") })).rejects.toMatchObject({
     code: "WAIT_ABORTED",
   });
@@ -298,7 +298,7 @@ test("success delivery wins an abort later in the same turn", async () => {
   });
 
   // This reaction runs in the same microtask checkpoint as successful delivery.
-  const client = await Sandbar.connect(adapter.bound, { signal: controller.signal }).then(
+  const client = await Beachside.connect(adapter.bound, { signal: controller.signal }).then(
     (value) => {
       controller.abort("after delivery");
 
@@ -326,7 +326,7 @@ test("schema validation failure wins over preaborted setup without calling adapt
     JSON.parse('{"extra":"invalid"}');
 
   await expect(
-    Sandbar.connect({ ...adapter.advanced, credentials, signal: AbortSignal.abort("cancel") }),
+    Beachside.connect({ ...adapter.advanced, credentials, signal: AbortSignal.abort("cancel") }),
   ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   expect(calls).toBe(0);
 });
@@ -352,7 +352,7 @@ test("abort between session resolution and success exposure never returns a clos
     });
 
     await expect(
-      Sandbar.connect(adapter.bound, { signal: controller.signal }),
+      Beachside.connect(adapter.bound, { signal: controller.signal }),
     ).rejects.toMatchObject({ code: "WAIT_ABORTED", cause: "resolution race" });
     expect(releases).toBe(1);
   }

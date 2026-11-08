@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { adapterSuite } from "@sandbar-sdk/adapter/testing";
-import { Image, NonzeroExitError, OutcomeUnknownError, Sandbar } from "sandbar-sdk";
+import { adapterSuite } from "@beachside/adapter/testing";
+import { Image, NonzeroExitError, OutcomeUnknownError, Beachside } from "beachside";
 import { createBoatAdapter } from "./adapter";
 import { boatFixture } from "./fixture.test-support";
 
@@ -18,7 +18,7 @@ function setup() {
   const adapter = createBoatAdapter({ fetch: fixture.fetch, pollIntervalMs: 1, settleSeconds: 1 });
 
   const connect = () =>
-    Sandbar.connect({ adapter, config, credentials: { apiKey: "fixture-main" } });
+    Beachside.connect({ adapter, config, credentials: { apiKey: "fixture-main" } });
 
   return { fixture, adapter, connect };
 }
@@ -60,7 +60,7 @@ test("setup requires explicit internet and rejects blocked egress before any eff
   const { fixture, adapter, connect } = setup();
 
   await expect(
-    Sandbar.connect({ adapter, config: {}, credentials: { apiKey: "fixture-main" } }),
+    Beachside.connect({ adapter, config: {}, credentials: { apiKey: "fixture-main" } }),
   ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   expect(fixture.calls).toHaveLength(0);
 
@@ -111,7 +111,7 @@ test("create sends the submission as Idempotency-Key, withholds account secrets 
 
   const { fixture: other, adapter } = setup();
 
-  const configured = await Sandbar.connect({
+  const configured = await Beachside.connect({
     adapter,
     config: { ...config, environment: "ci", machine: "large", lifecycle: { lifetimeSeconds: 120 } },
     credentials: { apiKey: "fixture-main" },
@@ -140,7 +140,7 @@ test("create sends the submission as Idempotency-Key, withholds account secrets 
 test("Boat resources pick the smallest machine type and inspect reports its size", async () => {
   const { fixture, adapter } = setup();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter,
     config: { ...config, resources: { vcpus: 3 } },
     credentials: { apiKey: "fixture-main" },
@@ -162,7 +162,7 @@ test("Boat resources pick the smallest machine type and inspect reports its size
 
   const before = fixture.calls.length;
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { ...config, resources: { vcpus: 32 } },
       credentials: { apiKey: "fixture-main" },
@@ -172,7 +172,7 @@ test("Boat resources pick the smallest machine type and inspect reports its size
     message: expect.stringContaining("largest is 16 vCPU / 32768 MiB"),
   });
   await expect(
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: { ...config, machine: "small", resources: { vcpus: 2 } },
       credentials: { apiKey: "fixture-main" },
@@ -201,7 +201,7 @@ test("create refusals are clean rejections; in-flight idempotency and 5xx stay u
       settleSeconds: 1,
     });
 
-    const direct = await Sandbar.connect({
+    const direct = await Beachside.connect({
       adapter: patched,
       config,
       credentials: { apiKey: "fixture-main" },
@@ -340,7 +340,7 @@ test("exec refusals before running reject; lost, timed-out or undecodable result
     // User output that imitates the record cannot become a result.
     fixture.overrideCommands(() => ({
       exitCode: 0,
-      stdout: "SANDBAR-EXEC-1 0 1 0\nQQ==\n\nextra",
+      stdout: "BEACHSIDE-EXEC-1 0 1 0\nQQ==\n\nextra",
       stderr: "",
       timedOut: false,
     }));
@@ -441,8 +441,14 @@ test("destroy confirms by id and waits for the deletion operation; inventory is 
   }
 
   const { fixture: shared, adapter } = setup();
-  const main = await Sandbar.connect({ adapter, config, credentials: { apiKey: "fixture-main" } });
-  const alt = await Sandbar.connect({ adapter, config, credentials: { apiKey: "fixture-alt" } });
+
+  const main = await Beachside.connect({
+    adapter,
+    config,
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  const alt = await Beachside.connect({ adapter, config, credentials: { apiKey: "fixture-alt" } });
 
   try {
     const mine = await main.sandboxes.create();
@@ -471,7 +477,7 @@ test("API keys never appear in errors", async () => {
       ),
   });
 
-  const error = await Sandbar.connect({
+  const error = await Beachside.connect({
     adapter,
     config,
     credentials: { apiKey: "secret-key-123" },

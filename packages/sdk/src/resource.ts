@@ -1,12 +1,12 @@
-import type { OperationOutcome } from "@sandbar-sdk/adapter";
-import { SnapshotRequest, MountSpec } from "@sandbar-sdk/adapter";
+import type { OperationOutcome } from "@beachside/adapter";
+import { SnapshotRequest, MountSpec } from "@beachside/adapter";
 import type {
   AdapterDirectClient,
   AdapterSandbox,
   AdapterOperation,
   AdapterRecoveryReference,
 } from "./adapter-direct";
-import type { OperationKind, RetainedArtifact, Scope } from "@sandbar-sdk/adapter";
+import type { OperationKind, RetainedArtifact, Scope } from "@beachside/adapter";
 import { z } from "zod";
 import type { AdapterImage, AdapterSnapshot, AdapterVolume } from "./resources";
 import {
@@ -17,7 +17,7 @@ import {
   MAX_EXEC_STDIN_BYTES,
   FilePath,
   type SafeError,
-} from "@sandbar-sdk/adapter/portable";
+} from "@beachside/adapter/portable";
 
 export type PreparedImage = {
   kind: "prepared";
@@ -33,12 +33,12 @@ export type ImageBuildResult = {
    * The built image as a scoped reference for `images.get()` and `images.delete()`. Ownership is
    * `verified-created` only when the adapter proved this build created it; otherwise `unknown`.
    */
-  reference: import("@sandbar-sdk/adapter").ResourceReference<"image">;
+  reference: import("@beachside/adapter").ResourceReference<"image">;
 };
 
-export type { OciImage, ImageInput } from "@sandbar-sdk/adapter";
+export type { OciImage, ImageInput } from "@beachside/adapter";
 
-import type { ImageInput, OciImage } from "@sandbar-sdk/adapter";
+import type { ImageInput, OciImage } from "@beachside/adapter";
 
 export const Image = {
   prepared(value: string | PreparedImage): ImageInput {
@@ -89,12 +89,143 @@ export type ExecInput = {
   command: ExecCommand;
   cwd?: string;
   env?: Record<string, string>;
-  /** Finite stdin bytes; strings encode as UTF-8 and supplied input ends with guest EOF. */
-  stdin?: string | Uint8Array;
+  /**
+   * Command input, ending with guest EOF. Strings encode as UTF-8. A stream (`AsyncIterable` or
+   * `ReadableStream` of bytes) is sent as it arrives, with no size limit, while the command runs;
+   * streams and input over 1 MiB need an adapter with incremental process stdin.
+   */
+  stdin?: string | Uint8Array | ExecStdinStream;
   /** Provider-specific execution/observation limit (default 300), not a total wait budget. Use the call signal to bound local waiting. */
   deadlineSeconds?: number;
   maxOutputBytes?: number;
 };
+
+/** Streamed command input: any async iterable or web stream of byte chunks. */
+export type ExecStdinStream = AsyncIterable<Uint8Array> | ReadableStream<Uint8Array>;
+
+export function isStdinStream(value: ExecInput["stdin"]): value is ExecStdinStream {
+  return (
+    value instanceof ReadableStream ||
+    (value !== null &&
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Distinguish caller-supplied iterables from byte and text input.
+      typeof value === "object" &&
+      !(value instanceof Uint8Array) &&
+      Symbol.asyncIterator in value)
+  );
+}
+
+/** Whether stdin must travel incrementally: a stream, or bytes or text over the finite bound. */
+export function stdinNeedsStream(stdin: ExecInput["stdin"]): boolean {
+  if (stdin === undefined) return false;
+
+  if (isStdinStream(stdin)) return true;
+
+  if (stdin instanceof Uint8Array) return stdin.byteLength > MAX_EXEC_STDIN_BYTES;
+
+  return stdin.length * 3 > MAX_EXEC_STDIN_BYTES && utf8Bytes(stdin) > MAX_EXEC_STDIN_BYTES;
+}
+
+function utf8Bytes(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+/**
+ * Input that must travel incrementally, read one chunk at a time. `cancel` stops the source when
+ * the command no longer needs it, releasing a web stream's reader even while a read is pending.
+ */
+export type StdinSource = { next(): Promise<Uint8Array | null>; cancel(): void };
+
+/** The streamed source for `stdin`, or undefined for finite input that fits the bound. */
+export function streamedStdin(stdin: ExecInput["stdin"]): StdinSource | undefined {
+  if (stdin === undefined || !stdinNeedsStream(stdin)) return undefined;
+
+  if (stdin instanceof ReadableStream) return readableSource(stdin);
+
+  if (isStdinStream(stdin)) return iterableSource(stdin);
+
+  let bytes: Uint8Array | null =
+    stdin instanceof Uint8Array ? Uint8Array.from(stdin) : new TextEncoder().encode(stdin);
+
+  return {
+    async next() {
+      const chunk = bytes;
+      bytes = null;
+
+      return chunk;
+    },
+    cancel() {
+      bytes = null;
+    },
+  };
+}
+
+/** Callers' stream chunks are checked at runtime, since JavaScript can pass anything. */
+function stdinChunk(value: Uint8Array): Uint8Array {
+  // SAFETY: Widened only for the runtime check; untyped callers may yield non-byte chunks.
+  if (!((value as object) instanceof Uint8Array))
+    throw new BeachsideError("INVALID_ARGUMENT", "Expected stdin stream byte chunks");
+
+  return value;
+}
+
+function readableSource(stream: ReadableStream<Uint8Array>): StdinSource {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let cancelled = false;
+
+  return {
+    async next() {
+      if (cancelled) return null;
+      reader ??= stream.getReader();
+      const part = await reader.read();
+
+      if (!part.done) return stdinChunk(part.value);
+      // The stream ended: hand it back to the caller unlocked.
+      cancelled = true;
+      reader.releaseLock();
+
+      return null;
+    },
+    cancel() {
+      if (cancelled) return;
+      cancelled = true;
+
+      if (!reader) {
+        void stream.cancel().catch(() => undefined);
+
+        return;
+      }
+
+      // Cancelling settles a pending read, after which the lock can be released.
+      const owned = reader;
+      void owned
+        .cancel()
+        .catch(() => undefined)
+        .finally(() => owned.releaseLock());
+    },
+  };
+}
+
+function iterableSource(iterable: AsyncIterable<Uint8Array>): StdinSource {
+  const iterator = iterable[Symbol.asyncIterator]();
+  let cancelled = false;
+
+  return {
+    async next() {
+      if (cancelled) return null;
+      const part = await iterator.next();
+
+      return part.done ? null : stdinChunk(part.value);
+    },
+    cancel() {
+      if (cancelled) return;
+      cancelled = true;
+      // An iterator's return() runs its cleanup (closing a file or socket) once it can.
+      void Promise.resolve()
+        .then(() => iterator.return?.())
+        .catch(() => undefined);
+    },
+  };
+}
 
 export type ValidatedExecInput = Required<
   Pick<ExecInput, "command" | "deadlineSeconds" | "maxOutputBytes">
@@ -141,8 +272,8 @@ export type OperationHandle<T, K extends OperationKind | undefined = undefined> 
       wait(options?: { signal?: AbortSignal; pollMs?: number }): Promise<T>;
     };
 
-/** @deprecated Use SandbarClient for the complete SDK connection surface. */
-export type DirectSandbarClient = Pick<
+/** @deprecated Use BeachsideClient for the complete SDK connection surface. */
+export type DirectBeachsideClient = Pick<
   AdapterDirectClient,
   | "provider"
   | "capabilities"
@@ -164,9 +295,9 @@ export type SandboxHandle<Advanced extends boolean = false> = Advanced extends t
   : DirectSandboxHandle;
 
 /** Public SDK connection. */
-export type SandbarClient<Advanced extends boolean = false> = Advanced extends true
+export type BeachsideClient<Advanced extends boolean = false> = Advanced extends true
   ? AdapterDirectClient
-  : DirectSandbarClient;
+  : DirectBeachsideClient;
 
 /** A retained snapshot, with independent restore and deletion operations. */
 export type SnapshotHandle = AdapterSnapshot;
@@ -177,7 +308,7 @@ export type ImageHandle = AdapterImage;
 /** Retained storage, with explicit mount descriptors and deletion. */
 export type VolumeHandle = AdapterVolume;
 
-export class SandbarError extends Error {
+export class BeachsideError extends Error {
   constructor(
     readonly code: string,
     message: string,
@@ -186,11 +317,11 @@ export class SandbarError extends Error {
     readonly reference?: RecoveryReference,
   ) {
     super(message);
-    this.name = "SandbarError";
+    this.name = "BeachsideError";
   }
 }
 
-export class UnsupportedFeatureError extends SandbarError {
+export class UnsupportedFeatureError extends BeachsideError {
   constructor(
     readonly feature: string,
     readonly unmetRequirements: readonly string[],
@@ -202,7 +333,7 @@ export class UnsupportedFeatureError extends SandbarError {
 
 export class OutcomeUnknownError<
   R extends RecoveryReference = RecoveryReference,
-> extends SandbarError {
+> extends BeachsideError {
   constructor(
     readonly reference: R,
     message = "Outcome unknown; investigate without blindly resubmitting",
@@ -215,7 +346,7 @@ export class OutcomeUnknownError<
 
 export class WaitAbortedError<
   R extends RecoveryReference = RecoveryReference,
-> extends SandbarError {
+> extends BeachsideError {
   readonly cause: unknown;
   constructor(
     readonly reference: R,
@@ -233,14 +364,14 @@ export class WaitAbortedError<
   }
 }
 
-export class NonzeroExitError extends SandbarError {
+export class NonzeroExitError extends BeachsideError {
   constructor(readonly result: ExecOutput) {
     super("NONZERO_EXIT", `Command exited with code ${result.exitCode}`, "applied");
     this.name = "NonzeroExitError";
   }
 }
 
-export class NoExitCodeError extends SandbarError {
+export class NoExitCodeError extends BeachsideError {
   constructor(readonly result: ExecOutput) {
     super("EXIT_STATUS_UNKNOWN", "Execution completed without an exit code", "applied");
     this.name = "NoExitCodeError";
@@ -313,7 +444,7 @@ function previewOutput(bytes: Uint8Array, options?: { maxBytes?: number }): Outp
 
 export function validateFilePath(path: string): string {
   if (!FilePath.safeParse(path).success)
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid absolute file path");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid absolute file path");
 
   return path;
 }
@@ -352,7 +483,7 @@ export function resolveNetworkPolicy(
   aliases: Readonly<Record<string, string>> = {},
 ): string {
   if (network !== undefined && networkPolicy !== undefined && network !== networkPolicy)
-    throw new SandbarError(
+    throw new BeachsideError(
       "INVALID_ARGUMENT",
       "Pass either network or the deprecated networkPolicy, not both",
     );
@@ -413,19 +544,19 @@ export function validateCreate(
       input.env !== undefined &&
       !CreateEnv.safeParse(input.env).success
     )
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_ARGUMENT",
         "Invalid create env: use at most 128 names matching [A-Za-z_][A-Za-z0-9_]* with string values without NUL, 64 KiB in total",
       );
 
-    throw new SandbarError("INVALID_ARGUMENT", "Invalid create request");
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid create request");
   }
 
   const env = parsed.data.env && Object.keys(parsed.data.env).length ? parsed.data.env : undefined;
 
   if (parsed.data.environment === undefined) {
     if (defaultEnvironment === undefined)
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_ARGUMENT",
         "Configure an adapter environment (daytona({ environment: ... })) or pass create({ environment: ... })",
       );
@@ -448,7 +579,7 @@ export function validateCreate(
   );
 
   if (!parsed.data.environment.value.trim())
-    throw new SandbarError("INVALID_ARGUMENT", "A prepared or OCI image is required");
+    throw new BeachsideError("INVALID_ARGUMENT", "A prepared or OCI image is required");
 
   const contract = CreateSandboxInput.safeParse({
     environment:
@@ -461,7 +592,7 @@ export function validateCreate(
     labels: parsed.data.labels,
   });
 
-  if (!contract.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid create request");
+  if (!contract.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid create request");
 
   const resolved: Omit<CreateInput, "network"> & {
     environment: ImageInput;
@@ -486,15 +617,21 @@ export function validateExec(
     : input;
 
   if (options.allowStdin === false && !isArgumentArray(input) && request?.stdin !== undefined)
-    throw new SandbarError("INVALID_ARGUMENT", "stdin is available only for finite exec input");
+    throw new BeachsideError("INVALID_ARGUMENT", "stdin is available only for finite exec input");
 
   let stdin: Uint8Array | undefined;
+
+  if (request?.stdin !== undefined && isStdinStream(request.stdin))
+    throw new BeachsideError(
+      "INVALID_ARGUMENT",
+      "Streamed stdin is available through exec(), not as finite input",
+    );
 
   if (request?.stdin !== undefined) {
     const parsedInput = ExecStdinInput.safeParse(request.stdin);
 
     if (!parsedInput.success)
-      throw new SandbarError("INVALID_ARGUMENT", "Invalid or oversized execution stdin");
+      throw new BeachsideError("INVALID_ARGUMENT", "Invalid or oversized execution stdin");
 
     stdin =
       parsedInput.data.kind === "text"
@@ -502,7 +639,7 @@ export function validateExec(
         : new Uint8Array(parsedInput.data.value);
 
     if (stdin.byteLength > MAX_EXEC_STDIN_BYTES)
-      throw new SandbarError("INVALID_ARGUMENT", "Execution stdin exceeds the byte bound");
+      throw new BeachsideError("INVALID_ARGUMENT", "Execution stdin exceeds the byte bound");
   }
 
   const parsed = ExecRequest.safeParse({
@@ -514,7 +651,7 @@ export function validateExec(
     output: { capture: "bounded", maxBytes: request?.maxOutputBytes ?? 1_048_576 },
   });
 
-  if (!parsed.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid execution request");
+  if (!parsed.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid execution request");
 
   return {
     command: parsed.data.command,
@@ -584,7 +721,7 @@ export function validateResourceInput<S extends z.ZodType>(
 ): z.output<S> {
   const parsed = schema.safeParse(value);
 
-  if (!parsed.success) throw new SandbarError("INVALID_ARGUMENT", message);
+  if (!parsed.success) throw new BeachsideError("INVALID_ARGUMENT", message);
 
   return parsed.data;
 }

@@ -1,6 +1,6 @@
 ---
 title: Run CI jobs
-description: Run each CI job in a fresh sandbox with the Sandbar CLI, on GitHub Actions or any other CI system.
+description: Run each CI job in a fresh sandbox with the Beachside CLI, on GitHub Actions or any other CI system.
 ---
 
 Running CI jobs in sandboxes keeps the runner thin and gives every job a clean, isolated machine that you size on the provider you already use. The CLI is built for this: `run` exits with your command's exit code, streams output live, and destroys the sandbox when the command ends, fails or is cancelled.
@@ -20,12 +20,12 @@ jobs:
       E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pandemicsyn/sandbar/actions/setup-sandbar@main
+      - uses: pandemicsyn/beachside/actions/setup-beachside@main
         with:
           adapters: e2b
           provider: e2b
       - run: >
-          sandbar run --push . --network internet
+          beachside run --push . --network internet
           --timeout 15m --ttl 30m --retry 5m
           --label ci=${{ github.repository_owner }}
           -- sh -c 'npm ci && npm test'
@@ -37,15 +37,15 @@ Put provider credentials in the job's `env`, as above, rather than on one step. 
 
 ## The setup action
 
-`setup-sandbar` installs the CLI and your adapters, then removes the sandboxes the job created when the job ends.
+`setup-beachside` installs the CLI and your adapters, then removes the sandboxes the job created when the job ends.
 
 | Input       | Default      | What it does                                                                                      |
 | ----------- | ------------ | ------------------------------------------------------------------------------------------------- |
-| `version`   | `latest`     | CLI version to install. Pin it, for example `0.7.0`, so every run uses the same CLI and adapters. |
+| `version`   | `latest`     | CLI version to install. Pin it, for example `0.8.0`, so every run uses the same CLI and adapters. |
 | `adapters`  | none         | Provider ids to install, such as `e2b` or `daytona e2b`, at the CLI's version.                    |
-| `provider`  | none         | Sets `SANDBAR_PROVIDER` for later steps, for jobs without a `sandbar.json` profile.               |
-| `state-dir` | job temp dir | Where the CLI records sandboxes, images and snapshots. Exported as `SANDBAR_STATE_DIR`.           |
-| `cleanup`   | `true`       | At the end of the job, even after a failure or cancellation, run `sandbar rm --all`.              |
+| `provider`  | none         | Sets `BEACHSIDE_PROVIDER` for later steps, for jobs without a `beachside.json` profile.           |
+| `state-dir` | job temp dir | Where the CLI records sandboxes, images and snapshots. Exported as `BEACHSIDE_STATE_DIR`.         |
+| `cleanup`   | `true`       | At the end of the job, even after a failure or cancellation, run `beachside rm --all`.            |
 
 Each job gets its own state folder, so the cleanup step only ever reaches sandboxes that job created, even on a shared self-hosted runner. Cleanup never fails the job; if a removal fails, it shows a warning and the sandbox's lifetime still applies. The action has two outputs, `version` and `state-dir`.
 
@@ -56,41 +56,41 @@ Pin the action itself to a release tag or a commit SHA for reproducible builds, 
 When you want results back, such as JUnit reports or coverage, split the job into steps. Steps share the runner's state folder, so later steps reach the sandbox by name:
 
 ```yaml
-- run: sandbar create --name job --network internet --ttl 45m --retry 5m --label ci=${{ github.repository_owner }}
-- run: echo "WORK=$(sandbar push job)" >> "$GITHUB_ENV"
-- run: sandbar exec job --cwd "$WORK" --timeout 30m -- sh -c 'npm ci && npm test -- --reporter=junit --outputFile=junit.xml'
+- run: beachside create --name job --network internet --ttl 45m --retry 5m --label ci=${{ github.repository_owner }}
+- run: echo "WORK=$(beachside push job)" >> "$GITHUB_ENV"
+- run: beachside exec job --cwd "$WORK" --timeout 30m -- sh -c 'npm ci && npm test -- --reporter=junit --outputFile=junit.xml'
 - if: always()
-  run: sandbar cp job:"$WORK"/junit.xml junit.xml
+  run: beachside cp job:"$WORK"/junit.xml junit.xml
 - if: always()
-  run: sandbar cp -r job:"$WORK"/coverage ./coverage
+  run: beachside cp -r job:"$WORK"/coverage ./coverage
 ```
 
-`push` prints the folder it wrote to, by default `work` under the sandbox user's home. `exec` exits with the command's exit code. The setup action removes `job` at the end, so there is no `rm` step; without the action, add `sandbar rm job` with `if: always()`.
+`push` prints the folder it wrote to, by default `work` under the sandbox user's home. `exec` exits with the command's exit code. The setup action removes `job` at the end, so there is no `rm` step; without the action, add `beachside rm job` with `if: always()`.
 
 ## Warm bases
 
 Installing dependencies on every job is slow. Prepare a sandbox once, save it as a snapshot, and start each job from it. The record of that snapshot lives in the state folder, which starts empty on a hosted runner, so keep it in the GitHub Actions cache. The key follows your lockfile, so the base is rebuilt when dependencies change:
 
 ```yaml
-- uses: pandemicsyn/sandbar/actions/setup-sandbar@main
-  id: sandbar
+- uses: pandemicsyn/beachside/actions/setup-beachside@main
+  id: beachside
   with:
     adapters: e2b
     provider: e2b
 - uses: actions/cache@v4
   id: base
   with:
-    path: ${{ steps.sandbar.outputs.state-dir }}/snapshots
-    key: sandbar-base-${{ hashFiles('package-lock.json') }}
-    restore-keys: sandbar-base-
+    path: ${{ steps.beachside.outputs.state-dir }}/snapshots
+    key: beachside-base-${{ hashFiles('package-lock.json') }}
+    restore-keys: beachside-base-
 - if: steps.base.outputs.cache-hit != 'true'
   run: |
-    sandbar create --name base --network internet --ttl 30m
-    sandbar exec base --cwd "$(sandbar push base)" -- npm ci
-    sandbar snapshot create base --name ci-base --replace
-    sandbar rm base
+    beachside create --name base --network internet --ttl 30m
+    beachside exec base --cwd "$(beachside push base)" -- npm ci
+    beachside snapshot create base --name ci-base --replace
+    beachside rm base
 - run: >
-    sandbar run --snapshot ci-base --push . --timeout 15m --ttl 30m --retry 5m
+    beachside run --snapshot ci-base --push . --timeout 15m --ttl 30m --retry 5m
     -- npm test
 ```
 
@@ -99,10 +99,10 @@ On a lockfile change, `restore-keys` brings back the previous record and `--repl
 On E2B and Daytona you can instead build an image into a provider template once, from your machine, and give jobs its id:
 
 ```sh
-sandbar image build node:22 --json | jq -r .data.prepared
+beachside image build node:22 --json | jq -r .data.prepared
 ```
 
-Save the printed id as a repository variable and start jobs with `sandbar run --prepared ${{ vars.SANDBAR_BASE }} ...`. This needs no cache, but the image only holds what the OCI image holds, not your installed dependencies.
+Save the printed id as a repository variable and start jobs with `beachside run --prepared ${{ vars.BEACHSIDE_BASE }} ...`. This needs no cache, but the image only holds what the OCI image holds, not your installed dependencies.
 
 ## Time limits
 
@@ -125,11 +125,11 @@ jobs:
     env:
       E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
     steps:
-      - uses: pandemicsyn/sandbar/actions/setup-sandbar@main
+      - uses: pandemicsyn/beachside/actions/setup-beachside@main
         with:
           adapters: e2b
           provider: e2b
-      - run: sandbar gc --label ci=${{ github.repository_owner }} --older-than 2h
+      - run: beachside gc --label ci=${{ github.repository_owner }} --older-than 2h
 ```
 
 Set `--older-than` above your longest job so the sweep never removes a sandbox a running job still uses. See [Cleaning up after killed jobs](/docs/cli/#cleaning-up-after-killed-jobs) for what `gc` matches and skips per provider. On every provider, `--ttl` remains the backstop.
@@ -152,14 +152,14 @@ The action is a convenience; the CLI needs only Node.js, npm and credentials in 
 test:
   image: node:22
   variables:
-    SANDBAR_PROVIDER: e2b
-    SANDBAR_STATE_DIR: $CI_PROJECT_DIR/.sandbar
+    BEACHSIDE_PROVIDER: e2b
+    BEACHSIDE_STATE_DIR: $CI_PROJECT_DIR/.beachside
   script:
-    - npm install -g @sandbar-sdk/cli@0.7.0
-    - sandbar adapter add e2b
-    - sandbar run --push . --network internet --timeout 15m --ttl 30m --retry 5m -- sh -c 'npm ci && npm test'
+    - npm install -g @beachside/cli@0.8.0
+    - beachside adapter add e2b
+    - beachside run --push . --network internet --timeout 15m --ttl 30m --retry 5m -- sh -c 'npm ci && npm test'
   after_script:
-    - sandbar rm --all || true
+    - beachside rm --all || true
 ```
 
-Set `E2B_API_KEY` as a masked CI/CD variable. Keep `SANDBAR_STATE_DIR` per job, as here, so `rm --all` only reaches that job's sandboxes.
+Set `E2B_API_KEY` as a masked CI/CD variable. Keep `BEACHSIDE_STATE_DIR` per job, as here, so `rm --all` only reaches that job's sandboxes.

@@ -37,7 +37,7 @@ The original October 2 source audit used published `@daytona/sdk@0.218.0` (inspe
 
 | Provider | Default exposure before lookup | Native mapping and enforcement | Expiry, mutation and lifecycle |
 | --- | --- | --- | --- |
-| Daytona | Existing Sandbar create sends `public: false`; native detail must continue to report private visibility. A lookup does not repair changed visibility. | `GET /sandbox/{id}/ports/{port}/preview-url`, returns URL/token; fetch supplies `x-daytona-preview-token`. Standard token authenticates all sandbox ports, including terminal/toolbox command and file access. It is a sandbox-wide credential, not a shareable viewing grant. | Pinned SDK warns that GET can open a preview route. Standard token cannot be individually revoked; official docs say stop/start rotates it, pause/resume retains it. Only running, scoped compute is accepted; no start/connect call is sent. No common expiry promise. |
+| Daytona | Existing Beachside create sends `public: false`; native detail must continue to report private visibility. A lookup does not repair changed visibility. | `GET /sandbox/{id}/ports/{port}/preview-url`, returns URL/token; fetch supplies `x-daytona-preview-token`. Standard token authenticates all sandbox ports, including terminal/toolbox command and file access. It is a sandbox-wide credential, not a shareable viewing grant. | Pinned SDK warns that GET can open a preview route. Standard token cannot be individually revoked; official docs say stop/start rotates it, pause/resume retains it. Only running, scoped compute is accepted; no start/connect call is sent. No common expiry promise. |
 | E2B | Native URLs are public by default. This implementation explicitly sets `network.allowPublicTraffic: true` for public (default) creation and restore, or false for explicit protected setup. | Public lookup reads scoped detail, requiring running state, `network.allowPublicTraffic: true`, domain `e2b.app` and `lifecycle.autoResume: false`; URL matches pinned `getHost(port)`. No endpoint mutation or guest attachment. | GET detail has no `trafficAccessToken`; create/connect return it. Pinned connect is `POST /v2/sandboxes/{id}/connect`, which may resume or alter session lifetime, so it is not used for preview. Public URL is usable only while native compute/listener remains available; request fresh access after reopening. |
 
 Evidence: [Daytona preview authentication and lifetime](https://www.daytona.io/docs/en/preview/), [published pinned SDK](https://www.npmjs.com/package/@daytona/sdk/v/0.218.0), [last public Daytona server source](https://github.com/daytonaio/daytona/blob/01c502bb1f1ff8f2885d0cd490e043736083dca8/apps/api/src/sandbox/services/sandbox.service.ts#L1876) (v0.190, corroboration rather than proof of deployed v0.218), [E2B public access enforcement](https://docs.e2b.dev/network/restrict-public-access), [pinned E2B SDK](https://www.npmjs.com/package/e2b/v/2.51.0). SDK source inspection confirms the creation flag, plain GET detail schema, hostname formula and mutating connect path. Current documentation is distinct from pinned native source and from the separately recorded live evidence.
@@ -101,7 +101,7 @@ The adapter addition is an optional native `terminate(ctx: ReadContext): Promise
 ### Concrete workflow (shipped API, finite output)
 
 ```ts
-import { SandbarError } from "sandbar-sdk";
+import { BeachsideError } from "beachside";
 
 const job = await box.processes.start({
   command: { kind: "argv", argv: ["node", "job.js"] },
@@ -123,7 +123,7 @@ try {
     const request = await job.terminate({ signal: observation });
     console.log(request.status); // requested / not-found / exited; not an exit code
   } catch (error) {
-    if (!(error instanceof SandbarError) || error.code !== "OUTCOME_UNKNOWN") throw error;
+    if (!(error instanceof BeachsideError) || error.code !== "OUTCOME_UNKNOWN") throw error;
     console.error("Termination acknowledgement is unknown", error);
     // Observe independently below; never repeat the termination request.
   }

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { buildAndLoad } from "./build";
 
 test("failed provider compilation rejects qualification instead of loading an existing stale SDK bundle", async () => {
-  const root = await mkdtemp(join(tmpdir(), "sandbar-build-provenance-"));
+  const root = await mkdtemp(join(tmpdir(), "beachside-build-provenance-"));
   const bundle = join(root, "sdk.js");
   await writeFile(bundle, "stale provider behavior");
   let loads = 0;

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
-import { Sandbar, type SandboxHandle, type SandboxReference } from "sandbar-sdk";
+import { Beachside, type SandboxHandle, type SandboxReference } from "beachside";
 import { modelKey } from "../shared/opencode";
 import { providerAdapter, reportFailure } from "../shared/provider";
 
@@ -12,11 +12,11 @@ export const OPENCODE2_VERSION = "2.2.3";
 export const PORT = 4096;
 
 // Installed outside the project so `pull` never copies it back.
-export const OPENCODE2 = "$HOME/.sandbar-opencode-box/opencode2";
+export const OPENCODE2 = "$HOME/.beachside-opencode-box/opencode2";
 
-const LOG = "$HOME/.sandbar-opencode-box/serve.log";
+const LOG = "$HOME/.beachside-opencode-box/serve.log";
 
-const ARCHIVE = "/tmp/sandbar-opencode-box.tar.gz";
+const ARCHIVE = "/tmp/beachside-opencode-box.tar.gz";
 
 type Provider = "daytona" | "e2b";
 
@@ -54,7 +54,7 @@ case "$(uname -m)" in
     ;;
   *) echo "OpenCode 2 needs Linux x64 or arm64" >&2; exit 1 ;;
 esac
-dir="$HOME/.sandbar-opencode-box"
+dir="$HOME/.beachside-opencode-box"
 mkdir -p "$dir"
 archive="$dir/cli.tgz"
 trap 'rm -f "$archive"' 0
@@ -343,7 +343,7 @@ cd "$1"
 function stateDir() {
   return join(
     process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"),
-    "sandbar-opencode-box",
+    "beachside-opencode-box",
   );
 }
 
@@ -398,7 +398,7 @@ const USAGE = `Usage:
 
 async function connect(record: BoxRecord) {
   // Reopen with the setup the box was created with.
-  const client = await Sandbar.connect(providerAdapter(record.provider, record.lifetimeSeconds));
+  const client = await Beachside.connect(providerAdapter(record.provider, record.lifetimeSeconds));
 
   return { client, box: await client.sandboxes.get(record.reference) };
 }
@@ -422,11 +422,11 @@ async function up(args: string[], name: string, signal: AbortSignal) {
   const files = await projectFiles(root);
   const password = randomBytes(24).toString("base64url");
   const lifetimeSeconds = Math.ceil(hours * 3600);
-  const client = await Sandbar.connect(providerAdapter(provider, lifetimeSeconds));
+  const client = await Beachside.connect(providerAdapter(provider, lifetimeSeconds));
 
   try {
     const box = await client.sandboxes.create(
-      { env, labels: { "sandbar-example": "opencode-box", "opencode-box": name } },
+      { env, labels: { "beachside-example": "opencode-box", "opencode-box": name } },
       { signal },
     );
 

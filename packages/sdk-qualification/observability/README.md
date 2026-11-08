@@ -1,6 +1,6 @@
 # Local observability qualification
 
-`bun run observability:check` typechecks all recipes and runs each in fresh Node and Bun processes, with sampled and unsampled cases. `SANDBAR_NODE_BINARY` selects a particular Node executable. The default is `node` on PATH. There are no live provider calls, account changes, real vendor ingestion, or vendor UI checks.
+`bun run observability:check` typechecks all recipes and runs each in fresh Node and Bun processes, with sampled and unsampled cases. `BEACHSIDE_NODE_BINARY` selects a particular Node executable. The default is `node` on PATH. There are no live provider calls, account changes, real vendor ingestion, or vendor UI checks.
 
 Pinned versions and copyable setup are documented in the [public tracing guide](../../../apps/docs/src/content/docs/docs/observability.mdx). Official Sentry 11 released APIs were verified against installed declarations and the current official pipeline documentation, rather than the earlier bridge direction in the proposal. Complete public examples are compiled from the actual guide, rendered from checked source files, and executed with provider/transport boundaries replaced. Additional injected connection and client-close failures verify telemetry shutdown in each complete example. Native Sentry OpenTelemetry bridges are checked on Node and Bun. Native dd-trace 6.17.0 is checked on Node with a local Agent stand-in and decoded MessagePack exports; Bun uses the OTel-to-Agent/Collector OTLP path.
 

@@ -1,9 +1,9 @@
 import { lstat, mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
-import type { AdapterRecoveryReference } from "sandbar-sdk";
+import type { AdapterRecoveryReference } from "beachside";
 import { z } from "zod";
-import { ResourceScope, ResourceReference } from "@sandbar-sdk/adapter";
+import { ResourceScope, ResourceReference } from "@beachside/adapter";
 import { envdSchema, failureDiagnosticSchema } from "./diagnostics";
 import { networkEvidenceSchema, networkProbeId } from "./network-probe";
 

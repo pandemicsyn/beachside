@@ -1,4 +1,4 @@
-import { ResourceReference } from "sandbar-sdk";
+import { ResourceReference } from "beachside";
 import { z } from "zod";
 import { daytonaConfiguration, daytonaConnection } from "./daytona-profile";
 import { e2bConfiguration, e2bConnection } from "./e2b-profile";
@@ -51,7 +51,7 @@ const factory =
       : input.provider === "daytona"
         ? daytonaConnection(
             daytonaConfiguration.parse(input.connection),
-            required("SANDBAR_DAYTONA_API_KEY"),
+            required("BEACHSIDE_DAYTONA_API_KEY"),
           )
         : undefined;
 

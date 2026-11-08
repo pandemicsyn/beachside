@@ -19,7 +19,7 @@ import { Excludes, localTree } from "../src/transfer";
 let root: string;
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "sandbar-tar-"));
+  root = await mkdtemp(join(tmpdir(), "beachside-tar-"));
 });
 
 afterAll(async () => {

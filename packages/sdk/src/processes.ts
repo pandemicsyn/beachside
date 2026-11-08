@@ -10,10 +10,11 @@ import {
   type ProcessOutputBytes,
   type ProcessOutputFormat,
   type NativeProcessStatus,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 import {
-  SandbarError,
+  BeachsideError,
+  streamedStdin,
   validateExec,
   validateFilePath,
   checkExec,
@@ -26,7 +27,7 @@ import type { AdapterDirectClient } from "./adapter-direct";
 import { noteOperation } from "./observability";
 import { utf8Length } from "./process-output";
 
-export type { ProcessOutput, ProcessOutputBytes, ProcessOutputFormat } from "@sandbar-sdk/adapter";
+export type { ProcessOutput, ProcessOutputBytes, ProcessOutputFormat } from "@beachside/adapter";
 
 export type ProcessChunk<F extends ProcessOutputFormat> = F extends "bytes"
   ? ProcessOutputBytes
@@ -39,7 +40,7 @@ export type StartProcessInput<F extends ProcessOutputFormat = ProcessOutputForma
     ? { output: { mode: "stream"; format: "bytes" } }
     : object);
 
-export type { ProcessSignal, TerminalDimensions } from "@sandbar-sdk/adapter";
+export type { ProcessSignal, TerminalDimensions } from "@beachside/adapter";
 
 // oxlint-disable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters -- Native/reference JSON is untrusted and must be bounded without recursive parsing or invoking accessors.
 function boundedNative(value: unknown): boolean {
@@ -135,7 +136,7 @@ export type ProcessExit = { exitCode: number; outputComplete: boolean };
 export type ProcessStatus = Omit<NativeProcessStatus, "exit"> & { exit?: ProcessExit };
 
 /** Local context only; these fields cannot reopen a command. */
-export type ProcessFailure = SandbarError & {
+export type ProcessFailure = BeachsideError & {
   provider: string;
   sandboxId: string;
   confirmedExit?: ProcessExit;
@@ -171,7 +172,7 @@ const Chunk = z.object({ stream: z.enum(["stdout", "stderr"]), text: z.string() 
 
 const encoder = new TextEncoder();
 
-const aborted = () => new SandbarError("WAIT_ABORTED", "Local observation stopped", "possible");
+const aborted = () => new BeachsideError("WAIT_ABORTED", "Local observation stopped", "possible");
 
 /** Best effort local release must never block a public wait or client close. */
 function release(native: NativeProcess, preserveInput = false): void {
@@ -194,13 +195,13 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
   private finished = false;
   private complete = false;
   private exitCode?: number;
-  private failure?: SandbarError;
+  private failure?: BeachsideError;
   private detached = false;
   private readonly local = new AbortController();
-  private waitFailure?: SandbarError;
+  private waitFailure?: BeachsideError;
   private inputClosed = false;
   private inputClosing = false;
-  private inputFailure?: SandbarError;
+  private inputFailure?: BeachsideError;
   private pendingInputBytes = 0;
   private pendingInputCalls = 0;
   private inputTail: Promise<void> = Promise.resolve();
@@ -210,7 +211,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
   private park?: Promise<void>;
   private resizeTail: Promise<void> = Promise.resolve();
   private pendingResizes = 0;
-  private resizeFailure?: SandbarError;
+  private resizeFailure?: BeachsideError;
   private cleanupPreservesInput = false;
   private savedReference?: ProcessReference<F>;
   private listeners = new Set<() => void>();
@@ -237,7 +238,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
   ) {
     clientSignal.addEventListener("abort", this.closed, { once: true });
   }
-  get error(): SandbarError | undefined {
+  get error(): BeachsideError | undefined {
     return this.failure;
   }
   private notify(): void {
@@ -264,7 +265,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
   private rememberNativeExit(): void {
     this.evidence(this.native?.confirmedExit);
   }
-  fail(error: SandbarError): void {
+  fail(error: BeachsideError): void {
     if (this.stopped || this.failure) return;
     this.rememberNativeExit();
 
@@ -305,7 +306,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
     if (this.stopped) return;
 
     if (this.format !== "text") {
-      const error = new SandbarError(
+      const error = new BeachsideError(
         "INVALID_RESPONSE",
         "Text delivered to a byte output process",
         "possible",
@@ -318,7 +319,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
     const checked = Chunk.safeParse(value);
 
     if (!checked.success) {
-      const error = new SandbarError("INVALID_RESPONSE", "Invalid process text", "possible");
+      const error = new BeachsideError("INVALID_RESPONSE", "Invalid process text", "possible");
       this.fail(error);
       throw error;
     }
@@ -331,7 +332,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
       bytes += utf8Length(point);
 
       if ((!this.sustained && this.total + bytes > this.max) || this.queuedBytes + bytes > 65_536) {
-        const error = new SandbarError(
+        const error = new BeachsideError(
           "OUTPUT_CAPACITY",
           "Process text budget exceeded",
           "possible",
@@ -364,7 +365,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
     parts.push({ chunk: { stream, text: text.slice(start) }, bytes: partBytes });
 
     if (this.queue.length + parts.length > 256) {
-      const error = new SandbarError(
+      const error = new BeachsideError(
         "OUTPUT_CAPACITY",
         "Process chunk budget exceeded",
         "possible",
@@ -387,7 +388,12 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
       .safeParse(value);
 
     if (this.format !== "bytes" || !checked.success) {
-      const error = new SandbarError("INVALID_RESPONSE", "Invalid process byte output", "possible");
+      const error = new BeachsideError(
+        "INVALID_RESPONSE",
+        "Invalid process byte output",
+        "possible",
+      );
+
       this.fail(error);
       throw error;
     }
@@ -395,7 +401,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
     const { stream, bytes } = checked.data;
 
     if (this.referenceContext?.profile === "terminal" && stream !== "stdout") {
-      const error = new SandbarError(
+      const error = new BeachsideError(
         "INVALID_RESPONSE",
         "Terminal output must be combined",
         "possible",
@@ -411,7 +417,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
       this.queuedBytes + bytes.byteLength > 65_536 ||
       this.queue.length + Math.ceil(bytes.byteLength / 16_384) > 256
     ) {
-      const error = new SandbarError(
+      const error = new BeachsideError(
         "OUTPUT_CAPACITY",
         "Process byte output queue exceeded",
         "possible",
@@ -451,7 +457,11 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
 
     if (this.sustained && (!native.outputDone || !native.detachOutput))
       this.fail(
-        new SandbarError("INVALID_RESPONSE", "Sustained output contract is incomplete", "possible"),
+        new BeachsideError(
+          "INVALID_RESPONSE",
+          "Sustained output contract is incomplete",
+          "possible",
+        ),
       );
 
     if (native.outputDone)
@@ -462,7 +472,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
         },
         () =>
           this.fail(
-            new SandbarError("UNAVAILABLE", "Process output observation failed", "possible"),
+            new BeachsideError("UNAVAILABLE", "Process output observation failed", "possible"),
           ),
       );
 
@@ -474,7 +484,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
           this.evidence(value);
 
           if (this.exitCode === undefined) {
-            this.waitFailure = new SandbarError(
+            this.waitFailure = new BeachsideError(
               "INVALID_RESPONSE",
               "Invalid process exit",
               "possible",
@@ -492,7 +502,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
 
           if (evidence.success) this.evidence(evidence.data.confirmedExit);
           this.rememberNativeExit();
-          this.waitFailure = new SandbarError(
+          this.waitFailure = new BeachsideError(
             "UNAVAILABLE",
             "Process observation failed",
             "possible",
@@ -502,7 +512,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
         },
       )
       .catch(() => {
-        this.waitFailure = new SandbarError(
+        this.waitFailure = new BeachsideError(
           "UNAVAILABLE",
           "Process observation failed",
           "possible",
@@ -516,7 +526,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
     else if (this.failure && this.sustained) this.releaseOutput();
   }
   output(options: { signal?: AbortSignal } = {}): AsyncIterable<ProcessChunk<F>> {
-    if (this.used) throw new SandbarError("INVALID_ARGUMENT", "Process output has one consumer");
+    if (this.used) throw new BeachsideError("INVALID_ARGUMENT", "Process output has one consumer");
     this.used = true;
     const signal = options.signal;
 
@@ -632,7 +642,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
       if (this.waitFailure) throw this.waitFailure;
 
       if (this.detached || (this.stopped && !this.sustained))
-        throw new SandbarError(
+        throw new BeachsideError(
           "UNAVAILABLE",
           "Process detached without confirmed exit",
           "possible",
@@ -859,14 +869,14 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
     } catch (error) {
       if (options.signal?.aborted) throw aborted();
 
-      if (error instanceof SandbarError) throw error;
+      if (error instanceof BeachsideError) throw error;
       throw this.terminationFailure("UNAVAILABLE", "Process status observation failed");
     } finally {
       clearTimeout(timer);
     }
   }
   private terminationFailure(code: string, message: string, effect: "none" | "possible" = "none") {
-    return Object.assign(new SandbarError(code, message, effect), {
+    return Object.assign(new BeachsideError(code, message, effect), {
       provider: this.provider,
       sandboxId: this.sandboxId,
     });
@@ -1072,7 +1082,7 @@ class LocalProcess<F extends ProcessOutputFormat> implements ProcessHandle<F> {
           await this.control((ctx) => this.native!.resize!(parsed.data, ctx));
         } catch (error) {
           this.resizeFailure =
-            error instanceof SandbarError
+            error instanceof BeachsideError
               ? error
               : this.terminationFailure(
                   "OUTCOME_UNKNOWN",
@@ -1173,19 +1183,19 @@ export async function startProcess<F extends ProcessOutputFormat = "text">(
     terminal &&
     (!Dimensions.safeParse(terminal).success || !client.session.processes?.supports?.terminal)
   )
-    throw new SandbarError(
+    throw new BeachsideError(
       Dimensions.safeParse(terminal).success ? "UNSUPPORTED" : "INVALID_ARGUMENT",
       "Terminal profile is unavailable",
     );
 
   if (options.signal?.aborted)
-    throw new SandbarError("WAIT_ABORTED", "Process start aborted before dispatch");
+    throw new BeachsideError("WAIT_ABORTED", "Process start aborted before dispatch");
 
   if (!client.session.processes)
-    throw new SandbarError("UNSUPPORTED", "Text streaming is unsupported");
+    throw new BeachsideError("UNSUPPORTED", "Text streaming is unsupported");
 
   if (input?.deadlineSeconds !== undefined)
-    throw new SandbarError("UNSUPPORTED", "Process runtime deadlines are unsupported");
+    throw new BeachsideError("UNSUPPORTED", "Process runtime deadlines are unsupported");
 
   const extra = z
     .object({
@@ -1196,26 +1206,26 @@ export async function startProcess<F extends ProcessOutputFormat = "text">(
     })
     .safeParse(input);
 
-  if (!extra.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid process IO options");
+  if (!extra.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid process IO options");
   const sustained = extra.data.output?.mode === "stream";
   const piped = extra.data.stdin === "pipe";
   const format = extra.data.output?.format ?? "text";
 
   if (sustained && input.maxOutputBytes !== undefined)
-    throw new SandbarError("INVALID_ARGUMENT", "Stream output cannot specify maxOutputBytes");
+    throw new BeachsideError("INVALID_ARGUMENT", "Stream output cannot specify maxOutputBytes");
 
   if (sustained && !client.session.processes.supports?.sustainedOutput)
-    throw new SandbarError("UNSUPPORTED", "Sustained process output is unsupported");
+    throw new BeachsideError("UNSUPPORTED", "Sustained process output is unsupported");
 
   if (format === "bytes" && !client.session.processes.supports?.binaryOutput)
-    throw new SandbarError("UNSUPPORTED", "Byte process output is unsupported");
+    throw new BeachsideError("UNSUPPORTED", "Byte process output is unsupported");
 
   if (piped && client.session.processes.supports?.stdin !== "bytes")
-    throw new SandbarError("UNSUPPORTED", "Incremental process stdin is unsupported");
+    throw new BeachsideError("UNSUPPORTED", "Incremental process stdin is unsupported");
   const request = validateExec({ ...input, stdin: undefined }, { allowStdin: false });
 
   if (request.maxOutputBytes < 1)
-    throw new SandbarError("INVALID_ARGUMENT", "Process output limit must be positive");
+    throw new BeachsideError("INVALID_ARGUMENT", "Process output limit must be positive");
 
   if (request.cwd !== undefined) validateFilePath(request.cwd);
   const strings = request.command.kind === "argv" ? request.command.argv : [request.command.script];
@@ -1224,7 +1234,7 @@ export async function startProcess<F extends ProcessOutputFormat = "text">(
     strings.some((part) => part.includes("\0")) ||
     Object.values(request.env ?? {}).some((part) => part.includes("\0"))
   )
-    throw new SandbarError("INVALID_ARGUMENT", "Process input contains NUL");
+    throw new BeachsideError("INVALID_ARGUMENT", "Process input contains NUL");
   const controller = new AbortController();
 
   const setup = AbortSignal.any([
@@ -1259,7 +1269,7 @@ export async function startProcess<F extends ProcessOutputFormat = "text">(
 
   const started = Promise.resolve().then(() => {
     if (setup.aborted)
-      throw new SandbarError("WAIT_ABORTED", "Process start aborted before dispatch");
+      throw new BeachsideError("WAIT_ABORTED", "Process start aborted before dispatch");
     dispatched = true;
 
     const context = {
@@ -1346,10 +1356,10 @@ export async function startProcess<F extends ProcessOutputFormat = "text">(
     const failure =
       process.error ??
       (!dispatched
-        ? new SandbarError("WAIT_ABORTED", "Process start aborted before dispatch")
+        ? new BeachsideError("WAIT_ABORTED", "Process start aborted before dispatch")
         : error instanceof AdapterError && !setup.aborted
-          ? new SandbarError(error.code, error.message, "possible")
-          : new SandbarError(
+          ? new BeachsideError(error.code, error.message, "possible")
+          : new BeachsideError(
               "OUTCOME_UNKNOWN",
               "Process start was not acknowledged; do not resubmit",
               "possible",
@@ -1374,7 +1384,7 @@ export async function reopenProcess<F extends ProcessOutputFormat>(
 ): Promise<LocalProcess<F>> {
   const parsed = Reference.safeParse(reference);
 
-  if (!parsed.success) throw new SandbarError("INVALID_ARGUMENT", "Invalid process reference");
+  if (!parsed.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid process reference");
   const ref = structuredClone(parsed.data);
 
   const scope = (value: z.infer<typeof ResourceScope>) =>
@@ -1389,7 +1399,7 @@ export async function reopenProcess<F extends ProcessOutputFormat>(
     ref.sandboxId !== sandbox.id ||
     scope(ref.scope) !== scope(client.scope)
   )
-    throw new SandbarError(
+    throw new BeachsideError(
       "CONFLICT",
       "Process reference belongs to a different sandbox or connection",
     );
@@ -1398,16 +1408,16 @@ export async function reopenProcess<F extends ProcessOutputFormat>(
     Date.parse(ref.expiresAt) <= Date.now() ||
     Date.parse(ref.expiresAt) > Date.now() + 86_400_000
   )
-    throw new SandbarError(
+    throw new BeachsideError(
       "INVALID_ARGUMENT",
       "Process reference has expired or exceeds its lifetime",
     );
 
   if (!client.session.processes?.supports?.reopen || !client.session.processes.reopen)
-    throw new SandbarError("UNSUPPORTED", "Process reopening is unsupported");
+    throw new BeachsideError("UNSUPPORTED", "Process reopening is unsupported");
 
   if (ref.profile === "terminal" && ref.output !== "bytes")
-    throw new SandbarError("INVALID_ARGUMENT", "Terminal reference requires byte output");
+    throw new BeachsideError("INVALID_ARGUMENT", "Terminal reference requires byte output");
 
   // SAFETY: Reference validation preserves the caller's generic output profile in the start input.
   return startProcess(
@@ -1472,23 +1482,35 @@ export async function callbackExec(
 
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Validate JavaScript callers before any command dispatch.
   if (typeof callback !== "function")
-    throw new SandbarError("INVALID_ARGUMENT", "Expected execution output callback");
+    throw new BeachsideError("INVALID_ARGUMENT", "Expected execution output callback");
 
-  const request = validateExec(input);
+  const object = Array.isArray(input) || !("command" in input) ? undefined : input;
+  const streamed = streamedStdin(object?.stdin);
+  const request = validateExec(streamed && object ? { ...object, stdin: undefined } : input);
+  const deadlineSeconds = object?.deadlineSeconds;
 
-  if (!Array.isArray(input) && "deadlineSeconds" in input && input.deadlineSeconds !== undefined)
-    throw new SandbarError(
+  // Streamed input runs on the process transport, so the SDK enforces its deadline locally.
+  const localDeadline = streamed ? (deadlineSeconds ?? request.deadlineSeconds) : undefined;
+
+  if (!streamed && deadlineSeconds !== undefined)
+    throw new BeachsideError(
       "UNSUPPORTED",
       "Callback execution cannot map deadlineSeconds on the process transport; use signal to bound local observation",
+    );
+
+  if (streamed && client.session.processes?.supports?.stdin !== "bytes")
+    throw new BeachsideError(
+      "UNSUPPORTED",
+      "Streamed stdin and stdin over 1 MiB need incremental process stdin, which this adapter lacks",
     );
 
   const maxOutputBytes = client.session.supports.exec?.maxOutputBytes;
 
   if (maxOutputBytes !== undefined && request.maxOutputBytes > maxOutputBytes)
-    throw new SandbarError("UNSUPPORTED", "Requested execution output limit is unsupported");
+    throw new BeachsideError("UNSUPPORTED", "Requested execution output limit is unsupported");
 
   if (client.session.processes?.supports?.execCapture !== "bytes")
-    throw new SandbarError("UNSUPPORTED", "Streaming execution byte capture is unsupported");
+    throw new BeachsideError("UNSUPPORTED", "Streaming execution byte capture is unsupported");
 
   const process = await startProcess(
     client,
@@ -1498,7 +1520,7 @@ export async function callbackExec(
       cwd: request.cwd,
       env: request.env,
       output: { mode: "stream" },
-      stdin: request.stdin === undefined ? "closed" : "pipe",
+      stdin: request.stdin === undefined && !streamed ? "closed" : "pipe",
     },
     options,
     controlActive,
@@ -1533,7 +1555,7 @@ export async function callbackExec(
       !z.number().int().safe().safeParse(value.exitCode).success ||
       !z.boolean().safeParse(value.truncated).success
     )
-      throw new SandbarError("INVALID_RESPONSE", "Invalid execution byte capture", "possible");
+      throw new BeachsideError("INVALID_RESPONSE", "Invalid execution byte capture", "possible");
     captured = execOutput(
       value.exitCode,
       new Uint8Array(value.stdout),
@@ -1571,23 +1593,78 @@ export async function callbackExec(
     }
   })().catch(stop);
 
+  const source =
+    streamed ??
+    (request.stdin === undefined
+      ? undefined
+      : (() => {
+          let bytes: Uint8Array | null = request.stdin!;
+
+          return {
+            async next() {
+              const chunk = bytes;
+              bytes = null;
+
+              return chunk;
+            },
+            cancel() {
+              bytes = null;
+            },
+          };
+        })());
+
+  let delivered = false;
+
   const delivery = (async () => {
-    if (request.stdin !== undefined) {
-      for (let offset = 0; offset < request.stdin.length; offset += 65_536) {
+    if (source === undefined) return;
+
+    for (let chunk = await source.next(); chunk; chunk = await source.next())
+      for (let offset = 0; offset < chunk.length; offset += 65_536) {
         if (signal.aborted) throw signal.reason;
-        await process.write(request.stdin.subarray(offset, offset + 65_536), { signal });
+
+        // A command that exits before reading all of a stream simply stops receiving it.
+        if (streamed && exit) return;
+        await process.write(chunk.subarray(offset, offset + 65_536), { signal });
       }
 
-      if (signal.aborted) throw signal.reason;
-      await process.closeStdin({ signal });
-    }
-  })().catch(stop);
+    if (signal.aborted) throw signal.reason;
+    delivered = true;
+    await process.closeStdin({ signal });
+  })().then(
+    () => undefined,
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Input transport rejections are untrusted failure evidence, never serialized.
+    (error: unknown) => {
+      if (streamed && exit) return;
+      stop(error);
+    },
+  );
+
+  const deadline =
+    localDeadline === undefined
+      ? undefined
+      : setTimeout(() => {
+          initiatingFailure ??= {
+            error: new BeachsideError(
+              "TIMEOUT",
+              `Execution exceeded deadlineSeconds (${localDeadline}); termination was requested`,
+              "possible",
+            ),
+          };
+          observation.abort();
+          void process.terminate({ signal: AbortSignal.timeout(30_000) }).catch(() => undefined);
+        }, localDeadline * 1000);
 
   try {
-    await Promise.all([delivery, output, waiting, raceAbort(capture, signal)]);
+    // Streamed input may never end (an open pipe); the command's exit settles the call.
+    await Promise.all([
+      streamed ? Promise.race([delivery, waiting]) : delivery,
+      output,
+      waiting,
+      raceAbort(capture, signal),
+    ]);
 
     if (captured!.exitCode !== exit!.exitCode)
-      throw new SandbarError(
+      throw new BeachsideError(
         "INVALID_RESPONSE",
         "Execution capture conflicts with confirmed exit",
         "possible",
@@ -1604,19 +1681,19 @@ export async function callbackExec(
 
     if (
       exit &&
-      error instanceof SandbarError &&
+      error instanceof BeachsideError &&
       (error.code === "NONZERO_EXIT" || error.code === "NO_EXIT_CODE")
     )
       throw error;
 
-    const failure = new SandbarError(
-      error instanceof SandbarError
+    const failure = new BeachsideError(
+      error instanceof BeachsideError
         ? error.code
         : options.signal?.aborted
           ? "WAIT_ABORTED"
           : "UNAVAILABLE",
       "Execution observation failed",
-      error instanceof SandbarError ? error.effect : "possible",
+      error instanceof BeachsideError ? error.effect : "possible",
     );
 
     Object.defineProperty(failure, "cause", { value: error, configurable: true });
@@ -1631,6 +1708,10 @@ export async function callbackExec(
     if (captured) context.output = captured;
     throw context;
   } finally {
+    clearTimeout(deadline);
+
+    // Stop reading input the command no longer takes, releasing the caller's stream.
+    if (!delivered) source?.cancel();
     await process.detach();
   }
 }

@@ -43,7 +43,7 @@ function splitVersion(text: string): { name: string; version: string | null } {
 }
 
 /**
- * Official ids map to `@sandbar-sdk/<id>` at this CLI's version, since adapters are released in
+ * Official ids map to `@beachside/<id>` at this CLI's version, since adapters are released in
  * lockstep with it. Other adapters receive credentials too, so a bare unknown name is refused rather
  * than sent to npm, where a typo could install someone else's package: third-party adapters are
  * named by their scoped package name or with an explicit `npm:` prefix.
@@ -125,9 +125,10 @@ async function ensureProject(dir: string): Promise<void> {
     path,
     `${JSON.stringify(
       {
-        name: "sandbar-adapters",
+        name: "beachside-adapters",
         private: true,
-        description: "Adapters for the sandbar CLI; manage with `sandbar adapter add` and `rm`.",
+        description:
+          "Adapters for the beachside CLI; manage with `beachside adapter add` and `rm`.",
       },
       null,
       2,
@@ -159,7 +160,7 @@ function npm(args: string[], dir: string, env: Env, out: Output, signal: AbortSi
         fail(
           new CliError(
             "ADAPTER_INSTALLER_MISSING",
-            "Cannot run npm, which `sandbar adapter` uses to install adapters",
+            "Cannot run npm, which `beachside adapter` uses to install adapters",
             "install Node.js with npm (https://nodejs.org), or put npm on PATH",
           ),
         );
@@ -201,7 +202,7 @@ async function verify(dir: string, target: Target): Promise<string[]> {
     throw new CliError(
       "ADAPTER_LOAD_FAILED",
       `${target.package} is installed but failed to load: ${cause instanceof Error ? cause.message : cause}`,
-      `reinstall it with \`sandbar adapter add ${target.input}\`, or remove it with \`sandbar adapter rm ${target.input}\``,
+      `reinstall it with \`beachside adapter add ${target.input}\`, or remove it with \`beachside adapter rm ${target.input}\``,
     );
   }
 
@@ -216,8 +217,8 @@ async function verify(dir: string, target: Target): Promise<string[]> {
       "ADAPTER_LOAD_FAILED",
       expected
         ? `${target.package} has no adapter export named ${expected}`
-        : `${target.package} exports no Sandbar adapter`,
-      `remove it with \`sandbar adapter rm ${target.input}\``,
+        : `${target.package} exports no Beachside adapter`,
+      `remove it with \`beachside adapter rm ${target.input}\``,
     );
 
   return found;
@@ -235,7 +236,7 @@ type AddResult = {
 async function addAdapters(session: Session, inputs: string[]): Promise<number> {
   const { env, out, signal } = session.ctx;
 
-  if (!inputs.length) throw usage("Name the adapters to add, e.g. `sandbar adapter add e2b`");
+  if (!inputs.length) throw usage("Name the adapters to add, e.g. `beachside adapter add e2b`");
   const targets = inputs.map((input) => parseTarget(input, true));
   const dir = adaptersDir(env);
 
@@ -289,7 +290,7 @@ async function addAdapters(session: Session, inputs: string[]): Promise<number> 
       ),
       ...(results.some((entry) => !entry.provider)
         ? [
-            'use a third-party adapter from a profile in sandbar.json: { "module": "<package>", "export": "<name>" }',
+            'use a third-party adapter from a profile in beachside.json: { "module": "<package>", "export": "<name>" }',
           ]
         : []),
     ].join("\n"),
@@ -354,7 +355,7 @@ async function listAdapters(session: Session): Promise<number> {
               `${(row.provider ?? "-").padEnd(8)} ${`${row.package}@${row.version ?? row.requested ?? "?"}`.padEnd(36)} ${row.status}`,
           )
           .join("\n")
-      : `no adapters in ${dir}; add one with \`sandbar adapter add <provider>\``,
+      : `no adapters in ${dir}; add one with \`beachside adapter add <provider>\``,
   );
 
   return 0;
@@ -363,7 +364,7 @@ async function listAdapters(session: Session): Promise<number> {
 async function removeAdapters(session: Session, inputs: string[]): Promise<number> {
   const { env, out, signal } = session.ctx;
 
-  if (!inputs.length) throw usage("Name the adapters to remove, e.g. `sandbar adapter rm e2b`");
+  if (!inputs.length) throw usage("Name the adapters to remove, e.g. `beachside adapter rm e2b`");
   const targets = inputs.map((input) => parseTarget(input, false));
   const dir = adaptersDir(env);
   const recorded = await dependencies(dir);

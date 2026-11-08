@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter } from "@sandbar-sdk/adapter";
-import { Sandbar, Image, type AdapterRecoveryReference } from "./index";
+import { defineAdapter } from "@beachside/adapter";
+import { Beachside, Image, type AdapterRecoveryReference } from "./index";
 
 function fixture(
   onReference?: (reference: AdapterRecoveryReference) => Promise<void> | void,
@@ -53,7 +53,7 @@ function fixture(
     },
   });
 
-  const connect = () => Sandbar.connect({ adapter, config: {}, credentials: {}, onReference });
+  const connect = () => Beachside.connect({ adapter, config: {}, credentials: {}, onReference });
 
   return { connect, effects: () => effects };
 }

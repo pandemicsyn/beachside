@@ -4,7 +4,7 @@ import {
   type NativeProcessExit,
   type ProcessStartContext,
   type ProcessStartInput,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import { z } from "zod";
 import { commandLine } from "./exec";
 import { HttpError, type Execution, type RunloopClient } from "./transport";

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { Sandbar } from "sandbar-sdk";
-import { sandboxReference } from "@sandbar-sdk/adapter";
+import { Beachside } from "beachside";
+import { sandboxReference } from "@beachside/adapter";
 import { createE2BAdapter } from "./index";
 import type { E2BRecord } from "./transport";
 
@@ -9,10 +9,10 @@ const owned = (id: string, state: E2BRecord["state"] = "running"): E2BRecord => 
   templateId: "template_1",
   state,
   metadata: {
-    sandbar_scope: "team_one:template_1",
-    sandbar_template: "template_1",
-    sandbar_submission: `sub_${id}`,
-    sandbar_operation: `op_${id}`,
+    beachside_scope: "team_one:template_1",
+    beachside_template: "template_1",
+    beachside_submission: `sub_${id}`,
+    beachside_operation: `op_${id}`,
   },
 });
 
@@ -65,7 +65,7 @@ function fixture(records: E2BRecord[]) {
     lists,
     gets,
     connect: () =>
-      Sandbar.connect({
+      Beachside.connect({
         adapter,
         config: { teamId: "team_one", templateId: "template_1" },
         credentials: { apiKey: "fixture-key" },
@@ -73,9 +73,9 @@ function fixture(records: E2BRecord[]) {
   };
 }
 
-test("E2B lists only this binding's Sandbar-created sandboxes and reopens them", async () => {
+test("E2B lists only this binding's Beachside-created sandboxes and reopens them", async () => {
   const foreign = owned("foreign_scope");
-  foreign.metadata.sandbar_scope = "team_two:template_1";
+  foreign.metadata.beachside_scope = "team_two:template_1";
   const unmarked = { ...owned("unmarked"), metadata: {} };
   const records = [owned("one"), foreign, unmarked, owned("paused", "paused"), owned("two")];
   const f = fixture(records);
@@ -83,9 +83,9 @@ test("E2B lists only this binding's Sandbar-created sandboxes and reopens them",
 
   try {
     const first = await client.sandboxes.list({ limit: 4 });
-    expect(f.lists).toEqual([{ metadata: { sandbar_scope: "team_one:template_1" }, limit: 4 }]);
+    expect(f.lists).toEqual([{ metadata: { beachside_scope: "team_one:template_1" }, limit: 4 }]);
     expect(f.gets).toEqual([]);
-    expect(first.coverage).toBe("sandbar-managed");
+    expect(first.coverage).toBe("managed");
     expect(first.nextCursor).toBe("4");
     expect(first.items.map(({ id, state }) => ({ id, state }))).toEqual([
       { id: "one", state: "running" },
@@ -103,7 +103,7 @@ test("E2B lists only this binding's Sandbar-created sandboxes and reopens them",
 
     const second = await client.sandboxes.list({ cursor: first.nextCursor, limit: 4 });
     expect(f.lists[1]).toEqual({
-      metadata: { sandbar_scope: "team_one:template_1" },
+      metadata: { beachside_scope: "team_one:template_1" },
       limit: 4,
       nextToken: "4",
     });

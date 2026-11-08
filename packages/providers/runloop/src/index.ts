@@ -5,3 +5,5 @@ export {
   runloopAdapter,
   type RunloopAdapterOptions,
 } from "./adapter";
+
+export { runloop, type RunloopOptions } from "./factory";

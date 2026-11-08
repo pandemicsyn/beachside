@@ -4,9 +4,9 @@ import {
   SandboxCleanupError,
   type ExecOutput,
   type SandboxHandle,
-} from "sandbar-sdk";
+} from "beachside";
 
-export const WORKDIR = "/tmp/sandbar-agent-example";
+export const WORKDIR = "/tmp/beachside-agent-example";
 
 export const OPENCODE_VERSION = "1.18.35";
 

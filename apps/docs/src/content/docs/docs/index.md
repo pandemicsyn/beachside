@@ -1,9 +1,9 @@
 ---
-title: Sandbar SDK
+title: Beachside SDK
 description: Create sandboxes, run code, and move files with one TypeScript SDK for Daytona, E2B, boxd and Vercel.
 ---
 
-Sandbar is a server-side TypeScript SDK for creating sandboxes, running commands, and moving files across providers. **Daytona, E2B, boxd and Vercel are separately installed adapters.** Other providers can integrate through the public adapter API.
+Beachside is a server-side TypeScript SDK for creating sandboxes, running commands, and moving files across providers. **Daytona, E2B, boxd and Vercel are separately installed adapters.** Other providers can integrate through the public adapter API.
 
 Start with [Getting started](/docs/direct-quickstart/) to install the SDK, run your first command and clean up the sandbox.
 
@@ -13,12 +13,12 @@ Run OpenCode inside a sandbox with the [runnable agent examples](/docs/guides/ru
 
 Copy a prompt to give your coding agent the right imports, examples, and constraints:
 
-- [Build an application with Sandbar](/docs/agents/build-with-sdk/)
-- [Build a provider integration for Sandbar](/docs/agents/build-a-provider/)
+- [Build an application with Beachside](/docs/agents/build-with-sdk/)
+- [Build a provider integration for Beachside](/docs/agents/build-a-provider/)
 
 ## Use the command line
 
-The [`sandbar` CLI](/docs/cli/) creates, uses and cleans up sandboxes from your shell, with JSON output and exit codes designed for coding agents.
+The [`beachside` CLI](/docs/cli/) creates, uses and cleans up sandboxes from your shell, with JSON output and exit codes designed for coding agents.
 
 ## Use the SDK
 

@@ -17,7 +17,7 @@ import {
   type SnapshotInfo,
   type SnapshotProfile,
   listedLabels,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 import {
   createSdkTransport,
   MODAL_ENDPOINT,
@@ -155,7 +155,7 @@ type PreparedCreate = {
 };
 
 /** Modal does not report reservations back, so the adapter records the full one in a tag. */
-const RESOURCES_TAG = "sandbar_resources";
+const RESOURCES_TAG = "beachside_resources";
 
 function recordSize(record: RecordValue): Fact<SandboxResources> {
   const match = /^(\d+(?:\.\d+)?)\/(\d+)$/.exec(record.tags[RESOURCES_TAG] ?? "");
@@ -175,7 +175,7 @@ export function modalWriteScript(overwrite: boolean): string {
 
 function modalExecId(submissionId: string): string {
   const bytes = createHash("sha256")
-    .update("sandbar-modal-exec\0")
+    .update("beachside-modal-exec\0")
     .update(submissionId)
     .digest()
     .subarray(0, 16);
@@ -253,8 +253,8 @@ export function createModalAdapter(
           items.push({
             id: record.id,
             state: record.running ? "running" : "unknown",
-            // Create labels are Modal tags beside the adapter's `sandbar_` markers.
-            labels: listedLabels(record.tags, (key) => key.startsWith("sandbar_")),
+            // Create labels are Modal tags beside the adapter's `beachside_` markers.
+            labels: listedLabels(record.tags, (key) => key.startsWith("beachside_")),
           });
 
           if (items.length > input.limit) break;
@@ -351,8 +351,8 @@ export function createModalAdapter(
             name: ctx.submissionId,
             tags: {
               ...input.labels,
-              sandbar_submission: ctx.submissionId,
-              sandbar_operation: ctx.operationId,
+              beachside_submission: ctx.submissionId,
+              beachside_operation: ctx.operationId,
             },
             timeoutMs: (input.lifetimeSeconds ?? config.lifetimeSeconds) * 1000,
           };
@@ -384,8 +384,8 @@ export function createModalAdapter(
           if (
             !record ||
             record.id !== id ||
-            record.tags.sandbar_submission !== ctx.submissionId ||
-            record.tags.sandbar_operation !== ctx.operationId
+            record.tags.beachside_submission !== ctx.submissionId ||
+            record.tags.beachside_operation !== ctx.operationId
           )
             return ctx.unknown("Modal create identity could not be correlated");
 
@@ -411,8 +411,8 @@ export function createModalAdapter(
 
         if (
           !record ||
-          record.tags.sandbar_submission !== attempt.submissionId ||
-          record.tags.sandbar_operation !== attempt.operationId
+          record.tags.beachside_submission !== attempt.submissionId ||
+          record.tags.beachside_operation !== attempt.operationId
         )
           return null;
         const checked = RecordSchema.parse(record);
@@ -451,7 +451,10 @@ export function createModalAdapter(
                 "Modal region differs from the verified connection",
               );
 
-            if (input.labels && Object.keys(input.labels).some((key) => key.startsWith("sandbar_")))
+            if (
+              input.labels &&
+              Object.keys(input.labels).some((key) => key.startsWith("beachside_"))
+            )
               throw new AdapterError("INVALID_ARGUMENT", "Reserved Modal tag prefix");
             await verify();
 
@@ -547,11 +550,11 @@ export function createModalAdapter(
           restore: { status: "supported" as const, value: restoreSupport },
           volumes: {
             status: "unsupported" as const,
-            reason: "Modal volumes are not exposed as Sandbar volumes yet",
+            reason: "Modal volumes are not exposed as Beachside volumes yet",
           },
           mounts: {
             status: "unsupported" as const,
-            reason: "Modal volume mounts are not exposed as Sandbar mounts yet",
+            reason: "Modal volume mounts are not exposed as Beachside mounts yet",
           },
         }),
         snapshotCapture: {
@@ -623,7 +626,7 @@ export function createModalAdapter(
           async prepare(input) {
             const { request } = input;
 
-            if (Object.keys(request.labels ?? {}).some((key) => key.startsWith("sandbar_")))
+            if (Object.keys(request.labels ?? {}).some((key) => key.startsWith("beachside_")))
               throw new AdapterError("INVALID_ARGUMENT", "Reserved Modal tag prefix");
 
             if (request.resources || request.mounts?.length)
@@ -853,7 +856,7 @@ export function createModalAdapter(
                       "/bin/sh",
                       "-c",
                       script,
-                      "sandbar-write",
+                      "beachside-write",
                       posix.dirname(input.path),
                       input.path,
                     ],

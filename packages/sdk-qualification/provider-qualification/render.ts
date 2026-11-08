@@ -93,7 +93,7 @@ const targets = [
         renderLiveMatrix(
           reports,
           Object.fromEntries(metadata.map((profile) => [profile.id, profile.name])),
-          "https://sandbarsdk.dev/docs/providers/support/",
+          "https://beachside.run/docs/providers/support/",
         ).replace(/^---\n[\s\S]*?\n---\n\n/, "# Live test evidence\n\n") +
         `\n${renderSupportDetails(reports, metadata)}`,
   ],

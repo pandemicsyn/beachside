@@ -3,21 +3,22 @@ title: Daytona
 description: Use the Daytona adapter for sandboxes from prepared snapshots, with previews, snapshots, volumes and suspend/resume.
 ---
 
-The `@sandbar-sdk/daytona` package runs Sandbar sandboxes on [Daytona](https://www.daytona.io) through its REST API, with no native SDK dependency. Install it with `npm install sandbar-sdk @sandbar-sdk/daytona`; it is a supported provider. Use Node 20+ or Bun.
+The `@beachside/daytona` package runs Beachside sandboxes on [Daytona](https://www.daytona.io) through its REST API, with no native SDK dependency. Install it with `npm install beachside @beachside/daytona`; it is a supported provider. Use Node 20+ or Bun.
 
 ```ts
-import { Image, Sandbar } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Image, Beachside } from "beachside";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const client = await Sandbar.connect(
-  daytona({
-    apiKey: process.env.DAYTONA_API_KEY!,
+const client = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: {
     target: "us",
     environment: Image.prepared("daytona-small"),
     lifecycle: { lifetimeSeconds: 600 },
     network: "daytona-default",
-  }),
-);
+  },
+});
 
 try {
   const box = await client.sandboxes.create();
@@ -32,6 +33,8 @@ try {
 ```
 
 Set `DAYTONA_API_KEY` on the server. `connect` reads the key's organization and checks that the `target` region is available to it. Everything is scoped to that organization, region and network setting; a rotated key for the same organization works with saved references.
+
+The package also exports `daytona()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(daytona({ apiKey, target: "us", network: "daytona-default" }))`. It is the same setup; use whichever reads better.
 
 ## Setup
 
@@ -53,23 +56,23 @@ Create-time `env` is sent as native sandbox environment variables, so it applies
 
 ## What works
 
-| Feature                      | Support                                                                                                        | Live tested |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------- |
-| Sandbox lifecycle            | Create, inspect and destroy. Destroy waits for confirmed deletion.                                             | Yes         |
-| Reconnect later              | `sandboxes.get(reference)` reopens the same sandbox without starting or extending it.                          | Yes         |
-| Lifetime renewal             | `renew()` resets the deadline, rounded up to whole minutes.                                                    | Yes         |
-| Pause and resume             | Native stop/start. Files are kept; processes are not.                                                          | Yes         |
-| Commands                     | argv and shell, exact stdout/stderr bytes up to 1 MiB per stream, deadline default 300 seconds.                | Yes         |
-| Streaming and terminals      | `processes.start()`, signals, terminals and reattaching after reconnecting.                                    | Yes         |
-| Command input                | Finite byte stdin.                                                                                             | No          |
-| Files                        | Binary read and write up to 16 MiB, overwrite and no-clobber, plus byte streams.                               | Yes         |
-| Directories                  | List, stat, create, remove, copy and move.                                                                     | Yes         |
-| HTTP previews                | Protected only, with an `x-daytona-preview-token` header. Public previews are not supported.                   | Yes         |
-| Images                       | Prepared snapshots and OCI builds; `images.get`, `list` and `delete` over native snapshots.                    | No          |
-| Network controls             | `daytona-default`, `internet` or strict `blocked`, set once per connection.                                    | No          |
-| Snapshots                    | Filesystem capture and restore into a new sandbox.                                                             | Yes         |
-| Volumes and mounts           | Create, delete and mount object-backed volumes, including at restore.                                          | Yes         |
-| Listing sandboxes and images | `sandboxes.list()` returns Sandbar-created sandboxes only; `images.list()` returns all organization snapshots. | No          |
+| Feature                      | Support                                                                                                          | Live tested |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------- |
+| Sandbox lifecycle            | Create, inspect and destroy. Destroy waits for confirmed deletion.                                               | Yes         |
+| Reconnect later              | `sandboxes.get(reference)` reopens the same sandbox without starting or extending it.                            | Yes         |
+| Lifetime renewal             | `renew()` resets the deadline, rounded up to whole minutes.                                                      | Yes         |
+| Pause and resume             | Native stop/start. Files are kept; processes are not.                                                            | Yes         |
+| Commands                     | argv and shell, exact stdout/stderr bytes up to 1 MiB per stream, deadline default 300 seconds.                  | Yes         |
+| Streaming and terminals      | `processes.start()`, signals, terminals and reattaching after reconnecting.                                      | Yes         |
+| Command input                | Finite byte stdin.                                                                                               | No          |
+| Files                        | Binary read and write of any size (byte streams underneath), overwrite and no-clobber.                           | Yes         |
+| Directories                  | List, stat, create, remove, copy and move.                                                                       | Yes         |
+| HTTP previews                | Protected only, with an `x-daytona-preview-token` header. Public previews are not supported.                     | Yes         |
+| Images                       | Prepared snapshots and OCI builds; `images.get`, `list` and `delete` over native snapshots.                      | No          |
+| Network controls             | `daytona-default`, `internet` or strict `blocked`, set once per connection.                                      | No          |
+| Snapshots                    | Filesystem capture and restore into a new sandbox.                                                               | Yes         |
+| Volumes and mounts           | Create, delete and mount object-backed volumes, including at restore.                                            | Yes         |
+| Listing sandboxes and images | `sandboxes.list()` returns Beachside-created sandboxes only; `images.list()` returns all organization snapshots. | No          |
 
 Live results cover the tested image, region and network setting; see [Provider support](/docs/providers/support/). Live runs used the prepared `daytona-small` snapshot in `us` with `daytona-default`; other snapshots are not qualified.
 
@@ -85,7 +88,7 @@ Earlier releases defaulted to `blocked`. To reopen sandboxes created under that 
 
 ## Image requirements
 
-Start from an active, Linux snapshot available to your organization in the target region. Public (general) snapshots can be used but are never deleted by Sandbar.
+Start from an active, Linux snapshot available to your organization in the target region. Public (general) snapshots can be used but are never deleted by Beachside.
 
 The image needs `/bin/sh`, `mktemp`, `mkfifo`, `cat`, `wc`, `head`, `od` and `rm` for command output, plus `mkdir`, `rmdir`, `mv`, copy and link utilities for file writes. Atomic no-clobber writes need `ln -T` and hard links. Directory operations and streaming processes need Python 3; no-clobber rename also needs Linux libc `renameat2`. Streaming needs writable private `/tmp`. Nothing is installed for you.
 
@@ -124,7 +127,7 @@ Volumes are object storage, not POSIX filesystems: no file locking or atomic ren
 - Command `deadlineSeconds` (default 300) sets Daytona's native timeout. Cleanup of child processes at timeout is not verified, and a lost response does not prove the command stopped. See [Execution and waiting timeouts](/docs/guides/resources/#execution-and-waiting-timeouts).
 - A preview token grants full sandbox access, including command execution and files. Treat it as a credential, send it with `redirect: "error"`, and know it cannot be revoked individually; stop/start rotates it. See [Preview access](/docs/guides/preview-access/).
 - Public previews, memory suspension and mounted suspension are not supported.
-- `sandboxes.list()` only covers sandboxes with Sandbar labels in the configured organization and region; pages can hold fewer items than `limit`.
+- `sandboxes.list()` only covers sandboxes with Beachside labels in the configured organization and region; pages can hold fewer items than `limit`.
 - `close()` does not stop compute. Snapshots you built from OCI images need separate cleanup.
 - Only the Daytona cloud endpoints are trusted by default.
 

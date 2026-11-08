@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://sandbarsdk.dev/sitemap-index.xml
+Sitemap: https://beachside.run/sitemap-index.xml

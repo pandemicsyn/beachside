@@ -1,22 +1,22 @@
 ---
 title: Command reference
-description: Every sandbar command, flag and exit code, generated from the CLI.
+description: Every beachside command, flag and exit code, generated from the CLI.
 ---
 
-> Generated from `sandbar schema`. Run `bun run --cwd apps/docs cli:generate` after changing a command.
+> Generated from `beachside schema`. Run `bun run --cwd apps/docs cli:generate` after changing a command.
 
 ## Global flags
 
 These work with every command.
 
-| Flag                | Description                                                                  |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `--json`            | Print one JSON document on stdout (also SANDBAR_JSON=1)                      |
-| `--profile <name>`  | Profile from sandbar.json (also SANDBAR_PROFILE)                             |
-| `--provider <id>`   | Official provider from environment credentials (also SANDBAR_PROVIDER)       |
-| `--config <path>`   | Config file (default ~/.config/sandbar/sandbar.json, also SANDBAR_CONFIG)    |
-| `--state-dir <dir>` | State store folder (default ~/.config/sandbar/state, also SANDBAR_STATE_DIR) |
-| `-V, --version`     | Print the CLI version                                                        |
+| Flag                | Description                                                                      |
+| ------------------- | -------------------------------------------------------------------------------- |
+| `--json`            | Print one JSON document on stdout (also BEACHSIDE_JSON=1)                        |
+| `--profile <name>`  | Profile from beachside.json (also BEACHSIDE_PROFILE)                             |
+| `--provider <id>`   | Official provider from environment credentials (also BEACHSIDE_PROVIDER)         |
+| `--config <path>`   | Config file (default ~/.config/beachside/beachside.json, also BEACHSIDE_CONFIG)  |
+| `--state-dir <dir>` | State store folder (default ~/.config/beachside/state, also BEACHSIDE_STATE_DIR) |
+| `-V, --version`     | Print the CLI version                                                            |
 
 ## Output
 
@@ -45,7 +45,7 @@ With `--json`, stdout holds exactly one document: `{ok:true,data}` or `{ok:false
 Create a sandbox and print its name.
 
 ```sh
-sandbar create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]...
+beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]...
 ```
 
 | Flag                 | Description                                                                                                          |
@@ -59,18 +59,18 @@ sandbar create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot
 | `--env-file <path>`  | Read K=V lines into the sandbox environment (repeatable; --env wins)                                                 |
 | `--build`            | Build --image now if this provider needs a build and none is recorded                                                |
 | `--ttl <duration>`   | Destroy the sandbox after this long even if nothing removes it, e.g. 30m or 2h; default is the profile's lifetime    |
-| `--snapshot <name>`  | Restore a snapshot recorded by `sandbar snapshot create` instead of an image                                         |
+| `--snapshot <name>`  | Restore a snapshot recorded by `beachside snapshot create` instead of an image                                       |
 | `--retry <duration>` | Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m |
 | `--if-not-exists`    | Return the named sandbox if it is still alive instead of failing                                                     |
 
 Examples:
 
 ```sh
-sandbar create --name web --network internet
-sandbar create --name job-42 --if-not-exists --json
-sandbar create --name ci --env-file .env --env API_TOKEN
-sandbar create --name job-42 --ttl 1h
-sandbar create --name job-42 --retry 5m --json
+beachside create --name web --network internet
+beachside create --name job-42 --if-not-exists --json
+beachside create --name ci --env-file .env --env API_TOKEN
+beachside create --name job-42 --ttl 1h
+beachside create --name job-42 --retry 5m --json
 ```
 
 ## ls
@@ -78,7 +78,7 @@ sandbar create --name job-42 --retry 5m --json
 List sandboxes in the store with their current state.
 
 ```sh
-sandbar ls [--offline | --remote]
+beachside ls [--offline | --remote]
 ```
 
 | Flag        | Description                                                         |
@@ -89,9 +89,9 @@ sandbar ls [--offline | --remote]
 Examples:
 
 ```sh
-sandbar ls
-sandbar ls --json
-sandbar ls --remote --provider daytona
+beachside ls
+beachside ls --json
+beachside ls --remote --provider daytona
 ```
 
 ## adopt
@@ -99,7 +99,7 @@ sandbar ls --remote --provider daytona
 Add a sandbox from the provider's listing to the store so other commands reach it.
 
 ```sh
-sandbar adopt <id> [--name <name>]
+beachside adopt <id> [--name <name>]
 ```
 
 | Flag            | Description                                    |
@@ -109,8 +109,8 @@ sandbar adopt <id> [--name <name>]
 Examples:
 
 ```sh
-sandbar ls --remote
-sandbar adopt 4f1c2a --name worker
+beachside ls --remote
+beachside adopt 4f1c2a --name worker
 ```
 
 ## inspect
@@ -118,13 +118,13 @@ sandbar adopt 4f1c2a --name worker
 Show a sandbox's state, expiry and reference.
 
 ```sh
-sandbar inspect <sandbox>
+beachside inspect <sandbox>
 ```
 
 Examples:
 
 ```sh
-sandbar inspect web --json
+beachside inspect web --json
 ```
 
 ## rm
@@ -132,7 +132,7 @@ sandbar inspect web --json
 Destroy sandboxes and remove their records.
 
 ```sh
-sandbar rm <sandbox>... | --all [--force]
+beachside rm <sandbox>... | --all [--force]
 ```
 
 | Flag      | Description                                                                 |
@@ -143,8 +143,8 @@ sandbar rm <sandbox>... | --all [--force]
 Examples:
 
 ```sh
-sandbar rm web
-sandbar rm --all
+beachside rm web
+beachside rm --all
 ```
 
 ## gc
@@ -152,7 +152,7 @@ sandbar rm --all
 Destroy the provider's sandboxes that carry the given labels, such as a killed job's.
 
 ```sh
-sandbar gc --label k=v... [--older-than <duration>] [--dry-run]
+beachside gc --label k=v... [--older-than <duration>] [--dry-run]
 ```
 
 | Flag                      | Description                                                                   |
@@ -164,8 +164,8 @@ sandbar gc --label k=v... [--older-than <duration>] [--dry-run]
 Examples:
 
 ```sh
-sandbar gc --label run=$GITHUB_RUN_ID
-sandbar gc --label ci=true --older-than 2h --dry-run
+beachside gc --label run=$GITHUB_RUN_ID
+beachside gc --label ci=true --older-than 2h --dry-run
 ```
 
 ## exec
@@ -173,7 +173,7 @@ sandbar gc --label ci=true --older-than 2h --dry-run
 Run a command in a sandbox; exits with the command's exit code.
 
 ```sh
-sandbar exec <sandbox> [--cwd <dir>] [--env K=V]... [--stdin] -- <command> [args...]
+beachside exec <sandbox> [--cwd <dir>] [--env K=V]... [--stdin] -- <command> [args...]
 ```
 
 | Flag                   | Description                                                                     |
@@ -192,8 +192,8 @@ Exits with the remote command's exit code; failures of the CLI itself exit 125.
 Examples:
 
 ```sh
-sandbar exec web -- ls -la /
-sandbar exec web --cwd /work --env CI=1 -- npm test
+beachside exec web -- ls -la /
+beachside exec web --cwd /work --env CI=1 -- npm test
 ```
 
 ## sh
@@ -201,7 +201,7 @@ sandbar exec web --cwd /work --env CI=1 -- npm test
 Run a shell script in a sandbox; exits with its exit code.
 
 ```sh
-sandbar sh <sandbox> '<script>' | sandbar sh <sandbox> -- '<script>'
+beachside sh <sandbox> '<script>' | beachside sh <sandbox> -- '<script>'
 ```
 
 | Flag                   | Description                                                                     |
@@ -220,8 +220,8 @@ Exits with the remote command's exit code; failures of the CLI itself exit 125.
 Examples:
 
 ```sh
-sandbar sh web 'cd /work && make test'
-sandbar sh web -- '-n is fine here'
+beachside sh web 'cd /work && make test'
+beachside sh web -- '-n is fine here'
 ```
 
 ## run
@@ -229,7 +229,7 @@ sandbar sh web -- '-n is fine here'
 Create a sandbox, run one command, and always destroy it.
 
 ```sh
-sandbar run [create flags] [exec flags] [--keep] [--push <path>] -- <command> [args...]
+beachside run [create flags] [exec flags] [--keep] [--push <path>] -- <command> [args...]
 ```
 
 | Flag                   | Description                                                                                                          |
@@ -243,7 +243,7 @@ sandbar run [create flags] [exec flags] [--keep] [--push <path>] -- <command> [a
 | `--env-file <path>`    | Read K=V lines into this command's environment (repeatable; --env wins)                                              |
 | `--build`              | Build --image now if this provider needs a build and none is recorded                                                |
 | `--ttl <duration>`     | Destroy the sandbox after this long even if nothing removes it, e.g. 30m or 2h; default is the profile's lifetime    |
-| `--snapshot <name>`    | Restore a snapshot recorded by `sandbar snapshot create` instead of an image                                         |
+| `--snapshot <name>`    | Restore a snapshot recorded by `beachside snapshot create` instead of an image                                       |
 | `--retry <duration>`   | Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m |
 | `--cwd <dir>`          | Working directory in the sandbox                                                                                     |
 | `--stdin`              | Send this process's stdin to the command                                                                             |
@@ -261,9 +261,9 @@ Exits with the remote command's exit code; failures of the CLI itself exit 125.
 Examples:
 
 ```sh
-sandbar run -- python3 -c 'print(2 + 2)'
-sandbar run --network internet -- curl -sI https://example.com
-sandbar run --push . --timeout 15m --ttl 30m -- sh -c 'npm ci && npm test'
+beachside run -- python3 -c 'print(2 + 2)'
+beachside run --network internet -- curl -sI https://example.com
+beachside run --push . --timeout 15m --ttl 30m -- sh -c 'npm ci && npm test'
 ```
 
 ## image
@@ -271,7 +271,7 @@ sandbar run --push . --timeout 15m --ttl 30m -- sh -c 'npm ci && npm test'
 Build OCI images for providers that need it, and list, delete or forget the builds.
 
 ```sh
-sandbar image build <oci-ref> [--name <name>] [--refresh] | ls [--remote] | inspect <name> | rm <name> [--force] | forget <name>
+beachside image build <oci-ref> [--name <name>] [--refresh] | ls [--remote] | inspect <name> | rm <name> [--force] | forget <name>
 ```
 
 | Flag            | Description                                                             |
@@ -284,12 +284,12 @@ sandbar image build <oci-ref> [--name <name>] [--refresh] | ls [--remote] | insp
 Examples:
 
 ```sh
-sandbar image build python:3.12 --provider e2b
-sandbar create --image python:3.12 --provider e2b
-sandbar image ls
-sandbar image ls --remote --provider e2b
-sandbar image rm python-3-12
-sandbar image forget python-3-12
+beachside image build python:3.12 --provider e2b
+beachside create --image python:3.12 --provider e2b
+beachside image ls
+beachside image ls --remote --provider e2b
+beachside image rm python-3-12
+beachside image forget python-3-12
 ```
 
 ## snapshot
@@ -297,7 +297,7 @@ sandbar image forget python-3-12
 Capture a sandbox as a snapshot, and list, inspect, delete or forget snapshots.
 
 ```sh
-sandbar snapshot create <sandbox> [--name <name> [--replace]] | ls [--remote] | inspect <name> | rm <name> [--force] | forget <name>
+beachside snapshot create <sandbox> [--name <name> [--replace]] | ls [--remote] | inspect <name> | rm <name> [--force] | forget <name>
 ```
 
 | Flag            | Description                                                                |
@@ -310,12 +310,12 @@ sandbar snapshot create <sandbox> [--name <name> [--replace]] | ls [--remote] | 
 Examples:
 
 ```sh
-sandbar snapshot create web --name deps
-sandbar create --snapshot deps --name web-2
-sandbar run --snapshot deps -- npm test
-sandbar snapshot create web --name deps --replace
-sandbar snapshot ls
-sandbar snapshot rm deps
+beachside snapshot create web --name deps
+beachside create --snapshot deps --name web-2
+beachside run --snapshot deps -- npm test
+beachside snapshot create web --name deps --replace
+beachside snapshot ls
+beachside snapshot rm deps
 ```
 
 ## cp
@@ -323,7 +323,7 @@ sandbar snapshot rm deps
 Copy files or directories to or from a sandbox.
 
 ```sh
-sandbar cp [-r] <src> <dst>   (one side is <sandbox>:/path)
+beachside cp [-r] <src> <dst>   (one side is <sandbox>:/path)
 ```
 
 | Flag               | Description                                                            |
@@ -335,10 +335,10 @@ sandbar cp [-r] <src> <dst>   (one side is <sandbox>:/path)
 Examples:
 
 ```sh
-sandbar cp ./app.py web:/work/app.py
-sandbar cp web:/work/out.json ./out.json
-sandbar cp -r ./src web:/work --exclude node_modules
-sandbar cp -r web:/work/coverage ./coverage
+beachside cp ./app.py web:/work/app.py
+beachside cp web:/work/out.json ./out.json
+beachside cp -r ./src web:/work --exclude node_modules
+beachside cp -r web:/work/coverage ./coverage
 ```
 
 ## push
@@ -346,7 +346,7 @@ sandbar cp -r web:/work/coverage ./coverage
 Send a local folder's git-tracked and unignored files into a sandbox.
 
 ```sh
-sandbar push <sandbox>[:/dir] [path]   (default: . to ~/work in the sandbox)
+beachside push <sandbox>[:/dir] [path]   (default: . to ~/work in the sandbox)
 ```
 
 | Flag                | Description                                                            |
@@ -357,9 +357,9 @@ sandbar push <sandbox>[:/dir] [path]   (default: . to ~/work in the sandbox)
 Examples:
 
 ```sh
-sandbar push ci
-sandbar push ci:/srv/app ./app --exclude '*.log'
-sandbar exec ci --cwd /srv/app -- npm test
+beachside push ci
+beachside push ci:/srv/app ./app --exclude '*.log'
+beachside exec ci --cwd /srv/app -- npm test
 ```
 
 ## cat
@@ -367,13 +367,13 @@ sandbar exec ci --cwd /srv/app -- npm test
 Print a file from a sandbox.
 
 ```sh
-sandbar cat <sandbox>:/path
+beachside cat <sandbox>:/path
 ```
 
 Examples:
 
 ```sh
-sandbar cat web:/etc/os-release
+beachside cat web:/etc/os-release
 ```
 
 ## doctor
@@ -381,31 +381,31 @@ sandbar cat web:/etc/os-release
 Check config, credentials and the provider connection without creating anything.
 
 ```sh
-sandbar doctor
+beachside doctor
 ```
 
 Examples:
 
 ```sh
-sandbar doctor --provider e2b
+beachside doctor --provider e2b
 ```
 
 ## adapter
 
-Install, list or remove the adapters the CLI loads, in ~/.config/sandbar/adapters.
+Install, list or remove the adapters the CLI loads, in ~/.config/beachside/adapters.
 
 ```sh
-sandbar adapter add <provider|package>[@version]... | ls | rm <provider|package>...
+beachside adapter add <provider|package>[@version]... | ls | rm <provider|package>...
 ```
 
 Examples:
 
 ```sh
-sandbar adapter add e2b
-sandbar adapter add daytona vercel --json
-sandbar adapter add @acme/sandbar-adapter@1.2.0
-sandbar adapter ls
-sandbar adapter rm e2b
+beachside adapter add e2b
+beachside adapter add daytona vercel --json
+beachside adapter add @acme/beachside-adapter@1.2.0
+beachside adapter ls
+beachside adapter rm e2b
 ```
 
 ## providers
@@ -413,13 +413,13 @@ sandbar adapter rm e2b
 List official providers, whether their adapter is installed and their credentials set.
 
 ```sh
-sandbar providers
+beachside providers
 ```
 
 Examples:
 
 ```sh
-sandbar providers --json
+beachside providers --json
 ```
 
 ## skill
@@ -427,7 +427,7 @@ sandbar providers --json
 Print the agent skill for this CLI, or install it for your coding agents.
 
 ```sh
-sandbar skill [install [--project]]
+beachside skill [install [--project]]
 ```
 
 | Flag        | Description                                                                         |
@@ -437,9 +437,9 @@ sandbar skill [install [--project]]
 Examples:
 
 ```sh
-sandbar skill
-sandbar skill install
-sandbar skill install --project
+beachside skill
+beachside skill install
+beachside skill install --project
 ```
 
 ## completion
@@ -447,13 +447,13 @@ sandbar skill install --project
 Print a shell completion script for zsh, bash or fish.
 
 ```sh
-sandbar completion <zsh|bash|fish>
+beachside completion <zsh|bash|fish>
 ```
 
 Examples:
 
 ```sh
-source <(sandbar completion zsh)   # in ~/.zshrc
-source <(sandbar completion bash)  # in ~/.bashrc
-sandbar completion fish > ~/.config/fish/completions/sandbar.fish
+source <(beachside completion zsh)   # in ~/.zshrc
+source <(beachside completion bash)  # in ~/.bashrc
+beachside completion fish > ~/.config/fish/completions/beachside.fish
 ```

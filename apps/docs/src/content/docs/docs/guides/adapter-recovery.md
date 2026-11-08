@@ -3,7 +3,7 @@ title: Asynchronous adapter recovery
 description: Add pending tokens and observation without replaying a native mutation.
 ---
 
-The [runnable asynchronous adapter](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/async-adapter.ts) uses `prepare` for read-only checks, `submit` for exactly one native start, and `observe` for read-only lookup. Its token schema has a version and a bounded JSON value.
+The [runnable asynchronous adapter](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/async-adapter.ts) uses `prepare` for read-only checks, `submit` for exactly one native start, and `observe` for read-only lookup. Its token schema has a version and a bounded JSON value.
 
 ```ts
 create: {
@@ -27,7 +27,7 @@ create: {
 
 This existing advanced operation API is optional. Ordinary snapshot calls return a resource reference for application persistence; they do not require an operation journal.
 
-For callers using the legacy checkpoint callback, persist the initial operation reference before native submission. The SDK awaits `onReference` for pending token updates; persist the updated `operation.reference` before a process can restart. Reopen the same verified scope and call `recover(savedReference)`; recovery never calls `submit`. The [runnable restart test](https://github.com/pandemicsyn/sandbar/blob/main/apps/docs/examples/async-adapter.test.ts) exercises this flow.
+For callers using the legacy checkpoint callback, persist the initial operation reference before native submission. The SDK awaits `onReference` for pending token updates; persist the updated `operation.reference` before a process can restart. Reopen the same verified scope and call `recover(savedReference)`; recovery never calls `submit`. The [runnable restart test](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/async-adapter.test.ts) exercises this flow.
 
 `wait()` respects each pending result's `pollAfterMs` as the earliest automatic next read. Its `pollMs` option can slow polling further but cannot shorten the adapter's delay. A manual `observe()` remains an explicit read; if it returns pending, a later `wait()` still respects the new delay.
 

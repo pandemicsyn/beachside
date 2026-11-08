@@ -24,7 +24,7 @@ afterEach(async () => {
 });
 
 async function ledger(checkpoint?: ConstructorParameters<typeof LedgerStore>[2]) {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-qualification-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-qualification-test-"));
   directories.push(directory);
   const store = new LedgerStore(directory, crypto.randomUUID(), checkpoint);
   await store.initialize("daytona", { kind: "borrowed-prepared", class: "base-template" });
@@ -33,7 +33,7 @@ async function ledger(checkpoint?: ConstructorParameters<typeof LedgerStore>[2])
 }
 
 test("private ledger retains nonsecret connection routing for crash cleanup", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "sandbar-qualification-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "beachside-qualification-test-"));
   directories.push(directory);
   const runId = crypto.randomUUID();
   const store = new LedgerStore(directory, runId);

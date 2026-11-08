@@ -1,5 +1,5 @@
 {
-  "name": "sandbar-sdk-qualification",
+  "name": "beachside-qualification",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,17 +7,17 @@
     "package-smoke": "bun package-smoke.mjs"
   },
   "dependencies": {
-    "@sandbar-sdk/adapter": "workspace:*",
-    "@sandbar/provider-fake": "workspace:*",
-    "sandbar-sdk": "workspace:*",
+    "@beachside/adapter": "workspace:*",
+    "@beachside-internal/provider-fake": "workspace:*",
+    "beachside": "workspace:*",
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@sandbar-sdk/daytona": "workspace:*",
-    "@sandbar-sdk/e2b": "workspace:*",
-    "@sandbar-sdk/boxd": "workspace:*",
-    "@sandbar-sdk/boat": "workspace:*",
-    "@sandbar-sdk/runloop": "workspace:*",
-    "@sandbar-sdk/vercel": "workspace:*"
+    "@beachside/daytona": "workspace:*",
+    "@beachside/e2b": "workspace:*",
+    "@beachside/boxd": "workspace:*",
+    "@beachside/boat": "workspace:*",
+    "@beachside/runloop": "workspace:*",
+    "@beachside/vercel": "workspace:*"
   }
 }

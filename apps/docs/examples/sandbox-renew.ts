@@ -1,6 +1,6 @@
-import { Image, type SandbarClient, type SandboxReference, type RenewResult } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
-import { e2b } from "@sandbar-sdk/e2b";
+import { Image, type BeachsideClient, type SandboxReference, type RenewResult } from "beachside";
+import { daytona } from "@beachside/daytona";
+import { e2b } from "@beachside/e2b";
 
 // Change only setup when choosing a provider for new compute.
 export const daytonaSetup = (apiKey: string) =>
@@ -9,7 +9,7 @@ export const daytonaSetup = (apiKey: string) =>
 export const e2bSetup = (apiKey: string, teamId: string) =>
   e2b({ apiKey, teamId, lifecycle: { lifetimeSeconds: 600 } });
 
-export async function renewWorkspace(client: SandbarClient, preparedImage: string) {
+export async function renewWorkspace(client: BeachsideClient, preparedImage: string) {
   try {
     const box = await client.sandboxes.create({ environment: Image.prepared(preparedImage) });
 
@@ -27,7 +27,7 @@ export async function renewWorkspace(client: SandbarClient, preparedImage: strin
   }
 }
 
-export async function reopenAndRenew(client: SandbarClient, saved: SandboxReference) {
+export async function reopenAndRenew(client: BeachsideClient, saved: SandboxReference) {
   const box = await client.sandboxes.get(saved); // read-only, no reset
 
   return box.renew(); // explicitly uses this connection's configured window

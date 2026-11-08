@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter, type MountSpec, type SnapshotProfile } from "@sandbar-sdk/adapter";
-import { Sandbar } from "sandbar-sdk";
+import { defineAdapter, type MountSpec, type SnapshotProfile } from "@beachside/adapter";
+import { Beachside } from "beachside";
 import {
   createWriter,
   seedData,
@@ -181,7 +181,7 @@ test("compiled storage examples select shared, independent and private state thr
     },
   });
 
-  const connect = () => Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const connect = () => Beachside.connect({ adapter, config: {}, credentials: {} });
   let client = await connect();
 
   try {

@@ -1,4 +1,4 @@
-import { SandbarError, type SandboxListEntry } from "sandbar-sdk";
+import { BeachsideError, type SandboxListEntry } from "beachside";
 import {
   coverageNote,
   forget,
@@ -25,7 +25,7 @@ function matches(item: SandboxListEntry, labels: Record<string, string>): boolea
 }
 
 /**
- * `sandbar gc`: destroy the profile's sandboxes whose provider labels match every `--label`,
+ * `beachside gc`: destroy the profile's sandboxes whose provider labels match every `--label`,
  * optionally only those created before `--older-than`. It reads the provider's listing rather than
  * the store, so it finds sandboxes that a killed job never removed.
  */
@@ -104,7 +104,7 @@ export async function gcCommand(session: Session, flags: Flags): Promise<number>
       skipped.push({
         ...base,
         result: "skipped",
-        reason: `adopted into the store; remove it with \`sandbar rm ${entry.record.name} --force\``,
+        reason: `adopted into the store; remove it with \`beachside rm ${entry.record.name} --force\``,
       });
       continue;
     }
@@ -122,7 +122,7 @@ export async function gcCommand(session: Session, flags: Flags): Promise<number>
         const box = await client.sandboxes.get(item.reference, { signal: session.ctx.signal });
         retainedResources = (await box.destroy({ signal: session.ctx.signal })).retainedResources;
       } catch (cause) {
-        if (!(cause instanceof SandbarError) || cause.code !== "NOT_FOUND") throw cause;
+        if (!(cause instanceof BeachsideError) || cause.code !== "NOT_FOUND") throw cause;
         result = "gone";
       }
 

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { defineAdapter, type SnapshotInfo } from "@sandbar-sdk/adapter";
-import { AdapterSnapshot, AdapterVolume, Sandbar } from "./index";
+import { defineAdapter, type SnapshotInfo } from "@beachside/adapter";
+import { AdapterSnapshot, AdapterVolume, Beachside } from "./index";
 
 const scope = { authority: { kind: "account", id: "one" }, partition: {} };
 
@@ -70,7 +70,7 @@ test.each(["missing", "specs"] as const)("restore hook array compatibility: %s",
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const snapshot = new AdapterSnapshot(client, reference);
   const volume = new AdapterVolume(client, { ...reference, kind: "volume", nativeId: "data" });
 

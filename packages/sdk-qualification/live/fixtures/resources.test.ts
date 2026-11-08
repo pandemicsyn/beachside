@@ -223,7 +223,7 @@ test("per-fixture compute and concurrency limits remain pre-dispatch checks", as
 test.each(["setup", "test"] as const)(
   "actual Bun %s timeout still runs bounded owned cleanup",
   async (phase) => {
-    const directory = await mkdtemp(join(tmpdir(), "sandbar-bun-timeout-"));
+    const directory = await mkdtemp(join(tmpdir(), "beachside-bun-timeout-"));
     const child = join(directory, "timeout.test.ts");
     const summary = join(directory, "summary.json");
     const resourcesPath = fileURLToPath(new URL("./resources.ts", import.meta.url));
@@ -371,7 +371,7 @@ for (const option of ["partialReferenceCapture", "pendingNativeCapture"] as cons
 test("snapshot profile metadata remains available when reopening later fails", async () => {
   const f = await fixture();
   const t = await resources(f);
-  let observed: import("@sandbar-sdk/adapter").SnapshotProfile | undefined;
+  let observed: import("@beachside/adapter").SnapshotProfile | undefined;
 
   try {
     await expect(

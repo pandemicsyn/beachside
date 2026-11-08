@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { status } from "@grpc/grpc-js";
-import { OutcomeUnknownError, Preserve, Sandbar } from "sandbar-sdk";
-import { snapshotSuite } from "@sandbar-sdk/adapter/testing";
+import { OutcomeUnknownError, Preserve, Beachside } from "beachside";
+import { snapshotSuite } from "@beachside/adapter/testing";
 import { createModalAdapter } from "./adapter";
 import { createRejection, type ModalTransport } from "./transport";
 
@@ -95,7 +95,7 @@ function fixture() {
   };
 
   const connect = (environment = "main") =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter: createModalAdapter(() => transport),
       config: { appName: "existing", environment, image: "im-base" },
       credentials: { tokenId: "ak-fixture", tokenSecret: "as-fixture" },
@@ -254,7 +254,7 @@ test("Modal accepts filesystem-only preserve and rejects memory at connect befor
   });
 
   const connect = (preserve: (typeof Preserve)[keyof typeof Preserve]) =>
-    Sandbar.connect({
+    Beachside.connect({
       adapter,
       config: {
         appName: "existing",
@@ -283,7 +283,7 @@ test("Modal accepts filesystem-only preserve and rejects memory at connect befor
 test("Modal passes the shared snapshot suite without listing", async () => {
   const native = fixture();
 
-  const client = await Sandbar.connect({
+  const client = await Beachside.connect({
     adapter: createModalAdapter(() => native.transport),
     config: {
       appName: "existing",
@@ -307,7 +307,7 @@ test("Modal snapshot retention sets the native TTL from capture", async () => {
   const native = fixture();
 
   for (const retentionSeconds of [undefined, 3600, 0]) {
-    const client = await Sandbar.connect({
+    const client = await Beachside.connect({
       adapter: createModalAdapter(() => native.transport),
       config: {
         appName: "existing",

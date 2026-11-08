@@ -1,24 +1,32 @@
 # TypeScript resource SDK
 
-`sandbar-sdk` uses an installed adapter in the caller's server-side Node.js or Bun process. Official Daytona and E2B adapters are available from `@sandbar-sdk/daytona` and `@sandbar-sdk/e2b`. The experimental Modal integration is installed separately as `@sandbar-sdk/modal` and uses the same public adapter contract as custom integrations. The fake provider is a deterministic test fixture. Live provider qualification remains separate from the packaged API shape.
+`beachside` uses an installed adapter in the caller's server-side Node.js or Bun process. Official Daytona and E2B adapters are available from `@beachside/daytona` and `@beachside/e2b`. The experimental Modal integration is installed separately as `@beachside/modal` and uses the same public adapter contract as custom integrations. The fake provider is a deterministic test fixture. Live provider qualification remains separate from the packaged API shape.
 
-Install `sandbar-sdk @sandbar-sdk/daytona` (or `sandbar-sdk @sandbar-sdk/e2b`).
+Install `beachside @beachside/daytona` (or `beachside @beachside/e2b`).
 
 ```ts
-import { Sandbar } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Beachside } from "beachside";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const sandbar = await Sandbar.connect(daytona({ apiKey: process.env.DAYTONA_API_KEY!, target: "us" }));
-await sandbar.close();
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: "us" },
+});
+await beachside.close();
 ```
 
 ```ts
-import { Sandbar, Image } from "sandbar-sdk";
-import { daytona } from "@sandbar-sdk/daytona";
+import { Beachside, Image } from "beachside";
+import { daytonaAdapter } from "@beachside/daytona";
 
-const sandbar = await Sandbar.connect(daytona({ apiKey: process.env.DAYTONA_API_KEY!, target: "us" }));
+const beachside = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: "us" },
+});
 try {
-  const box = await sandbar.sandboxes.create({ environment: Image.prepared("your-snapshot-id") });
+  const box = await beachside.sandboxes.create({ environment: Image.prepared("your-snapshot-id") });
   try {
     const result = await box.exec(["printf", "hello"]);
     console.log(result.stdoutText(4096));
@@ -26,7 +34,7 @@ try {
     await box.destroy();
   }
 } finally {
-  await sandbar.close();
+  await beachside.close();
 }
 ```
 
@@ -50,17 +58,17 @@ Snapshot handles expose inspect and separately supported restore/delete operatio
 
 Requirement reads finish before the durable submission marker; the approved preparation is then dispatched without another capability read. For already-stopped sources, an unchanged lifecycle request accepts a stopped outcome.
 
-Tracing uses your application’s OpenTelemetry provider. Set `tracing: false` to disable Sandbar spans and propagation, or inject `tracing: { tracerProvider }`. Sandbar never configures exporters or shuts down your provider. See the [tracing and safe diagnostics guide](https://sandbarsdk.dev/docs/observability/) for pinned Node/Bun recipes and local-only vendor evidence; metrics and structured logs are a later release.
+Tracing uses your application’s OpenTelemetry provider. Set `tracing: false` to disable Beachside spans and propagation, or inject `tracing: { tracerProvider }`. Beachside never configures exporters or shuts down your provider. See the [tracing and safe diagnostics guide](https://beachside.run/docs/observability/) for pinned Node/Bun recipes and local-only vendor evidence; metrics and structured logs are a later release.
 
 Persist resource and operation references as versioned JSON in your own application storage. Their historical observations do not depend on the original API key or a mandatory signature. Reopen with current credentials for the same verified native scope; E2B credential rotation requires verified `teamId` configuration. `onReference` is awaited before stage dispatches and when evidence changes. Observation stays read-only; explicit `operation.continue()` may advance a proven never-submitted next stage. Serialize continuation across processes through your own lease or compare-and-swap. E2B cleanup deletes the containing template, not an individual build, and rejects known shared expansion; the provider offers no transactional read/delete generation condition.
 
 Empty restore resource maps and mount arrays are equivalent to omission. The SDK temporarily accepts legacy empty mount objects at runtime; see the migration below. Snapshot and volume deletion persist a rejected stage when cancellation is known to precede native dispatch. The SDK allows up to one second after caller cancellation to join deletion finalization and surface a proven rejection with `effect: "none"`; client close remains immediate, and a stalled finalization still reports uncertainty. Other mutation waits retain their existing cancellation behavior.
 
-Start with the [everyday SDK guides](https://sandbarsdk.dev/docs/guides/resources/) and [snapshots/volumes](https://sandbarsdk.dev/docs/guides/snapshots-and-volumes/). Save `captured.snapshot.reference` or `volume.reference` in application storage and reopen with `client.snapshots.get(...)` or `client.volumes.get(...)` on a fresh matching connection. Handles expose `provider` and `id`. Confirmed partial capture errors expose the snapshot reference and capture details through `SandbarError.outcome`; do not parse native tokens or repeat capture. The [compiled example](../../apps/docs/examples/recovery-outcomes.ts) demonstrates these paths. Existing checkpoint/continuation APIs are advanced compatibility paths, not a prerequisite for ordinary application persistence.
+Start with the [everyday SDK guides](https://beachside.run/docs/guides/resources/) and [snapshots/volumes](https://beachside.run/docs/guides/snapshots-and-volumes/). Save `captured.snapshot.reference` or `volume.reference` in application storage and reopen with `client.snapshots.get(...)` or `client.volumes.get(...)` on a fresh matching connection. Handles expose `provider` and `id`. Confirmed partial capture errors expose the snapshot reference and capture details through `BeachsideError.outcome`; do not parse native tokens or repeat capture. The [compiled example](../../apps/docs/examples/recovery-outcomes.ts) demonstrates these paths. Existing checkpoint/continuation APIs are advanced compatibility paths, not a prerequisite for ordinary application persistence.
 
-For explicit direct connection annotations, import `DirectSandbarClient` and `DirectSandboxHandle` from `sandbar-sdk`. They include `client.snapshots`, `client.volumes` and `sandbox.snapshot()`. `SandbarClient` and `SandboxHandle` are aliases for those complete SDK surfaces.
+For explicit direct connection annotations, import `DirectBeachsideClient` and `DirectSandboxHandle` from `beachside`. They include `client.snapshots`, `client.volumes` and `sandbox.snapshot()`. `BeachsideClient` and `SandboxHandle` are aliases for those complete SDK surfaces.
 
-Malformed snapshot requests, restore requests, inventory inputs, volume creation inputs and mount descriptors reject with `SandbarError` (`INVALID_ARGUMENT`, effect `none`) before provider mutation. Restore preflight uses `UnsupportedFeatureError.unmetRequirements` to report network policy, sizing, independent lifecycle and mount limitations together. Native response validation remains separate from caller input errors.
+Malformed snapshot requests, restore requests, inventory inputs, volume creation inputs and mount descriptors reject with `BeachsideError` (`INVALID_ARGUMENT`, effect `none`) before provider mutation. Restore preflight uses `UnsupportedFeatureError.unmetRequirements` to report network policy, sizing, independent lifecycle and mount limitations together. Native response validation remains separate from caller input errors.
 
 Create and restore share `mounts: MountSpec[]` from `volume.at(path)`. Daytona selects exact current volumes alongside known mount-free filesystem/fresh snapshot state under `internet` or `daytona-default` networking; mounted `blocked` restore rejects before allocation. Unknown/recorded mount provenance and memory composition remain unsupported. No implicit storage creation, copying or name substitution occurs. Independent lifecycle is required unless explicitly set to `false`.
 
@@ -69,7 +77,7 @@ The coordinated SDK/adapter release R replaces legacy action maps. Nonempty maps
 Unknown restore outcomes expose selected `mounts` and an acknowledged `sandbox` reference when available. Persist these with the operation reference and reconcile read-only without another allocation. The first bounded mounted-restore acceptance at `824946d` passed A startup evidence, then failed a harness snapshot-name/ID assertion before B. The corrected workflow passed live at `5911ccc`: A and independently empty B passed first-action selected-data checks, private-state preservation, exact native identities and fresh-client reopening, with all owned resources cleaned up. Deterministic and packed evidence are separate from live qualification.
 
 
-## Reopen Sandbar-created compute
+## Reopen Beachside-created compute
 
 Direct SDK sandbox handles expose `reference: SandboxReference | null`. Save that reference in an application-owned trusted store and configure a fresh connection with the same native binding:
 
@@ -118,4 +126,4 @@ Both profiles have one consumer, 16 KiB maximum emitted chunks, and a 64 KiB/256
 
 ## Consumer types
 
-Use `SandbarClient`, `SandboxHandle`, `SnapshotHandle`, `VolumeHandle`, `OperationHandle<T>` and `RecoveryReference` for application annotations. Concrete connection/handle declarations use the optional `true` type parameter to preserve their complete advanced and nominal compatibility surface; ordinary annotations retain their existing structural view. Concrete operations include a kind type parameter for continuation and recovery narrowing. Existing Adapter*/Direct* names, runtime classes and `instanceof` behavior remain supported. See the TypeScript reference for staged migration and advanced compatibility access.
+Use `BeachsideClient`, `SandboxHandle`, `SnapshotHandle`, `VolumeHandle`, `OperationHandle<T>` and `RecoveryReference` for application annotations. Concrete connection/handle declarations use the optional `true` type parameter to preserve their complete advanced and nominal compatibility surface; ordinary annotations retain their existing structural view. Concrete operations include a kind type parameter for continuation and recovery narrowing. Existing Adapter*/Direct* names, runtime classes and `instanceof` behavior remain supported. See the TypeScript reference for staged migration and advanced compatibility access.

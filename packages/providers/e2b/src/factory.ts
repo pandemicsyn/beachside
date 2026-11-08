@@ -4,7 +4,7 @@ import {
   type BoundAdapter,
   type Preserve,
   type ResourceMinimums,
-} from "@sandbar-sdk/adapter";
+} from "@beachside/adapter";
 
 /** E2B adapter with API-key scope and default base template; optional verified team scope. */
 export function e2b(options: {

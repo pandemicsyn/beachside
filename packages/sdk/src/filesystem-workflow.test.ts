@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { AdapterError, defineAdapter, type AdapterSession } from "@sandbar-sdk/adapter";
-import { Sandbar, Image } from "./index";
+import { AdapterError, defineAdapter, type AdapterSession } from "@beachside/adapter";
+import { Beachside, Image } from "./index";
 
 /** Independently authored adapter stores chunk records, never a contiguous file buffer. */
 async function fixture() {
@@ -91,7 +91,7 @@ async function fixture() {
     },
   });
 
-  const client = await Sandbar.connect({ adapter, config: {}, credentials: {} });
+  const client = await Beachside.connect({ adapter, config: {}, credentials: {} });
   const box = await client.sandboxes.create({ environment: Image.prepared("base") });
 
   return { client, box, files };
