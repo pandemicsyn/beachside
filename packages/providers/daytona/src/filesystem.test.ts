@@ -620,9 +620,11 @@ test("Daytona interrupted and malformed helpers retain possible copy effects and
 
 test("Daytona writes create missing parent folders and leave no staging or receipts behind", async () => {
   const root = mkdtempSync(join(tmpdir(), "beachside-daytona-parents-"));
+
   const receiptsBefore = new Set(
     readdirSync("/tmp").filter((name) => name.startsWith(".beachside-")),
   );
+
   let client: Awaited<ReturnType<typeof Beachside.connect>> | undefined;
 
   try {
@@ -682,6 +684,7 @@ test("Daytona writes create missing parent folders and leave no staging or recei
             ? new Response(readFileSync(path))
             : new Response(null, { status: 404 });
         }
+
         throw new Error(`Unexpected parent fixture route ${url.pathname}`);
       },
       { preconnect: fetch.preconnect },

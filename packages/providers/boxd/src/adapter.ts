@@ -1221,12 +1221,28 @@ export function createBoxdAdapter(
                     );
                 }
 
-                const bytesWritten = await native.run(
-                  { ...readContext(ctx.signal), uploadBytes: input.bytes.length },
-                  () => native.machines.files.upload(input.sandbox.id, input.path, input.bytes),
+                const upload = () =>
+                  native.run({ ...readContext(ctx.signal), uploadBytes: input.bytes.length }, () =>
+                    native.machines.files.upload(input.sandbox.id, input.path, input.bytes),
+                  );
+
+                try {
+                  return { bytesWritten: await upload() };
+                } catch (error) {
+                  if (nativeError(error).code !== "NOT_FOUND") throw error;
+                }
+
+                // The refused upload wrote nothing; create the missing folders, then send it once more.
+                const parent = input.path.slice(0, input.path.lastIndexOf("/")) || "/";
+                await filesystem(native, input.sandbox.id).run(
+                  "mkdir",
+                  parent,
+                  "",
+                  true,
+                  readContext(ctx.signal),
                 );
 
-                return { bytesWritten };
+                return { bytesWritten: await upload() };
               } catch (error) {
                 return rejection(ctx, error);
               }

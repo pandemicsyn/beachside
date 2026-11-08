@@ -478,8 +478,7 @@ test("lost exec, write and destroy responses recover by read-only evidence after
         if (dropped) {
           mutations.receiptCleanup++;
 
-          for (const key of [...files.keys()])
-            if (key.startsWith(`${dropped[1]}/`)) files.delete(key);
+          for (const key of files.keys()) if (key.startsWith(`${dropped[1]}/`)) files.delete(key);
 
           return Response.json({ exitCode: 0, result: "" });
         }

@@ -2090,7 +2090,12 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             if (!token.success) return null;
             await requireRunning(attempt.sandbox.id, attempt.sandbox.reference);
             const paths = executionPaths(attempt.submissionId);
-            const result = await readExecution(attempt.sandbox.id, paths, token.data.maxOutputBytes);
+
+            const result = await readExecution(
+              attempt.sandbox.id,
+              paths,
+              token.data.maxOutputBytes,
+            );
 
             // A recovered outcome no longer needs its capture files.
             if (result) await cleanup(attempt.sandbox.id, paths);

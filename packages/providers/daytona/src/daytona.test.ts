@@ -510,6 +510,7 @@ test("verified direct scope, read-only preparation, one create, exact binary exe
 
     if (url.pathname.endsWith("/process/execute")) {
       if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
+
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -1464,6 +1465,7 @@ test.each(["absent", "file", "directory", "symlink", "missing-exit"] as const)(
 
       if (url.pathname.endsWith("/process/execute")) {
         if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
+
         const command = z
           .object({ command: z.string() })
           .parse(JSON.parse(String(init?.body))).command;
@@ -1566,6 +1568,7 @@ test("lost staging upload response is read back and committed without another up
 
     if (url.pathname.endsWith("/process/execute")) {
       if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
+
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -1623,6 +1626,7 @@ test("lost exec and upload responses remain unknown after one submission each", 
 
     if (url.pathname.endsWith("/process/execute")) {
       if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
+
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -2176,6 +2180,7 @@ test("write receipt is atomically published before recovery from a lost response
 
     if (url.pathname.endsWith("/process/execute")) {
       if (receiptCleanup(init)) return Response.json({ exitCode: 0, result: "" });
+
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;
@@ -2830,6 +2835,7 @@ test.each([
     if (url.pathname.endsWith("/process/execute")) {
       if (receiptCleanup(init)) {
         receiptCleanups++;
+
         const dropped = spawnSync(
           "sh",
           ["-c", z.object({ command: z.string() }).parse(JSON.parse(String(init?.body))).command],
@@ -2838,6 +2844,7 @@ test.each([
 
         return Response.json({ exitCode: dropped.status, result: "" });
       }
+
       const command = z
         .object({ command: z.string() })
         .parse(JSON.parse(String(init?.body))).command;

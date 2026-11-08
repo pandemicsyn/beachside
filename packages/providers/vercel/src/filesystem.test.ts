@@ -86,3 +86,23 @@ test("filesystem directory overflow rejects a prefix instead of claiming complet
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("filesystem helper creates missing parent folders for write stages and copies", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vercel-fs-parents-"));
+
+  try {
+    const stage = join(root, "a", "b", ".stage");
+    invoke("reserve", stage);
+    invoke("publish", stage, join(root, "a", "b", "file"));
+    invoke(
+      "copy",
+      join(root, "a", "b", "file"),
+      join(root, "c", "d", "copy"),
+      false,
+      join(root, "c", "d", ".copy"),
+    );
+    expect(fileStat(invoke("stat", join(root, "c", "d", "copy"))).type).toBe("file");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
