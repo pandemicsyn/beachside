@@ -456,6 +456,7 @@ export function freestyleFixture() {
       if (vm.state !== "running") return error(409, "VM_NOT_RUNNING");
       effects.exec++;
       commands.push(body.command);
+
       // Root owner reads and `chown` of map-backed files use the recorded numeric owner.
       if (body.linuxUser === "root") {
         const owned = /^if \[ -f '([^']+)' \]/.exec(body.command);
