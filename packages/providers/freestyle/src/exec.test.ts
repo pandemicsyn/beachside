@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { EXEC_RECORD, INLINE_BYTES, filesResult, parseWrapper, quote, wrapperScript } from "./exec";
+import { linuxGuest } from "./fixture.test-support";
 
 const sh = (script: string) => {
   const result = spawnSync("sh", ["-c", script], { encoding: "utf8" });
@@ -76,7 +77,7 @@ test("output beyond the inline bound stays in the guest for download", () => {
   ).toBeNull();
 });
 
-test("an argv program whose path contains = runs literally", () => {
+linuxGuest("an argv program whose path contains = runs literally", () => {
   const script = wrapperScript({
     command: { kind: "argv", argv: ["/nonexistent/tool=runner", "printf", "WRONG_PROGRAM"] },
     env: { V: "x" },

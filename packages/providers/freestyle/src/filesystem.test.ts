@@ -12,7 +12,7 @@ import {
 import { join } from "node:path";
 import { Beachside } from "beachside";
 import { createFreestyleAdapter, MAX_FILE_BYTES } from "./adapter";
-import { freestyleFixture } from "./fixture.test-support";
+import { freestyleFixture, linuxGuest } from "./fixture.test-support";
 
 const fixtures: ReturnType<typeof freestyleFixture>[] = [];
 
@@ -150,40 +150,43 @@ test("without Python 3, new and root-owned files still write; replacing another 
   }
 });
 
-test("a root owner repair changes only the verified written file, never a swapped-in target", async () => {
-  const { fixture, client, box, dir } = await setup();
+linuxGuest(
+  "a root owner repair changes only the verified written file, never a swapped-in target",
+  async () => {
+    const { fixture, client, box, dir } = await setup();
 
-  try {
-    // As root the file can belong to another user; otherwise this process stands in for both.
-    const root = process.getuid?.() === 0;
-    const uid = root ? 1000 : (process.getuid?.() ?? 0);
-    const path = join(dir, "owned.txt");
-    writeFileSync(path, "one");
+    try {
+      // As root the file can belong to another user; otherwise this process stands in for both.
+      const root = process.getuid?.() === 0;
+      const uid = root ? 1000 : (process.getuid?.() ?? 0);
+      const path = join(dir, "owned.txt");
+      writeFileSync(path, "one");
 
-    if (root) chownSync(path, 1000, 1000);
+      if (root) chownSync(path, 1000, 1000);
 
-    await box.writeFile(path, new TextEncoder().encode("two"), { overwrite: true });
-    expect(statSync(path).uid).toBe(uid);
-    expect(readFileSync(path, "utf8")).toBe("two");
+      await box.writeFile(path, new TextEncoder().encode("two"), { overwrite: true });
+      expect(statSync(path).uid).toBe(uid);
+      expect(readFileSync(path, "utf8")).toBe("two");
 
-    // A guest process swaps the path for a symlink to a root-owned file between the PUT and
-    // the repair; the repair must not follow it.
-    const victim = join(dir, "victim.txt");
-    writeFileSync(victim, "secret");
-    fixture.afterNextPut((written) => {
-      rmSync(written);
-      symlinkSync(victim, written);
-    });
+      // A guest process swaps the path for a symlink to a root-owned file between the PUT and
+      // the repair; the repair must not follow it.
+      const victim = join(dir, "victim.txt");
+      writeFileSync(victim, "secret");
+      fixture.afterNextPut((written) => {
+        rmSync(written);
+        symlinkSync(victim, written);
+      });
 
-    await expect(
-      box.writeFile(path, new TextEncoder().encode("three"), { overwrite: true }),
-    ).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
-    expect(statSync(victim).uid).toBe(process.getuid?.() ?? 0);
-    expect(readFileSync(victim, "utf8")).toBe("secret");
-  } finally {
-    await client.close();
-  }
-});
+      await expect(
+        box.writeFile(path, new TextEncoder().encode("three"), { overwrite: true }),
+      ).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
+      expect(statSync(victim).uid).toBe(process.getuid?.() ?? 0);
+      expect(readFileSync(victim, "utf8")).toBe("secret");
+    } finally {
+      await client.close();
+    }
+  },
+);
 
 test("a plain-text error from a range read surfaces as UNAVAILABLE", async () => {
   const { fixture, client, box, dir } = await setup();
@@ -203,7 +206,7 @@ test("a plain-text error from a range read surfaces as UNAVAILABLE", async () =>
   }
 });
 
-test("no-clobber writes and copies refuse an existing target; moves keep bytes", async () => {
+linuxGuest("no-clobber writes and copies refuse an existing target; moves keep bytes", async () => {
   const { client, box, dir } = await setup();
 
   try {
@@ -252,6 +255,8 @@ test("a paused VM serves reads through the file API without waking, and refuses 
       sizeBytes: 4,
       mode: 0o644,
     });
+    // A paused VM reports no modification time.
+    expect((await box.statFile(path, { followSymlinks: true })).modifiedAt).toBeUndefined();
     expect(await box.fileExists(path)).toBe(true);
     expect(await box.fileExists("/home/ubuntu/data/missing")).toBe(false);
     await expect(box.statFile(path)).rejects.toMatchObject({ code: "CONFLICT" });

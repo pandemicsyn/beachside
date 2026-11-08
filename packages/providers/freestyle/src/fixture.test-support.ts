@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -130,6 +131,13 @@ function bytesOf(body: BodyInit | null | undefined): Uint8Array {
 
   return parsed instanceof Uint8Array ? parsed : new TextEncoder().encode(parsed);
 }
+
+/**
+ * Tests whose simulated guest commands need Linux tools (`setsid`, GNU `stat`, `renameat2`,
+ * dash's exit codes), as a Freestyle VM has. They run on Linux, as in CI, and are skipped
+ * elsewhere, such as on macOS.
+ */
+export const linuxGuest = test.skipIf(process.platform !== "linux");
 
 export function freestyleFixture() {
   const vms = new Map<string, FixtureVm>();
@@ -629,10 +637,11 @@ export function freestyleFixture() {
         isFile: true,
         isDirectory: false,
         isSymlink: false,
-        permissions: "0644",
-        owner: "ubuntu",
-        group: "ubuntu",
-        modified: vm.createdAt,
+        // As observed live on a paused VM: numeric owners and an empty modification time.
+        permissions: "644",
+        owner: "1000",
+        group: "1000",
+        modified: "",
       });
     }
 

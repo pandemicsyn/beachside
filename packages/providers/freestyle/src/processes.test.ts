@@ -3,7 +3,7 @@ import { Beachside } from "beachside";
 import type { PtySessionEvents, PtySessionInfo } from "freestyle";
 import { createFreestyleAdapter } from "./adapter";
 import { observeJob } from "./process";
-import { freestyleFixture } from "./fixture.test-support";
+import { freestyleFixture, linuxGuest } from "./fixture.test-support";
 import type { PtyDriver } from "./terminal";
 
 const fixtures: ReturnType<typeof freestyleFixture>[] = [];
@@ -121,57 +121,63 @@ async function setup() {
   return { fixture, client, box, pty };
 }
 
-test("process output streams from the guest job before exit, stdout and stderr apart", async () => {
-  const { client, box } = await setup();
+linuxGuest(
+  "process output streams from the guest job before exit, stdout and stderr apart",
+  async () => {
+    const { client, box } = await setup();
 
-  try {
-    const process = await box.processes.start({
-      command: {
-        kind: "shell",
-        script: "printf 'héllo '; printf warn >&2; sleep 0.2; printf world; exit 3",
-      },
-      output: { mode: "stream" },
-    });
+    try {
+      const process = await box.processes.start({
+        command: {
+          kind: "shell",
+          script: "printf 'héllo '; printf warn >&2; sleep 0.2; printf world; exit 3",
+        },
+        output: { mode: "stream" },
+      });
 
-    const chunks = { stdout: "", stderr: "" };
+      const chunks = { stdout: "", stderr: "" };
 
-    for await (const chunk of process.output()) chunks[chunk.stream] += chunk.text;
+      for await (const chunk of process.output()) chunks[chunk.stream] += chunk.text;
 
-    expect(chunks).toEqual({ stdout: "héllo world", stderr: "warn" });
-    expect((await process.wait()).exitCode).toBe(3);
-    await process.detach();
-  } finally {
-    await client.close();
-  }
-});
+      expect(chunks).toEqual({ stdout: "héllo world", stderr: "warn" });
+      expect((await process.wait()).exitCode).toBe(3);
+      await process.detach();
+    } finally {
+      await client.close();
+    }
+  },
+);
 
-test("byte output survives exactly, and piped stdin reaches the process until EOF", async () => {
-  const { client, box } = await setup();
+linuxGuest(
+  "byte output survives exactly, and piped stdin reaches the process until EOF",
+  async () => {
+    const { client, box } = await setup();
 
-  try {
-    const process = await box.processes.start({
-      command: { kind: "argv", argv: ["cat"] },
-      stdin: "pipe",
-      output: { mode: "stream", format: "bytes" },
-    });
+    try {
+      const process = await box.processes.start({
+        command: { kind: "argv", argv: ["cat"] },
+        stdin: "pipe",
+        output: { mode: "stream", format: "bytes" },
+      });
 
-    const sent = Uint8Array.of(0, 255, 10, 200, 1);
-    await process.write(sent);
-    await process.closeStdin();
+      const sent = Uint8Array.of(0, 255, 10, 200, 1);
+      await process.write(sent);
+      await process.closeStdin();
 
-    const received: number[] = [];
+      const received: number[] = [];
 
-    for await (const chunk of process.output()) received.push(...chunk.bytes);
+      for await (const chunk of process.output()) received.push(...chunk.bytes);
 
-    expect(Uint8Array.from(received)).toEqual(sent);
-    expect((await process.wait()).exitCode).toBe(0);
-    await process.detach();
-  } finally {
-    await client.close();
-  }
-});
+      expect(Uint8Array.from(received)).toEqual(sent);
+      expect((await process.wait()).exitCode).toBe(0);
+      await process.detach();
+    } finally {
+      await client.close();
+    }
+  },
+);
 
-test("a burst larger than the SDK output queue reaches an active reader intact", async () => {
+linuxGuest("a burst larger than the SDK output queue reaches an active reader intact", async () => {
   const { client, box } = await setup();
 
   try {
@@ -192,7 +198,7 @@ test("a burst larger than the SDK output queue reaches an active reader intact",
   }
 });
 
-test("SIGTERM reaches the job's process group, and status reports the exit", async () => {
+linuxGuest("SIGTERM reaches the job's process group, and status reports the exit", async () => {
   const { client, box } = await setup();
 
   try {
@@ -211,7 +217,7 @@ test("SIGTERM reaches the job's process group, and status reports the exit", asy
   }
 });
 
-test("a reopened process reports only output written after it reattached", async () => {
+linuxGuest("a reopened process reports only output written after it reattached", async () => {
   const { client, box } = await setup();
 
   try {
@@ -266,179 +272,201 @@ test("terminals run on a named Freestyle PTY session and resize", async () => {
   }
 });
 
-test("terminate kills the job, and callback exec streams while capturing exact bytes", async () => {
-  const { client, box } = await setup();
+linuxGuest(
+  "terminate kills the job, and callback exec streams while capturing exact bytes",
+  async () => {
+    const { client, box } = await setup();
 
-  try {
-    const process = await box.processes.start({
-      command: { kind: "argv", argv: ["sleep", "30"] },
-      output: { mode: "stream" },
-    });
+    try {
+      const process = await box.processes.start({
+        command: { kind: "argv", argv: ["sleep", "30"] },
+        output: { mode: "stream" },
+      });
 
-    expect((await process.terminate()).status).toBe("requested");
-    expect((await process.wait()).exitCode).toBe(137);
-    await process.detach();
+      expect((await process.terminate()).status).toBe("requested");
+      expect((await process.wait()).exitCode).toBe(137);
+      await process.detach();
 
-    const seen: string[] = [];
+      const seen: string[] = [];
 
-    const result = await box.exec(["/bin/sh", "-c", "printf 'a\\377b'"], {
-      onOutput: (chunk) => {
-        seen.push(chunk.stream);
-      },
-    });
+      const result = await box.exec(["/bin/sh", "-c", "printf 'a\\377b'"], {
+        onOutput: (chunk) => {
+          seen.push(chunk.stream);
+        },
+      });
 
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toEqual(Uint8Array.of(97, 255, 98));
-    expect(seen).toContain("stdout");
-  } finally {
-    await client.close();
-  }
-});
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toEqual(Uint8Array.of(97, 255, 98));
+      expect(seen).toContain("stdout");
+    } finally {
+      await client.close();
+    }
+  },
+);
 
-test("a suspend holds process polling, so the job's guest commands never wake the VM", async () => {
-  const { fixture, client, box } = await setup();
+linuxGuest(
+  "a suspend holds process polling, so the job's guest commands never wake the VM",
+  async () => {
+    const { fixture, client, box } = await setup();
 
-  try {
-    const process = await box.processes.start({
-      command: { kind: "shell", script: "sleep 0.4; printf after" },
-      output: { mode: "stream" },
-    });
+    try {
+      const process = await box.processes.start({
+        command: { kind: "shell", script: "sleep 0.4; printf after" },
+        output: { mode: "stream" },
+      });
 
-    await box.suspend();
-    const execs = fixture.effects.exec;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(fixture.effects.exec).toBe(execs);
-    expect(fixture.effects.wake).toBe(0);
-    expect(fixture.vms.get(box.id)?.state).toBe("paused");
+      await box.suspend();
+      const execs = fixture.effects.exec;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(fixture.effects.exec).toBe(execs);
+      expect(fixture.effects.wake).toBe(0);
+      expect(fixture.vms.get(box.id)?.state).toBe("paused");
 
-    await box.resume();
-    let text = "";
+      await box.resume();
+      let text = "";
 
-    for await (const chunk of process.output()) if ("text" in chunk) text += chunk.text;
+      for await (const chunk of process.output()) if ("text" in chunk) text += chunk.text;
 
-    expect(text).toBe("after");
-    expect((await process.wait()).exitCode).toBe(0);
-    await process.detach();
-  } finally {
-    await client.close();
-  }
-});
+      expect(text).toBe("after");
+      expect((await process.wait()).exitCode).toBe(0);
+      await process.detach();
+    } finally {
+      await client.close();
+    }
+  },
+);
 
-test("an acknowledged pause that leaves the VM running ends as unknown, and observers poll again", async () => {
-  const { fixture, client, box } = await setup();
+linuxGuest(
+  "an acknowledged pause that leaves the VM running ends as unknown, and observers poll again",
+  async () => {
+    const { fixture, client, box } = await setup();
 
-  try {
-    const process = await box.processes.start({
-      command: { kind: "shell", script: "sleep 0.3; printf after" },
-      output: { mode: "stream" },
-    });
+    try {
+      const process = await box.processes.start({
+        command: { kind: "shell", script: "sleep 0.3; printf after" },
+        output: { mode: "stream" },
+      });
 
-    fixture.ignoreNextPause();
-    await expect(box.suspend()).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
-    expect(fixture.vms.get(box.id)?.state).toBe("running");
-    expect((await process.wait()).exitCode).toBe(0);
-    await process.detach();
-  } finally {
-    await client.close();
-  }
-}, 20_000);
+      fixture.ignoreNextPause();
+      await expect(box.suspend()).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
+      expect(fixture.vms.get(box.id)?.state).toBe("running");
+      expect((await process.wait()).exitCode).toBe(0);
+      await process.detach();
+    } finally {
+      await client.close();
+    }
+  },
+  20_000,
+);
 
-test("process controls refuse while the VM is held paused, so they never wake it", async () => {
-  const { fixture, client, box } = await setup();
+linuxGuest(
+  "process controls refuse while the VM is held paused, so they never wake it",
+  async () => {
+    const { fixture, client, box } = await setup();
 
-  try {
-    const process = await box.processes.start({
-      command: { kind: "shell", script: "sleep 0.4; printf after" },
-      output: { mode: "stream" },
-      stdin: "pipe",
-    });
+    try {
+      const process = await box.processes.start({
+        command: { kind: "shell", script: "sleep 0.4; printf after" },
+        output: { mode: "stream" },
+        stdin: "pipe",
+      });
 
-    const reference = JSON.parse(JSON.stringify(process.reference()));
-    await box.suspend();
-    const execs = fixture.effects.exec;
+      const reference = JSON.parse(JSON.stringify(process.reference()));
+      await box.suspend();
+      const execs = fixture.effects.exec;
 
-    // The SDK ends handles on suspend; a reopen waits for a running VM.
-    await expect(process.status()).rejects.toBeDefined();
-    await expect(process.signal("SIGTERM")).rejects.toBeDefined();
-    await expect(box.processes.reopen(reference)).rejects.toMatchObject({ code: "CONFLICT" });
+      // The SDK ends handles on suspend; a reopen waits for a running VM.
+      await expect(process.status()).rejects.toBeDefined();
+      await expect(process.signal("SIGTERM")).rejects.toBeDefined();
+      await expect(box.processes.reopen(reference)).rejects.toMatchObject({ code: "CONFLICT" });
 
-    expect(fixture.effects.exec).toBe(execs);
-    expect(fixture.effects.wake).toBe(0);
-    expect(fixture.vms.get(box.id)?.state).toBe("paused");
+      expect(fixture.effects.exec).toBe(execs);
+      expect(fixture.effects.wake).toBe(0);
+      expect(fixture.vms.get(box.id)?.state).toBe("paused");
 
-    await box.resume();
-    const again = await box.processes.reopen(reference);
-    expect((await again.wait()).exitCode).toBe(0);
-    await again.detach();
-  } finally {
-    await client.close();
-  }
-}, 20_000);
+      await box.resume();
+      const again = await box.processes.reopen(reference);
+      expect((await again.wait()).exitCode).toBe(0);
+      await again.detach();
+    } finally {
+      await client.close();
+    }
+  },
+  20_000,
+);
 
-test("a refused resume keeps observers held until the VM really runs", async () => {
-  const { fixture, client, box } = await setup();
+linuxGuest(
+  "a refused resume keeps observers held until the VM really runs",
+  async () => {
+    const { fixture, client, box } = await setup();
 
-  try {
-    const process = await box.processes.start({
-      command: { kind: "shell", script: "sleep 0.3; printf after" },
-      output: { mode: "stream" },
-    });
+    try {
+      const process = await box.processes.start({
+        command: { kind: "shell", script: "sleep 0.3; printf after" },
+        output: { mode: "stream" },
+      });
 
-    await box.suspend();
-    fixture.failNextStart(fixture.error(400, "BAD_REQUEST"));
-    await expect(box.resume()).rejects.toBeDefined();
-    const execs = fixture.effects.exec;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(fixture.effects.exec).toBe(execs);
-    expect(fixture.effects.wake).toBe(0);
+      await box.suspend();
+      fixture.failNextStart(fixture.error(400, "BAD_REQUEST"));
+      await expect(box.resume()).rejects.toBeDefined();
+      const execs = fixture.effects.exec;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(fixture.effects.exec).toBe(execs);
+      expect(fixture.effects.wake).toBe(0);
 
-    await box.resume();
-    let text = "";
+      await box.resume();
+      let text = "";
 
-    for await (const chunk of process.output()) if ("text" in chunk) text += chunk.text;
-    expect(text).toBe("after");
-    await process.detach();
-  } finally {
-    await client.close();
-  }
-}, 20_000);
+      for await (const chunk of process.output()) if ("text" in chunk) text += chunk.text;
+      expect(text).toBe("after");
+      await process.detach();
+    } finally {
+      await client.close();
+    }
+  },
+  20_000,
+);
 
-test("piped stdin holders end with the job, whether it exits or is terminated", async () => {
-  const { fixture, client, box } = await setup();
+linuxGuest(
+  "piped stdin holders end with the job, whether it exits or is terminated",
+  async () => {
+    const { fixture, client, box } = await setup();
 
-  const holders = () =>
-    Bun.spawnSync(["sh", "-c", `pgrep -f 'sleep 2147483647' | wc -l`]).stdout.toString().trim();
+    const holders = () =>
+      Bun.spawnSync(["sh", "-c", `pgrep -f 'sleep 2147483647' | wc -l`]).stdout.toString().trim();
 
-  try {
-    const before = holders();
+    try {
+      const before = holders();
 
-    const exits = await box.processes.start({
-      command: { kind: "shell", script: "head -c 2" },
-      output: { mode: "stream" },
-      stdin: "pipe",
-    });
+      const exits = await box.processes.start({
+        command: { kind: "shell", script: "head -c 2" },
+        output: { mode: "stream" },
+        stdin: "pipe",
+      });
 
-    await exits.write("hi");
-    expect((await exits.wait()).exitCode).toBe(0);
-    await exits.detach();
+      await exits.write("hi");
+      expect((await exits.wait()).exitCode).toBe(0);
+      await exits.detach();
 
-    const killed = await box.processes.start({
-      command: { kind: "shell", script: "sleep 30" },
-      output: { mode: "stream" },
-      stdin: "pipe",
-    });
+      const killed = await box.processes.start({
+        command: { kind: "shell", script: "sleep 30" },
+        output: { mode: "stream" },
+        stdin: "pipe",
+      });
 
-    await killed.terminate();
-    await killed.wait().catch(() => undefined);
-    await killed.detach();
+      await killed.terminate();
+      await killed.wait().catch(() => undefined);
+      await killed.detach();
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(holders()).toBe(before);
-    expect(fixture.effects.exec).toBeGreaterThan(0);
-  } finally {
-    await client.close();
-  }
-}, 20_000);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(holders()).toBe(before);
+      expect(fixture.effects.exec).toBeGreaterThan(0);
+    } finally {
+      await client.close();
+    }
+  },
+  20_000,
+);
 
 test("a held job refuses every control before running a guest command", async () => {
   const commands: string[] = [];

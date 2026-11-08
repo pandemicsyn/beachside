@@ -35,6 +35,7 @@ import {
   type ExecInput,
   type Fact,
   type FileEntry,
+  type FileStat,
   type FileWriteInput,
   type ImageInfo,
   type ObserveContext,
@@ -732,7 +733,10 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
        */
       const launchEnv = new Map<string, Record<string, string>>();
 
-      /** Write the env file, readable by root only, as Freestyle's own default. */
+      /**
+       * Write the env file with mode 0600. Freestyle gives a new file to the VM's default user,
+       * which runs every command and so must read it; other users cannot.
+       */
       const writeEnv = (
         id: string,
         env: Record<string, string>,
@@ -978,14 +982,27 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
       };
 
       /** Metadata from the native file API, for a VM that is not running. */
-      const nativeStat = async (vmId: string, path: string, ctx: ReadContext) => {
+      /**
+       * Metadata from the native file API, for a VM that is not running. As observed live,
+       * `modified` is epoch seconds as text on a running VM and empty on a paused one, and
+       * `permissions` holds only the permission bits, so `mode` omits setuid, setgid and
+       * sticky bits.
+       */
+      const nativeStat = async (
+        vmId: string,
+        path: string,
+        ctx: ReadContext,
+      ): Promise<FileStat> => {
         const native = await read(ctx, (client) => client.vms.ref(vmId).fs.stat(path));
-        const modified = Date.parse(native.modified);
 
-        if (!Number.isFinite(modified) || !/^0?[0-7]{1,6}$/.test(native.permissions))
+        if (
+          !/^0?[0-7]{1,4}$/.test(native.permissions) ||
+          !Number.isSafeInteger(native.size) ||
+          native.size < 0
+        )
           throw new AdapterError("UNAVAILABLE", "Freestyle metadata response is invalid");
 
-        return statValue({
+        const stat: FileStat = {
           type: native.isSymlink
             ? "symlink"
             : native.isFile
@@ -994,9 +1011,19 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
                 ? "directory"
                 : "unknown",
           sizeBytes: native.size,
-          modifiedAt: modified / 1000,
-          mode: Number.parseInt(native.permissions, 8) & 0o7777,
-        });
+          mode: Number.parseInt(native.permissions, 8) & 0o777,
+        };
+
+        const modified = /^\d{1,12}(\.\d+)?$/.test(native.modified)
+          ? Number(native.modified) * 1000
+          : Date.parse(native.modified);
+
+        if (native.modified && !Number.isFinite(modified))
+          throw new AdapterError("UNAVAILABLE", "Freestyle metadata response is invalid");
+
+        if (native.modified) stat.modifiedAt = new Date(modified).toISOString();
+
+        return stat;
       };
 
       /** One guest control command; anything but a clean exit is an error. */

@@ -124,7 +124,7 @@ test("a slow boot with env finishes setup through observation", async () => {
   }
 });
 
-test("the create-time env file is readable by root only", async () => {
+test("the create-time env file is private to the command user (mode 0600)", async () => {
   const { fixture, connect } = setup();
   const client = await connect();
 
