@@ -325,10 +325,6 @@ test("files round-trip bytes, verify sha256 and list directories", async () => {
     await box.writeFile("/work/data.bin", bytes, { overwrite: true });
     expect([...(await box.readFile("/work/data.bin"))]).toEqual([0, 255, 10, 13]);
     expect(fixture.effects.write).toBe(1);
-    await expect(box.writeFile("/work/other.bin", bytes)).rejects.toMatchObject({
-      code: "UNSUPPORTED",
-    });
-    expect(fixture.effects.write).toBe(1);
 
     const write = fixture.calls.find((call) => call.path.endsWith("/fs/write"));
     expect(write?.query.get("sha256")).toMatch(/^[0-9a-f]{64}$/);
@@ -369,7 +365,7 @@ test("suspend pauses with memory, resume starts it again, renew extends the dead
   }
 });
 
-test("configured preview ports are published at create on style.dev", async () => {
+test("configured preview ports are published at create, others on first use", async () => {
   const { fixture, connect } = setup();
   const client = await connect({ preview: { ports: [3000] } });
 
@@ -393,7 +389,13 @@ test("configured preview ports are published at create on style.dev", async () =
       access: "public",
       url: `https://${slug}-3000.style.dev`,
     });
-    await expect(box.preview(8080)).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    // Any other port is published on first use, once.
+    expect(await box.preview(8080)).toEqual({
+      access: "public",
+      url: `https://${slug}-8080.style.dev`,
+    });
+    expect(await box.preview(8080)).toMatchObject({ url: `https://${slug}-8080.style.dev` });
+    expect(fixture.count("POST", /^\/v5\/tls$/)).toBe(1);
     await box.destroy();
   } finally {
     await client.close();

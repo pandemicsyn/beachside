@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Json } from "@beachside/adapter";
@@ -282,6 +282,26 @@ export function freestyleFixture() {
       return result;
     }
 
+    if (method === "POST" && path === "/v5/tls") {
+      const rule = z
+        .object({
+          domain: z.string(),
+          destination: z.object({ vmId: z.string(), port: z.number() }),
+        })
+        .parse(parsed);
+
+      const target = vms.get(rule.destination.vmId);
+
+      if (!target || target.account !== account) return error(404, "VM_NOT_FOUND");
+
+      if ([...vms.values()].some((item) => item.tls.some((tls) => tls.domain === rule.domain)))
+        return error(409, "DOMAIN_TAKEN");
+      const created = { id: `tls${++sequence}`, domain: rule.domain, port: rule.destination.port };
+      target.tls.push(created);
+
+      return json(200, { ...created, action: "allow" });
+    }
+
     if (method === "GET" && path === "/v5/tls") {
       const vm = vms.get(url.searchParams.get("vmId") ?? "");
 
@@ -448,18 +468,34 @@ export function freestyleFixture() {
 
     const file = url.searchParams.get("path") ?? "";
 
+    // Guest commands run through the local sh, so their files (wrapper output and anything
+    // under the fixture directory) live on the local disk.
+    const local =
+      /^\/tmp\/beachside-exec\.[A-Za-z0-9]{8}\/std(?:out|err)$/.test(file) ||
+      file.startsWith(`${workdir}/`);
+
     if (method === "GET" && rest === "fs/read") {
-      // Wrapper output lives on the local disk because the wrapper ran through the local sh.
-      if (/^\/tmp\/beachside-exec\.[A-Za-z0-9]{8}\/std(?:out|err)$/.test(file))
+      let bytes: Uint8Array | undefined;
+
+      if (local)
         try {
-          return new Response(new Uint8Array(readFileSync(file)));
+          bytes = new Uint8Array(readFileSync(file));
         } catch {
-          return error(404, "FILE_NOT_FOUND");
+          bytes = undefined;
         }
+      else bytes = vm.files.get(file);
 
-      const bytes = vm.files.get(file);
+      if (!bytes) return error(404, "FILE_NOT_FOUND");
+      const range = /^bytes=(\d+)-(\d*)$/.exec(headers.get("range") ?? "");
 
-      return bytes ? new Response(new Uint8Array(bytes)) : error(404, "FILE_NOT_FOUND");
+      if (range) {
+        const start = Number(range[1]);
+        const end = range[2] ? Number(range[2]) + 1 : bytes.length;
+
+        return new Response(bytes.slice(start, end), { status: 206 });
+      }
+
+      return new Response(new Uint8Array(bytes));
     }
 
     if (method === "PUT" && rest === "fs/write") {
@@ -467,12 +503,22 @@ export function freestyleFixture() {
 
       if (url.searchParams.get("sha256") !== sha256) return error(400, "CHECKSUM_MISMATCH");
       effects.write++;
-      vm.files.set(file, new Uint8Array(raw));
+
+      if (local) writeFileSync(file, raw);
+      else vm.files.set(file, new Uint8Array(raw));
 
       if (file === ENV_FILE) writeFileSync(localEnv(vm), raw);
 
       return new Response(null, { status: 204 });
     }
+
+    if (method === "GET" && rest === "fs/dir" && local)
+      return json(200, {
+        entries: readdirSync(file, { withFileTypes: true }).map((entry) => ({
+          name: entry.name,
+          kind: entry.isDirectory() ? "directory" : entry.isSymbolicLink() ? "symlink" : "file",
+        })),
+      });
 
     if (method === "GET" && rest === "fs/dir") {
       const prefix = file.endsWith("/") ? file : `${file}/`;

@@ -13,6 +13,7 @@ import { z } from "zod";
 import {
   AdapterCheckpointError,
   AdapterError,
+  AdapterFilesystemError,
   assertResourceScope,
   DEFAULT_LIFETIME_SECONDS,
   defineAdapter,
@@ -58,6 +59,7 @@ import {
   wrapperScript,
   type WrapperResult,
 } from "./exec";
+import { directoryValue, Exists, filesystem, statValue } from "./filesystem";
 import {
   launcherScript,
   observeJob,
@@ -820,6 +822,29 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         requestSeconds: 60,
       });
 
+      const files = (vmId: string) =>
+        filesystem(guest(vmId), async (path, offset, length, ctx) => {
+          try {
+            return await api(callSignal(ctx), length + 1024)
+              .vms.ref(vmId)
+              .fs.readFile(path, { offset, length });
+          } catch (error) {
+            throw failure(error).error;
+          }
+        });
+
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Helper throws are normalized at this boundary.
+      const fileRejection = (ctx: AttemptContext, error: unknown) => {
+        if (error instanceof AdapterFilesystemError && error.details.effect !== "none")
+          return ctx.unknown(
+            "Freestyle filesystem operation may have changed the requested path; do not replay",
+          );
+
+        if (error instanceof AdapterError) return ctx.reject(error.code, error.message);
+
+        return ctx.unknown("Freestyle filesystem response was not confirmed; do not replay");
+      };
+
       const pty: PtyDriver = options.pty ?? {
         open: (vmId, request) => api(host.signal).vms.ref(vmId).pty.open(request),
         attach: (vmId, request) => api(host.signal).vms.ref(vmId).pty.attach(request),
@@ -1033,7 +1058,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           images: ["prepared"],
           network: ["blocked", "internet"],
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
-          fileWrite: { overwrite: true, noClobber: false },
+          fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
           lifetime: { minSeconds: 60, maxSeconds: MAX_TTL_SECONDS },
         },
@@ -1321,28 +1346,47 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           submit: (input, ctx) => runCommand(input, ctx),
         },
         async preview(input, ctx) {
-          if (!config.preview.ports.includes(input.port))
-            throw new AdapterError(
-              "UNSUPPORTED",
-              "This preview port was not configured at adapter setup",
-            );
           const vm = await requireVm(input.sandbox, ctx);
-          const rules = await read(ctx, (native) => native.tls.rules.list({ vmId: vm.id }));
 
-          const rule = rules.rules.find(
-            (candidate) =>
-              candidate.action === "allow" &&
-              candidate.source.public === true &&
-              candidate.destination.vmId === vm.id &&
-              candidate.destination.port === input.port &&
-              /^[a-z0-9-]{1,63}\.style\.dev$/.test(candidate.domain),
-          );
+          const published = async () =>
+            (await read(ctx, (native) => native.tls.rules.list({ vmId: vm.id }))).rules.find(
+              (candidate) =>
+                candidate.action === "allow" &&
+                candidate.source.public === true &&
+                candidate.destination.vmId === vm.id &&
+                candidate.destination.port === input.port &&
+                /^[a-z0-9-]{1,63}\.style\.dev$/.test(candidate.domain),
+            );
+
+          let rule = await published();
+
+          // A port not published at create gets its style.dev rule now. The rule names the VM,
+          // so Freestyle deletes it with the VM; a concurrent publish is found by listing again.
+          if (!rule) {
+            if (!vm.slug || !AttemptSlug.safeParse(vm.slug).success)
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "Only VMs created by Beachside get style.dev preview names",
+              );
+
+            try {
+              await api(callSignal(ctx)).tls.rules.create({
+                action: "allow",
+                domain: previewDomain(vm.slug, input.port),
+                source: { public: true },
+                destination: { vmId: vm.id, port: input.port },
+              });
+            } catch (error) {
+              const native = failure(error);
+
+              if (native.status !== 409) throw native.error;
+            }
+
+            rule = await published();
+          }
 
           if (!rule)
-            throw new AdapterError(
-              "UNSUPPORTED",
-              "This VM has no style.dev rule for the port; preview ports are published at create",
-            );
+            throw new AdapterError("UNAVAILABLE", "Freestyle did not publish the preview port");
 
           return { access: "public", url: `https://${rule.domain}` };
         },
@@ -1367,12 +1411,6 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           },
           write: {
             async prepare(input, ctx) {
-              if (!input.overwrite)
-                throw new AdapterError(
-                  "UNSUPPORTED",
-                  "Freestyle file writes always replace the target; no-clobber creation is unavailable",
-                );
-
               if (input.bytes.byteLength > MAX_FILE_BYTES)
                 throw new AdapterError("CAPACITY", "Freestyle file exceeds the write bound");
               await requireRunning(input.sandbox, ctx);
@@ -1380,6 +1418,19 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
               return input;
             },
             async submit(input, ctx) {
+              // A no-clobber write stages the bytes and publishes them with a hard link.
+              if (!input.overwrite)
+                try {
+                  return await files(input.sandbox.id).write(
+                    input.path,
+                    [input.bytes],
+                    false,
+                    readContext(ctx.signal, 120),
+                  );
+                } catch (error) {
+                  return fileRejection(ctx, error);
+                }
+
               try {
                 // One request, verified by sha256 and replaced atomically in the guest.
                 await api(callSignal(readContext(ctx.signal, 120)))
@@ -1390,6 +1441,161 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
               }
 
               return { bytesWritten: input.bytes.byteLength };
+            },
+          },
+          async readDirectory(input, ctx) {
+            await requireRunning(input.sandbox, ctx);
+
+            return directoryValue(
+              await files(input.sandbox.id).helper("list", input.path, "", false, ctx),
+            );
+          },
+          async stat(input, ctx) {
+            await requireRunning(input.sandbox, ctx);
+
+            return statValue(
+              await files(input.sandbox.id).helper(
+                "stat",
+                input.path,
+                "",
+                input.followSymlinks,
+                ctx,
+              ),
+            );
+          },
+          async exists(input, ctx) {
+            await requireRunning(input.sandbox, ctx);
+
+            return Exists.parse(
+              await files(input.sandbox.id).helper("exists", input.path, "", false, ctx),
+            ).exists;
+          },
+          async readStream(input, ctx) {
+            await requireRunning(input.sandbox, ctx);
+
+            return files(input.sandbox.id).read(input.path, ctx);
+          },
+          async writeStream(input, ctx) {
+            await requireRunning(input.sandbox, ctx);
+            const iterator = input.bytes[Symbol.asyncIterator]();
+            const head: Uint8Array[] = [];
+            let size = 0;
+            let ended = false;
+
+            // An overwrite that ends within one native request goes as one sha256-verified PUT;
+            // anything larger, or a no-clobber write, is staged and published in the guest.
+            while (input.overwrite && size <= MAX_FILE_BYTES) {
+              const next = await iterator.next();
+
+              if (next.done) {
+                ended = true;
+                break;
+              }
+
+              head.push(next.value);
+              size += next.value.length;
+            }
+
+            if (ended) {
+              try {
+                await api(callSignal(readContext(ctx.signal, 120)))
+                  .vms.ref(input.sandbox.id)
+                  .fs.writeFile(input.path, new Uint8Array(Buffer.concat(head)));
+              } catch (error) {
+                const native = failure(error);
+
+                if (refusedBeforeEffect(native)) throw native.error;
+
+                throw new AdapterFilesystemError(
+                  "UNAVAILABLE",
+                  "Freestyle file write was not confirmed; do not replay",
+                  {
+                    effect: "possible",
+                    source: input.path,
+                    destination: input.path,
+                    temporaryPaths: [],
+                  },
+                );
+              }
+
+              ctx.retain?.({ effect: "applied", temporaryPaths: [], bytesTransferred: size });
+
+              return { bytesWritten: size };
+            }
+
+            async function* rest() {
+              yield* head;
+
+              for (let next = await iterator.next(); !next.done; next = await iterator.next())
+                yield next.value;
+            }
+
+            return files(input.sandbox.id).write(input.path, rest(), input.overwrite, ctx);
+          },
+          async copy(input, ctx) {
+            await requireRunning(input.sandbox, ctx);
+
+            return files(input.sandbox.id).transfer(
+              "copy",
+              input.source,
+              input.destination,
+              input.overwrite,
+              ctx,
+            );
+          },
+          async move(input, ctx) {
+            await requireRunning(input.sandbox, ctx);
+
+            return files(input.sandbox.id).transfer(
+              "move",
+              input.source,
+              input.destination,
+              input.overwrite,
+              ctx,
+            );
+          },
+          makeDirectory: {
+            async prepare(input, ctx) {
+              await requireRunning(input.sandbox, ctx);
+
+              return input;
+            },
+            async submit(input, ctx) {
+              try {
+                await files(input.sandbox.id).helper(
+                  "mkdir",
+                  input.path,
+                  "",
+                  input.recursive,
+                  readContext(ctx.signal),
+                );
+
+                return { acknowledged: true };
+              } catch (error) {
+                return fileRejection(ctx, error);
+              }
+            },
+          },
+          remove: {
+            async prepare(input, ctx) {
+              await requireRunning(input.sandbox, ctx);
+
+              return input;
+            },
+            async submit(input, ctx) {
+              try {
+                await files(input.sandbox.id).helper(
+                  "remove",
+                  input.path,
+                  "",
+                  input.recursive,
+                  readContext(ctx.signal),
+                );
+
+                return { acknowledged: true };
+              } catch (error) {
+                return fileRejection(ctx, error);
+              }
             },
           },
           async list(input, ctx) {
