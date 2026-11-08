@@ -7,7 +7,7 @@ because it creates paid sandboxes.
 Each provider job:
 
 1. Builds the CLI and the provider's adapter from the chosen commit and installs them as packed
-   tarballs (or, with `cli-version` set, installs that release through `actions/setup-sandbar`).
+   tarballs (or, with `cli-version` set, installs that release through `actions/setup-beachside`).
 2. Restores the base snapshot record from the Actions cache, keyed on `bun.lock` and
    `prepare.sh`. On a miss it creates a sandbox, pushes the checkout, runs `prepare.sh` (Bun and
    `bun install`) and captures the `live-base` snapshot with `--replace`.
@@ -19,6 +19,6 @@ Each provider job:
 It needs these repository secrets: `DAYTONA_API_KEY` and `E2B_API_KEY`. `DAYTONA_TARGET` defaults
 to `us`; set a repository variable to change it.
 
-Sandboxes are labelled `ci=sandbar-live`, so `sandbar gc --label ci=sandbar-live --older-than 2h`
+Sandboxes are labelled `ci=beachside-live`, so `beachside gc --label ci=beachside-live --older-than 2h`
 sweeps anything a killed runner left. Each provider keeps one `live-base` snapshot between runs;
 a dependency change replaces it.

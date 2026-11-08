@@ -11,7 +11,7 @@ on:
         options: [both, daytona, e2b]
         default: both
       cli-version:
-        description: Released CLI version to use through setup-sandbar; empty builds the CLI and adapters from this commit
+        description: Released CLI version to use through setup-beachside; empty builds the CLI and adapters from this commit
         type: string
         default: ""
       warm-base:
@@ -40,8 +40,8 @@ jobs:
       PROVIDER: ${{ matrix.provider }}
       FROM_CHECKOUT: ${{ inputs.cli-version == '' }}
       # Every sandbox carries both labels: one for this attempt's leak check, one for sweeps.
-      RUN_LABEL: sandbar-live-ci=${{ github.run_id }}-${{ github.run_attempt }}
-      SWEEP_LABEL: ci=sandbar-live
+      RUN_LABEL: beachside-live-ci=${{ github.run_id }}-${{ github.run_attempt }}
+      SWEEP_LABEL: ci=beachside-live
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -58,18 +58,18 @@ jobs:
           set -eu
           bun install --frozen-lockfile
           bun run build:packages
-          config="$RUNNER_TEMP/sandbar-config"
-          bin=$(sh .github/live-ci/install-from-checkout.sh "$PROVIDER" "$RUNNER_TEMP/sandbar-cli" "$config/sandbar/adapters")
+          config="$RUNNER_TEMP/beachside-config"
+          bin=$(sh .github/live-ci/install-from-checkout.sh "$PROVIDER" "$RUNNER_TEMP/beachside-cli" "$config/beachside/adapters")
           echo "$bin" >> "$GITHUB_PATH"
           echo "XDG_CONFIG_HOME=$config" >> "$GITHUB_ENV"
-          echo "SANDBAR_STATE_DIR=$RUNNER_TEMP/sandbar/state" >> "$GITHUB_ENV"
+          echo "BEACHSIDE_STATE_DIR=$RUNNER_TEMP/beachside/state" >> "$GITHUB_ENV"
           # The adapter is already installed; this checks it loads and matches the CLI.
-          PATH="$bin:$PATH" XDG_CONFIG_HOME="$config" sandbar adapter add "$PROVIDER"
+          PATH="$bin:$PATH" XDG_CONFIG_HOME="$config" beachside adapter add "$PROVIDER"
 
       # ...or install a released one exactly as users do.
       - name: Set up a released CLI
         if: env.FROM_CHECKOUT != 'true'
-        uses: ./actions/setup-sandbar
+        uses: ./actions/setup-beachside
         with:
           version: ${{ inputs.cli-version }}
           adapters: ${{ matrix.provider }}
@@ -77,7 +77,7 @@ jobs:
       - name: Write the job's profile
         run: |
           set -eu
-          config="$RUNNER_TEMP/sandbar.json"
+          config="$RUNNER_TEMP/beachside.json"
           if [ "$PROVIDER" = daytona ]; then
             # Daytona's default size is too small to build this monorepo.
             extra='"config": { "resources": { "vcpus": 2, "memoryMiB": 4096 } }'
@@ -86,56 +86,56 @@ jobs:
           fi
           printf '{ "default": "live", "profiles": { "live": { "provider": "%s", %s } } }\n' \
             "$PROVIDER" "$extra" > "$config"
-          echo "SANDBAR_CONFIG=$config" >> "$GITHUB_ENV"
+          echo "BEACHSIDE_CONFIG=$config" >> "$GITHUB_ENV"
 
       - name: Check credentials and adapter
         run: |
-          sandbar --version
-          sandbar doctor
+          beachside --version
+          beachside doctor
 
       - name: Restore the base snapshot record
         if: inputs.warm-base
         id: base
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/sandbar/state/snapshots
-          key: sandbar-live-base-${{ matrix.provider }}-${{ hashFiles('bun.lock', '.github/live-ci/prepare.sh') }}
-          restore-keys: sandbar-live-base-${{ matrix.provider }}-
+          path: ${{ runner.temp }}/beachside/state/snapshots
+          key: beachside-live-base-${{ matrix.provider }}-${{ hashFiles('bun.lock', '.github/live-ci/prepare.sh') }}
+          restore-keys: beachside-live-base-${{ matrix.provider }}-
 
       - name: Build the base snapshot
         if: inputs.warm-base && steps.base.outputs.cache-hit != 'true'
         run: |
           set -eu
-          sandbar create --name base --network internet --ttl 30m --retry 5m \
+          beachside create --name base --network internet --ttl 30m --retry 5m \
             --label "$RUN_LABEL" --label "$SWEEP_LABEL"
-          work=$(sandbar push base)
-          sandbar exec base --cwd "$work" --timeout 15m -- sh .github/live-ci/prepare.sh
-          sandbar snapshot create base --name live-base --replace
-          sandbar rm base
+          work=$(beachside push base)
+          beachside exec base --cwd "$work" --timeout 15m -- sh .github/live-ci/prepare.sh
+          beachside snapshot create base --name live-base --replace
+          beachside rm base
 
       - name: Create the job sandbox
         run: |
           set -eu
           from=""
           if [ "${{ inputs.warm-base }}" = true ]; then from="--snapshot live-base"; fi
-          sandbar create --name job $from --network internet --ttl 45m --retry 5m \
+          beachside create --name job $from --network internet --ttl 45m --retry 5m \
             --label "$RUN_LABEL" --label "$SWEEP_LABEL"
-          echo "WORK=$(sandbar push job)" >> "$GITHUB_ENV"
+          echo "WORK=$(beachside push job)" >> "$GITHUB_ENV"
 
       - name: Exit codes pass through
         run: |
           set +e
-          sandbar exec job -- sh -c 'exit 3'
+          beachside exec job -- sh -c 'exit 3'
           code=$?
           set -e
           test "$code" -eq 3 || { echo "::error::exec exited $code, expected 3"; exit 1; }
 
       - name: Lint, build and test in the sandbox
-        run: sandbar exec job --cwd "$WORK" --timeout 25m -- sh .github/live-ci/test.sh
+        run: beachside exec job --cwd "$WORK" --timeout 25m -- sh .github/live-ci/test.sh
 
       - name: Copy test results back
         if: always() && env.WORK != ''
-        run: sandbar cp job:"$WORK"/junit.xml junit.xml
+        run: beachside cp job:"$WORK"/junit.xml junit.xml
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -149,13 +149,13 @@ jobs:
       # build has no action, so it cleans up the same way here.
       - name: Remove this job's sandboxes
         if: always() && env.FROM_CHECKOUT == 'true'
-        run: sandbar rm --all
+        run: beachside rm --all
 
       - name: Check nothing leaked
         if: always() && env.FROM_CHECKOUT == 'true'
         run: |
           set -eu
-          result=$(sandbar gc --label "$RUN_LABEL" --json)
+          result=$(beachside gc --label "$RUN_LABEL" --json)
           echo "$result"
           left=$(echo "$result" | jq '.data.removed | length')
           if [ "$left" -ne 0 ]; then
