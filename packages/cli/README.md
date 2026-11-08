@@ -49,6 +49,8 @@ A `<sandbox>` is a store name, a native id held in the store, or `@file.json` ho
 
 With `--json` (or `BEACHSIDE_JSON=1`) stdout holds exactly one document: `{"ok":true,"data":...}` or `{"ok":false,"error":{"code","message","retryable","outcome","hint?","known?","details?"}}`. Diagnostics go to stderr. When `rm` stops partway, `error.details` lists what was `removed`, `skipped` and `failed`.
 
+Inside Rex, or anywhere with `BEACHSIDE_PROGRAM_STATUS=on`, commands that change or wait on sandboxes report working/done/error on the terminal tab with the Program Status Protocol (OSC 7501). Reports go to stderr only when it is a terminal; `BEACHSIDE_PROGRAM_STATUS=off` turns them off.
+
 | Code | Meaning |
 | --- | --- |
 | 0 | success |
