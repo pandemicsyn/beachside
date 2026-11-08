@@ -85,18 +85,6 @@ export async function projectFiles(root: string) {
   return [...new Set(files), ".git"];
 }
 
-async function* chunks(stream: ReadableStream<Uint8Array>) {
-  const reader = stream.getReader();
-
-  while (true) {
-    const next = await reader.read();
-
-    if (next.done) return;
-
-    yield next.value;
-  }
-}
-
 async function output(argv: string[], cwd: string) {
   const child = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "inherit" });
   const text = await new Response(child.stdout).text();
@@ -107,9 +95,10 @@ async function output(argv: string[], cwd: string) {
 }
 
 // The project lands at the same absolute path, so the local OpenCode client's directory
-// matches the server's.
+// matches the server's. Buffered transfers move small archives in one request and switch to
+// file streams on their own for large ones.
 export async function uploadProject(
-  box: Pick<SandboxHandle, "exec" | "writeFileStream">,
+  box: Pick<SandboxHandle, "exec" | "writeFile">,
   root: string,
   files: string[],
   signal: AbortSignal,
@@ -121,9 +110,11 @@ export async function uploadProject(
     stderr: "inherit",
   });
 
-  await box.writeFileStream(ARCHIVE, chunks(tar.stdout), { signal, overwrite: true });
+  const archive = new Uint8Array(await new Response(tar.stdout).arrayBuffer());
 
   if ((await tar.exited) !== 0) throw new Error("Packing the project failed");
+
+  await box.writeFile(ARCHIVE, archive, { signal, overwrite: true });
 
   await box.exec(
     {
@@ -309,7 +300,7 @@ export function previewProxy(target: string, headers: Record<string, string>) {
 
 /** Copy the box's project back over the local checkout, `.git` included. */
 export async function pullProject(
-  box: Pick<SandboxHandle, "exec" | "readFileStream">,
+  box: Pick<SandboxHandle, "exec" | "readFile">,
   root: string,
   signal: AbortSignal,
 ) {
@@ -329,11 +320,8 @@ cd "$1"
     { signal },
   );
 
-  const tar = Bun.spawn(["tar", "-xzf", "-"], { cwd: root, stdin: "pipe", stderr: "inherit" });
-
-  for await (const chunk of box.readFileStream(ARCHIVE, { signal })) await tar.stdin.write(chunk);
-
-  await tar.stdin.end();
+  const archive = await box.readFile(ARCHIVE, { signal });
+  const tar = Bun.spawn(["tar", "-xzf", "-"], { cwd: root, stdin: archive, stderr: "inherit" });
 
   if ((await tar.exited) !== 0) throw new Error("Unpacking the project failed");
 

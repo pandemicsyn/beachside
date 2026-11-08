@@ -114,10 +114,9 @@ test("upload streams a tarball of the project and unpacks it at the same path", 
 
   await uploadProject(
     {
-      async writeFileStream(_path, bytes) {
-        for await (const chunk of bytes) chunks.push(chunk);
-
-        return chunks.reduce((total, chunk) => total + chunk.length, 0);
+      async writeFile(_path, bytes, options) {
+        expect(options).toMatchObject({ overwrite: true });
+        chunks.push(bytes);
       },
       async exec(input) {
         calls.push(input);
@@ -157,9 +156,8 @@ test("pull unpacks the box's archive over the local checkout", async () => {
 
         return done();
       },
-      async *readFileStream() {
-        yield archive.subarray(0, 10);
-        yield archive.subarray(10);
+      async readFile() {
+        return archive;
       },
     },
     local,
