@@ -290,7 +290,8 @@ test("E2B native streams transfer 32 MiB with incremental octet-stream upload an
   ).toEqual({ bytesWritten: 32 * 1024 * 1024 });
   const expectedDigest = expected.digest("hex");
   expect(f.digest()).toBe(expectedDigest);
-  expect(f.commands()).toBe(2);
+  // Only publish runs a helper: envd creates the stage, so uploads into sticky /tmp work.
+  expect(f.commands()).toBe(1);
 
   const stream = await f.transport.readStream!(
     "box",
@@ -366,6 +367,6 @@ test("E2B short acknowledged upload never publishes the staging artifact", async
       temporaryPaths: [],
     },
   });
-  // The only helper calls reserve and clean the correlated stage; no publish occurs.
-  expect(f.commands()).toBe(2);
+  // The only helper call cleans the correlated stage; no publish occurs.
+  expect(f.commands()).toBe(1);
 });

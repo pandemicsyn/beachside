@@ -22,7 +22,12 @@ import { randomUUID } from "node:crypto";
 import { startProcess } from "./process-native";
 import type { E2BProcessOptions, E2BProcessReference } from "./process-contract";
 import { guestFilesystem, directoryValue, statValue } from "./filesystem-native";
-import { classifyWriteFailure, E2BWriteFailure } from "./write-failure";
+import {
+  classifyWriteFailure,
+  E2BWriteFailure,
+  streamFailureReason,
+  type StreamStep,
+} from "./write-failure";
 
 export const E2B_ENDPOINT = "https://api.e2b.app";
 
@@ -1129,7 +1134,7 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         throw new AdapterError("UNSUPPORTED", "E2B streaming writes require envd 0.5.7 or later");
       const parent = path.slice(0, path.lastIndexOf("/")) || "/";
       const stage = `${parent}/.beachside-stream-${randomUUID()}`;
-      let reserved = false;
+      let step: StreamStep = "upload";
       let dispatched = false;
       let published = false;
       let bytesWritten = 0;
@@ -1167,8 +1172,9 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         signal.throwIfAborted();
         retain?.({ temporaryPaths: [stage] });
         dispatched = true;
-        await guestFilesystem(sandbox, "reserve", stage, "", false, signal);
-        reserved = true;
+        // envd creates the stage itself. Pre-creating it as the sandbox user breaks uploads into
+        // sticky directories such as /tmp: envd reopens it as root, which fs.protected_regular
+        // refuses for a file owned by someone else.
 
         const receipt = await sandbox.files.write(stage, body, {
           useOctetStream: true,
@@ -1189,6 +1195,7 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
               bytesTransferred: bytesWritten,
             },
           );
+        step = "verify";
         const stagedInfo = await sandbox.files.getInfo(stage, { requestTimeoutMs: 30_000, signal });
 
         if (
@@ -1207,6 +1214,7 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
               bytesTransferred: bytesWritten,
             },
           );
+        step = "publish";
         await guestFilesystem(sandbox, "publish", stage, path, overwrite, signal);
         published = true;
         retain?.({ temporaryPaths: [], bytesTransferred: bytesWritten });
@@ -1216,22 +1224,21 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         failure =
           error instanceof AdapterFilesystemError
             ? error
-            : new AdapterFilesystemError(
-                "UNAVAILABLE",
-                "E2B stream completion could not be confirmed",
-                {
-                  effect: dispatched ? "possible" : "none",
-                  destination: path,
-                  temporaryPaths: dispatched && !published ? [stage] : [],
-                  bytesTransferred: bytesWritten,
-                },
-              );
+            : new AdapterFilesystemError("UNAVAILABLE", streamFailureReason(error, step), {
+                effect: dispatched ? "possible" : "none",
+                destination: path,
+                temporaryPaths: dispatched && !published ? [stage] : [],
+                bytesTransferred: bytesWritten,
+              });
+
+        // Keep the native failure for debugging without copying its text into the portable message.
+        if (failure !== error) failure.cause = error;
         throw failure;
       } finally {
         void iterator.return?.().catch(() => undefined);
 
-        if (reserved && !published) {
-          // Only the correlated reserved staging artifact is eligible for cleanup.
+        if (dispatched && !published) {
+          // Only the correlated, uniquely named staging artifact is eligible for cleanup.
           await guestFilesystem(sandbox, "remove", stage).then(
             () => {
               retain?.({ temporaryPaths: [] });
