@@ -1,5 +1,28 @@
 # @beachside/cli
 
+## 0.9.0
+
+### Minor Changes
+
+- [#161](https://github.com/pandemicsyn/beachside/pull/161) [`1015d07`](https://github.com/pandemicsyn/beachside/commit/1015d0747bba34d76be96f6107b4ae7e25c9246f) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Report command status on terminal tabs with the Program Status Protocol (OSC 7501): inside Rex, or with `BEACHSIDE_PROGRAM_STATUS=on`, `create`, `run`, `exec`, `rm`, `gc` and other sandbox-changing commands show working, done or error. Reports go to stderr only when it is a terminal, so `--json` and piped output are unchanged.
+
+- [#172](https://github.com/pandemicsyn/beachside/pull/172) [`a633a1c`](https://github.com/pandemicsyn/beachside/commit/a633a1c0b5948e9668c1a9dbb8eb26e313e7c853) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Inside Rex (or with `BEACHSIDE_PROGRAM_STATUS=on`), `cp` and `push` into a sandbox now show upload progress on the terminal tab, and `run`, `exec` and `sh` send a desktop notification (OSC 777) when they finish after more than 30 seconds. `BEACHSIDE_NOTIFY_AFTER=<seconds>|off` changes or turns off the notification.
+
+- [#159](https://github.com/pandemicsyn/beachside/pull/159) [`d137e90`](https://github.com/pandemicsyn/beachside/commit/d137e90e8f7bc271713c8b0776605bf4996196c2) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Make provider setup consistent. Every first-party package now exports its definition as `<provider>Adapter` and a factory named after the provider: `boxd()`, `boat()`, `runloop()`, `modal()` and `vercel()` join `daytona()` and `e2b()`. Docs, examples and skills show the split form, `Beachside.connect({ adapter, credentials, config })`, which works for every adapter.
+
+  Breaking for Vercel: the definition is now `vercelAdapter`, and `vercel` is the factory. Replace `adapter: vercel` with `adapter: vercelAdapter`, or call `Beachside.connect(vercel({ token, teamId, projectId }))`. Passing a factory where a definition belongs now fails with `INVALID_ARGUMENT` and names both forms.
+
+### Patch Changes
+
+- [#171](https://github.com/pandemicsyn/beachside/pull/171) [`fe54090`](https://github.com/pandemicsyn/beachside/commit/fe54090c4f0434c1064443d9b26ad886903eefc4) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - `snapshot create` no longer leaves a Daytona snapshot uncertain when the capture outlives the adapter's wait: the CLI sends the pending source restart and records the snapshot. `snapshot rm` and `snapshot inspect` finish such a capture the same way, so an uncertain capture can be deleted. A profile's OCI `config.environment` now follows the same build rule as `--image`: create reuses the recorded `image build` instead of starting another build.
+
+- [#164](https://github.com/pandemicsyn/beachside/pull/164) [`366a0c9`](https://github.com/pandemicsyn/beachside/commit/366a0c9ea7b02c1ea2358992edf69624fb3ad80c) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - `cp` and `cat` handle files of any size: they stream where the provider streams files, and otherwise move the file in 1 MiB parts that the sandbox joins or splits. A failed download no longer truncates the local file. `exec`, `sh` and `run` stream `--stdin` and `--stdin-file` as the input arrives where the provider takes incremental stdin (Daytona, E2B, Vercel), so input has no size limit and can stay open (with `--json` or `--no-stream`, input over 1 MiB uses the SDK's streamed stdin). On other providers, input over 1 MiB fails with a hint to copy it in and redirect it.
+
+- [#173](https://github.com/pandemicsyn/beachside/pull/173) [`29d0a39`](https://github.com/pandemicsyn/beachside/commit/29d0a39eb99f3c7abb9d4a23bf3fcebf42c4ebd5) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Clarify in the README that the CLI never prompts for input and that exit codes indicate what to do next.
+- Updated dependencies [[`d137e90`](https://github.com/pandemicsyn/beachside/commit/d137e90e8f7bc271713c8b0776605bf4996196c2), [`3f414a8`](https://github.com/pandemicsyn/beachside/commit/3f414a8dbb7d9b73259e99a2c70cda59fac75af9), [`7b9fa24`](https://github.com/pandemicsyn/beachside/commit/7b9fa244f6364b8b6aace7bcd46d80edb71fe993)]:
+  - beachside@0.9.0
+  - @beachside/adapter@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes
