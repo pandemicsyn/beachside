@@ -52,13 +52,24 @@ export function byteLimit(value: number | undefined, defaultValue?: number): num
   return limit;
 }
 
+/**
+ * The effective limit of one buffered adapter read or write: the caller's optional `maxBytes`
+ * guard, bounded by the adapter's own buffered limit. Larger files use the adapter's streams.
+ */
 export function bufferedLimit(value: number | undefined, adapterLimit: number): number {
-  const limit = byteLimit(value, 1_048_576)!;
+  const limit = byteLimit(value);
+  const adapter = byteLimit(adapterLimit)!;
 
-  if (limit > 16_777_216)
-    throw new BeachsideError("INVALID_ARGUMENT", "Buffered file limit exceeds 16 MiB; use streams");
+  return limit === undefined ? adapter : Math.min(limit, adapter);
+}
 
-  return Math.min(limit, byteLimit(adapterLimit)!);
+/** The error for a file larger than an adapter without file streams can move in one call. */
+export function adapterFileLimit(adapterLimit: number, code: "CAPACITY" | "OUTPUT_CAPACITY") {
+  return new BeachsideError(
+    code,
+    `File exceeds this adapter's ${adapterLimit}-byte file limit; it has no file streams`,
+    code === "OUTPUT_CAPACITY" ? "unknown" : "none",
+  );
 }
 
 class Transfer {

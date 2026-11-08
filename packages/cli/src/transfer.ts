@@ -1,8 +1,20 @@
 import { execFile } from "node:child_process";
-import { createReadStream } from "node:fs";
-import { lstat, mkdir, readdir, readlink } from "node:fs/promises";
-import { dirname, join, posix } from "node:path";
-import { NonzeroExitError, type ExecOutput, type SandboxHandle } from "beachside";
+import { createReadStream, createWriteStream } from "node:fs";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  readlink,
+  realpath,
+  rename,
+  rm,
+  stat,
+} from "node:fs/promises";
+import { basename, dirname, join, posix } from "node:path";
+import { pipeline } from "node:stream/promises";
+import { BeachsideError, NonzeroExitError, type ExecOutput, type SandboxHandle } from "beachside";
 import { CliError } from "./output";
 import {
   archivePath,
@@ -29,6 +41,9 @@ const NoTar = 127;
 
 /** Exit code the pack script uses when the source path does not exist. */
 const NoSource = 66;
+
+/** Exit code the join script uses when --no-clobber finds the destination. */
+const Exists = 73;
 
 /** Quote one word for a POSIX shell. */
 export function shellQuote(value: string): string {
@@ -82,6 +97,55 @@ export const scripts = {
         ? `split -b ${PartBytes} -a 6 archive.tar part. && rm archive.tar`
         : "mv archive.tar part.000000",
       'echo "$tmp"',
+      "LC_ALL=C ls",
+    ].join("\n");
+  },
+  /** Make an empty staging folder for the parts of one large file. */
+  stage(): string {
+    return ["set -e", makeTemp, 'echo "$tmp"'].join("\n");
+  },
+  /**
+   * Join staged parts into the file at `path`, remove the staging folder, and print `path`. The
+   * file is assembled beside the destination and published in one step: `mv` to replace, or a
+   * hard link when `overwrite` is false, which fails atomically if the destination appeared. A
+   * destination that became a directory in between is caught afterwards and reported.
+   */
+  join(tmp: string, path: string, overwrite: boolean): string {
+    const dest = shellQuote(path);
+    const dir = shellQuote(posix.dirname(path));
+
+    return [
+      "set -e",
+      `tmp=${shellQuote(tmp)}`,
+      'part=""',
+      `trap 'rm -rf "$tmp"; [ -z "$part" ] || rm -f "$part"' EXIT`,
+      `if [ -d ${dest} ]; then echo "the destination is a directory" >&2; exit 1; fi`,
+      `part=$(mktemp ${dir}/.beachside.XXXXXX)`,
+      `cat "$tmp"/part.* > "$part"`,
+      // mktemp makes the file private; give it the mode a new file would get.
+      `chmod "$(printf '%o' $((0666 & ~0$(umask))))" "$part"`,
+      'name=$(basename "$part")',
+      ...(overwrite
+        ? [`mv -f "$part" ${dest}`]
+        : [
+            `if ! ln "$part" ${dest} 2>/dev/null; then if [ -e ${dest} ] || [ -L ${dest} ]; then echo "the destination already exists" >&2; exit ${Exists}; fi; echo "could not publish the file" >&2; exit 1; fi`,
+          ]),
+      // A destination that became a directory meanwhile received the file inside it instead.
+      `if [ -d ${dest} ]; then rm -f ${dest}/"$name"; echo "the destination is a directory" >&2; exit 1; fi`,
+      `echo ${dest}`,
+    ].join("\n");
+  },
+  /** Split the regular file at `path` into parts in a staging folder and list them. */
+  split(path: string): string {
+    const source = shellQuote(path);
+
+    return [
+      "set -e",
+      `if [ ! -f ${source} ]; then echo "No such file" >&2; exit ${NoSource}; fi`,
+      makeTemp,
+      `split -b ${PartBytes} -a 6 ${source} "$tmp/part." || { rm -rf "$tmp"; exit 1; }`,
+      'echo "$tmp"',
+      'cd "$tmp"',
       "LC_ALL=C ls",
     ].join("\n");
   },
@@ -521,4 +585,186 @@ export async function download(
   }
 
   return { ...summary, path: local };
+}
+
+/**
+ * Write one local file of `size` bytes to `path` in the sandbox. Providers with file streams take
+ * it as one stream; otherwise a file larger than one buffered part travels as parts that the
+ * sandbox joins, so no file is too big to copy. Returns the bytes written.
+ */
+export async function uploadFile(
+  box: SandboxHandle<true>,
+  sandbox: string,
+  local: string,
+  size: number,
+  path: string,
+  overwrite: boolean,
+  signal: AbortSignal,
+): Promise<number> {
+  if (box.supports("writeFileStream"))
+    return box.writeFileStream(path, createReadStream(local), { overwrite, signal });
+
+  if (size <= PartBytes) {
+    const bytes = new Uint8Array(await readFile(local));
+    await box.writeFile(path, bytes, { overwrite, signal });
+
+    return bytes.byteLength;
+  }
+
+  const [tmp] = await step(
+    box,
+    sandbox,
+    scripts.stage(),
+    signal,
+    (stderr) => new CliError("REMOTE_FAILED", `Could not prepare the copy: ${stderr}`),
+  );
+
+  if (!tmp?.startsWith("/"))
+    throw new CliError("INVALID_RESPONSE", "The sandbox did not report a staging folder");
+  let sent = 0;
+
+  try {
+    await writeParts(parts(createReadStream(local), PartBytes), async (index, bytes) => {
+      await box.writeFile(partName(tmp, index), bytes, {
+        overwrite: true,
+        maxBytes: PartBytes,
+        signal,
+      });
+      sent += bytes.byteLength;
+    });
+  } catch (cause) {
+    await cleanup(box, tmp, signal);
+    throw cause;
+  }
+
+  await step(box, sandbox, scripts.join(tmp, path, overwrite), signal, (stderr, exitCode) =>
+    exitCode === Exists
+      ? new CliError(
+          "CONFLICT",
+          `${path} already exists in sandbox ${sandbox}`,
+          "drop --no-clobber to overwrite it",
+        )
+      : new CliError("REMOTE_FAILED", `Could not write ${path}: ${stderr}`),
+  );
+
+  return sent;
+}
+
+/**
+ * The bytes of one sandbox file, in order. Providers with file streams stream it; otherwise a
+ * file too large for one buffered read is split in the sandbox and read part by part.
+ */
+export async function* fileChunks(
+  box: SandboxHandle<true>,
+  sandbox: string,
+  path: string,
+  signal: AbortSignal,
+): AsyncIterable<Uint8Array> {
+  if (box.supports("readFileStream")) {
+    yield* box.readFileStream(path, { signal });
+
+    return;
+  }
+
+  try {
+    yield await box.readFile(path, { maxBytes: PartBytes, signal });
+
+    return;
+  } catch (cause) {
+    if (!(cause instanceof BeachsideError) || cause.code !== "OUTPUT_CAPACITY") throw cause;
+  }
+
+  const [tmp, ...names] = await step(
+    box,
+    sandbox,
+    scripts.split(path),
+    signal,
+    (stderr, exitCode) =>
+      exitCode === NoSource
+        ? new CliError("NOT_FOUND", `${path} is not a file in sandbox ${sandbox}`)
+        : new CliError("REMOTE_FAILED", `Could not split ${path} for copying: ${stderr}`),
+  );
+
+  if (!tmp?.startsWith("/") || names.some((name) => !/^part\.[a-z0-9]+$/.test(name)))
+    throw new CliError("INVALID_RESPONSE", "The sandbox did not report the file parts");
+
+  try {
+    for (const name of names.sort())
+      yield await box.readFile(`${tmp}/${name}`, { maxBytes: PartBytes, signal });
+  } finally {
+    await cleanup(box, tmp, signal);
+  }
+}
+
+/**
+ * Save streamed bytes as the local file `local`. With `noClobber` the file is created exclusively;
+ * otherwise the bytes go to a sibling temporary file that replaces `local` only once complete, so
+ * a failed copy leaves the old file as it was. Returns the bytes written.
+ */
+export async function saveLocalFile(
+  chunks: AsyncIterable<Uint8Array>,
+  local: string,
+  noClobber: boolean,
+): Promise<number> {
+  let bytes = 0;
+
+  async function* counted() {
+    for await (const chunk of chunks) {
+      bytes += chunk.byteLength;
+      yield chunk;
+    }
+  }
+
+  if (noClobber) {
+    let created = false;
+    const out = createWriteStream(local, { flags: "wx" });
+    out.once("open", () => {
+      created = true;
+    });
+
+    try {
+      await pipeline(counted(), out);
+    } catch (cause) {
+      if (created) await rm(local, { force: true });
+
+      if (cause instanceof Error && "code" in cause && cause.code === "EEXIST")
+        throw new CliError(
+          "CONFLICT",
+          `${local} already exists`,
+          "drop --no-clobber to overwrite it",
+        );
+      throw cause;
+    }
+
+    return bytes;
+  }
+
+  // A symlink keeps working: the copy replaces the file it points to, as a direct write would.
+  const link = (await lstat(local).catch(() => null))?.isSymbolicLink();
+  const target = link ? await realpath(local).catch(() => null) : local;
+
+  // A dangling link has no file to replace beside; write through it as before.
+  if (!target) {
+    await pipeline(counted(), createWriteStream(local, { flags: "w" }));
+
+    return bytes;
+  }
+
+  const part = join(
+    dirname(target),
+    `.${basename(target)}.beachside-${crypto.randomUUID().slice(0, 8)}.part`,
+  );
+
+  try {
+    await pipeline(counted(), createWriteStream(part, { flags: "wx" }));
+    const existing = await stat(target).catch(() => null);
+
+    if (existing?.isFile()) await chmod(part, existing.mode & 0o7777);
+    await rename(part, target);
+  } catch (cause) {
+    await rm(part, { force: true });
+    throw cause;
+  }
+
+  return bytes;
 }

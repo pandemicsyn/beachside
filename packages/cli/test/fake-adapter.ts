@@ -1,5 +1,13 @@
-import { appendFile } from "node:fs/promises";
-import { bindAdapter, defineAdapter } from "@beachside/adapter";
+import { createReadStream, createWriteStream } from "node:fs";
+import { appendFile, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { pipeline } from "node:stream/promises";
+import {
+  AdapterError,
+  AdapterFilesystemError,
+  bindAdapter,
+  defineAdapter,
+} from "@beachside/adapter";
 import { AdapterImage } from "beachside";
 import { createFakeAdapter } from "@beachside-internal/provider-fake";
 import { z } from "zod";
@@ -212,3 +220,167 @@ export const otherAccount = bindAdapter(
 
 /** The fake adapter with simulated filesystem snapshots, like Daytona, E2B or Modal. */
 export const snapshotting = bindAdapter(createFakeAdapter({ url, token, snapshots: true }), {}, {});
+
+const streamedFiles = process.env.BEACHSIDE_FAKE_FILES;
+
+/** Sandbox paths of the file-streaming fake live under BEACHSIDE_FAKE_FILES on the test host. */
+function hostPath(path: string): string {
+  if (!streamedFiles) throw new Error("BEACHSIDE_FAKE_FILES is required");
+
+  return join(streamedFiles, path);
+}
+
+/** The fake adapter with incremental file streams, like boxd, Daytona, E2B or Vercel. */
+export const fileStreaming = bindAdapter(
+  defineAdapter({
+    name: "fake",
+    displayName: "Fake test provider that streams files",
+    config: z.strictObject({}),
+    credentials: z.strictObject({}),
+    async connect({ host }) {
+      const session = await definition.connect({ config: {}, credentials: {}, host });
+
+      return {
+        ...session,
+        files: {
+          ...session.files!,
+          async readStream(input: { path: string }) {
+            const chunks = createReadStream(hostPath(input.path))[Symbol.asyncIterator]();
+
+            return new ReadableStream<Uint8Array>({
+              async pull(controller) {
+                const next = await chunks.next();
+
+                if (next.done) controller.close();
+                else controller.enqueue(new Uint8Array(next.value));
+              },
+              async cancel() {
+                await chunks.return?.();
+              },
+            });
+          },
+          async writeStream(input: {
+            path: string;
+            bytes: AsyncIterable<Uint8Array>;
+            overwrite: boolean;
+          }) {
+            const target = hostPath(input.path);
+            let bytesWritten = 0;
+            await mkdir(dirname(target), { recursive: true });
+
+            try {
+              await pipeline(
+                async function* () {
+                  for await (const chunk of input.bytes) {
+                    bytesWritten += chunk.byteLength;
+                    yield chunk;
+                  }
+                },
+                createWriteStream(target, { flags: input.overwrite ? "w" : "wx" }),
+              );
+            } catch (cause) {
+              if (cause instanceof Error && "code" in cause && cause.code === "EEXIST")
+                throw new AdapterFilesystemError("CONFLICT", "File exists", { effect: "none" });
+              throw cause;
+            }
+
+            return { bytesWritten };
+          },
+        },
+      };
+    },
+  }),
+  {},
+  {},
+);
+
+const stdinLog = process.env.BEACHSIDE_FAKE_STDIN;
+
+/** With BEACHSIDE_FAKE_STDIN_FAIL_AFTER, writes past that many bytes fail like a dropped link. */
+const failAfter = process.env.BEACHSIDE_FAKE_STDIN_FAIL_AFTER
+  ? Number(process.env.BEACHSIDE_FAKE_STDIN_FAIL_AFTER)
+  : undefined;
+
+/**
+ * Streams output and takes incremental stdin, like Daytona, E2B or Vercel. Each command appends
+ * its input to BEACHSIDE_FAKE_STDIN and exits once its stdin is closed; a buffered exec captures
+ * the number of input bytes as stdout.
+ */
+export const stdinStreaming = bindAdapter(
+  defineAdapter({
+    name: "fake",
+    displayName: "Fake test provider that streams stdin",
+    config: z.strictObject({}),
+    credentials: z.strictObject({}),
+    async connect({ host }) {
+      const processing = createFakeAdapter({ url: url!, token: token!, processes: { holdMs: 0 } });
+      const session = await processing.connect({ config: {}, credentials: {}, host });
+      const processes = session.processes!;
+
+      return {
+        ...session,
+        processes: {
+          ...processes,
+          supports: {
+            ...processes.supports,
+            stdin: "bytes" as const,
+            execCapture: "bytes" as const,
+          },
+          async start(
+            input: Parameters<typeof processes.start>[0],
+            ctx: Parameters<typeof processes.start>[1],
+          ) {
+            const native = await processes.start(input, ctx);
+            let closed = false;
+            let received = 0;
+            let open: () => void = () => undefined;
+
+            const gate = new Promise<void>((resolve) => {
+              open = resolve;
+            });
+
+            return {
+              get confirmedExit() {
+                return closed ? native.confirmedExit : undefined;
+              },
+              wait: async () => {
+                await gate;
+
+                return native.wait();
+              },
+              outputDone: gate.then(() => native.outputDone),
+              // Buffered exec captures the byte count received, like `wc -c`.
+              capture: gate.then(async () => ({
+                exitCode: (await native.wait()).exitCode,
+                stdout: new TextEncoder().encode(`${received}\n`),
+                stderr: new Uint8Array(),
+                truncated: false,
+              })),
+              detachOutput: () => native.detachOutput!(),
+              async terminate(context: Parameters<NonNullable<typeof native.terminate>>[0]) {
+                closed = true;
+                open();
+
+                return native.terminate!(context);
+              },
+              detach: () => native.detach(),
+              async write(bytes: Uint8Array) {
+                if (failAfter !== undefined && received + bytes.byteLength > failAfter)
+                  throw new AdapterError("UNAVAILABLE", "Fake stdin transport dropped");
+                received += bytes.byteLength;
+
+                if (stdinLog) await appendFile(stdinLog, bytes);
+              },
+              async closeStdin() {
+                closed = true;
+                open();
+              },
+            };
+          },
+        },
+      };
+    },
+  }),
+  {},
+  {},
+);

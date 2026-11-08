@@ -48,6 +48,7 @@ Import from `beachside`.
 | `ExecInput`                   | type      |
 | `ExecOptions`                 | type      |
 | `ExecOutput`                  | type      |
+| `ExecStdinStream`             | type      |
 | `Fact`                        | type      |
 | `FileEntry`                   | type      |
 | `FileReadOptions`             | type      |

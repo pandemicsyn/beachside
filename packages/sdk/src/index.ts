@@ -62,6 +62,7 @@ export type {
   CreateInput,
   NetworkPolicy,
   ExecInput,
+  ExecStdinStream,
   ExecOutput,
   OutputPreview,
   DirectBeachsideClient,

@@ -81,7 +81,7 @@ Every sandbox has a wall-clock lifetime after which the provider removes it: `li
 
 ## Files
 
-`writeFile(path, bytes)` and `readFile(path)` use absolute paths and default to a 1 MiB limit (`maxBytes` up to 16 MiB). Writes refuse to replace an existing file unless you pass `{ overwrite: true }`; boxd, Vercel and Daytona mounted volumes always need `overwrite: true`. For larger files use `readFileStream` / `writeFileStream` where the adapter supports them. On E2B, work under `/home/user`.
+`writeFile(path, bytes)` and `readFile(path)` use absolute paths and work at any size (large files stream underneath where the adapter streams files; `maxBytes` is an optional guard). Writes refuse to replace an existing file unless you pass `{ overwrite: true }`; boxd, Vercel and Daytona mounted volumes always need `overwrite: true`. Use `readFileStream` / `writeFileStream` to process data in chunks. `exec` `stdin` takes a string, bytes, or a stream (`AsyncIterable`/`ReadableStream`); streams and input over 1 MiB need Daytona, E2B or Vercel. On E2B, work under `/home/user`.
 
 ## Errors and uncertain outcomes
 
@@ -112,7 +112,7 @@ Never build a reference by hand from a sandbox id. `get()` never creates or resu
 
 - **Daytona:** set the network policy at connection (`"daytona-default"`, or `"internet"` on higher tiers). Omitting it means strict `blocked`, which may be unavailable. Create from an active snapshot in the chosen region.
 - **E2B:** the `base` template works out of the box; use `/home/user`.
-- **boxd:** needs `network: "internet"` and an org; files are capped at 1 MiB and need `overwrite: true`.
+- **boxd:** needs `network: "internet"` and an org; files over 1 MiB stream underneath, and writes need `overwrite: true`.
 - **Boat:** needs `network: "internet"`; files live under `/home/user` or `/tmp`, are capped at 5 MiB and need `overwrite: true`. Sandboxes get none of the Boat account's secrets unless `environment` names one. `suspend()` archives the disk; `resume()` starts a fresh machine.
 - **Runloop (experimental; sign-ups are invite-only):** egress is blocked by default (the adapter manages a deny-all `beachside-blocked` network policy); pass `network: "internet"` to allow it. Files need `overwrite: true`. `suspend()` keeps the disk only; `snapshot()` captures the disk, and restores start fresh processes. `preview(port)` returns a URL plus an auth header unless `preview.access` is `"public"`.
 - **Vercel:** disposable Node 24 sandboxes with blocked networking by default; no stdin, process streams, snapshots or volumes; files need `overwrite: true`.
