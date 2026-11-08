@@ -48,6 +48,7 @@ import {
 } from "@beachside/adapter";
 import {
   checkEnv,
+  commandLine,
   ENV_FILE,
   envFile,
   envMarker,
@@ -57,6 +58,14 @@ import {
   wrapperScript,
   type WrapperResult,
 } from "./exec";
+import {
+  launcherScript,
+  observeJob,
+  parseLauncher,
+  ProcessReference,
+  type GuestRunner,
+} from "./process";
+import { openTerminal, TerminalReference, terminalSlug, type PtyDriver } from "./terminal";
 import {
   createFreestyleClient,
   FREESTYLE_API,
@@ -326,6 +335,10 @@ export type FreestyleAdapterOptions = {
   pollIntervalMs?: number;
   /** Longest a mutation waits in-call before returning a pending result. */
   settleSeconds?: number;
+  /** Delay between output reads while a process is quiet (default 250 ms). */
+  processPollMs?: number;
+  /** Terminal sessions; defaults to the SDK's `vm.pty` WebSockets. Tests inject a stand-in. */
+  pty?: PtyDriver;
 };
 
 /** Constructing a definition performs no provider IO. */
@@ -772,6 +785,48 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         );
       };
 
+      /** One guest control command; anything but a clean exit is an error. */
+      const guest =
+        (vmId: string): GuestRunner =>
+        async (command, ctx, stdin) => {
+          const request: ExecOptions = {
+            command,
+            timeoutMs: Math.max(1000, Math.min(300_000, ctx.deadline - Date.now())),
+          };
+
+          if (stdin) request.stdin = base64(stdin);
+          let response;
+
+          try {
+            response = await api(callSignal(ctx)).vms.ref(vmId).exec(request);
+          } catch (error) {
+            throw failure(error).error;
+          }
+
+          if (response.statusCode !== 0)
+            throw new AdapterError(
+              response.statusCode === null || response.statusCode === undefined
+                ? "TIMEOUT"
+                : "UNAVAILABLE",
+              "Freestyle guest control command failed",
+            );
+
+          return response.stdout ?? "";
+        };
+
+      const jobOptions = (vmId: string) => ({
+        run: guest(vmId),
+        pollMs: options.processPollMs ?? 250,
+        requestSeconds: 60,
+      });
+
+      const pty: PtyDriver = options.pty ?? {
+        open: (vmId, request) => api(host.signal).vms.ref(vmId).pty.open(request),
+        attach: (vmId, request) => api(host.signal).vms.ref(vmId).pty.attach(request),
+        list: async (vmId, ctx) =>
+          (await read(ctx, (native) => native.vms.ref(vmId).pty.list())).sessions,
+      };
+
       const listedReference = (vm: VmData): SandboxReference | null =>
         Id.safeParse(vm.id).success
           ? {
@@ -1132,6 +1187,115 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
               : ctx.unknown(
                   "Freestyle delete response was lost and the VM still exists; destroy it again explicitly",
                 );
+          },
+        },
+        processes: {
+          supports: {
+            sustainedOutput: true,
+            binaryOutput: true,
+            signals: ["SIGTERM", "SIGKILL"],
+            terminal: true,
+            reopen: true,
+            stdin: "bytes",
+            status: true,
+            execCapture: "bytes",
+          },
+          async start(input, ctx) {
+            if (
+              input.capture &&
+              (!Number.isSafeInteger(input.capture.maxBytes) ||
+                input.capture.maxBytes < 1 ||
+                input.capture.maxBytes > MAX_OUTPUT_BYTES)
+            )
+              throw new AdapterError(
+                "CAPACITY",
+                "Freestyle process capture exceeds its byte bound",
+              );
+            // Validates argv, env names and NUL bytes before any effect.
+            commandLine(input);
+            await requireRunning(input.sandbox, ctx);
+            const format = input.output?.format ?? "text";
+
+            if (input.terminal) {
+              if (input.stdin === "closed")
+                throw new AdapterError("UNSUPPORTED", "Freestyle terminals always take input");
+
+              return openTerminal(
+                pty,
+                {
+                  vmId: input.sandbox.id,
+                  command: commandLine({ ...input, env: { TERM: "xterm-256color", ...input.env } }),
+                  terminal: input.terminal,
+                  reference: {
+                    version: 1,
+                    kind: "freestyle-pty",
+                    sandbox: input.sandbox.id,
+                    session: terminalSlug(),
+                  },
+                  format,
+                  capture: input.capture,
+                },
+                ctx,
+              );
+            }
+
+            const directory = parseLauncher(
+              await guest(input.sandbox.id)(launcherScript(input), ctx),
+            );
+
+            if (!directory)
+              throw new AdapterError("UNAVAILABLE", "Freestyle process start was not acknowledged");
+
+            return observeJob(
+              jobOptions(input.sandbox.id),
+              {
+                version: 1,
+                kind: "freestyle-job",
+                sandbox: input.sandbox.id,
+                directory,
+                stdin: input.stdin ?? "closed",
+              },
+              { format, capture: input.capture, fromEnd: false },
+              ctx,
+            );
+          },
+          async reopen(input, ctx) {
+            await requireRunning(input.sandbox, ctx);
+            const job = ProcessReference.safeParse(input.reference);
+            const terminal = TerminalReference.safeParse(input.reference);
+
+            if (
+              job.success &&
+              job.data.sandbox === input.sandbox.id &&
+              input.profile === "process" &&
+              job.data.stdin === input.stdin
+            )
+              return observeJob(
+                jobOptions(input.sandbox.id),
+                job.data,
+                { format: input.output.format, fromEnd: true },
+                ctx,
+              );
+
+            if (
+              terminal.success &&
+              terminal.data.sandbox === input.sandbox.id &&
+              input.profile === "terminal"
+            )
+              return openTerminal(
+                pty,
+                {
+                  vmId: input.sandbox.id,
+                  reference: terminal.data,
+                  format: input.output.format,
+                },
+                ctx,
+              );
+
+            throw new AdapterError(
+              "CONFLICT",
+              "Process reference does not belong to this Freestyle VM and profile",
+            );
           },
         },
         exec: {
