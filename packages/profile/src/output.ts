@@ -1,3 +1,4 @@
+import { BeachsideError, OutcomeUnknownError } from "beachside";
 import type { RecoveryReference, ResourceReference, SandboxReference } from "beachside";
 
 /** A failure the CLI detected itself, before or around provider calls. */
@@ -52,3 +53,74 @@ export type Known = {
 };
 
 export type Outcome = "rejected" | "unknown" | "partial";
+
+export type ErrorReport = {
+  code: string;
+  message: string;
+  retryable: boolean;
+  outcome: Outcome;
+  hint?: string;
+  known?: Known;
+  details?: BatchDetails;
+};
+
+const retryableCodes = new Set(["RATE_LIMIT", "CAPACITY", "UNAVAILABLE"]);
+
+/** Codes whose effect may already have happened, so blind retry is unsafe. */
+const uncertainEffects = new Set(["possible", "unknown", "partial", "applied"]);
+
+export function describeError(cause: unknown): ErrorReport {
+  if (cause instanceof CliError)
+    return {
+      code: cause.code,
+      message: cause.message,
+      retryable: false,
+      outcome: cause.outcome,
+      hint: cause.hint,
+      known: cause.known,
+      details: cause.details,
+    };
+
+  if (cause instanceof BeachsideError) {
+    const partial = cause.outcome?.status === "partial";
+
+    let known: Known | undefined;
+
+    if (cause.outcome && "sandbox" in cause.outcome && cause.outcome.sandbox)
+      known = { reference: cause.outcome.sandbox };
+
+    if (cause.reference) known = { ...known, recovery: cause.reference };
+
+    const outcome: Outcome = partial
+      ? "partial"
+      : cause instanceof OutcomeUnknownError || uncertainEffects.has(cause.effect)
+        ? "unknown"
+        : "rejected";
+
+    return {
+      code: partial ? "PARTIAL" : cause.code,
+      message: cause.message,
+      retryable: outcome === "rejected" && retryableCodes.has(cause.code),
+      outcome,
+      known,
+    };
+  }
+
+  // Local file errors (a missing --stdin-file, an unreadable cp source) happen before any effect.
+  const local = cause instanceof Error && "syscall" in cause && "code" in cause;
+
+  if (local)
+    return {
+      code: "LOCAL_IO",
+      message: cause.message,
+      retryable: false,
+      outcome: "rejected",
+    };
+
+  return {
+    code: "INTERNAL",
+    message: cause instanceof Error ? cause.message : String(cause),
+    retryable: false,
+    outcome: "unknown",
+  };
+}

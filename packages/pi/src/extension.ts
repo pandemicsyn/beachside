@@ -1,5 +1,4 @@
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   createBashToolDefinition,
   createEditToolDefinition,
@@ -11,11 +10,13 @@ import {
   SessionManager,
   type ExtensionAPI,
   type ToolDefinition,
+  type Skill,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type TSchema } from "typebox";
-import { bashOperations, createBeachsideTools, findDescription } from "./tools";
+import { bashOperations, createBeachsideTools, findDescription, grepDescription } from "./tools";
 import { Fork, Saved, SandboxSession, forkEntry, message, sessionEntry } from "./session";
 import { pull, push } from "./workspace";
+import { hostSkillPath } from "./skills";
 
 const localTools = {
   bash: createBashToolDefinition,
@@ -27,12 +28,11 @@ const localTools = {
   write: createWriteToolDefinition,
 };
 
-const skillsDir = fileURLToPath(new URL("./skills/", import.meta.url));
-
 export default function beachside(pi: ExtensionAPI) {
   let session: SandboxSession | undefined;
   let exit = "destroy";
   let previousTools: string[] = [];
+  let skills: Skill[] = [];
 
   pi.registerFlag("beachside", {
     type: "string",
@@ -59,18 +59,28 @@ export default function beachside(pi: ExtensionAPI) {
   function replace<P extends TSchema, D>(
     local: ToolDefinition<P, D>,
     factory: (tools: ReturnType<typeof createBeachsideTools>) => ToolDefinition<P, D>,
+    localSkill?: (
+      args: Parameters<typeof local.execute>[1],
+    ) => Promise<Parameters<typeof local.execute>[1] | undefined>,
   ) {
     pi.registerTool({
       ...local,
       defaultActive: false,
       async execute(id, args, signal, update, ctx) {
-        if (!session || session.off) return local.execute(id, args, signal, update, ctx);
-        signal?.throwIfAborted();
-        const { box, workdir } = await session.get();
-        signal?.throwIfAborted();
-        const remote = factory(createBeachsideTools(box, workdir, signal));
+        const active = session;
 
-        return remote.execute(id, args, signal, update, ctx);
+        if (!active || active.off) return local.execute(id, args, signal, update, ctx);
+        signal?.throwIfAborted();
+        const skillArgs = await localSkill?.(args);
+
+        if (skillArgs) return local.execute(id, skillArgs, signal, update, ctx);
+
+        return active.use(async ({ box, workdir }) => {
+          signal?.throwIfAborted();
+          const remote = factory(createBeachsideTools(box, workdir, signal));
+
+          return remote.execute(id, args, signal, update, ctx);
+        });
       },
     });
   }
@@ -127,9 +137,17 @@ export default function beachside(pi: ExtensionAPI) {
     replace(localTools.bash(ctx.cwd), (tools) => tools.bash);
     replace(localTools.edit(ctx.cwd), (tools) => tools.edit);
     replace({ ...localTools.find(ctx.cwd), description: findDescription }, (tools) => tools.find);
-    replace(localTools.grep(ctx.cwd), (tools) => tools.grep);
+    replace({ ...localTools.grep(ctx.cwd), description: grepDescription }, (tools) => tools.grep);
     replace(localTools.ls(ctx.cwd), (tools) => tools.ls);
-    replace(localTools.read(ctx.cwd), (tools) => tools.read);
+    replace(
+      localTools.read(ctx.cwd),
+      (tools) => tools.read,
+      async (args) => {
+        const path = await hostSkillPath(args.path, skills);
+
+        return path ? { ...args, path } : undefined;
+      },
+    );
     replace(localTools.write(ctx.cwd), (tools) => tools.write);
     pi.setActiveTools(previousTools.filter((name) => name !== "powershell"));
     ctx.ui.setStatus("beachside", `${active.profile} · sandbox pending`);
@@ -151,8 +169,20 @@ export default function beachside(pi: ExtensionAPI) {
       return;
     }
 
+    if (exit === "suspend") active.requireSuspend();
+
     try {
       const caps = await active.capabilities();
+
+      if (exit === "suspend") {
+        const support = caps.lifecycle.suspend;
+
+        if (support.status !== "supported") {
+          const reason = `--beachside-exit suspend is unavailable for profile ${active.profile}: ${support.reason}`;
+          active.block(reason);
+          throw new Error(reason);
+        }
+      }
 
       if (caps.preview) {
         pi.registerTool({
@@ -162,8 +192,7 @@ export default function beachside(pi: ExtensionAPI) {
           parameters: Type.Object({ port: Type.Integer({ minimum: 1, maximum: 65535 }) }),
           async execute(_id, { port }, signal) {
             if (active.off) throw new Error("Beachside is off");
-            const { box } = await active.get();
-            const preview = await box.preview(port, { signal });
+            const preview = await active.use(({ box }) => box.preview(port, { signal }));
 
             const text =
               preview.access === "protected"
@@ -203,14 +232,8 @@ export default function beachside(pi: ExtensionAPI) {
     const options = event.systemPromptOptions;
     options.sections.cwd = await session.promptWorkdir();
     options.sections.beachside =
-      "The file and shell tools use the remote Beachside filesystem. Paths are guest paths.";
-    options.skills = options.skills
-      .filter((skill) => skill.filePath.startsWith(skillsDir))
-      .map((skill) => ({
-        ...skill,
-        filePath: `/tmp/beachside-pi-skills/${skill.name}/SKILL.md`,
-        baseDir: `/tmp/beachside-pi-skills/${skill.name}`,
-      }));
+      "File and shell tools use guest paths. The read tool can also open loaded skill files at their listed absolute host paths.";
+    skills = [...options.skills];
   });
 
   pi.on("user_bash", () => {
@@ -222,10 +245,12 @@ export default function beachside(pi: ExtensionAPI) {
       operations: {
         async exec(command, cwd, options) {
           options.signal?.throwIfAborted();
-          const { box, workdir } = await active.get();
-          options.signal?.throwIfAborted();
 
-          return bashOperations(box, workdir).exec(command, cwd, options);
+          return active.use(({ box, workdir }) => {
+            options.signal?.throwIfAborted();
+
+            return bashOperations(box, workdir).exec(command, cwd, options);
+          });
         },
       },
     };
@@ -255,7 +280,7 @@ export default function beachside(pi: ExtensionAPI) {
     description: "Show the Beachside sandbox status",
     async handler(_args, ctx) {
       const text = session
-        ? `${session.profile} · ${session.off ? "off" : (session.box?.id ?? "no active sandbox")}${session.workdir ? ` · ${session.workdir}` : ""}`
+        ? `${session.profile} · ${session.name} · ${session.off ? "off" : (session.box?.id ?? "no active sandbox")}${session.workdir ? ` · ${session.workdir}` : ""}`
         : "Beachside is off";
 
       ctx.ui.notify(text, "info");
@@ -265,9 +290,10 @@ export default function beachside(pi: ExtensionAPI) {
   pi.registerCommand("beachside-push", {
     description: "Copy the host workspace into the guest workdir",
     async handler(_args, ctx) {
-      const { box, workdir } = await requireSession().get();
-      await push(box, ctx.cwd, workdir, ctx.signal ?? new AbortController().signal);
-      ctx.ui.notify(`Pushed workspace to ${workdir}`, "info");
+      await requireSession().use(async ({ box, workdir }) => {
+        await push(box, ctx.cwd, workdir, ctx.signal ?? new AbortController().signal);
+        ctx.ui.notify(`Pushed workspace to ${workdir}`, "info");
+      });
     },
   });
 
@@ -276,8 +302,9 @@ export default function beachside(pi: ExtensionAPI) {
     async handler(args, ctx) {
       if (!args.trim()) throw new Error("Usage: /beachside-pull <new-host-directory>");
       const destination = resolve(ctx.cwd, args.trim());
-      const { box, workdir } = await requireSession().get();
-      await pull(box, workdir, destination, ctx.signal ?? new AbortController().signal);
+      await requireSession().use(({ box, workdir }) =>
+        pull(box, workdir, destination, ctx.signal ?? new AbortController().signal),
+      );
       ctx.ui.notify(`Pulled workspace to ${destination}`, "info");
     },
   });

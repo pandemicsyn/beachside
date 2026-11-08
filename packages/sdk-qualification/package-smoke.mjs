@@ -1449,7 +1449,7 @@ export const fake = createFakeAdapter({ url: process.env.FAKE_URL, token: proces
     },
     archiveOverrides,
     `import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createAgentSession, DefaultResourceLoader, SessionManager } from "@earendil-works/pi-coding-agent";
 import { createBeachsideTools } from "@beachside/pi";
@@ -1462,7 +1462,7 @@ const agentDir = join(cwd, "agent");
 await access(join(packageDir, manifest.pi.skills[0], "beachside/SKILL.md"));
 await access(join(packageDir, manifest.pi.skills[0], "beachside-cli/SKILL.md"));
 const tools = ["bash", "edit", "find", "grep", "ls", "read", "write"];
-async function open(sessionManager, profile, sessionStartEvent) {
+async function open(sessionManager, profile, sessionStartEvent, flags = {}) {
   const resourceLoader = new DefaultResourceLoader({
     cwd, agentDir,
     additionalExtensionPaths: manifest.pi.extensions.map((file) => join(packageDir, file)),
@@ -1472,6 +1472,7 @@ async function open(sessionManager, profile, sessionStartEvent) {
   assert.deepEqual(extensions.errors, []);
   if (profile) extensions.runtime.flagValues.set("beachside", profile);
   extensions.runtime.flagValues.set("beachside-sync", "none");
+  for (const [name, value] of Object.entries(flags)) extensions.runtime.flagValues.set(name, value);
   const { session } = await createAgentSession({ cwd, agentDir, resourceLoader, tools, sessionManager, sessionStartEvent });
   await session.bindExtensions({
     mode: "print",
@@ -1492,8 +1493,21 @@ function saved(session) {
     entry.type === "custom" && entry.customType === "beachside.pi.session" &&
     entry.data.owner === session.sessionManager.getSessionId());
 }
+async function records(kind) {
+  const directory = join(process.env.BEACHSIDE_STATE_DIR, kind);
+  const files = await readdir(directory).catch((error) => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  });
+  return Promise.all(files.filter((file) => file.endsWith(".json")).map(async (file) =>
+    JSON.parse(await readFile(join(directory, file), "utf8"))));
+}
+async function close(session, reason = "quit") {
+  await session.extensionRunner.emit({ type: "session_shutdown", reason });
+  session.dispose();
+}
 const manager = SessionManager.create(cwd, join(cwd, "sessions"));
-let session = await open(manager, "fake");
+let session = await open(manager, "fake", undefined, { "beachside-exit": "keep" });
 try {
   assert.deepEqual(session.getActiveToolNames().sort(), tools);
   assert.deepEqual(session.extensionRunner.getAllRegisteredTools().map((item) => item.definition.name).sort(), tools);
@@ -1508,14 +1522,51 @@ try {
     await assert.rejects(access(join(cwd, "host-canary")));
   } else {
     manager.appendMessage({ role: "user", content: "Fixture session", timestamp: Date.now() });
+    const unsupported = await open(SessionManager.inMemory(cwd), "fake", undefined, { "beachside-exit": "suspend" });
+    try {
+      await assert.rejects(remoteShell(unsupported, "echo blocked suspend", false), /suspend is unavailable/);
+      assert.deepEqual(await records("sandboxes"), []);
+    } finally {
+      await close(unsupported);
+    }
+
+    const pending = SessionManager.inMemory(cwd);
+    pending.appendCustomEntry("beachside.pi.session", { owner: pending.getSessionId(), profile: "fake", status: "pending" });
+    const unresolved = await open(pending);
+    try {
+      await assert.rejects(remoteShell(unresolved, "echo blocked pending", false), /sandbox is pending/);
+      assert.deepEqual(await records("sandboxes"), []);
+    } finally {
+      await close(unresolved);
+    }
+
+    await assert.rejects(remoteShell(session, "echo failed setup", false), /sandbox was removed/);
+    assert.equal(saved(session).at(-1).data.status, "retryable");
+    assert.deepEqual(await records("sandboxes"), []);
+
     const result = await Promise.all([false, true].map((exclude) => remoteShell(session, "echo remote", exclude)));
     assert.deepEqual(result, ["remote", "remote"]);
     assert.equal(saved(session).filter((entry) => entry.data.status === "ready").length, 1);
     const parentId = saved(session).at(-1).data.reference.nativeId;
     const parentPath = manager.getSessionFile();
 
-    await session.extensionRunner.emit({ type: "session_shutdown", reason: "reload" });
-    session.dispose();
+    const [record] = await records("sandboxes");
+    assert.match(record.name, /^pi-/);
+    assert.equal(record.status, "created");
+    assert.equal(record.reference.nativeId, parentId);
+
+    process.env.BEACHSIDE_MAX_SANDBOXES = "1";
+    const capped = await open(SessionManager.inMemory(cwd), "fake");
+    try {
+      await assert.rejects(remoteShell(capped, "echo over cap", false), /store already holds 1 sandbox/);
+      assert.equal((await records("sandboxes")).length, 1);
+    } finally {
+      await close(capped);
+      delete process.env.BEACHSIDE_MAX_SANDBOXES;
+    }
+
+    await close(session);
+    assert.equal((await records("sandboxes"))[0].reference.nativeId, parentId);
     session = await open(SessionManager.open(parentPath));
     assert.equal(await remoteShell(session, "echo reopened", false), "reopened");
     assert.equal(saved(session).at(-1).data.reference.nativeId, parentId);
@@ -1557,6 +1608,21 @@ try {
     session.dispose();
     session = await open(SessionManager.open(parentPath));
     assert.equal(await remoteShell(session, "echo cleanup parent", false), "cleanup parent");
+    delete process.env.FAKE_UNKNOWN_SNAPSHOT;
+    await session.prompt("/beachside-snapshot warm");
+    const [snapshot] = await records("snapshots");
+    assert.equal(snapshot.name, "warm");
+    assert.equal(snapshot.status, "captured");
+
+    const restored = await open(SessionManager.inMemory(cwd), "fake", undefined, { "beachside-snapshot": "warm" });
+    try {
+      assert.equal(await remoteShell(restored, "echo named restore", false), "named restore");
+      assert.notEqual(saved(restored).at(-1).data.reference.nativeId, parentId);
+    } finally {
+      await close(restored);
+    }
+    assert.equal((await records("sandboxes")).length, 1);
+
   }
 } finally {
   await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
@@ -1597,19 +1663,17 @@ export const fake = {
   );
   const piConfig = join(piConsumer, "beachside.json");
 
-  const skillsSetup =
-    "mkdir -p /tmp/beachside-pi-skills/beachside /tmp/beachside-pi-skills/beachside-cli";
-
-  for (const [script, stdout] of [
+  for (const [script, stdout, exitCode = 0] of [
+    ["mkdir -p -- '/tmp/beachside-work'", "", 1],
     ["mkdir -p -- '/tmp/beachside-work'", ""],
-    [skillsSetup, ""],
     ["exec bash -c 'echo remote'", "remote"],
     ["exec bash -c 'echo remote'", "remote"],
     ["exec bash -c 'echo reopened'", "reopened"],
-    [skillsSetup, ""],
     ["exec bash -c 'echo forked'", "forked"],
     ["exec bash -c 'echo parent'", "parent"],
     ["exec bash -c 'echo cleanup parent'", "cleanup parent"],
+    ["mkdir -p -- '/tmp/beachside-work'", ""],
+    ["exec bash -c 'echo named restore'", "named restore"],
   ]) {
     await fixture.fakeControl("/_test/seed", {
       submissionId: "*",
@@ -1618,7 +1682,7 @@ export const fake = {
       command: {
         command: { kind: "shell", script },
         cwd: script.startsWith("exec bash") ? "/tmp/beachside-work" : undefined,
-        exitCode: 0,
+        exitCode,
         stdoutBase64: Buffer.from(stdout).toString("base64"),
       },
     });
@@ -1639,6 +1703,8 @@ export const fake = {
     );
     run("node", ["consumer.mjs"], piConsumer, {
       BEACHSIDE_CONFIG: piConfig,
+      BEACHSIDE_STATE_DIR: join(piConsumer, "state"),
+      BEACHSIDE_MAX_SANDBOXES: "",
       FAKE_URL: fixture.fakeUrl,
       FAKE_TOKEN: fixture.fakeToken,
       INVALID_PROFILE: invalid ? "1" : "0",

@@ -114,9 +114,9 @@ test("Pi's seven tools use one sandbox and preserve Pi results", async () => {
     await seed(
       [
         "if command -v rg >/dev/null 2>&1; then",
-        "'rg' '--no-config' '--hidden' '--color=never' '-nH' '--' 'value' '/work'",
+        "'rg' '--no-config' '--hidden' '--color=never' '-nH' '-g' '!.git' '-g' '!node_modules' '--' 'value' '/work'",
         "else",
-        "'grep' '-rEnH' '--' 'value' '/work'",
+        "'grep' '-rEnH' '--exclude-dir=.git' '--exclude-dir=node_modules' '--' 'value' '/work'",
         "fi",
       ].join("\n"),
       "/work/main.ts:1:export const value = 2;\n",

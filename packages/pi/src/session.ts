@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   BeachsideError,
@@ -6,14 +8,19 @@ import {
   type BeachsideClient,
   type RecoveryReference,
 } from "beachside";
-import { loadConfig, stateDir } from "@beachside-internal/profile/config";
+import { loadConfig, maxSandboxes, stateDir } from "@beachside-internal/profile/config";
 import { connect, resolveProfile } from "@beachside-internal/profile/providers";
 import { SecretReader } from "@beachside-internal/profile/secrets";
-import { FsStateStore, RecordName, type SnapshotRecord } from "@beachside-internal/profile/store";
+import {
+  FsStateStore,
+  RecordName,
+  type SnapshotRecord,
+  type Versioned,
+} from "@beachside-internal/profile/store";
+import { claimSandbox, recordSandbox } from "@beachside-internal/profile/sandboxes";
+import { describeError } from "@beachside-internal/profile/output";
 import { z } from "zod";
 import { workspace, push } from "./workspace";
-import beachsideSkill from "../../../skills/beachside/SKILL.md" with { type: "text" };
-import cliSkill from "../../../skills/beachside-cli/SKILL.md" with { type: "text" };
 
 export const sessionEntry = "beachside.pi.session";
 
@@ -24,7 +31,7 @@ const SnapshotReference = ResourceReference.extend({ kind: z.literal("snapshot")
 export const Saved = z.object({
   owner: z.string(),
   profile: z.string(),
-  status: z.enum(["pending", "ready", "destroyed", "inactive"]),
+  status: z.enum(["pending", "ready", "destroyed", "inactive", "retryable"]),
   workdir: z.string().optional(),
   network: z.string().optional(),
   reference: ResourceReference.extend({ kind: z.literal("sandbox") }).nullish(),
@@ -55,6 +62,7 @@ type Box = SandboxHandle<true>;
 
 export class SandboxSession {
   readonly owner: string;
+  readonly name: string;
   box?: Box;
   workdir?: string;
   off: boolean;
@@ -65,6 +73,12 @@ export class SandboxSession {
   private client?: BeachsideClient<true>;
   private renewal?: NodeJS.Timeout;
   private renewing?: Promise<void>;
+  private expires?: import("beachside").SandboxInfo["expires"];
+  private usedSinceRenewal = false;
+  private activeUses = 0;
+  private stoppingRenewal = false;
+  private allocation?: Versioned;
+  private needsSuspend = false;
   private readonly lifetime = new AbortController();
 
   constructor(
@@ -77,6 +91,7 @@ export class SandboxSession {
     private readonly snapshotName?: string,
   ) {
     this.owner = ctx.sessionManager.getSessionId();
+    this.name = `pi-${createHash("sha256").update(this.owner).digest("hex").slice(0, 16)}`;
     this.off = saved?.off ?? false;
     this.workdir = saved?.workdir ?? fork?.workdir;
   }
@@ -95,21 +110,13 @@ export class SandboxSession {
     const env = process.env;
     const loaded = await loadConfig(undefined, env);
     const profile = resolveProfile({ profile: this.profile }, loaded, env);
-    const raw = loaded.value.profiles?.[this.profile]?.config;
 
-    let policy = profile.network;
+    if (!profile.network)
+      throw new Error(
+        `Profile ${this.profile} needs an explicit network policy in its top-level network field`,
+      );
 
-    if (policy === undefined && (raw?.network !== undefined || raw?.networkPolicy !== undefined)) {
-      const configured =
-        raw.network !== undefined ? profile.config.network : profile.config.networkPolicy;
-
-      policy = z.string().min(1).safeParse(configured).data;
-    }
-
-    const network = z.string().min(1).safeParse(policy);
-
-    if (!network.success)
-      throw new Error(`Profile ${this.profile} needs an explicit network policy`);
+    const limit = maxSandboxes(loaded, env);
 
     const client = await connect(
       profile,
@@ -122,7 +129,8 @@ export class SandboxSession {
 
     return {
       client,
-      network: network.data,
+      network: profile.network,
+      limit,
       store: new FsStateStore(stateDir(undefined, loaded, env, this.ctx.cwd)),
     };
   }
@@ -133,6 +141,10 @@ export class SandboxSession {
 
   async capabilities() {
     return (await this.config()).client.capabilities();
+  }
+
+  requireSuspend() {
+    this.needsSuspend = true;
   }
 
   block(reason: string) {
@@ -153,16 +165,39 @@ export class SandboxSession {
     }
   }
 
-  get() {
-    return (this.opening ??= this.open());
+  async use<T>(action: (sandbox: Awaited<ReturnType<SandboxSession["get"]>>) => Promise<T>) {
+    const sandbox = await this.get();
+    this.activeUses++;
+    this.usedSinceRenewal = true;
+    this.scheduleRenewal(sandbox.box);
+
+    try {
+      return await action(sandbox);
+    } finally {
+      this.activeUses--;
+    }
+  }
+
+  async get() {
+    if (this.blocked) throw new Error(this.blocked);
+    this.opening ??= this.open().catch((cause: unknown) => {
+      if (!this.saved || this.saved.status === "retryable") {
+        this.opening = undefined;
+        this.planning = undefined;
+      }
+
+      throw cause;
+    });
+
+    return this.opening;
   }
 
   private async open(): Promise<{ box: Box; workdir: string }> {
-    const { client, network, store } = await this.config();
+    const { client, network, store, limit } = await this.config();
     const signal = this.lifetime.signal;
     const labels = { "beachside.pi": "1", "beachside.pi.session": this.owner };
 
-    if (this.saved) {
+    if (this.saved && this.saved.status !== "retryable") {
       const { status, reference, workdir, recovery } = this.saved;
 
       if (this.saved.network && this.saved.network !== network) {
@@ -173,7 +208,7 @@ export class SandboxSession {
 
       if (status !== "ready" || !reference || !workdir) {
         throw new Error(
-          `Saved Beachside sandbox is ${status}${reference ? ` (${reference.nativeId})` : ""}${recovery ? `; recovery is recorded in the Pi session` : ""}. Start a new Pi session to allocate another sandbox.`,
+          `Saved Beachside sandbox is ${status}${reference ? ` (${reference.nativeId})` : ""}${recovery ? `; recovery is recorded in the Pi session` : ""}. Inspect the record with beachside inspect ${this.name} before starting a new Pi session.`,
         );
       }
 
@@ -181,8 +216,10 @@ export class SandboxSession {
       this.box = box;
       const info = await box.inspect({ signal });
 
-      if (info.state === "suspended") await box.resume({ signal });
+      if (info.state === "suspended" || info.state === "stopped") await box.resume({ signal });
       else if (info.state !== "running") throw new Error(`Sandbox ${box.id} is ${info.state}`);
+
+      if (this.needsSuspend) await this.checkSuspend(box);
       await this.ready(box, workdir, network);
 
       return { box, workdir };
@@ -207,84 +244,104 @@ export class SandboxSession {
 
     this.workdir = plan.workdir;
 
-    // Persist before submission so an interrupted run cannot silently allocate another sandbox.
+    const caps = await client.capabilities();
+    const restore = caps.snapshots.restore;
+
+    if (this.needsSuspend && caps.lifecycle.suspend.status !== "supported")
+      throw new Error(
+        `--beachside-exit suspend is unavailable for profile ${this.profile}: ${caps.lifecycle.suspend.reason}`,
+      );
+
+    const appliedLabels =
+      caps.createLabels &&
+      (!snapshot || (restore.status === "supported" && restore.value.options?.labels))
+        ? labels
+        : undefined;
+
+    if (snapshot && restore.status !== "supported") throw new Error(restore.reason);
+    const source = snapshot ? await client.snapshots.get(snapshot) : undefined;
     const pending = { status: "pending", workdir: plan.workdir, network } as const;
-    this.persist(pending);
-    let box: Box;
+
+    const claimed = await claimSandbox(
+      store,
+      limit,
+      {
+        format: 1,
+        kind: "sandbox",
+        status: "creating",
+        profile: this.profile,
+        provider: client.provider,
+        createdAt: new Date().toISOString(),
+        labels: appliedLabels ?? {},
+        reference: null,
+      },
+      this.name,
+    );
 
     try {
-      if (snapshot) {
-        const { snapshots } = await client.capabilities();
-        const restore = snapshots.restore;
-
-        if (restore.status !== "supported") throw new Error(restore.reason);
-        const source = await client.snapshots.get(snapshot);
-
-        const operation = await source.submitRestore(
-          {
-            network,
-            requireIndependentLifecycle: true,
-            labels:
-              restore.value.options?.labels && client.provider !== "vercel" ? labels : undefined,
-          },
-          { signal },
-        );
-
-        this.persist({ ...pending, recovery: operation.reference });
-        box = await operation.wait({ signal });
-      } else {
-        const caps = await client.capabilities();
-
-        const operation = await client.sandboxes.submitCreate(
-          {
-            network,
-            labels: caps.createLabels ? labels : undefined,
-          },
-          { signal },
-        );
-
-        this.persist({ ...pending, recovery: operation.reference });
-        box = await operation.wait({ signal });
-      }
+      this.persist(pending);
     } catch (cause) {
-      if (cause instanceof BeachsideError) {
-        const reference =
-          cause.outcome && "sandbox" in cause.outcome ? cause.outcome.sandbox : undefined;
-
-        if (reference || cause.reference) {
-          this.persist({ ...pending, reference, recovery: cause.reference });
-        }
-      }
-
+      await store.remove("sandbox", this.name, claimed.version);
       throw cause;
     }
 
+    let created: Awaited<ReturnType<typeof recordSandbox>>;
+
+    try {
+      created = await recordSandbox(store, claimed, () =>
+        source
+          ? source.restore(
+              { network, requireIndependentLifecycle: true, labels: appliedLabels },
+              { signal },
+            )
+          : client.sandboxes.create({ network, labels: appliedLabels }, { signal }),
+      );
+    } catch (cause) {
+      const report = describeError(cause);
+
+      if (report.outcome === "rejected") this.persist({ status: "retryable", network });
+      else
+        this.persist({
+          ...pending,
+          reference: report.known?.reference,
+          recovery: report.known?.recovery,
+        });
+      throw cause;
+    }
+
+    const { box, record, version, unrecorded } = created;
     this.box = box;
-    this.persist({ ...pending, reference: box.reference });
+    this.allocation = { record, version };
 
-    if (plan.script)
-      await box.exec({ command: { kind: "shell", script: plan.script } }, { signal });
+    try {
+      this.persist({ ...pending, reference: box.reference });
 
-    if (plan.upload) await push(box, this.ctx.cwd, plan.workdir, signal);
-    await box.exec(
-      {
-        command: {
-          kind: "shell",
-          script:
-            "mkdir -p /tmp/beachside-pi-skills/beachside /tmp/beachside-pi-skills/beachside-cli",
-        },
-      },
-      { signal },
-    );
-    await box.writeTextFile("/tmp/beachside-pi-skills/beachside/SKILL.md", beachsideSkill, {
-      overwrite: true,
-      signal,
-    });
-    await box.writeTextFile("/tmp/beachside-pi-skills/beachside-cli/SKILL.md", cliSkill, {
-      overwrite: true,
-      signal,
-    });
-    await this.ready(box, plan.workdir, network);
+      if (unrecorded) throw new Error(`Could not record ${this.name}: ${unrecorded.message}`);
+
+      if (this.needsSuspend) await this.checkSuspend(box);
+
+      if (plan.script)
+        await box.exec({ command: { kind: "shell", script: plan.script } }, { signal });
+
+      if (plan.upload) await push(box, this.ctx.cwd, plan.workdir, signal);
+      await this.ready(box, plan.workdir, network);
+    } catch (cause) {
+      // No tools have used the sandbox yet. Retry only after confirmed cleanup of this allocation.
+      try {
+        await this.destroyBox(box);
+        this.persist({ status: "retryable", network });
+      } catch (cleanup) {
+        throw new Error(
+          `Sandbox setup failed: ${message(cause)}. Cleanup needs attention for ${this.name} (${box.id}): ${message(cleanup)}`,
+          { cause },
+        );
+      }
+
+      throw new Error(
+        `Sandbox setup failed: ${message(cause)}. The sandbox was removed. Retry after fixing setup.`,
+        { cause },
+      );
+    }
 
     if (this.fork?.snapshot) {
       try {
@@ -300,50 +357,90 @@ export class SandboxSession {
     return { box, workdir: plan.workdir };
   }
 
+  private async checkSuspend(box: Box) {
+    const suspend = (await box.capabilities()).lifecycle.suspend;
+
+    if (suspend.status !== "supported")
+      throw new Error(
+        `--beachside-exit suspend is unavailable for this sandbox: ${suspend.reason}`,
+      );
+  }
+
   private async ready(box: Box, workdir: string, network: string) {
     this.persist({ status: "ready", reference: box.reference, workdir, network });
-    this.ctx.ui.setStatus("beachside", `${this.client?.provider} · ${box.id} · ${workdir}`);
+    this.ctx.ui.setStatus(
+      "beachside",
+      `${this.client?.provider} · ${this.name} (${box.id}) · ${workdir}`,
+    );
 
     try {
       const caps = await box.capabilities();
 
-      if (caps.lifecycle.renew.status !== "supported") return;
-      await this.scheduleRenewal(box, (await box.inspect()).expires);
+      if (caps.lifecycle.renew.status === "supported")
+        this.expires = (await box.inspect({ signal: this.lifetime.signal })).expires;
     } catch (cause) {
       this.ctx.ui.notify(`Sandbox ${box.id} renewal unavailable: ${message(cause)}`, "warning");
     }
   }
 
-  private async scheduleRenewal(
-    box: Box,
-    expires: import("beachside").SandboxInfo["expires"] | undefined,
-  ) {
-    if (expires?.status !== "known" || this.lifetime.signal.aborted) return;
-    const remaining = Date.parse(expires.at) - Date.now();
+  private scheduleRenewal(box: Box) {
+    if (
+      this.renewal ||
+      this.renewing ||
+      this.stoppingRenewal ||
+      this.off ||
+      this.expires?.status !== "known"
+    )
+      return;
+    const remaining = Date.parse(this.expires.at) - Date.now();
 
     if (!Number.isFinite(remaining) || remaining <= 0) return;
     this.renewal = setTimeout(
       () => {
-        this.renewing = box.renew(undefined, { signal: this.lifetime.signal }).then(
-          async (result) => this.scheduleRenewal(box, result.observation?.expires),
-          (cause: unknown) => {
-            this.ctx.ui.notify(`Sandbox ${box.id} renewal stopped: ${message(cause)}`, "warning");
-          },
-        );
+        this.renewal = undefined;
+
+        if (!this.usedSinceRenewal && !this.activeUses) return;
+        this.usedSinceRenewal = false;
+        this.renewing = box
+          .renew(undefined, { signal: this.lifetime.signal })
+          .then(
+            (result) => {
+              this.expires = result.observation?.expires;
+            },
+            (cause: unknown) => {
+              this.expires = undefined;
+              this.ctx.ui.notify(`Sandbox ${box.id} renewal stopped: ${message(cause)}`, "warning");
+            },
+          )
+          .finally(() => {
+            this.renewing = undefined;
+            this.scheduleRenewal(box);
+          });
       },
       Math.max(1000, Math.min(remaining / 2, 2_147_483_647)),
     );
     this.renewal.unref();
   }
 
+  private async stopRenewal() {
+    this.stoppingRenewal = true;
+    clearTimeout(this.renewal);
+    this.renewal = undefined;
+    await this.renewing;
+  }
+
   disable() {
     this.off = true;
+    void this.stopRenewal();
     this.persist({ status: "inactive", ...this.saved, off: true });
     this.ctx.ui.setStatus("beachside", undefined);
   }
 
   async capture(name: string) {
-    const { box } = await this.get();
+    return this.use(({ box }) => this.captureSnapshot(box, name));
+  }
+
+  private async captureSnapshot(box: Box, name: string) {
     const plan = await box.checkSnapshot(keepSource);
 
     if (plan.status !== "supported") throw new Error(plan.reason);
@@ -407,8 +504,7 @@ export class SandboxSession {
   }
 
   async destroy() {
-    clearTimeout(this.renewal);
-    await this.renewing;
+    await this.stopRenewal();
     await this.opening?.catch(() => undefined);
     let box = this.box;
 
@@ -422,7 +518,7 @@ export class SandboxSession {
     }
 
     if (!box) return;
-    await box.destroy();
+    await this.destroyBox(box);
     this.persist({
       status: "destroyed",
       reference: box.reference,
@@ -434,11 +530,25 @@ export class SandboxSession {
     this.ctx.ui.setStatus("beachside", undefined);
   }
 
-  async shutdown(reason: string, exit: string, target?: string) {
-    clearTimeout(this.renewal);
+  private async destroyBox(box: Box) {
+    const { store } = await this.config();
+    await box.destroy();
+    this.box = undefined;
+    const current = await store.get("sandbox", this.name);
 
+    if (
+      current &&
+      (current.version === this.allocation?.version ||
+        (box.reference && isDeepStrictEqual(current.record.reference, box.reference)))
+    )
+      await store.remove("sandbox", this.name, current.version);
+
+    this.allocation = undefined;
+  }
+
+  async shutdown(reason: string, exit: string, target?: string) {
     try {
-      await this.renewing;
+      await this.stopRenewal();
       await this.opening?.catch(() => undefined);
       const box = this.box;
 
@@ -473,10 +583,9 @@ export class SandboxSession {
       }
 
       if (reason === "quit") {
-        if (exit === "destroy" && (box || (this.opening && this.saved?.reference)))
-          await this.destroy();
+        if (exit === "destroy" && this.saved?.status === "ready" && box) await this.destroy();
 
-        if (exit === "suspend" && box) await box.suspend();
+        if (exit === "suspend" && this.saved?.status === "ready" && box) await box.suspend();
       }
     } finally {
       this.lifetime.abort();

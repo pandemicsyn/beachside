@@ -22,7 +22,11 @@ Use a named profile in `~/.config/beachside/beachside.json`, the same file the B
 }
 ```
 
-Set `network` explicitly in the profile. An explicit adapter setting under `config.network` also works. Adapter defaults and provider environment fallbacks do not select the policy for Pi. Third-party profiles use the same `module` and `export` fields as the CLI. Profile credentials and secret references are resolved on the host. Adapter modules execute on the host and should come from trusted sources.
+Set the top-level `network` field to choose guest egress explicitly. Use `internet` for cloning and downloading dependencies, or `blocked` with `upload` or `none` on a provider that supports it. Third-party profiles use the same `module` and `export` fields as the CLI. Profile credentials and secret references are resolved on the host. Adapter modules execute on the host and should come from trusted sources.
+
+Pi saves a named `pi-…` sandbox record in the CLI store and honors `limits.maxSandboxes`. Use `/beachside` to get its name for `beachside inspect` or `beachside rm`. If initial workspace setup fails, Pi cleans up the unused sandbox before allowing another attempt.
+
+Pi keeps its loaded skills available. The `read` tool can open their listed absolute host paths and supporting files in dedicated skill directories. Shell commands and workspace edits run in the guest.
 
 ## Workspace
 
@@ -34,7 +38,7 @@ Set `network` explicitly in the profile. An explicit adapter setting under `conf
 
 ## Lifecycle and provider support
 
-The sandbox opens on first use. Set `--beachside-eager` to open it on session start. By default Pi destroys the sandbox on quit. Use `--beachside-exit suspend` or `--beachside-exit keep` for later resumption. Switching Pi sessions and reloading the extension retain the old sandbox. Resumption uses the verified saved reference and fails if the sandbox is gone or the adapter cannot reopen it. Renewal follows the observed provider deadline when available. Pi starts writing a new session file after its first user or assistant message. Before then, an interrupted Pi process can leave a sandbox to clean up via labels or expiry.
+The sandbox opens on first use. Set `--beachside-eager` to open it on session start. By default Pi destroys the sandbox on quit. Use `--beachside-exit suspend` or `--beachside-exit keep` for later resumption. Switching Pi sessions and reloading the extension retain the old sandbox. Resumption uses the verified saved reference and fails if the sandbox is gone or the adapter cannot reopen it. Renewal follows tool activity and the observed provider deadline when available. A kept sandbox can expire under the provider’s lifetime policy. Pi starts writing a new session file after its first user or assistant message. Before then, an interrupted Pi process can leave a sandbox to clean up via labels or expiry.
 
 `/beachside-snapshot <name>` saves a source-preserving snapshot to the shared CLI snapshot store on supported profiles. `--beachside-snapshot <name>` restores from that store. File-backed Pi forks restore into a new sandbox where the configured capture preserves the source and restore provides an independent lifecycle. Unsupported capture starts the child with a fresh sandbox. A failed or uncertain capture stops the child from allocating until addressed.
 

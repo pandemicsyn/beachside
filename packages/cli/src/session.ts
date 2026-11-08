@@ -14,11 +14,7 @@ import {
   type ResolvedProfile,
 } from "@beachside-internal/profile/providers";
 import { SecretReader } from "@beachside-internal/profile/secrets";
-import {
-  FsStateStore,
-  type SandboxRecord,
-  type StateStore,
-} from "@beachside-internal/profile/store";
+import { FsStateStore, type SandboxRecord } from "@beachside-internal/profile/store";
 
 export type GlobalFlags = {
   json: boolean;
@@ -54,7 +50,7 @@ export class Session {
     return this.loaded;
   }
 
-  async store(): Promise<StateStore> {
+  async store(): Promise<FsStateStore> {
     const { flags, env, cwd } = this.ctx;
 
     return new FsStateStore(stateDir(flags.stateDir, await this.config(), env, cwd));

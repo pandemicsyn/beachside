@@ -10,6 +10,7 @@
     "./store": "./src/store.ts",
     "./transfer": "./src/transfer.ts",
     "./tar": "./src/tar.ts",
+    "./sandboxes": "./src/sandboxes.ts",
     "./output": "./src/output.ts"
   },
   "scripts": {

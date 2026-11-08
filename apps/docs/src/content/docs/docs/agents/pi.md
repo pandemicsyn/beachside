@@ -15,8 +15,6 @@ beachside adapter add e2b
 pi install npm:@beachside/pi
 ```
 
-The Pi package is available through npm after its first release.
-
 Add an `e2b` profile to `~/.config/beachside/beachside.json`. If you already use the CLI, add this entry to the existing `profiles` object.
 
 ```json
@@ -31,7 +29,7 @@ Add an `e2b` profile to `~/.config/beachside/beachside.json`. If you already use
 }
 ```
 
-Set `network` explicitly in each profile you use with Pi. An explicit adapter setting under `config.network` also works. Custom adapters use the same `module`, `export`, and credential settings as the CLI. See [CLI configuration](/docs/cli/configuration/) and [E2B setup](/docs/providers/e2b/).
+Set the top-level `network` field so Pi has an explicit guest egress policy. This example uses `internet` so the sandbox can clone a repository and download dependencies. For an offline workspace, choose `blocked` on a provider that supports it and use `upload` or `none`. Custom adapters use the same `module`, `export`, and credential settings as the CLI. See [CLI configuration](/docs/cli/configuration/) and [E2B setup](/docs/providers/e2b/).
 
 From your project directory, start Pi and try `!pwd` to see the guest working directory.
 
@@ -40,6 +38,10 @@ pi --beachside e2b --beachside-sync upload
 ```
 
 Use `/beachside` to see the profile, sandbox ID, and guest workdir. File paths in the coding tools resolve inside the guest.
+
+Pi saves a named `pi-…` sandbox record in the CLI store and honors `limits.maxSandboxes`. Use `/beachside` to get its name for `beachside inspect` or `beachside rm`. If initial workspace setup fails, Pi cleans up the unused sandbox before allowing another attempt.
+
+Pi keeps its loaded skills available. The `read` tool can open their listed absolute host paths and supporting files in dedicated skill directories. Shell commands and workspace edits run in the guest.
 
 ## Choose what goes into the sandbox
 
@@ -62,7 +64,7 @@ Changes reach your machine only when you request a pull.
 
 ## Resume a session or start from a snapshot
 
-The sandbox opens on first use. Pass `--beachside-eager` to open it on session start. Pi destroys the sandbox on quit by default. To reopen it later from the saved Pi session, start with `--beachside-exit keep`, or use `--beachside-exit suspend` with a profile that supports suspension. Resume uses the original sandbox identity and requires that the sandbox still exist. Switching sessions or reloading the extension retains the previous sandbox.
+The sandbox opens on first use. Pass `--beachside-eager` to open it on session start. Pi destroys the sandbox on quit by default. To reopen it later from the saved Pi session, start with `--beachside-exit keep`, or use `--beachside-exit suspend` with a profile that supports suspension. Resume uses the original sandbox identity and requires that the sandbox still exist. Switching sessions or reloading the extension retains the previous sandbox. Pi renews the sandbox while tools are active where supported. With `keep`, the sandbox can still expire under its provider lifetime after Pi quits.
 
 On supported profiles, `/beachside-snapshot warm-node` saves a source-preserving snapshot in the shared CLI snapshot store. Start a new Pi session from it with:
 

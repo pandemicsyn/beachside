@@ -25,6 +25,9 @@ const partBytes = 1_048_576;
 export const findDescription =
   "Search for files by glob pattern in the sandbox. Excludes .git and node_modules and includes other paths regardless of .gitignore.";
 
+export const grepDescription =
+  "Search sandbox files for patterns. Skips .git and node_modules. Git ignore rules apply when ripgrep is installed.";
+
 function guestPath(path: string, cwd: string): string {
   if (path === "~" || path.startsWith("~/")) {
     throw new Error("Use an absolute guest path or a path relative to the Beachside workdir");
@@ -244,10 +247,21 @@ export function createBeachsideTools(
     readFile,
     access,
     detectImageMimeType: async (path) => {
-      // Text reads can use Pi's stream without buffering the entire file for MIME detection.
       if (!/\.(png|jpe?g|gif|webp)$/i.test(path)) return null;
 
-      return imageMime(await readFile(path));
+      if (!box.supports("readFileStream")) return imageMime(await readFile(path));
+      const prefix = Buffer.alloc(12);
+      let size = 0;
+
+      for await (const chunk of box.readFileStream(path, { signal })) {
+        const count = Math.min(chunk.length, prefix.length - size);
+        prefix.set(chunk.subarray(0, count), size);
+        size += count;
+
+        if (size === prefix.length) break;
+      }
+
+      return imageMime(prefix.subarray(0, size));
     },
   };
 
@@ -371,6 +385,7 @@ export function createBeachsideTools(
     }),
     grep: {
       ...grep,
+      description: grepDescription,
       promptSnippet: "Search sandbox files for patterns",
       async execute(_id, args, wait) {
         const path = guestPath(args.path ?? ".", workdir);
@@ -394,12 +409,18 @@ export function createBeachsideTools(
             ...(args.literal ? ["-F"] : []),
             ...flags,
             ...(args.glob ? ["-g", args.glob] : []),
+            "-g",
+            "!.git",
+            "-g",
+            "!node_modules",
             ...tail,
           ]),
           "else",
           argv([
             "grep",
             args.literal ? "-rFnH" : "-rEnH",
+            "--exclude-dir=.git",
+            "--exclude-dir=node_modules",
             ...flags,
             ...(args.glob ? [`--include=${args.glob}`] : []),
             ...tail,
