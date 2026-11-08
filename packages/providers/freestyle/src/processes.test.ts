@@ -293,3 +293,44 @@ test("terminate kills the job, and callback exec streams while capturing exact b
     await client.close();
   }
 });
+
+test("a suspend holds process polling, so the job's guest commands never wake the VM", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    const process = await box.processes.start({
+      command: { kind: "shell", script: "sleep 0.4; printf after" },
+      output: { mode: "stream" },
+    });
+
+    await box.suspend();
+    const execs = fixture.effects.exec;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(fixture.effects.exec).toBe(execs);
+    expect(fixture.effects.wake).toBe(0);
+    expect(fixture.vms.get(box.id)?.state).toBe("paused");
+
+    await box.resume();
+    let text = "";
+
+    for await (const chunk of process.output()) if ("text" in chunk) text += chunk.text;
+
+    expect(text).toBe("after");
+    expect((await process.wait()).exitCode).toBe(0);
+    await process.detach();
+  } finally {
+    await client.close();
+  }
+});
+
+test("an acknowledged pause that leaves the VM running ends as unknown, not a hang", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    fixture.ignoreNextPause();
+    await expect(box.suspend()).rejects.toMatchObject({ code: "OUTCOME_UNKNOWN" });
+    expect(fixture.vms.get(box.id)?.state).toBe("running");
+  } finally {
+    await client.close();
+  }
+});

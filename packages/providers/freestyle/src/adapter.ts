@@ -195,7 +195,11 @@ const CreateToken = z.strictObject({
 
 const DestroyToken = z.strictObject({ id: Id, acknowledged: z.boolean() });
 
-const LifecycleToken = z.strictObject({ id: Id });
+const LifecycleToken = z.strictObject({
+  id: Id,
+  /** When a pause was submitted, in epoch milliseconds. */
+  since: z.number().int().nonnegative().optional(),
+});
 
 /** Snapshot slugs this adapter mints: one per capture attempt, derived from its submission id. */
 const SnapshotSlug = z.string().regex(/^beachside-snapshot-[0-9a-f]{24}$/);
@@ -870,7 +874,11 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           return response.stdout ?? "";
         };
 
+      /** VMs this client is pausing or holds paused; their process observers stop polling. */
+      const held = new Set<string>();
+
       const jobOptions = (vmId: string) => ({
+        held: () => held.has(vmId),
         run: guest(vmId),
         pollMs: options.processPollMs ?? 250,
         requestSeconds: 60,
@@ -1741,14 +1749,18 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             };
           },
           async submit(input, ctx) {
-            const token = { id: Id.parse(input.sandbox.id) };
+            const token = { id: Id.parse(input.sandbox.id), since: Date.now() };
             await ctx.checkpoint(token);
+            // Process observers stop polling first: their guest commands keep the VM running.
+            held.add(token.id);
 
             try {
               await api(callSignal(readContext(ctx.signal, 120)))
                 .vms.ref(token.id)
                 .pause();
             } catch (error) {
+              held.delete(token.id);
+
               return rejection(ctx, error, "Freestyle pause response was not confirmed");
             }
 
@@ -1774,13 +1786,28 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
               return ctx.unknown("Freestyle pause identity is unavailable; do not replay");
             const vm = await find(token.data.id, ctx);
 
-            if (!vm) return ctx.unknown("Freestyle VM disappeared while pausing");
+            if (!vm) {
+              held.delete(token.data.id);
+
+              return ctx.unknown("Freestyle VM disappeared while pausing");
+            }
 
             if (vm.state === "paused") return suspended(vm, box.reference);
 
-            return vm.state === "pausing" || vm.state === "running"
-              ? ctx.pending(token.data, { pollAfterMs: pollMs })
-              : ctx.unknown(`Freestyle VM is ${vm.state} after pause; inspect without replay`);
+            // An acknowledged pause that leaves the VM running is not waited on forever.
+            const waiting =
+              vm.state === "pausing" ||
+              (vm.state === "running" &&
+                Date.now() - (token.data.since ?? 0) < settleSeconds * 1000);
+
+            if (waiting) return ctx.pending(token.data, { pollAfterMs: pollMs });
+            held.delete(token.data.id);
+
+            return ctx.unknown(
+              vm.state === "running"
+                ? "Freestyle acknowledged the pause but the VM kept running; inspect it before retrying"
+                : `Freestyle VM is ${vm.state} after pause; inspect without replay`,
+            );
           },
         },
         resume: {
@@ -1799,6 +1826,8 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           async submit(input, ctx) {
             const token = { id: Id.parse(input.sandbox.id) };
             await ctx.checkpoint(token);
+            // Process observers resume polling once the VM is asked to run again.
+            held.delete(token.id);
 
             try {
               await api(callSignal(readContext(ctx.signal, 120)))

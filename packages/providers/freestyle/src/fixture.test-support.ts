@@ -144,6 +144,7 @@ export function freestyleFixture() {
     exec: 0,
     write: 0,
     pause: 0,
+    wake: 0,
     start: 0,
     snapshot: 0,
   };
@@ -164,6 +165,8 @@ export function freestyleFixture() {
   let backgroundNextCreate = false;
   /** Forget the next stored background result, as an expired or unknown request id. */
   let forgetNextBackground = false;
+  /** Acknowledge the next pause but leave the VM running. */
+  let ignorePause = false;
   const background = new Map<string, Response>();
 
   /** The guest env file lives on the local disk too, because commands run through the local sh. */
@@ -402,6 +405,13 @@ export function freestyleFixture() {
     if (method === "POST" && rest === "pause") {
       if (vm.state !== "running") return error(409, "VM_NOT_RUNNING");
       effects.pause++;
+
+      if (ignorePause) {
+        ignorePause = false;
+
+        return json(200, view(vm));
+      }
+
       vm.state = "pausing";
 
       return json(200, view(vm));
@@ -452,6 +462,12 @@ export function freestyleFixture() {
       commandFault = undefined;
 
       if (fault instanceof Response) return fault;
+
+      // A guest command wakes a pausing or paused VM, as inbound activity does.
+      if (vm.state === "pausing" || vm.state === "paused") {
+        effects.wake++;
+        vm.state = "running";
+      }
 
       if (vm.state !== "running") return error(409, "VM_NOT_RUNNING");
       effects.exec++;
@@ -596,6 +612,9 @@ export function freestyleFixture() {
       calls.filter((call) => call.method === method && pattern.test(call.path)).length,
     setBootPolls(value: number) {
       bootPolls = value;
+    },
+    ignoreNextPause() {
+      ignorePause = true;
     },
     forgetNextBackgroundResult() {
       forgetNextBackground = true;
