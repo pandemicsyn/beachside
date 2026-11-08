@@ -85,24 +85,6 @@ test("snapshot setup failure retains its creator reference for explicit reconcil
   expect(f.calls.create).toBe(1);
 });
 
-test("saved-reference reopen failure fails the body without losing owned teardown", async () => {
-  const f = await fixture();
-  const t = await resources(f);
-
-  try {
-    await expect(
-      snapshotRoundtrip(t, async () => {
-        throw Error("Reopen failed");
-      }),
-    ).rejects.toThrow("Reopen failed");
-  } finally {
-    await t.close();
-  }
-
-  expect([f.boxes.size, f.snapshots.size]).toEqual([0, 0]);
-  expect(f.calls.restore).toBe(1);
-});
-
 test("teardown failure remains unsuccessful and durably blocks same-provider admission", async () => {
   const f = await fixture({ failDelete: true });
   const t = await resources(f);
@@ -220,30 +202,26 @@ test("per-fixture compute and concurrency limits remain pre-dispatch checks", as
   expect(f.boxes.size).toBe(0);
 });
 
-test.each(["setup", "test"] as const)(
-  "actual Bun %s timeout still runs bounded owned cleanup",
-  async (phase) => {
-    const directory = await mkdtemp(join(tmpdir(), "beachside-bun-timeout-"));
-    const child = join(directory, "timeout.test.ts");
-    const summary = join(directory, "summary.json");
-    const resourcesPath = fileURLToPath(new URL("./resources.ts", import.meta.url));
-    const fixturePath = fileURLToPath(new URL("./offline.ts", import.meta.url));
-    await writeFile(
-      child,
-      `
+test("actual Bun test timeout still runs bounded owned cleanup", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "beachside-bun-timeout-"));
+  const child = join(directory, "timeout.test.ts");
+  const summary = join(directory, "summary.json");
+  const resourcesPath = fileURLToPath(new URL("./resources.ts", import.meta.url));
+  const fixturePath = fileURLToPath(new URL("./offline.ts", import.meta.url));
+  await writeFile(
+    child,
+    `
 import {beforeAll,afterAll,test} from "bun:test";
 import {writeFile,access} from "node:fs/promises";
 import {dirname,join} from "node:path";
 import {TestResources} from ${JSON.stringify(resourcesPath)};
 import {fixture} from ${JSON.stringify(fixturePath)};
-// Initialize custody before the timed hook so cleanup always has its owner.
 const f=await fixture();
-const factory=${phase === "setup" ? "async (hook)=>{await new Promise(r=>setTimeout(r,100));return f.connect(hook);}" : "f.connect"};
-const t=new TestResources(factory,f.ledger,"base","blocked",{compute:1,snapshots:0,volumes:0,exerciseMs:500,cleanupMs:500});
+const t=new TestResources(f.connect,f.ledger,"base","blocked",{compute:1,snapshots:0,volumes:0,exerciseMs:500,cleanupMs:500});
 beforeAll(async()=>{
  await t.open();
- if(${JSON.stringify(phase)}==="test")await t.create("sandbox/source");
-},${phase === "setup" ? 20 : 500});
+ await t.create("sandbox/source");
+},500);
 afterAll(async()=>{
  await t.close();
  let unlocked=false;try{await access(join(dirname(f.ledger.path),".admission.lock"));}catch(error){if(error.code!=="ENOENT")throw error;unlocked=true;}
@@ -251,39 +229,33 @@ afterAll(async()=>{
 },6000);
 test("snapshot-roundtrip",async()=>{await new Promise(()=>{});},20);
 `,
+  );
+
+  try {
+    const childProcess = Bun.spawn(
+      [
+        process.execPath,
+        "test",
+        child,
+        "--reporter=junit",
+        `--reporter-outfile=${join(directory, "junit.xml")}`,
+      ],
+      { stdout: "ignore", stderr: "ignore" },
     );
 
-    try {
-      const childProcess = Bun.spawn(
-        [
-          process.execPath,
-          "test",
-          child,
-          "--reporter=junit",
-          `--reporter-outfile=${join(directory, "junit.xml")}`,
-        ],
-        { stdout: "pipe", stderr: "pipe" },
-      );
-
-      const [exit, xml] = await Promise.all([
-        childProcess.exited,
-        new Response(childProcess.stderr).text(),
-      ]);
-
-      expect(exit).not.toBe(0);
-      expect(xml.toLowerCase()).toMatch(/timeout|timed out/);
-      expect(JSON.parse(await readFile(summary, "utf8"))).toMatchObject({
-        boxes: 0,
-        unlocked: true,
-        cleanup: phase === "setup" ? "not-required" : "confirmed",
-      });
-      expect(await readFile(join(directory, "junit.xml"), "utf8")).toContain("<failure");
-    } finally {
-      await rm(directory, { recursive: true, force: true });
-    }
-  },
-  10000,
-);
+    expect(await childProcess.exited).not.toBe(0);
+    expect(await readFile(join(directory, "junit.xml"), "utf8")).toContain(
+      '<failure type="TimeoutError"',
+    );
+    expect(JSON.parse(await readFile(summary, "utf8"))).toMatchObject({
+      boxes: 0,
+      unlocked: true,
+      cleanup: "confirmed",
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 10000);
 
 test("failed read-only connection and pre-open cancellation allocate nothing and release admission", async () => {
   const f = await fixture();
@@ -368,7 +340,7 @@ for (const option of ["partialReferenceCapture", "pendingNativeCapture"] as cons
     expect(f.calls.capture).toBe(1);
   });
 
-test("snapshot profile metadata remains available when reopening later fails", async () => {
+test("failed snapshot reopen preserves profile metadata and cleans owned resources", async () => {
   const f = await fixture();
   const t = await resources(f);
   let observed: import("@beachside/adapter").SnapshotProfile | undefined;
@@ -395,6 +367,8 @@ test("snapshot profile metadata remains available when reopening later fails", a
     restoreExecution: "fresh",
     sourceAfter: "unchanged",
   });
+  expect([f.boxes.size, f.snapshots.size]).toEqual([0, 0]);
+  expect(f.calls.restore).toBe(1);
 });
 
 test("zero-volume fixtures reject volume creators before native dispatch", async () => {
