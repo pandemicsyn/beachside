@@ -113,6 +113,32 @@ test("a refused fork resumes the source and rejects without a holder", async () 
   }
 });
 
+test("a restore whose fork response was lost is recovered by its name, never forked twice", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const source = await client.sandboxes.create();
+    const { snapshot } = await source.snapshot();
+    const forks = () => fixture.calls.filter((call) => call.path.endsWith("/fork")).length;
+    const before = forks();
+
+    fixture.loseNextCreateResponse();
+    const lost = await snapshot.submitRestore({ requireIndependentLifecycle: false });
+    const saved = JSON.parse(JSON.stringify(lost.reference));
+
+    const recovered = await (await client.recover(saved)).wait();
+
+    const restoredId =
+      recovered && "reference" in recovered ? (recovered.reference?.nativeId ?? "") : "";
+
+    expect(fixture.sandboxes.get(restoredId)?.parent).toBe(snapshot.reference.nativeId);
+    expect(forks() - before).toBe(1);
+  } finally {
+    await client.close();
+  }
+});
+
 test("restores keep the snapshot's network policy", async () => {
   const { connect } = setup();
   const client = await connect();

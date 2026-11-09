@@ -457,7 +457,8 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
 
         disks.set(disk.id, disk);
 
-        return json(201, {
+        // Idempotent by name: 201 only when this request made the disk.
+        return json(existing ? 200 : 201, {
           diskId: disk.id,
           authorizedUsers: [{ type: "token", token: "disk-secret-token" }],
         });

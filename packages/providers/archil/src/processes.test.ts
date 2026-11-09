@@ -159,3 +159,25 @@ test("terminate kills the program, and callback exec streams while capturing exa
     await client.close();
   }
 });
+
+test("a process observer waiting out a suspend settles when the sandbox is destroyed", async () => {
+  const { client, box } = await running();
+
+  try {
+    const process = await box.processes.start({
+      command: { kind: "argv", argv: ["sleep", "30"] },
+      output: { mode: "stream" },
+    });
+
+    const outcome = process.wait().then(
+      () => "exited",
+      () => "rejected",
+    );
+
+    await box.suspend();
+    await box.destroy();
+    expect(await outcome).toBe("rejected");
+  } finally {
+    await client.close();
+  }
+}, 15_000);

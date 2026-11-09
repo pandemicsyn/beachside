@@ -42,15 +42,15 @@ export const ProcessReference = z.strictObject({
 export type ProcessReference = z.infer<typeof ProcessReference>;
 
 /**
- * Wrap a command line so its shell PID lands in a private file before `exec`, which keeps the
- * same PID: a later `kill -TERM` reaches the user's program, not a wrapper.
+ * Wrap a command line so its shell PID lands in a private file: a later signal reaches the
+ * program's process group. The file is removed when the command ends or is signalled.
  */
 export function launcher(commandLine: string) {
   const pidFile = `${PID_DIRECTORY}/${randomUUID()}`;
 
   return {
     pidFile,
-    script: `mkdir -p ${PID_DIRECTORY} && echo $$ > ${quote(pidFile)} && { ${commandLine}; }`,
+    script: `mkdir -p ${PID_DIRECTORY} && echo $$ > ${quote(pidFile)} && { ${commandLine}; }; s=$?; rm -f ${quote(pidFile)}; exit $s`,
   };
 }
 
@@ -295,14 +295,21 @@ export function observeProcess(
       return { status: "requested" as const };
     }
 
-    // Set before sending: the exit can arrive before the signal command returns.
+    // Set before sending, since the exit can arrive before the signal command returns; a
+    // signal that found no process is taken back.
+    const previous = sent;
     sent = name === "SIGKILL" ? "SIGKILL" : "SIGTERM";
 
     const code = await options.signalCommand(
       // The process group first, so the program and its children all get the signal.
-      `p=$(cat ${quote(reference.pidFile)} 2>/dev/null) && [ -n "$p" ] && { kill -${name === "SIGKILL" ? "KILL" : "TERM"} -- "-$p" 2>/dev/null || kill -${name === "SIGKILL" ? "KILL" : "TERM"} "$p" 2>/dev/null; }`,
+      `f=${quote(reference.pidFile)}; p=$(cat "$f" 2>/dev/null) && [ -n "$p" ] && { kill -${name === "SIGKILL" ? "KILL" : "TERM"} -- "-$p" 2>/dev/null || kill -${name === "SIGKILL" ? "KILL" : "TERM"} "$p" 2>/dev/null; }${
+        // A killed shell cannot remove its PID file; a terminated program may still be running.
+        name === "SIGKILL" ? ' && rm -f "$f"' : ""
+      }`,
       context,
     );
+
+    if (code !== 0) sent = previous;
 
     return { status: code === 0 ? ("requested" as const) : ("not-found" as const) };
   };

@@ -62,11 +62,14 @@ import { REGION_NAMES, REGIONS, type NativeFetch } from "./regions";
 /** Setup default image, sent explicitly: Archil's REST and SDK documentation disagree on theirs. */
 export const DEFAULT_IMAGE = "node:24-bookworm";
 
-/** Per-stream bytes an exec keeps; the rest is drained and reported as truncated. */
-export const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+/** Exec output the SDK lets a caller capture (its `maxOutputBytes` ceiling); the rest drains. */
+export const MAX_OUTPUT_BYTES = 1024 * 1024;
 
-/** Finite exec stdin, sent in 1 MiB frames over the process connection. */
-export const MAX_STDIN_BYTES = 8 * 1024 * 1024;
+/** Finite exec stdin, matching the SDK's buffered stdin ceiling. */
+export const MAX_STDIN_BYTES = 1024 * 1024;
+
+/** The SDK's exec deadline ceiling; long work runs as a process instead. */
+export const MAX_EXEC_SECONDS = 3600;
 
 /** Largest buffered file read or write; streams have no bound. */
 export const MAX_FILE_BYTES = 32 * 1024 * 1024;
@@ -91,6 +94,16 @@ function capturedState(value: SandboxState | undefined): "running" | "suspended"
   if (value === "suspended" || value === "stopped") return value;
 
   return "running";
+}
+
+/** A failed image build's message: only an interrupted build is worth requesting again. */
+function buildFailed(reason: string | undefined): string {
+  if (reason === "invalid_source")
+    return "Archil image build failed (invalid_source): the image reference cannot be built; fix the source before building again";
+
+  return `Archil image build failed${reason ? ` (${reason})` : ""}${
+    reason === "interrupted" ? "; request it again to rebuild" : ""
+  }`;
 }
 
 /** Holders that keep a snapshot restorable are named with this prefix. */
@@ -1781,15 +1794,20 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             const { mounts } = input;
             await ctx.checkpoint({ id, stage: "stopping", mounts });
 
-            const done = (retained: boolean) => ({
-              computeStopped: true,
-              retainedResources: [...(retained ? [id] : []), ...mounts.map((mount) => mount.id)],
-              mountDurability: mounts.map((mount) => ({
-                volume: volumeRef(mount.id),
-                path: mount.path,
-                status: "unconfirmed" as const,
-              })),
-            });
+            const done = (retained: boolean) => {
+              // Stopped compute keeps no processes; observers waiting out a suspend must not hang.
+              held.delete(id);
+
+              return {
+                computeStopped: true,
+                retainedResources: [...(retained ? [id] : []), ...mounts.map((mount) => mount.id)],
+                mountDurability: mounts.map((mount) => ({
+                  volume: volumeRef(mount.id),
+                  path: mount.path,
+                  status: "unconfirmed" as const,
+                })),
+              };
+            };
 
             const current = await find(id, readContext(ctx.signal));
 
@@ -1848,15 +1866,20 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             const { id, mounts } = token.data;
             const wire = await find(id, ctx);
 
-            const done = (retained: boolean) => ({
-              computeStopped: true,
-              retainedResources: [...(retained ? [id] : []), ...mounts.map((mount) => mount.id)],
-              mountDurability: mounts.map((mount) => ({
-                volume: volumeRef(mount.id),
-                path: mount.path,
-                status: "unconfirmed" as const,
-              })),
-            });
+            const done = (retained: boolean) => {
+              // Stopped compute keeps no processes; observers waiting out a suspend must not hang.
+              held.delete(id);
+
+              return {
+                computeStopped: true,
+                retainedResources: [...(retained ? [id] : []), ...mounts.map((mount) => mount.id)],
+                mountDurability: mounts.map((mount) => ({
+                  volume: volumeRef(mount.id),
+                  path: mount.path,
+                  status: "unconfirmed" as const,
+                })),
+              };
+            };
 
             if (!wire) return done(false);
 
@@ -1949,10 +1972,10 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
         exec: {
           finiteStdin: "bytes",
           async prepare(input, ctx) {
-            if (input.deadlineSeconds > MAX_SESSION_SECONDS)
+            if (input.deadlineSeconds > MAX_EXEC_SECONDS)
               throw new AdapterError(
                 "INVALID_ARGUMENT",
-                `Archil commands run for at most ${MAX_SESSION_SECONDS} seconds`,
+                `Archil commands run for at most ${MAX_EXEC_SECONDS} seconds`,
               );
 
             if (input.stdin !== undefined && input.stdin.byteLength > MAX_STDIN_BYTES)
@@ -2533,13 +2556,14 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
           async observe(attempt, ctx) {
             const token = CreateToken.safeParse(attempt.token);
 
+            // The restore's name carries a tag of the holder it forks.
             if (
               !attempt.resource ||
               !token.success ||
-              token.data.name !== attemptName(attempt.submissionId)
+              token.data.name !==
+                restoreName(attempt.submissionId, checkedSnapshot(attempt.resource))
             )
               return ctx.unknown("Archil restore identity is unavailable; do not replay");
-            checkedSnapshot(attempt.resource);
 
             return observeLaunch(token.data, attempt, ctx, partialRestore);
           },
@@ -2607,7 +2631,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
               if (native.status !== 409)
                 return rejection(ctx, error, "Archil snapshot delete was not confirmed");
 
-              if (/child/i.test(native.error.message))
+              if (native.code === "sandbox_has_children" || /child/i.test(native.error.message))
                 return ctx.reject(
                   "CONFLICT",
                   "Sandboxes restored from this Archil snapshot still depend on it",
@@ -2687,10 +2711,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             const token = { id: image.image_id, source: input.source.value };
             await ctx.checkpoint(token);
 
-            if (image.status === "failed")
-              return ctx.unknown(
-                `Archil image build failed${image.failure_reason ? ` (${image.failure_reason})` : ""}; request it again to rebuild`,
-              );
+            if (image.status === "failed") return ctx.unknown(buildFailed(image.failure_reason));
 
             return builtImage(image) ?? ctx.pending(token, { pollAfterMs: pollMs });
           },
@@ -2704,10 +2725,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
 
             if (!image) return ctx.unknown("Archil image disappeared while building");
 
-            if (image.status === "failed")
-              return ctx.unknown(
-                `Archil image build failed${image.failure_reason ? ` (${image.failure_reason})` : ""}; request it again to rebuild`,
-              );
+            if (image.status === "failed") return ctx.unknown(buildFailed(image.failure_reason));
 
             return builtImage(image) ?? ctx.pending(token.data, { pollAfterMs: pollMs });
           },
@@ -2754,18 +2772,26 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             const token = { name: input.name };
             await ctx.checkpoint(token);
             let id: string;
+            let fresh: boolean;
 
             try {
-              // The one-time disk token in the response is discarded, never stored.
-              const created = z
-                .looseObject({ diskId: Id })
-                .safeParse(await send("POST", "/api/disks", { name: input.name }, ctx.signal));
+              // Archil's create is idempotent by name: 201 made a disk, 200 found one already
+              // there. The one-time disk token in the response is discarded, never stored.
+              const answer = await control.callWithStatus(
+                "POST",
+                "/api/disks",
+                { body: { name: input.name } },
+                callSignal(readContext(ctx.signal, 60)),
+              );
+
+              const created = z.looseObject({ diskId: Id }).safeParse(answer.data);
 
               if (!created.success)
                 return ctx.unknown(
                   "Archil disk acknowledgement is invalid; list disks without replay",
                 );
               id = created.data.diskId;
+              fresh = answer.status === 201;
             } catch (error) {
               const native = failure(error);
 
@@ -2777,10 +2803,16 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             await ctx.checkpoint({ ...token, id });
             const disk = await findDisk(id, readContext(ctx.signal)).catch(() => null);
 
-            const ref = {
-              ...volumeRef(id, "verified-created"),
-              receipt: JSON.stringify({ operation: ctx.operationId, submission: ctx.submissionId }),
-            };
+            // Only a disk this request made is proven ours; an existing one stays unknown.
+            const ref = fresh
+              ? {
+                  ...volumeRef(id, "verified-created"),
+                  receipt: JSON.stringify({
+                    operation: ctx.operationId,
+                    submission: ctx.submissionId,
+                  }),
+                }
+              : volumeRef(id);
 
             return volumeInfo(disk ?? { id, name: input.name, status: "creating" }, ref);
           },

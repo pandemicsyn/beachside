@@ -20,7 +20,7 @@ A live pass covers the image, region and network setting it ran with, not every 
 | [Boat](/docs/providers/boat/)             | Experimental | None yet                              | Not yet tested against the live Boat service.                                                                            |
 | [Runloop](/docs/providers/runloop/)       | Experimental | None yet                              | Not yet tested against the live Runloop service; sign-ups are invitation only.                                           |
 | [Freestyle](/docs/providers/freestyle/)   | Experimental | None yet                              | Not yet tested against the live Freestyle service.                                                                       |
-| [Archil](/docs/providers/archil/)         | Experimental | None yet                              | Not yet tested against the live Archil service.                                                                          |
+| [Archil](/docs/providers/archil/)         | Experimental | None yet                              | Checked by hand on the Free plan; not yet run through the live qualification suite.                                      |
 | Modal                                     | Experimental | None yet                              | Not yet tested against the live Modal service.                                                                           |
 
 ## What has been tested live

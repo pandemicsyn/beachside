@@ -496,7 +496,7 @@ export const providerStatus: ProviderStatus[] = [
     name: "Archil",
     href: "/docs/providers/archil/",
     experimental: true,
-    note: "Not yet tested against the live Archil service.",
+    note: "Checked by hand on the Free plan; not yet run through the live qualification suite.",
   },
   {
     id: "modal",

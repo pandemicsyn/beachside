@@ -204,6 +204,13 @@ export type Control = {
     init: CallInit,
     signal: AbortSignal,
   ): Promise<Json | undefined>;
+  /** As `call`, with the HTTP status, for answers whose meaning depends on it (201 vs 200). */
+  callWithStatus(
+    method: string,
+    path: string,
+    init: CallInit,
+    signal: AbortSignal,
+  ): Promise<{ status: number; data: Json | undefined }>;
   /** The `ApiClient` the official SDK's `Sandbox` uses, bound to one signal. */
   sdkClient(signal: AbortSignal): NativeClient;
 };
@@ -358,16 +365,19 @@ export function createControl(options: {
     return { ok: true as const, data: envelope.data.data, envelope: parsed };
   };
 
-  const call: Control["call"] = async (method, path, init, signal) => {
+  const callWithStatus: Control["callWithStatus"] = async (method, path, init, signal) => {
     const { response, body } = await send(method, path, init, signal);
 
-    if (response.status === 204) return undefined;
+    if (response.status === 204) return { status: 204, data: undefined };
     const result = decode(response, body);
 
     if (!result.ok) throw new ArchilCallError(result.failure);
 
-    return result.data;
+    return { status: response.status, data: result.data };
   };
+
+  const call: Control["call"] = async (method, path, init, signal) =>
+    (await callWithStatus(method, path, init, signal)).data;
 
   const sdkClient = (signal: AbortSignal): NativeClient => {
     const method =
@@ -430,5 +440,5 @@ export function createControl(options: {
     return opaque as NativeClient;
   };
 
-  return { baseUrl, secrets, call, sdkClient };
+  return { baseUrl, secrets, call, callWithStatus, sdkClient };
 }

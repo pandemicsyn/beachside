@@ -7,6 +7,12 @@ test("disks mount at create, survive destroy and can be explicitly deleted", asy
 
   try {
     const volume = await client.volumes.create({ name: "workspace" });
+    expect(volume.reference.ownership).toBe("verified-created");
+
+    // Archil answers a second create with the same name with the existing disk (200).
+    const again = await client.volumes.create({ name: "workspace" });
+    expect(again.reference.nativeId).toBe(volume.reference.nativeId);
+    expect(again.reference.ownership).toBe("unknown");
     expect(await volume.inspect()).toMatchObject({ state: "ready", filesystem: "object-backed" });
     expect(JSON.stringify(volume.reference)).not.toContain("disk-secret-token");
 

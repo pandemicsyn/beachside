@@ -312,7 +312,11 @@ import { archilAdapter } from "@beachside/archil";
 async function flow() {
   const client = await Beachside.connect({ adapter: archilAdapter, config: { region: "aws-us-east-1", resources: { vcpus: 2, memoryMiB: 4096 }, snapshots: { preserve: Preserve.FILESYSTEM } }, credentials: { apiKey: "fixture" } });
   const volume = await client.volumes.create({ name: "workspace" });
-  const box = await client.sandboxes.create({ networkPolicy: "blocked", mounts: [volume.at("/workspace")] });
+  const mounted = await client.sandboxes.create({ networkPolicy: "blocked", mounts: [volume.at("/workspace")] });
+  await mounted.destroy({ storage: "allow-unconfirmed" });
+  await volume.delete();
+  // Archil forks only unmounted sandboxes, so the snapshot source has no mounts.
+  const box = await client.sandboxes.create({ networkPolicy: "blocked" });
   const preview = await box.preview(3000);
   const url: string = preview.url;
   const { snapshot } = await box.snapshot();

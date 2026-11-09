@@ -1,6 +1,6 @@
 # @beachside/archil
 
-Experimental Archil Sandboxes adapter for Beachside. Tested on every change against a simulated Archil API and process connection; not yet checked against the live service. Install with `npm install beachside @beachside/archil`. Requires Node 22.19+ or Bun, and an Archil API key; on the Free plan, set `network: "archil-managed"`. Built on Archil's official SDK, pinned to `disk@1.12.0`.
+Experimental Archil Sandboxes adapter for Beachside. Tested on every change against a simulated Archil API and process connection, and checked by hand against the live service (Free plan, `aws-us-east-1`, November 2026); not yet through the provider qualification suite. Install with `npm install beachside @beachside/archil`. Requires Node 22.19+ or Bun, and an Archil API key; on the Free plan, set `network: "archil-managed"`. Built on Archil's official SDK, pinned to `disk@1.12.0`.
 
 ```ts
 import { Beachside } from "beachside";
@@ -42,7 +42,7 @@ Archil does not reveal which account an API key belongs to, so the scope is a on
 ## Behavior
 
 - **Transport.** Control-plane calls go through an adapter-owned client that sends each mutation once, so the SDK's built-in retries never replay pause, stop, resume, delete or timeout. The SDK's `Sandbox` objects run on that client for processes and files, so the WebSocket protocol stays the SDK's.
-- **Commands.** argv is single-quoted into Archil's command line. Raw stdout and stderr bytes are kept up to 8 MiB per stream; the rest is drained and marked truncated. A dropped connection reattaches at the last offset up to three times.
+- **Commands.** argv is single-quoted into Archil's command line. Raw stdout and stderr bytes are kept up to the SDK's 1 MiB capture limit; the rest is drained and marked truncated. A dropped connection reattaches at the last offset up to three times.
 - **Processes and terminals.** Background processes record a PID file so signals reach the program; terminals use the native PTY.
 - **Files.** Buffered reads use the SDK's chunked reader; writes, streams and metadata run through a Python 3 helper in the guest that publishes with an atomic rename or hard link.
 - **Snapshots.** Capture pauses (or stops) the source, forks its checkpoint into a `bs-snap-…` holder, parks the holder and resumes the source. Restores fork the holder, so they depend on it: `restore()` needs `requireIndependentLifecycle: false`. Archil refuses to delete a sandbox with children, so destroying a source with snapshots reports it retained, and deleting a snapshot with live restores is a `CONFLICT`.
