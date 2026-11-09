@@ -46,6 +46,8 @@ The package also exports `freestyle()`, which takes credentials and config in on
 
 An `image` given as a `sh-…` snapshot id is checked at connect, and `connect` fails with `NOT_FOUND` if your API key cannot see it. Freestyle has no lookup for a snapshot slug or a public `owner/slug` base, so those are checked when the first VM is created.
 
+With `network: "internet"`, a VM can join a Tailscale tailnet: the [Rex guide](/docs/cli/rex/) runs a Rex server in one and opens it from a Mac.
+
 Labels are stored as Freestyle VM metadata (up to 64, keys and values up to 63 characters), so `sandboxes.list()` and `beachside gc` can find them. Create-time `env` applies to every command, process and terminal; Freestyle only takes environment variables per command, so the adapter writes them to `/etc/beachside.env` in the VM, with mode `0600` and owned by the VM's default user `ubuntu`, which runs every command, so other users in the VM cannot read it (the command user can, as it can read its own environment), and each command reads that file before its own `env`. The values are never saved in references or recovery records. They stay in the creating process's memory until the file is written, so a create whose response was lost, or a VM that boots slower than the create waits, still finishes in that process. A different process that recovers the same create cannot write the values, so it reports `OUTCOME_UNKNOWN`; destroy that VM and create another. `region` and mounts are rejected.
 
 ## What works
