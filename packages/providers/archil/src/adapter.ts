@@ -296,7 +296,8 @@ const CaptureToken = z.strictObject({
 
 type CaptureToken = z.infer<typeof CaptureToken>;
 
-const DeleteToken = z.strictObject({ id: Id });
+/** `accepted` records that Archil answered the delete with success; its removal is async. */
+const DeleteToken = z.strictObject({ id: Id, accepted: z.literal(true).optional() });
 
 const VolumeToken = z.strictObject({ name: z.string().max(128), id: Id.optional() });
 
@@ -2867,10 +2868,20 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
                 : ctx.pending(token, { pollAfterMs: pollMs });
             }
 
-            return (await findDisk(token.id, readContext(ctx.signal)).catch(() => undefined)) ===
-              null
-              ? { deleted: true as const, reference: ref }
-              : ctx.pending(token, { pollAfterMs: pollMs });
+            // Archil removes the disk after answering; poll until it is gone.
+            const accepted = { id: token.id, accepted: true as const };
+
+            try {
+              const gone = await settle(ctx.signal, async (read) =>
+                (await findDisk(token.id, read)) ? undefined : true,
+              );
+
+              if (gone) return { deleted: true as const, reference: ref };
+            } catch {
+              /* Deletion is acknowledged; completion continues through observation. */
+            }
+
+            return ctx.pending(accepted, { pollAfterMs: pollMs });
           },
           async observe(attempt, ctx) {
             const token = DeleteToken.safeParse(attempt.token);
@@ -2883,7 +2894,8 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
 
             if (!disk) return { deleted: true as const, reference: ref };
 
-            return disk.status === "deleting"
+            // An accepted delete finishes asynchronously, whatever status the disk shows meanwhile.
+            return token.data.accepted || disk.status === "deleting"
               ? ctx.pending(token.data, { pollAfterMs: pollMs })
               : ctx.unknown("Archil disk still exists; delete it again explicitly");
           },

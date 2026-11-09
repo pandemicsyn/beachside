@@ -48,7 +48,14 @@ export type FixtureSandbox = {
   ports: Set<number>;
 };
 
-type FixtureDisk = { id: string; account: string; name: string; status: string };
+type FixtureDisk = {
+  id: string;
+  account: string;
+  name: string;
+  status: string;
+  /** Reads left before an accepted delete removes the disk (Archil deletes asynchronously). */
+  removeAfter?: number;
+};
 
 type FixtureImage = { id: string; source: string; status: string; polls: number };
 
@@ -460,6 +467,12 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
 
       if (!disk || disk.account !== account) return failure(404, "disk_not_found");
 
+      if (method === "GET" && disk.removeAfter !== undefined && --disk.removeAfter < 0) {
+        disks.delete(disk.id);
+
+        return failure(404, "disk_not_found");
+      }
+
       if (method === "GET") return json(200, diskView(disk));
 
       if (method === "DELETE") {
@@ -468,7 +481,7 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
         );
 
         if (mounted) return failure(409, "disk_in_use");
-        disks.delete(disk.id);
+        disk.removeAfter = 2;
 
         return json(200, null);
       }
