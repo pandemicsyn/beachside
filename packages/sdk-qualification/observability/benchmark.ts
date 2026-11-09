@@ -14,54 +14,72 @@ const manager = new AsyncLocalStorageContextManager().enable();
 
 context.setGlobalContextManager(manager);
 
-const measurements = [];
+const measurements: { mode: string; concurrency: number; medianWorkloadMs: number }[] = [];
 
-for (const mode of ["disabled", "unsampled", "sampled"] as const) {
-  for (const concurrency of [1, 4]) {
-    const exporter = new InMemorySpanExporter();
+const modes = ["disabled", "unsampled", "sampled"] as const;
 
-    const provider = new NodeTracerProvider({
-      sampler: mode === "unsampled" ? new AlwaysOffSampler() : undefined,
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
-    });
+const REPEATS = 15;
 
-    const fixture = fixtureAdapter({ exitCode: 0 });
+for (const concurrency of [1, 4]) {
+  const runs = await Promise.all(
+    modes.map(async (mode) => {
+      const exporter = new InMemorySpanExporter();
 
-    const client = await Beachside.connect({
-      adapter: fixture.adapter,
-      config: {},
-      credentials: {},
-      tracing: mode === "disabled" ? false : { tracerProvider: provider },
-    });
+      const provider = new NodeTracerProvider({
+        sampler: mode === "unsampled" ? new AlwaysOffSampler() : undefined,
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+      });
 
-    const work = async () => {
-      const op = await client.sandboxes.submitCreate({ environment: Image.prepared("fixture") });
-      const box = await op.wait();
-      await box.exec({ command: { kind: "argv", argv: ["fixture"] }, maxOutputBytes: 1024 });
-      await box.readFile("/fixture");
-      await box.writeFile("/fixture", new Uint8Array([1, 2]));
-      await box.destroy();
-    };
+      const fixture = fixtureAdapter({ exitCode: 0 });
 
-    for (let i = 0; i < 50; i++) await work();
-    const samples = [];
+      const client = await Beachside.connect({
+        adapter: fixture.adapter,
+        config: {},
+        credentials: {},
+        tracing: mode === "disabled" ? false : { tracerProvider: provider },
+      });
 
-    for (let repeat = 0; repeat < 5; repeat++) {
-      exporter.reset();
+      const work = async () => {
+        const op = await client.sandboxes.submitCreate({ environment: Image.prepared("fixture") });
+        const box = await op.wait();
+        await box.exec({ command: { kind: "argv", argv: ["fixture"] }, maxOutputBytes: 1024 });
+        await box.readFile("/fixture");
+        await box.writeFile("/fixture", new Uint8Array([1, 2]));
+        await box.destroy();
+      };
+
+      const samples: number[] = [];
+
+      return { mode, exporter, provider, client, work, samples };
+    }),
+  );
+
+  for (const run of runs) for (let i = 0; i < 50; i++) await run.work();
+
+  // Interleave the modes, so machine noise and runtime warm-up hit each mode alike.
+  for (let repeat = 0; repeat < REPEATS; repeat++) {
+    for (const run of runs) {
+      run.exporter.reset();
       const start = performance.now();
 
-      for (let batch = 0; batch < 100; batch++) {
-        await Promise.all(Array.from({ length: concurrency }, work));
-        exporter.reset();
+      for (let batch = 0; batch < 40; batch++) {
+        await Promise.all(Array.from({ length: concurrency }, run.work));
+        run.exporter.reset();
       }
 
-      samples.push((performance.now() - start) / (100 * concurrency));
+      run.samples.push((performance.now() - start) / (40 * concurrency));
     }
+  }
 
-    samples.sort((a, b) => a - b);
-    measurements.push({ mode, concurrency, medianWorkloadMs: Number(samples[2]!.toFixed(4)) });
-    await client.close();
-    await provider.shutdown();
+  for (const run of runs) {
+    run.samples.sort((a, b) => a - b);
+    measurements.push({
+      mode: run.mode,
+      concurrency,
+      medianWorkloadMs: Number(run.samples[Math.floor(REPEATS / 2)]!.toFixed(4)),
+    });
+    await run.client.close();
+    await run.provider.shutdown();
   }
 }
 
