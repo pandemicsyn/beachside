@@ -86,8 +86,7 @@ export function secretPlaceholder(env: string): string {
 export function secretHeaderValue(value: string, header: SecretHeader): string {
   if (header.format === "bearer") return `Bearer ${value}`;
 
-  if (header.format === "basic")
-    return `Basic ${base64(`${header.username ?? ""}:${value}`)}`;
+  if (header.format === "basic") return `Basic ${base64(`${header.username ?? ""}:${value}`)}`;
 
   return value;
 }
@@ -248,6 +247,19 @@ export function envWithSecretPlaceholders(
   const result: Record<string, string> = { ...env };
 
   for (const binding of bindings) result[binding.env] = secretPlaceholder(binding.env);
+
+  return result;
+}
+
+/** Replace every secret value (and computed header value) in a native message. */
+export function redactSecrets(
+  text: string,
+  bindings: readonly SecretBinding[] | undefined,
+): string {
+  let result = text;
+
+  for (const value of secretValues(bindings).sort((a, b) => b.length - a.length))
+    result = result.split(value).join("[secret]");
 
   return result;
 }

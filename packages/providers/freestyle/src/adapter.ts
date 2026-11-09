@@ -5,6 +5,7 @@ import type {
   ExecOptions,
   Freestyle,
   FirewallSpec,
+  InlineTlsRule,
   SnapshotData,
   TlsSpec,
   VmData,
@@ -49,6 +50,11 @@ import {
   type SandboxState,
   type SnapshotInfo,
   type SnapshotProfile,
+  envWithSecretPlaceholders,
+  redactSecrets,
+  secretHeadersByHost,
+  type SecretBinding,
+  type SecretSupport,
 } from "@beachside/adapter";
 import {
   checkEnv,
@@ -79,6 +85,48 @@ import {
   type NativeFailure,
   type NativeFetch,
 } from "./transport";
+
+// The edge sets the whole header for each bound host; the VM sees only a Beachside placeholder.
+const SECRET_SUPPORT: SecretSupport = {
+  delivery: "header",
+  basicAuth: true,
+  wildcardHosts: true,
+  maxSecrets: 32,
+};
+
+const SYSTEM_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
+
+/**
+ * Freestyle terminates TLS for brokered hosts with its own CA, installed in the VM's system
+ * store. Runtimes that bring their own bundle (Node, Python requests) are pointed at it too,
+ * unless the caller set them.
+ */
+const SECRET_CA_ENV = {
+  NODE_EXTRA_CA_CERTS: SYSTEM_CA_BUNDLE,
+  REQUESTS_CA_BUNDLE: SYSTEM_CA_BUNDLE,
+  SSL_CERT_FILE: SYSTEM_CA_BUNDLE,
+};
+
+function secretEnv(
+  env: Readonly<Record<string, string>> | undefined,
+  secrets: readonly SecretBinding[] | undefined,
+): Record<string, string> | undefined {
+  const result = secrets?.length
+    ? { ...SECRET_CA_ENV, ...envWithSecretPlaceholders(env, secrets) }
+    : env;
+
+  return result && Object.keys(result).length ? result : undefined;
+}
+
+/** An egress TLS rule also opens its host, so brokering would widen a blocked VM's network. */
+function checkSecrets(policy: string, secrets: readonly SecretBinding[] | undefined) {
+  if (secrets?.length && policy !== "internet")
+    throw new AdapterError(
+      "UNSUPPORTED",
+      "Freestyle brokers secrets only with network internet: its TLS rules also open the host",
+    );
+  secretHeadersByHost(secrets);
+}
 
 /** Freestyle's platform default base snapshot: Ubuntu 24.04 with 4 vCPU and 8 GiB. */
 export const BASE_IMAGE = "freestyle/ubuntu";
@@ -577,12 +625,17 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         }
       };
 
-      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Native SDK throws are normalized at this boundary.
-      const rejection = (ctx: AttemptContext, error: unknown, reason: string) => {
+      const rejection = (
+        ctx: AttemptContext,
+        // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Native SDK throws are normalized at this boundary.
+        error: unknown,
+        reason: string,
+        secrets?: readonly SecretBinding[],
+      ) => {
         const native = failure(error);
 
         return refusedBeforeEffect(native)
-          ? ctx.reject(native.error.code, native.error.message)
+          ? ctx.reject(native.error.code, redactSecrets(native.error.message, secrets))
           : ctx.unknown(`${reason}; do not replay`);
       };
 
@@ -660,11 +713,13 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           request.idleTimeoutSeconds = config.lifecycle.idleSeconds;
 
         if (input.labels && Object.keys(input.labels).length) request.metadata = input.labels;
-        const tls = previews(slug);
+        // Brokered secrets are egress TLS rules: the edge sets each header for its host, and the
+        // VM holds only a placeholder. Values are write-only at Freestyle and never saved here.
+        const rules = [...(previews(slug)?.rules ?? []), ...secretRules(input.secrets)];
 
-        if (tls) request.tls = tls;
+        if (rules.length) request.tls = { rules };
 
-        const env = input.env && Object.keys(input.env).length ? input.env : undefined;
+        const env = secretEnv(input.env, input.secrets);
         // The env requirement is saved before dispatch, so a recovered attempt still demands
         // the env file's marker before it reports the VM as ready. The values stay in this
         // process only, so its own observation can still write them.
@@ -684,6 +739,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
             ctx,
             error,
             "Freestyle create response was not confirmed; observe finds the VM by its slug",
+            input.secrets,
           );
         }
 
@@ -792,6 +848,15 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
 
         return launched(vm, token, attempt, ctx, partial);
       };
+
+      const secretRules = (secrets: readonly SecretBinding[] | undefined): InlineTlsRule[] =>
+        [...secretHeadersByHost(secrets)].map(([domain, headers]) => ({
+          action: "allow" as const,
+          domain,
+          source: {},
+          destination: { public: true as const },
+          transform: [{ headers }],
+        }));
 
       const firewall = (policy: string): FirewallSpec =>
         policy === "internet"
@@ -1364,6 +1429,8 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          // Network internet only; prepare refuses brokering on a blocked VM.
+          secrets: SECRET_SUPPORT,
           lifetime: { minSeconds: 60, maxSeconds: MAX_TTL_SECONDS },
         },
         create: {
@@ -1414,6 +1481,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
                 "Freestyle labels allow at most 64 entries with keys and values up to 63 characters",
               );
             checkEnv(input.env);
+            checkSecrets(input.networkPolicy, input.secrets);
 
             return input;
           },
@@ -2274,6 +2342,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           options: {
             env: true,
             labels: true,
+            secrets: true,
             lifetime: { minSeconds: 60, maxSeconds: MAX_TTL_SECONDS },
           },
           async prepare(input, ctx) {
@@ -2290,6 +2359,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
               );
 
             checkEnv(input.request.env);
+            checkSecrets(input.request.networkPolicy, input.request.secrets);
 
             if (input.request.labels && !Labels.safeParse(input.request.labels).success)
               throw new AdapterError(
@@ -2307,6 +2377,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
                 networkPolicy: input.request.networkPolicy,
                 labels: input.request.labels,
                 env: input.request.env,
+                secrets: input.request.secrets,
                 lifetimeSeconds: input.request.lifetimeSeconds,
               },
               ctx,

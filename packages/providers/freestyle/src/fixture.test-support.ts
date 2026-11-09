@@ -66,7 +66,12 @@ const Body = z
     tls: z
       .object({
         rules: z.array(
-          z.object({ domain: z.string(), destination: z.object({ port: z.number() }) }),
+          z
+            .object({
+              domain: z.string(),
+              destination: z.object({ port: z.number().optional() }).passthrough(),
+            })
+            .passthrough(),
         ),
       })
       .optional(),
@@ -272,11 +277,12 @@ export function freestyleFixture() {
         polls: 0,
         files: new Map(from?.files),
         owners: new Map(),
-        tls: (body.tls?.rules ?? []).map((rule) => ({
-          id: `tls${++sequence}`,
-          domain: rule.domain,
-          port: rule.destination.port,
-        })),
+        // Egress rules (brokered secrets) carry no port; only previews land on the VM.
+        tls: (body.tls?.rules ?? []).flatMap((rule) =>
+          rule.destination.port === undefined
+            ? []
+            : [{ id: `tls${++sequence}`, domain: rule.domain, port: rule.destination.port }],
+        ),
       };
 
       vms.set(id, vm);
