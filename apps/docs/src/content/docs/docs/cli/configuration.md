@@ -56,6 +56,21 @@ The CLI picks a profile from `--profile`, then `BEACHSIDE_PROFILE`, then `--prov
 
 Each sandbox remembers the profile that created it, so later commands on it use the same profile whatever is selected now.
 
+## Setups
+
+`setups` names setup steps that `--setup <name>` runs after a sandbox starts, and a profile's `setup` lists the ones its sandboxes get by default:
+
+```json
+{
+  "profiles": { "e2b": { "provider": "e2b", "setup": ["node"] } },
+  "setups": {
+    "node": { "setup": ["fnm install 22"], "network": "internet" }
+  }
+}
+```
+
+See [Set up a sandbox](/docs/cli/setup/) for steps, startup, env and failures.
+
 ## Credentials
 
 A credential can be written three ways:

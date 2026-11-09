@@ -26,6 +26,11 @@ export type SetupStepOptions = {
   cwd?: string;
   /** Environment for this step only. Put secrets in the create-time `env` instead. */
   env?: Record<string, string>;
+  /**
+   * Text sent to the step's stdin, such as a key the step reads with `--auth-key-file -`. Never
+   * part of the digest, never saved. Not allowed on startup steps, which are saved for reruns.
+   */
+  stdin?: string;
   /** Per-step limit, 600 seconds by default and at most 3600. */
   timeoutSeconds?: number;
   /** `root` runs the step as root, through `sudo -n` when the sandbox user is not root. */
@@ -80,6 +85,13 @@ export const Setup = {
   /** A named, reusable setup that composes: `setup: [nodeDev, playwright]`. */
   define(input: SetupDefinitionInput): SetupDefinition {
     return new SetupDefinition(input);
+  },
+  /**
+   * The digest Beachside records for a setup: the same value as `box.setupReport.digest`, or
+   * null when there are no setup steps. Reads `Setup.file()` scripts.
+   */
+  async digest(input: SetupInput): Promise<string | null> {
+    return (await resolveSetup({ setup: input })).digest;
   },
   /** A local script file, uploaded and run with its shebang. Its digest is the file content. */
   file(path: string, options: Omit<SetupStepOptions, "run" | "script" | "file"> = {}): SetupStep {
@@ -136,6 +148,11 @@ export type SetupCreateOptions = SetupRunOptions & {
   setup?: SetupInput;
   startup?: readonly SetupStep[];
   /**
+   * On restore: `run` (default) runs the startup the snapshot recorded when no `startup` is
+   * passed; `skip` leaves it, for callers that run setup themselves with `box.runSetup()`.
+   */
+  recordedStartup?: "run" | "skip";
+  /**
    * What happens to a new sandbox whose setup or startup fails: `destroy` (default) removes it
    * before the error is thrown; `keep` leaves it running and puts it on the error as `sandbox`.
    */
@@ -145,6 +162,7 @@ export type SetupCreateOptions = SetupRunOptions & {
 export const setupCreateKeys = [
   "setup",
   "startup",
+  "recordedStartup",
   "onSetupOutput",
   "onSetupStep",
   "setupTimeoutSeconds",
@@ -190,6 +208,7 @@ export type ResolvedStep = {
   argv: string[];
   cwd?: string;
   env?: Record<string, string>;
+  stdin?: string;
   timeoutSeconds: number;
   user?: "root";
   cache: boolean;
@@ -218,6 +237,7 @@ const StepObject = z
     name: z.string().min(1).max(200).optional(),
     cwd: z.string().min(1).max(4096).optional(),
     env: Env.optional(),
+    stdin: z.string().optional(),
     timeoutSeconds: z.number().int().positive().max(3600).optional(),
     user: z.literal("root").optional(),
     cache: z.boolean().optional(),
@@ -257,6 +277,7 @@ const RunOptions = z.strictObject({
   onSetupStep: z.function().optional(),
   setupTimeoutSeconds: z.number().int().positive().max(86_400).optional(),
   onSetupFailure: z.enum(["destroy", "keep"]).optional(),
+  recordedStartup: z.enum(["run", "skip"]).optional(),
 });
 
 function issues(error: z.ZodError): string {
@@ -287,6 +308,7 @@ export function splitSetup<T extends SetupCreateOptions>(input: T | undefined): 
   const {
     setup,
     startup,
+    recordedStartup,
     onSetupOutput,
     onSetupStep,
     setupTimeoutSeconds,
@@ -307,6 +329,8 @@ export function splitSetup<T extends SetupCreateOptions>(input: T | undefined): 
   if (setupTimeoutSeconds !== undefined) setupOptions.setupTimeoutSeconds = setupTimeoutSeconds;
 
   if (onSetupFailure !== undefined) setupOptions.onSetupFailure = onSetupFailure;
+
+  if (recordedStartup !== undefined) setupOptions.recordedStartup = recordedStartup;
   validateSetupOptions(setupOptions);
 
   const split: SplitSetup<T> = { setupOptions, rest };
@@ -436,6 +460,8 @@ async function resolveStep(step: SetupStep, readFile: ReadSetupFile): Promise<Re
 
   if (source.user !== undefined) resolved.user = source.user;
 
+  if (source.stdin !== undefined) resolved.stdin = source.stdin;
+
   return resolved;
 }
 
@@ -483,6 +509,8 @@ export async function resolveSetup(
 
   const setup = await Promise.all(setupSteps.map((step) => resolveStep(step, readFile)));
   const startup = await Promise.all(startupSteps.map((step) => resolveStep(step, readFile)));
+
+  rejectStartupStdin(startup);
 
   return {
     setup,
@@ -542,8 +570,12 @@ export type SetupTarget = {
 
 export type SetupRunContext = SetupRunOptions & {
   signal?: AbortSignal;
+  /** `false` runs the steps without touching the sandbox's setup state file. */
+  record?: boolean;
   /** Whether the adapter can stream exec output live; otherwise output arrives per step. */
   streams: boolean;
+  /** Environment for every step, under each step's own; like sandbox env, not in the digest. */
+  env?: Record<string, string>;
 };
 
 const TAIL_LINES = 20;
@@ -678,8 +710,16 @@ function storedStartup(steps: readonly ResolvedStep[]): SetupState["startup"] {
   return steps.map((step) => StoredStep.parse(step));
 }
 
+function rejectStartupStdin(steps: readonly ResolvedStep[]): void {
+  if (steps.some((step) => step.stdin !== undefined))
+    throw new BeachsideError(
+      "INVALID_ARGUMENT",
+      "Startup steps cannot take stdin: they are saved in the sandbox to run again",
+    );
+}
+
 /** Startup steps recorded in a state file, ready to run again. */
-export function recordedStartup(state: SetupState | null): ResolvedStep[] {
+export function recordedStartupSteps(state: SetupState | null): ResolvedStep[] {
   return state ? state.startup.map((step) => ({ ...step })) : [];
 }
 
@@ -717,11 +757,14 @@ class PhaseRunner {
         );
       const input: import("./resource").ExecInput = { command, cwd: cwdFor(step, homeDir) };
 
-      if (step.env) input.env = step.env;
+      if (step.env || this.ctx.env) input.env = { ...this.ctx.env, ...step.env };
+
+      if (step.stdin !== undefined) input.stdin = step.stdin;
 
       const onOutput = this.ctx.onSetupOutput;
 
-      if (this.ctx.streams && onOutput)
+      // Steps with stdin take the buffered path, which every exec adapter supports.
+      if (this.ctx.streams && onOutput && step.stdin === undefined)
         output = await this.target.exec(input, {
           signal,
           onOutput: (chunk) =>
@@ -738,7 +781,8 @@ class PhaseRunner {
       if (cause instanceof NonzeroExitError) {
         output = cause.result;
 
-        if (!this.ctx.streams || !this.ctx.onSetupOutput) await this.replay(phase, ref, output);
+        if (!this.ctx.streams || !this.ctx.onSetupOutput || step.stdin !== undefined)
+          await this.replay(phase, ref, output);
       } else {
         const timedOut = timeout.aborted && !this.signal.aborted;
 
@@ -826,7 +870,9 @@ export function planSetup(
     )
       prefix++;
 
-    if (prefix < done.length && resolved.setup.length) {
+    // Diverged: the sandbox holds other steps where the requested ones differ. A request that
+    // is a prefix of what the sandbox holds is already satisfied.
+    if (prefix < done.length && prefix < resolved.setup.length) {
       notes.push(
         "the sandbox holds a different setup than requested; running every requested step",
       );
@@ -837,7 +883,7 @@ export function planSetup(
   const startup =
     resolved.startup.length || !options.startupFromRecord
       ? resolved.startup
-      : recordedStartup(recorded);
+      : recordedStartupSteps(recorded);
 
   return {
     setup: resolved.setup.map((step, index) =>
@@ -869,7 +915,16 @@ export async function runSetupPlan(
 
   for (const message of plan.notes) await runner.emit({ type: "note", phase: "setup", message });
 
-  if (plan.setup.length) {
+  if (ctx.record === false) {
+    for (const [index, entry] of plan.setup.entries())
+      report.setup.push(
+        await runner.step("setup", entry.step, {
+          index,
+          total: plan.setup.length,
+          name: entry.step.name,
+        }),
+      );
+  } else if (plan.setup.length) {
     const total = plan.setup.length;
     const completed: SetupState["setup"]["steps"] = [];
 

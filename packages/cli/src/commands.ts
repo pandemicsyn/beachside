@@ -8,6 +8,7 @@ import {
   NonzeroExitError,
   ResourceReference,
   BeachsideError,
+  SetupFailedError,
   assertResourceScope,
   type CreateInput,
   type ExecInput,
@@ -18,6 +19,8 @@ import {
   type SandboxHandle,
   type SandboxList,
   type SandboxListEntry,
+  type SetupStep,
+  type SetupStepOptions,
 } from "beachside";
 import { z } from "zod";
 import { searchProjectAdapters, valueAvailable, type Env, type LoadedConfig } from "./config";
@@ -31,9 +34,23 @@ import {
   type Output,
 } from "./output";
 import {
+  catalog,
+  hasSetupRequest,
+  resolveSetupRequest,
+  setupFailed,
+  setupLines,
+  setupProgress,
+  setupRequest,
+  type CliSetup,
+  type SetupRecord,
+  type SetupRequest,
+} from "./setups";
+import { resolveEnvReferences } from "./config";
+import {
   addonLines,
   parseAddons,
   sandboxShell,
+  setupShell,
   setupAddons,
   tailnetKey,
   teardownAddons,
@@ -118,6 +135,16 @@ type CreateRequest = {
   retrySeconds?: number;
   /** `--with`: servers to install once the sandbox exists. */
   addons: AddonName[];
+  /** `--setup`, `--setup-cmd`, `--startup`, `--startup-cmd`; profile defaults are added later. */
+  setup: SetupRequest;
+  /** `--no-default-setup`: skip the profile's default setups. */
+  noDefaultSetup: boolean;
+  /** `--quiet-setup`: print step headers and failures only. */
+  quietSetup: boolean;
+  /** `--setup-timeout`: overall limit for setup and startup. */
+  setupTimeoutSeconds?: number;
+  /** `--rm-on-failure`: remove the sandbox when its setup fails instead of keeping it. */
+  rmOnFailure: boolean;
 };
 
 /** Create flags a restore cannot honor: the snapshot fixes the image. */
@@ -131,6 +158,7 @@ function createRequest(flags: Flags, env: Record<string, string> = {}): CreateRe
   const ttl = flags.string("ttl");
   const retry = flags.string("retry");
   const snapshot = flags.string("snapshot");
+  const setupTimeout = flags.string("setup-timeout");
   const addons = parseAddons(flags.strings("with"));
   const network = flags.string("network") ?? (addons.length ? "internet" : undefined);
   const labels = parsePairs(flags.strings("label"), "label");
@@ -170,7 +198,65 @@ function createRequest(flags: Flags, env: Record<string, string> = {}): CreateRe
     snapshot,
     retrySeconds: retry === undefined ? undefined : parseDuration(retry, "retry"),
     addons,
+    setup: setupRequest({
+      setups: flags.strings("setup"),
+      commands: flags.strings("setup-cmd"),
+      startups: flags.strings("startup"),
+      startupCommands: flags.strings("startup-cmd"),
+      defaults: [],
+    }),
+    noDefaultSetup: flags.bool("no-default-setup"),
+    quietSetup: flags.bool("quiet-setup"),
+    setupTimeoutSeconds:
+      setupTimeout === undefined ? undefined : parseDuration(setupTimeout, "setup-timeout"),
+    rmOnFailure: flags.bool("rm-on-failure"),
   };
+}
+
+/**
+ * Resolve the setup a create asked for, before anything exists: the profile's default setups,
+ * then `--setup` and `--setup-cmd`. A named setup's network becomes the default and must agree
+ * with an explicit `--network`; its env joins the sandbox env under `--env`.
+ */
+async function prepareSetup(
+  session: Session,
+  request: CreateRequest,
+  explicitNetwork: string | undefined,
+): Promise<CliSetup | null> {
+  const loaded = await session.config();
+
+  if (!request.noDefaultSetup && !request.snapshot) {
+    const profile = await session.profile();
+
+    request.setup.defaults = loaded.value.profiles?.[profile.name]?.setup ?? [];
+  }
+
+  if (!hasSetupRequest(request.setup)) return null;
+
+  const { cwd, env } = session.ctx;
+  const resolved = await resolveSetupRequest(request.setup, catalog(loaded), cwd, env);
+
+  if (resolved.network) {
+    if (explicitNetwork !== undefined && explicitNetwork !== resolved.network.value)
+      throw usage(
+        `Setup ${resolved.network.from} needs --network ${resolved.network.value}, not ${explicitNetwork}`,
+        `drop --network or pass --network ${resolved.network.value}`,
+      );
+
+    request.network = resolved.network.value;
+  }
+
+  const setupEnv: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(resolved.env))
+    setupEnv[key] = await session.secret(
+      String(resolveEnvReferences(value, env, `setup env ${key}`)),
+      `setup env ${key}`,
+    );
+
+  request.env = { ...setupEnv, ...request.env };
+
+  return resolved;
 }
 
 const EnvName = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -564,6 +650,7 @@ function sandboxSummary(record: SandboxRecord) {
     image: record.image ?? null,
     adopted: record.adopted ?? false,
     addons: record.addons ?? [],
+    setup: record.setup ?? null,
   };
 }
 
@@ -628,14 +715,22 @@ export async function findTarget(session: Session, target: string): Promise<Targ
 
 export async function createCommand(session: Session, flags: Flags): Promise<number> {
   const request = createRequest(flags, await envFlags(session, flags));
+  const setup = await prepareSetup(session, request, flags.string("network"));
   const key = request.addons.length ? tailnetKey(session.ctx.env) : undefined;
   const created = await createSandbox(session, request);
 
   if (created.unrecorded) throw unrecordedError(created);
 
-  if (key && !created.existing) await installAddons(session, created, request.addons, key);
+  if (created.existing) {
+    requireSetup(created.record, setup);
+    requireAddons(created.record, request.addons);
+  } else {
+    const failure = await setUp(session, created, setup, request);
 
-  if (created.existing) requireAddons(created.record, request.addons);
+    if (failure) throw failure;
+
+    if (key) await installAddons(session, created, request.addons, key, request.quietSetup);
+  }
 
   session.ctx.out.success(
     {
@@ -643,7 +738,318 @@ export async function createCommand(session: Session, flags: Flags): Promise<num
       existing: created.existing,
       reference: created.record.reference,
     },
-    [created.record.name, ...addonLines(created.record.addons ?? [])].join("\n"),
+    [
+      created.record.name,
+      ...setupLines(created.record.setup),
+      ...addonLines(created.record.addons ?? []),
+    ].join("\n"),
+  );
+
+  return 0;
+}
+
+/** `--if-not-exists` found the sandbox: its recorded setup must match and be ready. */
+function requireSetup(record: SandboxRecord, setup: CliSetup | null): void {
+  if (!setup?.digest) return;
+
+  if (record.setup?.digest === setup.digest && record.setup.state === "ready") return;
+
+  throw new CliError(
+    "CONFLICT",
+    record.setup?.digest === setup.digest
+      ? `${record.name} exists but its setup is ${record.setup.state}`
+      : `${record.name} exists with a different setup (${record.setup?.sources.join(", ") || "none"})`,
+    `run the missing steps with \`beachside setup ${record.name}\`, or remove it with \`beachside rm ${record.name}\``,
+  );
+}
+
+/** Save the sandbox record as it stands; setup and add-ons call this after every step. */
+async function saveRecord(session: Session, record: SandboxRecord): Promise<void> {
+  const store = await session.store();
+  const current = await store.get("sandbox", record.name);
+
+  if (current) await store.update("sandbox", record.name, record, current.version);
+}
+
+type SetupRun = {
+  setup: CliSetup | null;
+  quiet: boolean;
+  timeoutSeconds?: number;
+  /** A restored sandbox: its recorded startup runs when no startup is asked for. */
+  restored: boolean;
+  /** Re-run steps already recorded (`beachside setup --force`). */
+  force?: boolean;
+  /** Default working directory, such as the folder `run --push` sent. */
+  cwd?: string;
+  /** Env for every step, for setups added to a sandbox that was created without it. */
+  env?: Record<string, string>;
+};
+
+/**
+ * Run setup on a recorded sandbox, saving each step's outcome in its record as it goes, so an
+ * interrupted setup still shows. Returns the setup failure for the caller to report; the
+ * sandbox stays.
+ */
+async function runSetupSteps(
+  session: Session,
+  box: SandboxHandle<true>,
+  record: SandboxRecord,
+  run: SetupRun,
+): Promise<SetupFailedError | null> {
+  const { out, signal } = session.ctx;
+  const progress = setupProgress(out, run.quiet);
+  const steps = withCwd(run.setup?.setup ?? [], run.cwd);
+  const startup = withCwd(run.setup?.startup ?? [], run.cwd);
+
+  const entry: SetupRecord = {
+    digest: run.setup?.digest ?? null,
+    sources: run.setup?.sources ?? [],
+    state: "running",
+    steps: [],
+  };
+
+  if (run.setup) entry.request = run.setup.request;
+
+  record.setup = entry;
+
+  if (steps.length || startup.length) await saveRecord(session, record);
+
+  try {
+    const options: Parameters<typeof box.runSetup>[0] = {
+      setup: steps,
+      startup,
+      recordedStartup: run.restored ? "run" : "skip",
+      force: run.force ?? false,
+      onSetupOutput: progress.onSetupOutput,
+      onSetupStep: async (event) => {
+        await progress.onSetupStep?.(event);
+
+        if (event.type === "note") return;
+
+        const step = { phase: event.phase, name: event.step.name };
+
+        if (event.type === "start") entry.steps.push({ ...step, status: "running" });
+        else {
+          const last = entry.steps.at(-1);
+
+          const done =
+            event.type === "done"
+              ? { ...step, status: "ran" as const, exitCode: 0, seconds: event.seconds }
+              : { ...step, status: "skipped" as const };
+
+          if (last?.status === "running" && last.name === step.name)
+            entry.steps[entry.steps.length - 1] = done;
+          else entry.steps.push(done);
+        }
+
+        await saveRecord(session, record);
+      },
+    };
+
+    if (run.timeoutSeconds) options.setupTimeoutSeconds = run.timeoutSeconds;
+
+    if (run.env && Object.keys(run.env).length) options.env = run.env;
+
+    await box.runSetup(options, { signal });
+  } catch (cause) {
+    entry.state = "failed";
+
+    const last = entry.steps.at(-1);
+
+    if (last?.status === "running")
+      entry.steps[entry.steps.length - 1] = {
+        ...last,
+        status: "failed",
+        exitCode: cause instanceof SetupFailedError ? cause.exitCode : null,
+      };
+    await saveRecord(session, record).catch(() => undefined);
+
+    if (cause instanceof SetupFailedError) return cause;
+
+    throw cause;
+  }
+
+  // Nothing asked for and nothing recorded to run: leave no setup entry behind.
+  if (!entry.steps.length && !run.setup) {
+    delete record.setup;
+    await saveRecord(session, record);
+
+    return null;
+  }
+
+  entry.state = "ready";
+  await saveRecord(session, record);
+
+  return null;
+}
+
+/** Give steps without their own working directory a default one. */
+function withCwd(steps: readonly SetupStep[], cwd: string | undefined): SetupStep[] {
+  if (!cwd) return [...steps];
+
+  return steps.map((step) => {
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Steps are a shell line, an argv array or the object form.
+    if (typeof step === "string" || Array.isArray(step)) return { run: step, cwd };
+
+    // SAFETY: Neither a string nor an array, so this is the object form.
+    const object = step as SetupStepOptions;
+
+    return object.cwd === undefined ? { ...object, cwd } : object;
+  });
+}
+
+/**
+ * The create's setup step: run what was asked for (and, on a restore, the recorded startup).
+ * On failure the sandbox is kept with its record marked failed, or removed with
+ * `--rm-on-failure`; either way the error says what to do next.
+ */
+async function setUp(
+  session: Session,
+  created: Created,
+  setup: CliSetup | null,
+  request: CreateRequest,
+  cwd?: string,
+): Promise<CliError | null> {
+  const restored = request.snapshot !== undefined;
+
+  if (!setup && !restored) return null;
+
+  const run: SetupRun = { setup, quiet: request.quietSetup, restored };
+
+  if (request.setupTimeoutSeconds) run.timeoutSeconds = request.setupTimeoutSeconds;
+
+  if (cwd) run.cwd = cwd;
+
+  const failure = await runSetupSteps(session, created.box, created.record, run);
+
+  if (!failure) return null;
+
+  const name = created.record.name;
+
+  if (!request.rmOnFailure) return setupFailed(`${name}: ${failure.message}`, name, true);
+
+  try {
+    await created.box.destroy();
+    await (await session.store()).remove("sandbox", name);
+  } catch (cause) {
+    return new CliError(
+      "CLEANUP_FAILED",
+      `${name}: ${failure.message}; removing it also failed: ${describeError(cause).message}`,
+      `remove it with \`beachside rm ${name}\``,
+      { sandbox: name },
+      "partial",
+    );
+  }
+
+  return setupFailed(`${name}: ${failure.message}`, name, false);
+}
+
+/** `beachside setup ls`: the named setups the config defines. */
+async function setupLs(session: Session): Promise<number> {
+  const loaded = await session.config();
+  const profile = await session.profile();
+  const defaults = new Set(loaded.value.profiles?.[profile.name]?.setup ?? []);
+
+  const setups = Object.entries(loaded.value.setups ?? {}).map(([name, config]) => ({
+    name,
+    default: defaults.has(name),
+    extends: config.extends ?? [],
+    setupSteps: config.setup?.length ?? 0,
+    startupSteps: config.startup?.length ?? 0,
+    network: config.network ?? null,
+    env: Object.keys(config.env ?? {}),
+    cache: config.cache ?? false,
+  }));
+
+  const lines = setups.map((entry) =>
+    [
+      entry.name.padEnd(20),
+      `${entry.setupSteps} setup, ${entry.startupSteps} startup`,
+      entry.extends.length ? `extends ${entry.extends.join(", ")}` : "",
+      entry.network ? `network ${entry.network}` : "",
+      entry.cache === false ? "" : "cached",
+      entry.default ? `default for ${profile.name}` : "",
+    ]
+      .filter(Boolean)
+      .join("  "),
+  );
+
+  session.ctx.out.success(
+    { setups },
+    setups.length ? lines.join("\n") : "No named setups; add them under setups in beachside.json",
+  );
+
+  return 0;
+}
+
+/**
+ * `beachside setup <sandbox>`: run setup in an existing sandbox. With no flags it replays what
+ * the sandbox recorded; flags add to that, so steps it already has are skipped unless `--force`.
+ * A failure keeps the sandbox.
+ */
+export async function setupCommand(session: Session, flags: Flags): Promise<number> {
+  const target = onePositional(flags, "sandbox");
+
+  if (target === "ls") return setupLs(session);
+
+  const { record } = await findTarget(session, target);
+  const recorded = record.setup?.request;
+
+  const asked = setupRequest({
+    setups: flags.strings("setup"),
+    commands: flags.strings("setup-cmd"),
+    startups: flags.strings("startup"),
+    startupCommands: flags.strings("startup-cmd"),
+    defaults: [],
+  });
+
+  if (!hasSetupRequest(asked) && !recorded)
+    throw usage(
+      record.setup
+        ? `${record.name} has no setup request to replay`
+        : `${record.name} has no recorded setup`,
+      `pass the setup to run, e.g. \`beachside setup ${record.name} --setup <name|path>\``,
+    );
+
+  const request = {
+    setups: [...(recorded?.setups ?? []), ...asked.setups],
+    commands: [...(recorded?.commands ?? []), ...asked.commands],
+    startups: [...(recorded?.startups ?? []), ...asked.startups],
+    startupCommands: [...(recorded?.startupCommands ?? []), ...asked.startupCommands],
+    defaults: flags.bool("no-default-setup") ? [] : (recorded?.defaults ?? []),
+  };
+
+  const loaded = await session.config();
+  const { cwd, env } = session.ctx;
+  const resolved = await resolveSetupRequest(request, catalog(loaded), cwd, env);
+  const setupEnv: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(resolved.env))
+    setupEnv[key] = await session.secret(
+      String(resolveEnvReferences(value, env, `setup env ${key}`)),
+      `setup env ${key}`,
+    );
+
+  const box = await session.reopen(record);
+  const timeout = flags.string("setup-timeout");
+
+  const run: SetupRun = {
+    setup: resolved,
+    quiet: flags.bool("quiet-setup"),
+    restored: false,
+    force: flags.bool("force"),
+    env: setupEnv,
+  };
+
+  if (timeout !== undefined) run.timeoutSeconds = parseDuration(timeout, "setup-timeout");
+
+  const failure = await runSetupSteps(session, box, record, run);
+
+  if (failure) throw setupFailed(`${record.name}: ${failure.message}`, record.name, true);
+
+  session.ctx.out.success(
+    { sandbox: record.name, setup: record.setup ?? null },
+    [record.name, ...setupLines(record.setup)].join("\n"),
   );
 
   return 0;
@@ -669,6 +1075,7 @@ async function installAddons(
   created: Created,
   names: AddonName[],
   key: string,
+  quiet: boolean,
 ): Promise<void> {
   const { out, signal } = session.ctx;
 
@@ -683,7 +1090,7 @@ async function installAddons(
   };
 
   const result = await setupAddons(
-    sandboxShell(created.box),
+    setupShell(created.box, setupProgress(out, quiet)),
     created.record.name,
     names,
     key,
@@ -982,6 +1389,7 @@ export async function inspectCommand(session: Session, flags: Flags): Promise<nu
     `state     ${info.state}${info.nativeState ? ` (${info.nativeState})` : ""}`,
     `expires   ${info.expires.status === "known" ? `${info.expires.at} (${info.expires.action})` : info.expires.status}`,
     `observed  ${info.observedAt}`,
+    ...setupLines(record.setup),
     ...addonLines(record.addons ?? []),
   ];
 
@@ -1673,6 +2081,7 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
   const command = argvCommand(flags);
   // run's --env and --env-file apply to its one command, which works on every provider.
   const request = createRequest(flags);
+  const setup = await prepareSetup(session, request, flags.string("network"));
   const input = await execInput(session, flags, command);
   const keep = flags.bool("keep");
   const pushPath = flags.string("push");
@@ -1717,6 +2126,19 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
         : undefined;
 
       if (pushed) out.note(`pushed ${pushed.files} file(s) to ${pushed.path}`);
+
+      // Setup runs after the push, in the pushed folder, so `npm ci` finds the lockfile.
+      const setupFailure = await setUp(
+        session,
+        created,
+        setup,
+        // run always removes its sandbox below unless --keep, so setup never removes it here.
+        { ...request, rmOnFailure: false },
+        pushed?.path,
+      );
+
+      if (setupFailure)
+        throw keep ? setupFailure : setupFailed(setupFailure.message, created.record.name, false);
       out.status.report("working", `beachside run: running in ${created.record.name}`);
       // The command runs in the pushed folder unless --cwd says otherwise.
       result = await execute(

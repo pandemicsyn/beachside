@@ -4,7 +4,11 @@ import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { defineAdapter, sandboxReference } from "@beachside/adapter";
+import {
+  defineAdapter,
+  sandboxReference,
+  type ExecInput as NativeExecInput,
+} from "@beachside/adapter";
 import { Beachside, BeachsideError, Setup, SetupFailedError, type SetupEvent } from "./index";
 import {
   planSetup,
@@ -30,6 +34,7 @@ function shell(
   command: { kind: "argv"; argv: string[] } | { kind: "shell"; script: string },
   cwd?: string,
   env?: Record<string, string>,
+  stdin?: Uint8Array,
 ) {
   mkdirSync(home, { recursive: true });
 
@@ -38,6 +43,7 @@ function shell(
   const result = spawnSync(file!, args, {
     cwd: cwd ?? home,
     env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: home, ...env },
+    input: stdin,
   });
 
   return {
@@ -99,9 +105,11 @@ function fixture() {
             execution: { status: "unknown" as const, reason: "fixture" },
           };
         },
-        async exec(input) {
-          return shell(homes.get(input.sandbox.id)!, input.command, input.cwd, input.env);
-        },
+        exec: Object.assign(
+          async (input: NativeExecInput) =>
+            shell(homes.get(input.sandbox.id)!, input.command, input.cwd, input.env, input.stdin),
+          { finiteStdin: "bytes" as const },
+        ),
         destroy: {
           recovery: { version: 1, token: Token },
           async observe() {
@@ -470,4 +478,70 @@ test("a step over its timeout fails as possibly still running", async () => {
   expect(error).toBeInstanceOf(SetupFailedError);
   expect(error.exitCode).toBeNull();
   expect(error.message).toContain("timed out after 1s");
+});
+
+test("stdin reaches a step, never the digest, and startup steps refuse it", async () => {
+  const f = fixture();
+  const client = await f.connect();
+
+  try {
+    const box = await client.sandboxes.create({
+      setup: [{ run: "cat > key.txt", stdin: "secret-key", name: "key" }],
+    });
+
+    expect(readFileSync(join(f.homes.get(box.id)!, "key.txt"), "utf8")).toBe("secret-key");
+
+    const state = readFileSync(join(f.homes.get(box.id)!, ".beachside/setup/state.json"), "utf8");
+
+    expect(state).not.toContain("secret-key");
+    expect(await Setup.digest([{ run: "cat > key.txt", stdin: "other" }])).toBe(
+      await Setup.digest([{ run: "cat > key.txt" }]),
+    );
+    await expect(
+      client.sandboxes.create({ startup: [{ run: "cat", stdin: "x" }] }),
+    ).rejects.toThrow("Startup steps cannot take stdin");
+  } finally {
+    await client.close();
+  }
+});
+
+test("record: false runs helper steps without touching the setup record", async () => {
+  const f = fixture();
+  const client = await f.connect();
+
+  try {
+    const box = await client.sandboxes.create({ setup: ["echo a >> log"] });
+    const statePath = join(f.homes.get(box.id)!, ".beachside/setup/state.json");
+    const before = readFileSync(statePath, "utf8");
+
+    const report = await box.runSetup({ setup: ["echo helper >> log"], record: false });
+
+    expect(report.setup.map((step) => step.status)).toEqual(["ran"]);
+    expect(readFileSync(statePath, "utf8")).toBe(before);
+
+    // A request that is a prefix of what the sandbox holds is already satisfied.
+    await box.runSetup({ setup: ["echo a >> log", "echo b >> log"] });
+
+    const again = await box.runSetup({ setup: ["echo a >> log"] });
+
+    expect(again.setup.map((step) => step.status)).toEqual(["skipped"]);
+    expect(readFileSync(join(f.homes.get(box.id)!, "log"), "utf8")).toBe("a\nhelper\nb\n");
+  } finally {
+    await client.close();
+  }
+});
+
+test("runSetup can run the startup a sandbox recorded", async () => {
+  const f = fixture();
+  const client = await f.connect();
+
+  try {
+    const box = await client.sandboxes.create({ setup: ["true"], startup: ["echo up >> log"] });
+    const report = await box.runSetup({ setup: ["true"], recordedStartup: "run" });
+
+    expect(report.startup.map((step) => step.name)).toEqual(["echo up >> log"]);
+    expect(readFileSync(join(f.homes.get(box.id)!, "log"), "utf8")).toBe("up\nup\n");
+  } finally {
+    await client.close();
+  }
 });

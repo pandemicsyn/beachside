@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -7,6 +8,7 @@ import {
   AdapterFilesystemError,
   bindAdapter,
   defineAdapter,
+  type ExecInput,
 } from "@beachside/adapter";
 import { AdapterImage } from "beachside";
 import { createFakeAdapter } from "@beachside-internal/provider-fake";
@@ -453,6 +455,78 @@ export const stdinStreaming = bindAdapter(
           },
         },
       };
+    },
+  }),
+  {},
+  {},
+);
+
+/** The local folder that stands in for one fake sandbox's home, under BEACHSIDE_FAKE_HOMES. */
+function localHome(id: string): string {
+  const homes = process.env.BEACHSIDE_FAKE_HOMES;
+
+  if (!homes) throw new Error("BEACHSIDE_FAKE_HOMES is required for the local-shell fake");
+
+  return join(homes, id);
+}
+
+/**
+ * The snapshotting fake whose exec runs a real local `sh` in a folder per sandbox, so setup
+ * steps, their state file and their failures behave as they would in a sandbox.
+ */
+export const localShell = bindAdapter(
+  defineAdapter({
+    name: "fake",
+    displayName: "Fake test provider with a local shell",
+    config: z.strictObject({}),
+    credentials: z.strictObject({}),
+    async connect({ host }) {
+      const session = await snapshottingDefinition.connect({ config: {}, credentials: {}, host });
+
+      const exec = async (input: ExecInput) => {
+        const home = localHome(input.sandbox.id);
+
+        await mkdir(home, { recursive: true });
+
+        // The sandbox's create-time env lives on the fake server, as it would on a provider.
+        const state = await fetch(new URL("/_test/state", url), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        // SAFETY: The fake's test state endpoint returns its resources in this shape.
+        const { resources } = (await state.json()) as {
+          resources: { ref: { nativeId: string }; env?: Record<string, string> }[];
+        };
+
+        const sandboxEnv =
+          resources.find((resource) => resource.ref.nativeId === input.sandbox.id)?.env ?? {};
+
+        const [file, ...args] =
+          input.command.kind === "shell" ? ["sh", "-c", input.command.script] : input.command.argv;
+
+        const result = spawnSync(file!, args, {
+          cwd: input.cwd ?? home,
+          env: {
+            PATH: process.env.PATH ?? "/usr/bin:/bin",
+            HOME: home,
+            ...sandboxEnv,
+            ...input.env,
+          },
+          input: input.stdin,
+          timeout: (input.deadlineSeconds ?? 300) * 1000,
+        });
+
+        return {
+          exitCode: result.status ?? 127,
+          stdout: new Uint8Array(result.stdout ?? []),
+          stderr: new Uint8Array(result.stderr ?? []),
+          truncated: false,
+        };
+      };
+
+      const { processes: _processes, ...rest } = session;
+
+      return { ...rest, exec: Object.assign(exec, { finiteStdin: "bytes" as const }) };
     },
   }),
   {},

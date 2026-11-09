@@ -70,6 +70,11 @@ export class Session {
     );
   }
 
+  /** A value with any password-manager reference read; plain values pass through. */
+  async secret(value: string, where: string): Promise<string> {
+    return String(await this.secrets.resolve(value, where));
+  }
+
   async connect(profile: ResolvedProfile): Promise<BeachsideClient<true>> {
     const client = await connect(profile, this.ctx.cwd, this.ctx.env, this.secrets);
     this.opened.push(client);

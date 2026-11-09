@@ -1,4 +1,5 @@
 import type { AdapterSandbox } from "./adapter-direct";
+import { BeachsideError } from "./resource";
 import { SandboxCleanupError } from "./scoped-sandbox";
 import {
   SetupFailedError,
@@ -9,6 +10,7 @@ import {
   type ResolvedSetup,
   type SetupCreateOptions,
   type SetupReport,
+  type SetupRunContext,
   type SetupRunOptions,
   type SetupTarget,
 } from "./setup";
@@ -23,6 +25,34 @@ export function setupReportOf(box: AdapterSandbox): SetupReport | null {
 export function recordSetupReport(box: AdapterSandbox, report: SetupReport): void {
   reports.set(box, report);
 }
+
+const EnvName = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** Check `runSetup({ env })`: names a shell accepts, string values. */
+export function validateSetupEnv(env: Record<string, string>): void {
+  for (const [key, value] of Object.entries(env))
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Callers may pass anything from JavaScript.
+    if (!EnvName.test(key) || typeof value !== "string")
+      throw new BeachsideError("INVALID_ARGUMENT", `Invalid setup env ${key}`, "none");
+}
+
+/** Extra controls for `box.runSetup()`. */
+export type RunSetupOptions = {
+  /** Run every step, even ones the sandbox already recorded. */
+  force?: boolean;
+  /** `run` also runs the startup the sandbox recorded when no startup is passed. */
+  recordedStartup?: "run" | "skip";
+  /**
+   * `false` runs the steps with setup's output and errors but leaves the sandbox's setup record
+   * alone, for helper steps that are not part of the sandbox's setup.
+   */
+  record?: boolean;
+  /**
+   * Environment for every step, under each step's own `env`. Like the sandbox's own env it is
+   * not part of the digest, so a rotated token does not rerun setup.
+   */
+  env?: Record<string, string>;
+};
 
 export function wantsSetup(options: SetupCreateOptions): boolean {
   return options.setup !== undefined || options.startup !== undefined;
@@ -52,14 +82,17 @@ export async function applySetup(
   signal?: AbortSignal,
 ): Promise<AdapterSandbox> {
   const target = host.target(box);
-  const recorded = mode === "restored" ? await readSetupState(target, signal) : null;
+  const runsRecorded = mode === "restored" && options.recordedStartup !== "skip";
+  // A restore reads the state for its recorded startup, and for setup the snapshot already holds.
+  const readsState = runsRecorded || (mode === "restored" && resolved !== null);
+  const recorded = readsState ? await readSetupState(target, signal) : null;
 
   if (!resolved && !recorded?.startup.length) return box;
 
   const plan = planSetup(
     resolved ?? { setup: [], startup: [], digest: null, names: [], cache: undefined },
     recorded,
-    { startupFromRecord: mode === "restored" },
+    { startupFromRecord: runsRecorded },
   );
 
   if (!plan.setup.length && !plan.startup.length) return box;
@@ -138,20 +171,25 @@ export async function startupAfterResume(
 export async function runSetupOn(
   box: AdapterSandbox,
   host: SetupHost,
-  options: SetupCreateOptions & { force?: boolean },
+  options: SetupCreateOptions & RunSetupOptions,
   signal?: AbortSignal,
 ): Promise<SetupReport> {
   const resolved = await resolveSetup(options);
   const target = host.target(box);
-  const recorded = await readSetupState(target, signal);
-  const plan = planSetup(resolved, recorded, { force: options.force ?? false });
+  const record = options.record ?? true;
+  const recorded = record ? await readSetupState(target, signal) : null;
+
+  const plan = planSetup(resolved, recorded, {
+    force: !record || (options.force ?? false),
+    startupFromRecord: options.recordedStartup === "run",
+  });
 
   try {
-    const report = await runSetupPlan(target, plan, {
-      ...runOptions(options),
-      signal,
-      streams: host.streams,
-    });
+    const ctx: SetupRunContext = { ...runOptions(options), signal, streams: host.streams, record };
+
+    if (options.env) ctx.env = options.env;
+
+    const report = await runSetupPlan(target, plan, ctx);
 
     recordSetupReport(box, report);
 

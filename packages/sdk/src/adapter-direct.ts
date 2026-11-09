@@ -7,6 +7,8 @@ import {
   setupReportOf,
   startupAfterResume,
   wantsSetup,
+  type RunSetupOptions,
+  validateSetupEnv,
   type SetupHost,
 } from "./setup-flow";
 import {
@@ -1067,19 +1069,19 @@ export class AdapterSandbox {
   }
   /**
    * Resume a suspended sandbox. When it comes back without its processes (`execution: "fresh"`),
-   * the startup steps recorded by setup run again; pass `startup: "skip"` to leave them.
+   * the startup steps recorded by setup run again; pass `recordedStartup: "skip"` to leave them.
    */
   async resume(
-    options: WaitOptions & SetupRunOptions & { startup?: "recorded" | "skip" } = {},
+    options: WaitOptions & SetupRunOptions & { recordedStartup?: "run" | "skip" } = {},
   ): Promise<ResumeResult> {
-    const { onSetupOutput, onSetupStep, setupTimeoutSeconds, startup, ...wait } = options;
+    const { onSetupOutput, onSetupStep, setupTimeoutSeconds, recordedStartup, ...wait } = options;
 
     const setupOptions = runOptions({ onSetupOutput, onSetupStep, setupTimeoutSeconds });
 
     validateSetupOptions(setupOptions);
     const result = await (await this.submitResume(wait)).wait(wait);
 
-    if (result.execution === "fresh" && startup !== "skip" && this.client.session.exec)
+    if (result.execution === "fresh" && recordedStartup !== "skip" && this.client.session.exec)
       await startupAfterResume(this, this.setupHost(), setupOptions, wait.signal);
 
     return result;
@@ -1093,15 +1095,27 @@ export class AdapterSandbox {
    * skipped unless `force`. A failure throws `SetupFailedError` and keeps the sandbox.
    */
   async runSetup(
-    input: Pick<SetupCreateOptions, "setup" | "startup"> & SetupRunOptions & { force?: boolean },
+    input: Pick<SetupCreateOptions, "setup" | "startup"> & SetupRunOptions & RunSetupOptions,
     options: { signal?: AbortSignal } = {},
   ): Promise<SetupReport> {
     this.client.ensureOpen();
-    const { force, ...rest } = input;
+
+    const { force, recordedStartup, record, env, ...rest } = input;
 
     validateSetupOptions(rest);
 
-    return runSetupOn(this, this.setupHost(), { ...rest, force: force ?? false }, options.signal);
+    const extra: RunSetupOptions = { force: force ?? false };
+
+    if (env !== undefined) {
+      validateSetupEnv(env);
+      extra.env = { ...env };
+    }
+
+    if (recordedStartup !== undefined) extra.recordedStartup = recordedStartup;
+
+    if (record !== undefined) extra.record = record;
+
+    return runSetupOn(this, this.setupHost(), { ...rest, ...extra }, options.signal);
   }
   /** @internal How setup reaches this sandbox. */
   setupHost(): SetupHost {

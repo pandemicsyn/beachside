@@ -639,7 +639,11 @@ export async function restoreSnapshot(
   const snapshot = await client.snapshots.get(SnapshotReference.parse(record.reference));
   const { network, env, labels, lifecycle } = input;
 
-  return snapshot.restore({ network, env, labels, lifecycle }, { signal: session.ctx.signal });
+  // The CLI runs the snapshot's recorded startup itself once the sandbox is on record.
+  return snapshot.restore(
+    { network, env, labels, lifecycle, recordedStartup: "skip" },
+    { signal: session.ctx.signal },
+  );
 }
 
 export const snapshotActions = ["create", "ls", "inspect", "rm", "forget"] as const;

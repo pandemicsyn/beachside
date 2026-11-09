@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ResourceReference, type RecoveryReference } from "beachside";
 import { z } from "zod";
 import { AddonRecord } from "./addons";
+import { SetupRecord } from "./setups";
 import { CliError, usage } from "./output";
 
 export const RecordName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/);
@@ -27,6 +28,8 @@ export const SandboxRecord = z.strictObject({
   adopted: z.literal(true).optional(),
   /** Servers `create --with` set up, with how to reach each one. Absent without --with. */
   addons: z.array(AddonRecord).optional(),
+  /** What `--setup` ran and how it ended. Absent when no setup ran. */
+  setup: SetupRecord.optional(),
   /** The SDK's operation reference for an uncertain create; the SDK validates it on recovery. */
   recovery: z
     .custom<RecoveryReference>(

@@ -187,4 +187,6 @@ export type {
   SetupCreateOptions,
 } from "./setup";
 
+export type { RunSetupOptions } from "./setup-flow";
+
 export type { SandboxScopeOptions, SandboxScopeCallbackOutcome } from "./scoped-sandbox";
