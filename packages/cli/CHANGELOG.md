@@ -1,5 +1,42 @@
 # @beachside/cli
 
+## 0.11.0
+
+### Minor Changes
+
+- [#187](https://github.com/pandemicsyn/beachside/pull/187) [`ae8c05a`](https://github.com/pandemicsyn/beachside/commit/ae8c05aadf2841f734c9c66223043290d587b9ef) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Setup scripts: `create` and `run` take `--setup <name|path>`, `--setup-cmd '<shell>'`, `--startup <path>` and `--startup-cmd '<shell>'`, which run in the new sandbox once it starts.
+
+  - **Named setups:** `setups` in `beachside.json` defines reusable setups with `extends`, `network` and `env`, and a profile's `setup` list applies by default (`--no-default-setup` skips it). `beachside setup ls` lists them.
+  - **Startup:** startup steps run at create and again after every `create --snapshot` restore.
+  - **Failures:** a failed step exits 9 with `SETUP_FAILED`. `create` keeps the sandbox, or removes it with `--rm-on-failure`; the record shows each step's outcome.
+  - **Rerun:** `beachside setup <sandbox>` reruns only the missing steps, and `--force` reruns everything.
+  - **Add-ons:** `--with` installs its servers through the same setup engine.
+
+  Setup caches: a setup with `"cache": true` (or `create --cache`) is snapshotted after setup and before startup. The next create with the same setup restores it and runs only `cache: false` steps and startup.
+
+  - **The key** covers the provider, scope, profile, image, every step and the files in `cache.files`.
+  - **Freshness:** caches go stale after `maxAge` (7 days by default) and are rebuilt on the next create.
+  - **Secrets:** a setup whose env holds secrets is refused unless it sets `secrets: "allow"`.
+  - **Commands:** `beachside setup cache ls|rm|prune` manages caches, and `gc` prunes stale ones. `--no-cache` and `--refresh-cache` control one create.
+
+  Setups can also come from a repository: with `"projectSetups": true` or `BEACHSIDE_PROJECT_SETUPS=1`, the CLI reads `.beachside/setup.json` (`setups` plus `default`) from the checkout. A step can be `{ "parallel": [...] }` to run several steps at once as one setup step.
+
+- [#184](https://github.com/pandemicsyn/beachside/pull/184) [`05f225d`](https://github.com/pandemicsyn/beachside/commit/05f225dc1c2cc69fdfb8f8c815d15189d6ce9beb) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - `beachside create --with rex|herdr` installs a server in the new sandbox and puts it on your Tailscale tailnet, with the auth key from `TAILSCALE_AUTH_KEY` sent only over stdin.
+
+  - **Rex:** runs on Rex's own Tailscale, and `create` waits for its HTTPS address.
+  - **herdr:** gets a Tailscale SSH device to attach to with `herdr --remote`.
+  - **Connection details:** `create` and `inspect` print how to connect, the sandbox record keeps the add-ons, and `rm` logs each device out of the tailnet.
+  - **Network:** `--with` implies `--network internet`.
+
+  A create the provider rejects with no image set now keeps the provider's own message, rather than always saying an image is needed. Previously an E2B lifetime over its cap read as "needs an image".
+
+### Patch Changes
+
+- [#182](https://github.com/pandemicsyn/beachside/pull/182) [`1577530`](https://github.com/pandemicsyn/beachside/commit/1577530fcb0d027b7f8cc3d851b144a96abbe535) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - The bundled `beachside-cli` skill now shows agents Rex's exact split-pane commands: `rex run --split=right -s "$REX_SESSION" --keep-open --json`, then `rex wait` and `rex capture` by the saved pane id. It also explains how to start a Rex server inside a sandbox, following the Rex guide.
+- Updated dependencies [[`ae8c05a`](https://github.com/pandemicsyn/beachside/commit/ae8c05aadf2841f734c9c66223043290d587b9ef), [`ae8c05a`](https://github.com/pandemicsyn/beachside/commit/ae8c05aadf2841f734c9c66223043290d587b9ef)]:
+  - beachside@0.11.0
+  - @beachside/adapter@0.11.0
+
 ## 0.10.0
 
 ### Minor Changes

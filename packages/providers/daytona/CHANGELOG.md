@@ -1,5 +1,12 @@
 # @beachside/daytona
 
+## 0.11.0
+
+### Patch Changes
+
+- Updated dependencies [[`ae8c05a`](https://github.com/pandemicsyn/beachside/commit/ae8c05aadf2841f734c9c66223043290d587b9ef)]:
+  - @beachside/adapter@0.11.0
+
 ## 0.10.0
 
 ### Patch Changes

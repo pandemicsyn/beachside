@@ -1,5 +1,18 @@
 # @beachside/adapter
 
+## 0.11.0
+
+### Minor Changes
+
+- [#187](https://github.com/pandemicsyn/beachside/pull/187) [`ae8c05a`](https://github.com/pandemicsyn/beachside/commit/ae8c05aadf2841f734c9c66223043290d587b9ef) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Snapshots can carry labels. `snapshot({ labels })` sets them at capture where the adapter keeps them, and `snapshots.list({ labels })` keeps only matching snapshots.
+
+  - **Adapters:** an adapter opts in with `snapshotCapture.labels: true`, and listed `SnapshotInfo` reports `labels`. Elsewhere a labelled capture is rejected before anything is captured.
+  - **Capability:** `capabilities().snapshots.capture.value.labels` says whether labels are kept.
+  - **Runloop:** labels are stored as snapshot metadata, next to the adapter's own `beachside_` keys, which stay reserved.
+  - **Setup:** `box.runSetup()` takes `env` for every step, kept out of the digest, and `runStartup: false`, which records startup steps without running them so a snapshot can be taken in between.
+
+  `Setup.parallel([...steps])` runs setup steps at the same time as one step; its steps' events and output carry `step.group`.
+
 ## 0.10.0
 
 No changes in this release.
