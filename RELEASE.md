@@ -1,6 +1,6 @@
 # Releasing Beachside packages
 
-`@beachside/adapter`, `beachside`, `@beachside/daytona`, `@beachside/e2b`, `@beachside/boxd`, `@beachside/boat` (experimental), `@beachside/runloop` (experimental), `@beachside/freestyle` (experimental), `@beachside/modal` (experimental), `@beachside/vercel`, and `@beachside/cli` use one lockstep version (currently pre-1.0) and one `v<version>` Git tag. Changesets write package changelogs, and the release workflow composes its GitHub release notes from those same version sections. Private apps, SPI, fake-provider and internal packages remain unpublished. Official and experimental adapters are public release packages.
+`@beachside/adapter`, `beachside`, `@beachside/daytona`, `@beachside/e2b`, `@beachside/boxd`, `@beachside/boat` (experimental), `@beachside/runloop` (experimental), `@beachside/freestyle` (experimental), `@beachside/modal` (experimental), `@beachside/vercel`, `@beachside/cli`, and `@beachside/pi` use one lockstep version (currently pre-1.0) and one `v<version>` Git tag. Changesets write package changelogs, and the release workflow composes its GitHub release notes from those same version sections. Private apps, SPI, fake-provider and internal packages remain unpublished. Official and experimental adapters are public release packages.
 
 ## Contributor flow
 
@@ -18,7 +18,7 @@ Manual runs check out the ref they run on. Qualify a branch with `gh workflow ru
 
 ## One-time setup before a real release
 
-- Confirm ownership and availability of every public npm package name. The selected public names are `@beachside/adapter`, `beachside`, `@beachside/daytona`, `@beachside/e2b`, `@beachside/boxd`, `@beachside/boat` (experimental), `@beachside/runloop` (experimental), `@beachside/freestyle` (experimental), `@beachside/modal` (experimental), `@beachside/vercel`, and `@beachside/cli`. Confirm npm ownership of each name before publication; registry E404 does not prove ownership. The ten selected packages have `private: false`, Apache-2.0 licensing and exact repository metadata. Keep internal SPI, fake-provider and app workspaces private. Update `scripts/release-packages.json` and the fixed group in `.changeset/config.json` together if the distributable graph changes.
+- Confirm ownership and availability of every public npm package name. The selected public names are `@beachside/adapter`, `beachside`, `@beachside/daytona`, `@beachside/e2b`, `@beachside/boxd`, `@beachside/boat` (experimental), `@beachside/runloop` (experimental), `@beachside/freestyle` (experimental), `@beachside/modal` (experimental), `@beachside/vercel`, `@beachside/cli`, and `@beachside/pi`. Confirm npm ownership of each name before publication; registry E404 does not prove ownership. The twelve selected packages have `private: false`, Apache-2.0 licensing and exact repository metadata. Keep internal SPI, fake-provider and app workspaces private. Update `scripts/release-packages.json` and the fixed group in `.changeset/config.json` together if the distributable graph changes.
 - Create a protected GitHub `npm` environment with required reviewers and restrict it to approved release tags. Enable Actions to write contents for version preparation; branch protection and the required independent review still apply to the version PR.
 - Configure an npm trusted publisher for **each** public package: GitHub owner `pandemicsyn`, repository `beachside`, workflow filename `release-npm.yml`, environment `npm`, with direct `npm publish` allowed. GitHub-hosted runners, npm CLI 11.5.1+ and Node 22.14+ are required. OIDC requires `id-token: write`; this workflow supplies it. No account credentials are stored in this repository.
 - Verify npm organization/scope rights and GitHub environment settings separately. This setup task does not publish packages or create a release.
@@ -32,6 +32,8 @@ Manual runs check out the ref they run on. Qualify a branch with `gh workflow ru
 3. `bun run release:bootstrap trust` runs `npm trust github` for each package with the settings above. Pass package names (for example `trust @beachside/e2b`) to configure only those. npm prompts for 2FA once; choose the option to skip 2FA for the next five minutes. A package holds one trust configuration, so a failed rerun means checking `npm trust list <package>` and revoking a wrong entry before creating it again.
 4. On npmjs.com, set each package's **Publishing access** to require two-factor authentication and disallow tokens. Trusted publishing is unaffected.
 5. Create the protected GitHub `npm` environment described above before the first real release. A workflow referencing a missing environment creates it without protection.
+
+Bootstrap `@beachside/pi` and configure its trusted publisher before the first version PR that releases it.
 
 Placeholders hold `latest` until the first stable release; a prerelease on `next` leaves `latest` on `0.0.0`. Later packages added to the release group follow the same steps before the version PR that first releases them is merged. The publish job checks this first: if any package is not on npm yet it stops before publishing anything. After bootstrapping, rerun the failed publish job.
 

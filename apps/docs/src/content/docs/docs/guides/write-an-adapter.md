@@ -240,7 +240,7 @@ Publish the adapter as its own package. Official integrations are named `@beachs
 The [command line](/docs/cli/configuration/) loads any adapter through a profile's `module` and `export`, so a third-party package works there without changes. For an official adapter maintained in this repository, also:
 
 - add the package to the `build:packages` and `check:built` chains in the root `package.json`, and to the fixed release group with a changeset;
-- add a CLI descriptor to `packages/cli/src/providers.ts` naming the environment variables for its credentials and required configuration;
+- add a CLI descriptor to `packages/profile/src/providers.ts` naming the environment variables for its credentials and required configuration;
 - add a provider profile for [live qualification](https://github.com/pandemicsyn/beachside/blob/main/packages/sdk-qualification/provider-qualification/README.md) and a row to `providerStatus` in `packages/sdk-qualification/provider-qualification/support.ts`, which feeds [Provider support](/docs/providers/support/);
 - have a maintainer publish a `0.0.0` placeholder and configure npm trusted publishing for the new package name before the first release, or the release cannot publish it.
 

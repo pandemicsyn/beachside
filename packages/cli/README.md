@@ -91,7 +91,7 @@ The CLI carries an agent skill that matches its own version. `beachside skill` p
 {
   "default": "e2b",
   "profiles": {
-    "e2b": { "provider": "e2b", "credentials": { "apiKey": "env:E2B_API_KEY" }, "config": { "network": "internet" } },
+    "e2b": { "provider": "e2b", "credentials": { "apiKey": "env:E2B_API_KEY" }, "network": "internet" },
     "local": { "module": "./my-adapter.js", "export": "myAdapter", "config": {}, "credentials": {} }
   },
   "state": { "kind": "fs", "dir": "~/.config/beachside/state" },
@@ -101,6 +101,7 @@ The CLI carries an agent skill that matches its own version. `beachside skill` p
 
 - Profile selection: `--profile`, `BEACHSIDE_PROFILE`, `--provider`, `BEACHSIDE_PROVIDER`, then `default`.
 - `provider` names an official adapter (`@beachside/<provider>`); `config` and `credentials` are that adapter's own settings. `module` and `export` load any adapter, either a definition or a bound adapter.
+- A profile-level `network` sets the policy for creation and snapshot restore. Use `--network` to override it for one command. Adapters can still require their own network settings under `config`.
 - Credentials can be written in the profile directly, as `env:NAME` references, or as password-manager references (below). Keep the file private (`chmod 600`) if it holds keys. Env-only providers read `DAYTONA_API_KEY` and `DAYTONA_TARGET`; `E2B_API_KEY`; `BOXD_API_KEY`, `BOXD_ORG` and `BOXD_NETWORK=internet` (boxd always allows egress, so its adapter requires choosing it); `BOAT_API_KEY` and `BOAT_NETWORK=internet` (likewise for Boat); `RUNLOOP_API_KEY` and optionally `RUNLOOP_NETWORK=internet` (Runloop egress is blocked by default); `FREESTYLE_API_KEY` and optionally `FREESTYLE_NETWORK=internet` (likewise for Freestyle); `VERCEL_TOKEN`, `VERCEL_TEAM_ID` and `VERCEL_PROJECT_ID`; `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `MODAL_APP_NAME` and `MODAL_ENVIRONMENT`.
 - `limits.maxSandboxes` (or `BEACHSIDE_MAX_SANDBOXES`) caps how many sandboxes the store may hold. Unset means uncapped.
 

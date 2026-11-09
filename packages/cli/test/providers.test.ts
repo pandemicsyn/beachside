@@ -2,9 +2,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig } from "../src/config";
-import { descriptor, loadAdapter, missingEnv, resolveProfile } from "../src/providers";
-import { SecretReader } from "../src/secrets";
+import { loadConfig } from "@beachside-internal/profile/config";
+import {
+  descriptor,
+  loadAdapter,
+  missingEnv,
+  resolveProfile,
+} from "@beachside-internal/profile/providers";
+import { SecretReader } from "@beachside-internal/profile/secrets";
 
 let home: string;
 

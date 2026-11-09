@@ -59,7 +59,7 @@ const { description: cliDescription = "" } = frontmatter(cli, "skills/beachside-
 
 const { description: sdkDescription = "" } = frontmatter(sdk, "skills/beachside/SKILL.md");
 
-const cliIds = await read("packages/cli/src/providers.ts");
+const cliIds = await read("packages/profile/src/providers.ts");
 
 for (const name of providers) {
   if (!sdk.includes("`" + name + "`"))

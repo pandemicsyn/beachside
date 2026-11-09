@@ -15,8 +15,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Json } from "@beachside/adapter";
 import { startFakeProviderServer } from "@beachside-internal/provider-fake/server";
-import { readTar } from "../src/tar";
-import { defaultPushDir, scripts, shellQuote } from "../src/transfer";
+import { readTar } from "@beachside-internal/profile/tar";
+import { defaultPushDir, scripts, shellQuote } from "@beachside-internal/profile/transfer";
 
 const token = "local-test-token-12345";
 

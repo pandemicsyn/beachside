@@ -407,7 +407,7 @@ async function readWhileOpen<T>(client: AdapterDirectClient, work: Promise<T>): 
   }
 }
 
-export type AdapterCapabilities = DirectCapabilities;
+export type AdapterCapabilities = DirectCapabilities & { preview: boolean };
 
 export type RecoveredOperation =
   | OperationHandle<SandboxHandle<true>, "create" | "snapshot_restore">
@@ -1153,6 +1153,8 @@ export class AdapterSandbox {
   supports(
     feature:
       | "inspect"
+      | "processStream"
+      | "processByteStream"
       | "exec"
       | "readFile"
       | "writeFile"
@@ -1171,6 +1173,12 @@ export class AdapterSandbox {
       | "removeFile",
   ): boolean {
     if (feature === "inspect") return !!this.client.session.inspect;
+
+    if (feature === "processStream" || feature === "processByteStream") {
+      const process = this.client.session.processes?.supports;
+
+      return !!process?.sustainedOutput && (feature === "processStream" || !!process.binaryOutput);
+    }
 
     if (feature === "exec")
       return !!this.client.session.exec && !!this.client.session.supports.exec;
@@ -2478,11 +2486,13 @@ export class AdapterDirectClient {
       images: [...support.images],
       imageBuild: !!this.session.imageBuild,
       createEnv: !!support.createEnv,
+      createLabels: !!support.createLabels,
       lifetime: support.lifetime ? { ...support.lifetime } : null,
       network: [...support.network],
       exec: !!this.session.exec && !!support.exec,
       inspect: !!this.session.inspect,
       inventory: !!this.session.inventory || !!this.session.sandboxList,
+      preview: !!this.session.preview,
       readFile: !!this.session.files?.read,
       writeFile: !!this.session.files?.write,
       maxOutputBytes: support.exec?.maxOutputBytes ?? 0,

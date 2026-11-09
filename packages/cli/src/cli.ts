@@ -31,7 +31,7 @@ import { skillCommand } from "./skill";
 import { adapterCommand } from "./adapters";
 import { gcCommand } from "./gc";
 import { complete, completionCommand, formatCompletion } from "./completion";
-import type { Env } from "./config";
+import type { Env } from "@beachside-internal/profile/config";
 import { programStatus } from "./program-status";
 
 type FlagSpec = {

@@ -869,6 +869,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          createLabels: true,
           // Under a minute rounds up to E2B's minimum, which inspect reports as the real expiry.
           lifetime: { minSeconds: 1, maxSeconds: MAX_LIFETIME_SECONDS },
         },

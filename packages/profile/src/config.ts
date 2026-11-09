@@ -17,6 +17,8 @@ export const ProfileConfig = z
     module: z.string().min(1).max(1024).optional(),
     /** The module export holding the adapter definition or bound adapter. */
     export: z.string().min(1).max(128).optional(),
+    /** Portable per-sandbox network policy, separate from native adapter setup. */
+    network: z.string().min(1).max(128).optional(),
     config: z.record(z.string(), z.json()).optional(),
     credentials: z.record(z.string(), z.string()).optional(),
   })

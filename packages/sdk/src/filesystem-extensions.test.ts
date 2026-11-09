@@ -100,6 +100,14 @@ test("walk has deterministic depth-first paths, intentional depth and subtree ex
       ),
     ).toEqual(["a", "a/file", "b", "z"]);
     expect(calls).toEqual(["/root", "/root/a"]);
+    calls.length = 0;
+    expect(
+      (await collect(f.box.walkFiles("/root", { excludeNames: ["deep"], maxEntries: 5 }))).map(
+        ({ relativePath }) => relativePath,
+      ),
+    ).toEqual(["a", "a/file", "b", "z"]);
+    expect(calls).toEqual(["/root", "/root/a"]);
+    expect(() => f.box.walkFiles("/root", { excludeNames: ["a/deep"] })).toThrow();
     await expect(
       collect(f.box.walkFiles("/root", { maxEntries: 2, exclude: ["a"] })),
     ).rejects.toMatchObject({ code: "OUTPUT_CAPACITY" });

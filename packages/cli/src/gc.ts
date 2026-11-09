@@ -9,7 +9,7 @@ import {
 } from "./commands";
 import { CliError, describeError, usage, type BatchItem } from "./output";
 import type { Session } from "./session";
-import { listAll } from "./store";
+import { listAll } from "@beachside-internal/profile/store";
 import { parseDuration, parsePairs } from "./units";
 
 /** One sandbox gc looked at; `name` is its store name, or the native id when it has none. */

@@ -20,7 +20,12 @@ import {
   type SandboxListEntry,
 } from "beachside";
 import { z } from "zod";
-import { searchProjectAdapters, valueAvailable, type Env, type LoadedConfig } from "./config";
+import {
+  searchProjectAdapters,
+  valueAvailable,
+  type Env,
+  type LoadedConfig,
+} from "@beachside-internal/profile/config";
 import {
   CliError,
   describeError,
@@ -31,19 +36,23 @@ import {
   type Output,
 } from "./output";
 import { imageEnvironment } from "./images";
-import { missingEnv, providers, resolveAdapterModule, type ResolvedProfile } from "./providers";
+import {
+  missingEnv,
+  providers,
+  resolveAdapterModule,
+  type ResolvedProfile,
+} from "@beachside-internal/profile/providers";
 import type { Session } from "./session";
 import { restoreSnapshot, snapshotSource } from "./snapshots";
 import {
   checkName,
-  generatedName,
   listAll,
   RecordName,
   type SandboxRecord,
   type SnapshotRecord,
   type StateStore,
   type Versioned,
-} from "./store";
+} from "@beachside-internal/profile/store";
 import {
   defaultPushDir,
   download,
@@ -56,7 +65,8 @@ import {
   upload,
   uploadFile,
   type LocalTree,
-} from "./transfer";
+} from "@beachside-internal/profile/transfer";
+import { claimName, claimSandbox, recordSandbox } from "@beachside-internal/profile/sandboxes";
 import { meter } from "./program-status";
 import { parseDuration, parsePairs, parseSize } from "./units";
 
@@ -245,10 +255,10 @@ async function envFlags(session: Session, flags: Flags): Promise<Record<string, 
 }
 
 /** The create input; `--image` is resolved after connecting, because it depends on the provider. */
-function createInput(request: CreateRequest): CreateInput {
+function createInput(request: CreateRequest, network?: string): CreateInput {
   return {
     environment: request.prepared ? Image.prepared(request.prepared) : undefined,
-    network: request.network,
+    network: request.network ?? network,
     labels: Object.keys(request.labels).length ? request.labels : undefined,
     env: Object.keys(request.env).length ? request.env : undefined,
     lifecycle:
@@ -266,39 +276,6 @@ type Created = {
   /** Set when the sandbox exists but its store record could not be written. */
   unrecorded?: Error;
 };
-
-async function claimName(
-  store: StateStore,
-  record: Omit<SandboxRecord, "name">,
-  requested?: string,
-  ifNotExists = false,
-): Promise<Versioned> {
-  for (let attempt = 0; ; attempt++) {
-    const name = requested ? checkName(requested) : generatedName();
-    const full = { ...record, name };
-
-    try {
-      const { version } = await store.create("sandbox", name, full);
-
-      return { record: full, version };
-    } catch (cause) {
-      if (!(cause instanceof CliError) || cause.code !== "CONFLICT" || attempt >= 8) throw cause;
-
-      if (requested)
-        throw new CliError(
-          "CONFLICT",
-          cause.message,
-          ifNotExists
-            ? "its record is not a confirmed sandbox (still creating, or outcome unknown); check `beachside inspect`, or drop it with `beachside rm --force`"
-            : "pass --if-not-exists to reuse it, or choose another --name",
-        );
-    }
-  }
-}
-
-async function liveCount(store: StateStore): Promise<number> {
-  return (await listAll(store, "sandbox")).length;
-}
 
 /**
  * The OCI image a profile's `config.environment` names. It follows the same build rule as
@@ -397,17 +374,9 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
     }
   }
 
-  const limit = await session.limit();
-
-  if (limit !== null && (await liveCount(store)) >= limit)
-    throw new CliError(
-      "LIMIT_REACHED",
-      `The store already holds ${limit} sandboxes (limits.maxSandboxes)`,
-      "remove some with `beachside rm`, or raise limits.maxSandboxes in beachside.json",
-    );
-
-  const claimed = await claimName(
+  const claimed = await claimSandbox(
     store,
+    await session.limit(),
     {
       format: 1,
       kind: "sandbox",
@@ -424,7 +393,7 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
   );
 
   let client: BeachsideClient<true>;
-  const input = createInput(request);
+  const input = createInput(request, profile.network);
 
   try {
     client = await session.connect(profile);
@@ -447,68 +416,30 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
     throw cause;
   }
 
-  let box: SandboxHandle<true>;
-
   try {
-    box = source
-      ? await restoreSnapshot(session, client, source, input)
-      : await client.sandboxes.create(input, { signal: session.ctx.signal });
+    const created = await recordSandbox(store, claimed, () =>
+      source
+        ? restoreSnapshot(session, client, source, input)
+        : client.sandboxes.create(input, { signal: session.ctx.signal }),
+    );
+
+    if (!created.box.reference)
+      session.ctx.out.note(
+        `warning: ${profile.provider} returned no reopenable reference; later commands cannot reach ${created.record.name}`,
+      );
+
+    return { client, ...created, existing: false };
   } catch (cause) {
     const report = describeError(cause);
 
-    if (report.outcome === "rejected") {
-      await store.remove("sandbox", claimed.record.name, claimed.version);
-
-      // Adapters without a default image reject an argument-free create in SDK terms.
-      if (report.code === "INVALID_ARGUMENT" && !input.environment && !source)
-        throw new CliError(
-          "INVALID_ARGUMENT",
-          `${profile.provider} needs an image for this sandbox: ${report.message}`,
-          "pass --prepared <id> (a provider template or snapshot) or --image <oci-ref>",
-        );
-      throw cause;
-    }
-
-    const reference = report.known?.reference ?? null;
-    const recovery = report.known?.recovery;
-    let kept = `the store keeps ${claimed.record.name} so it can be inspected or removed`;
-
-    try {
-      await store.update(
-        "sandbox",
-        claimed.record.name,
-        { ...claimed.record, status: "unknown", reference, recovery },
-        claimed.version,
+    if (report.code === "INVALID_ARGUMENT" && !input.environment && !source)
+      throw new CliError(
+        "INVALID_ARGUMENT",
+        `${profile.provider} needs an image for this sandbox: ${report.message}`,
+        "pass --prepared <id> (a provider template or snapshot) or --image <oci-ref>",
       );
-    } catch (storeCause) {
-      kept = `the store could not record it (${describeError(storeCause).message}); keep the reference below`;
-    }
-
-    throw new CliError(
-      report.outcome === "partial" ? "PARTIAL" : "OUTCOME_UNKNOWN",
-      report.message,
-      kept,
-      { sandbox: claimed.record.name, reference, recovery },
-      report.outcome,
-    );
+    throw cause;
   }
-
-  const record: SandboxRecord = { ...claimed.record, status: "created", reference: box.reference };
-
-  if (!box.reference)
-    session.ctx.out.note(
-      `warning: ${profile.provider} returned no reopenable reference; later commands cannot reach ${record.name}`,
-    );
-
-  try {
-    await store.update("sandbox", record.name, record, claimed.version);
-  } catch (cause) {
-    const unrecorded = cause instanceof Error ? cause : new Error(String(cause));
-
-    return { client, box, record, existing: false, unrecorded };
-  }
-
-  return { client, box, record, existing: false };
 }
 
 /** The sandbox exists but the store does not know it: report it, never hide it. */
@@ -1020,7 +951,8 @@ async function recoverCreate(session: Session, store: StateStore, target: Target
   if (target.fromFile || record.status !== "unknown" || record.reference || !record.recovery)
     return target;
 
-  if (record.recovery.kind !== "create") return target;
+  if (record.recovery.kind !== "create" && record.recovery.kind !== "snapshot_restore")
+    return target;
 
   const client = await session.connect(await session.profileNamed(record.profile));
   let value: unknown;

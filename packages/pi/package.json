@@ -1,0 +1,63 @@
+{
+  "name": "@beachside/pi",
+  "version": "0.10.0",
+  "private": false,
+  "type": "module",
+  "description": "Run Pi coding tools in Beachside sandboxes.",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && bun build src/extension.ts src/tools.ts --target node --outdir dist --packages bundle --external beachside --external @beachside/adapter --external zod --external @earendil-works/pi-coding-agent --external typebox && tsc -p tsconfig.build.json && mkdir -p dist/skills && cp -R ../../skills/beachside ../../skills/beachside-cli dist/skills/"
+  },
+  "dependencies": {
+    "@beachside/adapter": "workspace:*",
+    "beachside": "workspace:*",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@beachside-internal/profile": "workspace:*",
+    "@beachside-internal/provider-fake": "workspace:*",
+    "@earendil-works/pi-coding-agent": "1.5.0",
+    "typebox": "1.3.27"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pandemicsyn/beachside.git",
+    "directory": "packages/pi"
+  },
+  "bugs": {
+    "url": "https://github.com/pandemicsyn/beachside/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pi-package"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/tools.d.ts",
+      "import": "./dist/tools.js"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extension.js"
+    ],
+    "skills": [
+      "./dist/skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}

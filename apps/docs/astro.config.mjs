@@ -82,6 +82,7 @@ export default defineConfig({
           label: "Build with an agent",
           items: [
             { slug: "docs/agents/skills" },
+            { slug: "docs/agents/pi" },
             { slug: "docs/agents/build-with-sdk" },
             { slug: "docs/agents/build-a-provider" },
           ],

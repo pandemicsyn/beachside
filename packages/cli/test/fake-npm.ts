@@ -3,7 +3,7 @@
 // package re-exports the test fixture under every official adapter export name.
 import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { providers } from "../src/providers";
+import { providers } from "@beachside-internal/profile/providers";
 
 const args = process.argv.slice(2);
 

@@ -7,6 +7,8 @@ export type WalkFilesOptions = ReadOptions & {
   maxEntries?: number;
   /** Exact root-relative paths to omit, including their descendants. */
   exclude?: readonly string[];
+  /** Exact entry names to omit at every depth, including their descendants. */
+  excludeNames?: readonly string[];
 };
 
 export type WalkFileEntry = FileEntry & {
@@ -53,6 +55,23 @@ export function walkFiles(
       "INVALID_ARGUMENT",
       "Exclusions must be canonical root-relative paths",
     );
+
+  if (
+    options.excludeNames !== undefined &&
+    (!Array.isArray(options.excludeNames) ||
+      options.excludeNames.some(
+        (name) =>
+          // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Validate JavaScript input before string operations.
+          typeof name !== "string" ||
+          !name ||
+          name.includes("/") ||
+          name.includes("\0") ||
+          name === "." ||
+          name === "..",
+      ))
+  )
+    throw new BeachsideError("INVALID_ARGUMENT", "Exclusions must be exact entry names");
+  const excludedNames = new Set(options.excludeNames);
   const excluded = new Set(options.exclude);
 
   return (async function* () {
@@ -81,7 +100,7 @@ export function walkFiles(
         check();
         const relativePath = relative ? `${relative}/${entry.name}` : entry.name;
 
-        if (excluded.has(relativePath)) continue;
+        if (excludedNames.has(entry.name) || excluded.has(relativePath)) continue;
         const child = `${path === "/" ? "" : path}/${entry.name}`;
         yield { ...entry, path: child, relativePath, depth };
         check();

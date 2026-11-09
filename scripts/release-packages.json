@@ -9,5 +9,6 @@
   "packages/providers/freestyle",
   "packages/providers/modal",
   "packages/providers/vercel",
-  "packages/cli"
+  "packages/cli",
+  "packages/pi"
 ]

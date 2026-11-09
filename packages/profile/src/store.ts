@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { link, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ResourceReference, type RecoveryReference } from "beachside";
 import { z } from "zod";
 import { CliError, usage } from "./output";
@@ -194,8 +194,16 @@ export class FsStateStore implements StateStore {
   }
 
   private async locked<T>(kind: RecordKind, name: string, action: () => Promise<T>): Promise<T> {
-    const lock = `${this.path(kind, name)}.lock`;
-    await mkdir(this.folder(kind), { recursive: true });
+    return this.lock(join(this.folder(kind), `${RecordName.parse(name)}.json.lock`), name, action);
+  }
+
+  /** Serialize the cap check with name reservation across CLI and Pi processes. */
+  withSandboxClaims<T>(action: () => Promise<T>): Promise<T> {
+    return this.lock(join(this.folder("sandbox"), ".claim.lock"), "sandbox claims", action);
+  }
+
+  private async lock<T>(lock: string, name: string, action: () => Promise<T>): Promise<T> {
+    await mkdir(dirname(lock), { recursive: true });
 
     for (let attempt = 0; ; attempt++) {
       try {

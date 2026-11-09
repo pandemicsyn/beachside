@@ -3,9 +3,9 @@ import { usage } from "./output";
 import { imageActions } from "./images";
 import { snapshotActions } from "./snapshots";
 import { adapterActions } from "./adapters";
-import { providers } from "./providers";
+import { providers } from "@beachside-internal/profile/providers";
 import type { Session } from "./session";
-import { listAll } from "./store";
+import { listAll } from "@beachside-internal/profile/store";
 
 /** What completion needs to know about a command; the CLI's command table provides it. */
 export type CompletionCommand = {

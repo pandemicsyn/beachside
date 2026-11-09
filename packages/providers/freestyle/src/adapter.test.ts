@@ -182,8 +182,11 @@ test("create boots the default base with a blocked firewall, a slug, the lifetim
   const client = await connect();
 
   try {
-    expect((await client.capabilities()).network).toEqual(["blocked", "internet"]);
-    const box = await client.sandboxes.create({ labels: { job: "ci-7" } });
+    expect(await client.capabilities()).toMatchObject({
+      network: ["blocked", "internet"],
+      createLabels: true,
+    });
+    const box = await client.sandboxes.create({ labels: { job: "ci-7", "beachside.pi": "1" } });
     const body = creates(fixture)[0]?.body;
 
     expect(body).toEqual({
@@ -191,7 +194,7 @@ test("create boots the default base with a blocked firewall, a slug, the lifetim
       slug: expect.stringMatching(/^beachside-[0-9a-f]{24}$/),
       ttlSeconds: 900,
       firewall: { rules: [] },
-      metadata: { job: "ci-7" },
+      metadata: { job: "ci-7", "beachside.pi": "1" },
     });
 
     const info = await box.inspect();
@@ -200,7 +203,7 @@ test("create boots the default base with a blocked firewall, a slug, the lifetim
     expect(info.resources).toEqual({ status: "known", value: { vcpus: 4, memoryMiB: 8192 } });
 
     const listed = await client.sandboxes.list();
-    expect(listed.items.map((item) => item.labels)).toEqual([{ job: "ci-7" }]);
+    expect(listed.items.map((item) => item.labels)).toEqual([{ job: "ci-7", "beachside.pi": "1" }]);
     await box.destroy();
 
     const open = await client.sandboxes.create({ networkPolicy: "internet" });

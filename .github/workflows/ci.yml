@@ -43,6 +43,7 @@ jobs:
               -e '(^|/)(package.json|tsconfig[^/]*\.json|build-assets\.ts|flatten-declarations\.mjs|\.npmignore|\.gitignore)$' \
               -e '^packages/([^/]+|providers/[^/]+)/src/(index|client|server|adapter|portable|testing|bound|factory|process-contract)\.ts$' \
               -e '^packages/([^/]+|providers/[^/]+)/assets/' \
+              -e '^packages/(pi|profile)/|^skills/(beachside|beachside-cli)/' \
               -e '^packages/sdk-qualification/.*\.(ts|mjs|json)$' \
               -e '^apps/docs/examples/recovery-outcomes\.ts$' \
               "$RUNNER_TEMP/changed-files"; then
@@ -112,11 +113,12 @@ jobs:
           path: ${{ runner.temp }}
       - name: Restore this run's build outputs
         run: tar -xzf "$RUNNER_TEMP/beachside-build.tar.gz"
-      - parallel:
-          - name: Packed Node and Bun consumers
-            run: bun run package:smoke:built
-          - name: Local OpenTelemetry, Sentry and Datadog fixtures
-            run: bun run observability:check
+      - name: Packed Node and Bun consumers
+        run: bun run package:smoke:built
+      # The observability suite includes a wall-clock benchmark. Run it after the
+      # packed installs and consumer processes have exited.
+      - name: Local OpenTelemetry, Sentry and Datadog fixtures
+        run: bun run observability:check
   docs:
     needs: build
     runs-on: ubuntu-latest

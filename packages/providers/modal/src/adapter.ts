@@ -432,6 +432,7 @@ export function createModalAdapter(
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          createLabels: true,
           lifetime: { minSeconds: 1, maxSeconds: MAX_LIFETIME_SECONDS },
         },
         create: {

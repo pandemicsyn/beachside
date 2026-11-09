@@ -48,3 +48,5 @@ Agents can also read these docs as Markdown. [`/llms.txt`](https://beachside.run
 The skills never hold credentials. The SDK skill reads keys from environment variables; the CLI skill uses your existing `beachside.json` profiles and tells the agent to leave configuration to you. Both tell the agent that live sandboxes cost money, to clean up what it creates, and never to retry an operation whose outcome is unknown.
 
 For one-off tasks you can still paste the [SDK prompt](/docs/agents/build-with-sdk/) or the [provider integration prompt](/docs/agents/build-a-provider/) instead.
+
+If you use Pi, the [Beachside Pi extension](/docs/agents/pi/) bundles the SDK and CLI skills and runs Pi’s coding tools in a sandbox.

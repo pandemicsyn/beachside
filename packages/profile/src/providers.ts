@@ -147,6 +147,7 @@ export type ResolvedProfile = {
   baseDir: string;
   /** Whether the project's node_modules may supply the adapter (config adapters.searchProject). */
   searchProject: boolean;
+  network?: string;
   config: Record<string, Json>;
   credentials: Record<string, string>;
 };
@@ -265,6 +266,14 @@ function fromProfile(
     export: profile.export ?? official?.export ?? "default",
     baseDir: loaded.dir,
     searchProject: searchProjectAdapters(loaded, env),
+    network:
+      profile.network === undefined
+        ? undefined
+        : z
+            .string()
+            .min(1)
+            .max(128)
+            .parse(resolveEnvReferences(profile.network, env, `${where}.network`)),
     config,
     credentials,
   };
