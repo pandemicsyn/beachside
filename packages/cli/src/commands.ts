@@ -31,7 +31,6 @@ import {
   type Output,
 } from "./output";
 import {
-  addonLabel,
   addonLines,
   parseAddons,
   sandboxShell,
@@ -140,8 +139,6 @@ function createRequest(flags: Flags, env: Record<string, string> = {}): CreateRe
       `--with ${addons.join(",")} needs --network internet`,
       "the sandbox downloads the server and reaches Tailscale's control servers",
     );
-
-  if (addons.length) labels[addonLabel] = addons.join("-");
 
   if (snapshot) {
     const conflicting = notWithSnapshot.find((name) => flags.has(name));

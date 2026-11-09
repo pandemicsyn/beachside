@@ -81,7 +81,12 @@ describe("setupAddons", () => {
 
     expect(result.failure).toBeUndefined();
     expect(result.ready).toEqual([
-      { name: "rex", hostname: "beachside-web", connect: "https://beachside-web.tail1.ts.net" },
+      {
+        name: "rex",
+        hostname: "beachside-web",
+        state: "ready",
+        connect: "https://beachside-web.tail1.ts.net",
+      },
     ]);
     expect(calls.map((call) => call.script).filter((script) => script.includes(key))).toEqual([]);
     expect(calls.filter((call) => call.stdin === key).map((call) => call.script)).toEqual([
@@ -109,11 +114,14 @@ describe("setupAddons", () => {
       {
         name: "herdr",
         hostname: "beachside-web",
+        state: "ready",
         connect: "herdr --remote ssh://ubuntu@beachside-web.tail1.ts.net",
       },
     ]);
     const join = calls.find((call) => call.stdin === key)!;
-    expect(join.script).toContain("up --auth-key=file:/dev/stdin --ssh --hostname='beachside-web'");
+    expect(join.script).toContain(
+      "up --auth-key=file:/dev/stdin --ssh --timeout=120s --hostname='beachside-web'",
+    );
     expect(calls.some((call) => call.script.includes("--statedir="))).toBe(true);
     expect(addonLines(result.ready)).toEqual([
       "herdr     herdr --remote ssh://ubuntu@beachside-web.tail1.ts.net",
@@ -134,10 +142,51 @@ describe("setupAddons", () => {
       quietOutput(),
     );
 
-    expect(result.ready).toEqual([]);
+    expect(result.ready).toEqual([{ name: "rex", hostname: "beachside-web", state: "failed" }]);
+    expect(addonLines(result.ready)).toEqual(["rex       setup failed (beachside-web)"]);
     expect(result.failure?.code).toBe("PARTIAL");
     expect(result.failure?.message).toContain("Installing Rex failed (exit 3)");
     expect(result.failure?.message).not.toContain(key);
+  });
+});
+
+describe("the routable IPv4 check", () => {
+  async function addsAddress(addresses: string): Promise<boolean> {
+    const { shell, calls } = scriptedShell([[/install\.sh/, { exitCode: 3 }]]);
+
+    await setupAddons(shell, "web", ["rex"], "k", AbortSignal.timeout(5000), quietOutput());
+
+    const dir = await mkdtemp(join(tmpdir(), "beachside-ip-"));
+    const log = join(dir, "added");
+
+    try {
+      await writeFile(
+        join(dir, "ip"),
+        `#!/bin/sh\ncase "$*" in *"addr add"*) echo "$*" >> ${log} ;; *) printf '%s\\n' ${JSON.stringify(addresses)} ;; esac\n`,
+        { mode: 0o755 },
+      );
+      await writeFile(join(dir, "sudo"), `#!/bin/sh\nshift\nexec "$@"\n`, { mode: 0o755 });
+
+      const done = Bun.spawnSync(["sh", "-c", calls[0]!.script], {
+        env: { PATH: `${dir}:/usr/bin:/bin` },
+      });
+
+      expect(done.exitCode).toBe(0);
+
+      return (await readdir(dir)).includes("added");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  test("adds 192.0.0.8 when the only IPv4 is link-local, even marked scope global (E2B)", async () => {
+    expect(
+      await addsAddress("2: eth0    inet 169.254.0.21/30 brd 169.254.0.23 scope global eth0"),
+    ).toBe(true);
+  });
+
+  test("leaves a sandbox with a routable IPv4 alone", async () => {
+    expect(await addsAddress("2: eth0    inet 10.40.1.5/24 scope global eth0")).toBe(false);
   });
 });
 

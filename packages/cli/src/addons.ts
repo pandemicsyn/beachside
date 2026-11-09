@@ -15,14 +15,13 @@ export const AddonRecord = z.strictObject({
   name: z.enum(addonNames),
   /** The tailnet device name the add-on asked for. */
   hostname: z.string().min(1),
-  /** How to reach it: Rex's https address, or the herdr command. */
-  connect: z.string().min(1),
+  /** `failed` keeps a half-set-up add-on on record so `rm` still logs its device out. */
+  state: z.enum(["ready", "failed"]),
+  /** How to reach it once ready: Rex's https address, or the herdr command. */
+  connect: z.string().min(1).optional(),
 });
 
 export type AddonRecord = z.infer<typeof AddonRecord>;
-
-/** The provider label that lists a sandbox's add-ons, for `ls --remote` and other machines. */
-export const addonLabel = "beachside.addons";
 
 const keyVariable = "TAILSCALE_AUTH_KEY";
 
@@ -120,7 +119,8 @@ const asRoot = `S=; [ "$(id -u)" = 0 ] || S="sudo -n"`;
  */
 const routableIpv4 = [
   asRoot,
-  "if command -v ip >/dev/null && ! ip -4 -o addr show scope global | grep -q .; then",
+  // E2B marks its link-local address scope global, so skip 169.254.0.0/16 explicitly.
+  "if command -v ip >/dev/null && ! ip -4 -o addr show scope global | grep -v ' inet 169\\.254\\.' | grep -q .; then",
   "  $S ip addr add 192.0.0.8/32 dev eth0 noprefixroute 2>/dev/null || true",
   "fi",
 ].join("\n");
@@ -187,7 +187,7 @@ async function setupRex(
     // This machine may not be on the tailnet; Rex still works from the user's Mac.
   }
 
-  return { name: "rex", hostname, connect: url };
+  return { name: "rex", hostname, state: "ready", connect: url };
 }
 
 /** Poll Rex's log for the tailnet listener and return its https address. */
@@ -273,7 +273,7 @@ async function setupHerdr(
     shell,
     {
       what: "Joining the tailnet",
-      script: `${asRoot}\n$S tailscale ${socket} up --auth-key=file:/dev/stdin --ssh --hostname=${shellQuote(hostname)}`,
+      script: `${asRoot}\n$S tailscale ${socket} up --auth-key=file:/dev/stdin --ssh --timeout=120s --hostname=${shellQuote(hostname)}`,
       stdin: key,
     },
     signal,
@@ -293,7 +293,12 @@ async function setupHerdr(
 
   const dnsName = parsed.success ? parsed.data.Self.DNSName.replace(/\.$/, "") : hostname;
 
-  return { name: "herdr", hostname, connect: `herdr --remote ssh://${user}@${dnsName}` };
+  return {
+    name: "herdr",
+    hostname,
+    state: "ready",
+    connect: `herdr --remote ssh://${user}@${dnsName}`,
+  };
 }
 
 /** Install and start each add-on in order. The sandbox is kept on failure, for inspection. */
@@ -306,6 +311,7 @@ export async function setupAddons(
   out: Output,
 ): Promise<{ ready: AddonRecord[]; failure?: CliError }> {
   const ready: AddonRecord[] = [];
+  let current: AddonRecord | undefined;
 
   try {
     await run(shell, { what: "Checking the network", script: routableIpv4 }, signal);
@@ -313,11 +319,13 @@ export async function setupAddons(
     for (const name of names) {
       const hostname = addonHostname(name, sandbox, names);
 
+      current = { name, hostname, state: "failed" };
       ready.push(
         name === "rex"
           ? await setupRex(shell, hostname, key, signal, out)
           : await setupHerdr(shell, hostname, key, signal, out),
       );
+      current = undefined;
     }
 
     return { ready };
@@ -325,7 +333,7 @@ export async function setupAddons(
     const message = cause instanceof Error ? cause.message : String(cause);
 
     return {
-      ready,
+      ready: current ? [...ready, current] : ready,
       failure: new CliError(
         "PARTIAL",
         `Created ${sandbox}, but setting up ${names.filter((name) => !ready.some((done) => done.name === name)).join(", ")} failed: ${message}`,
@@ -363,9 +371,13 @@ export async function teardownAddons(
 
 /** One line per add-on for human output. */
 export function addonLines(addons: AddonRecord[]): string[] {
-  return addons.map((addon) =>
-    addon.name === "rex"
-      ? `rex       ${addon.connect}  (in Rex: Add Remote Host…)`
-      : `herdr     ${addon.connect}`,
-  );
+  return addons.map((addon) => {
+    const name = addon.name.padEnd(10);
+
+    if (addon.state === "failed") return `${name}setup failed (${addon.hostname})`;
+
+    return addon.name === "rex"
+      ? `${name}${addon.connect}  (in Rex: Add Remote Host…)`
+      : `${name}${addon.connect}`;
+  });
 }
