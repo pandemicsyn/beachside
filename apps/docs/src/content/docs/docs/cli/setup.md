@@ -162,7 +162,7 @@ beachside: setup deps: cache hit (restored in 4s; built 2m ago in 3m12s)
 `--cache` caches any create's setup, `--no-cache` skips the cache for one create, and `--refresh-cache` builds it again now.
 
 - **The key** covers the provider, account and profile, the image, every step (text, scripts, working folder, user and env names) and the content of each file in `files`. A change to any of them is a new cache. Env values are not part of it.
-- **When the snapshot is taken:** after setup, before startup, `--with` servers and anything else the command does, so the cache never holds running processes or tailnet logins. On a hit, steps marked `"cache": false` run again, then startup.
+- **When the snapshot is taken:** after setup, before startup, `--with` servers and anything else the command does, so the cache never holds startup's processes or tailnet logins. Where snapshots keep memory (boxd), anything a setup step left running in the background is restored with the cache. On a hit, steps marked `"cache": false` run again, then startup.
 - **Age:** after `maxAge` (7 days by default) a cache is stale. The next create rebuilds it and deletes the old snapshot once the new one exists. Nothing is deleted on a timer.
 - **Two creates at once:** the first to miss builds the cache. The other runs setup without it rather than wait.
 - **Where it is kept:** a cache is a snapshot record named `cache-<key>` in the state folder, so `snapshot ls` and `snapshot inspect` show it too. On providers that label snapshots, the snapshot also carries a `beachside.setup-cache` label, and a runner with an empty state folder finds it there.

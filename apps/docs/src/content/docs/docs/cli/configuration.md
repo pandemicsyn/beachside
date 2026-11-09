@@ -20,7 +20,7 @@ Set `BEACHSIDE_PROVIDER` (or pass `--provider`) and the provider's own variables
 | `vercel`    | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                         |
 | `modal`     | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `MODAL_APP_NAME`, `MODAL_ENVIRONMENT` |
 
-`beachside providers` shows which of these are missing. boxd and Boat always allow internet egress, so their adapters ask you to choose that explicitly with `BOXD_NETWORK=internet` or `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
+`beachside providers` shows which of these are missing. `BOXD_ORG` is the ID (`org-…`) or slug of the boxd org your API key defaults to; `boxd auth` shows your current org context. Daytona has no default image, so each Daytona `create` or `run` needs `--prepared <snapshot>` (such as `daytona-small`) or `--image`. boxd and Boat always allow internet egress, so their adapters ask you to choose that explicitly with `BOXD_NETWORK=internet` or `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
 
 ## Profiles
 
