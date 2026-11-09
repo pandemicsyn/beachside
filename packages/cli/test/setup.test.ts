@@ -315,6 +315,21 @@ describe("setup caches", () => {
     return envelope(await cli(["setup", "cache", "ls", "--json"])).data.caches;
   }
 
+  test("capture judged only on a sandbox is checked after setup", async () => {
+    await useDeps();
+    const env = { BEACHSIDE_FAKE_CAPTURE_NEEDS_SANDBOX: "1" };
+
+    const built = await cli(["create", "--name", "one", "--setup", "deps", "--json"], env);
+
+    expect(built.code).toBe(0);
+    expect(envelope(built).data.setup.cache).toMatchObject({ status: "built" });
+
+    const hit = await cli(["create", "--name", "two", "--setup", "deps", "--json"], env);
+
+    expect(hit.code).toBe(0);
+    expect(envelope(hit).data.setup.cache).toMatchObject({ status: "hit" });
+  });
+
   test("a miss builds the cache after setup and before startup; a hit restores it", async () => {
     await useDeps();
 

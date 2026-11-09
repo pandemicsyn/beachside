@@ -74,6 +74,8 @@ export type CachePlan = {
   maxAgeSeconds: number;
   refresh: boolean;
   labels: boolean;
+  /** Capture support was `unknown` before the sandbox existed; check it again on the sandbox. */
+  recheck: boolean;
 };
 
 /**
@@ -129,13 +131,20 @@ export async function planCache(
   const capabilities = await client.capabilities();
   const { capture, restore } = capabilities.snapshots;
 
-  if (capture.status !== "supported" || restore.status !== "supported")
-    throw new CliError(
-      "UNSUPPORTED",
-      `${profile.provider} cannot cache setups: snapshot ${capture.status !== "supported" ? "capture" : "restore"} is ${capture.status !== "supported" ? capture.status : restore.status}`,
-      `pass --no-cache, or remove "cache" from setup ${from}`,
-    );
-  const restoreOptions = restore.value.options ?? {};
+  // Some providers judge capture only on an actual sandbox: `unknown` is checked again after setup.
+  const refused = [
+    ["capture", capture],
+    ["restore", restore],
+  ] as const;
+
+  for (const [what, support] of refused)
+    if (support.status === "unsupported" || support.status === "unavailable")
+      throw new CliError(
+        "UNSUPPORTED",
+        `${profile.provider} cannot cache setups: snapshot ${what} is ${support.status} (${support.reason})`,
+        `pass --no-cache, or remove "cache" from setup ${from}`,
+      );
+  const restoreOptions = restore.status === "supported" ? (restore.value.options ?? {}) : {};
 
   const missing = [
     Object.keys(request.env).length && !restoreOptions.env ? "--env" : null,
@@ -185,7 +194,8 @@ export async function planCache(
       ? parseDuration(options.maxAge, `setup ${from} cache.maxAge`)
       : DEFAULT_MAX_AGE_SECONDS,
     refresh: flags.refresh,
-    labels: capture.value.labels === true,
+    labels: capture.status === "supported" && capture.value.labels === true,
+    recheck: capture.status !== "supported",
   };
 }
 
@@ -403,22 +413,48 @@ export async function captureCache(
   const { entry, previous } = lookup;
   let result: SnapshotResult;
 
+  // Refused before any effect: give the claim back, keeping a previous cache as it was.
+  const release = async () => {
+    if (previous) {
+      const { claimedAt: _claimedAt, ...cache } = entry.record.cache!;
+
+      await store
+        .update("snapshot", plan.name, { ...entry.record, cache }, entry.version)
+        .catch(() => undefined);
+    } else await store.remove("snapshot", plan.name, entry.version).catch(() => undefined);
+  };
+
+  let labels = plan.labels;
+
+  if (plan.recheck) {
+    const capture = await box
+      .capabilities()
+      .then((capabilities) => capabilities.snapshots.capture)
+      .catch(async (cause: unknown) => {
+        await release();
+        throw cause;
+      });
+
+    if (capture.status !== "supported") {
+      await release();
+      throw new CliError(
+        "UNSUPPORTED",
+        `snapshot capture is ${capture.status} (${capture.reason})`,
+      );
+    }
+
+    labels = capture.value.labels === true;
+  }
+
   try {
-    result = await box.snapshot(plan.labels ? { labels: { [CACHE_LABEL]: plan.key } } : {}, {
+    result = await box.snapshot(labels ? { labels: { [CACHE_LABEL]: plan.key } } : {}, {
       signal: session.ctx.signal,
     });
   } catch (cause) {
     const report = describeError(cause);
 
-    // Refused before any effect: give the claim back, keeping a previous cache as it was.
     if (report.outcome === "rejected") {
-      if (previous) {
-        const { claimedAt: _claimedAt, ...cache } = entry.record.cache!;
-
-        await store
-          .update("snapshot", plan.name, { ...entry.record, cache }, entry.version)
-          .catch(() => undefined);
-      } else await store.remove("snapshot", plan.name, entry.version).catch(() => undefined);
+      await release();
 
       throw cause;
     }

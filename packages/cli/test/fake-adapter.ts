@@ -573,6 +573,13 @@ export const localShell = bindAdapter(
         ...rest,
         snapshotCapture,
         snapshotRestore,
+        // Like Daytona: with BEACHSIDE_FAKE_CAPTURE_NEEDS_SANDBOX, capture is judged only on a sandbox.
+        async snapshotProfiles(target, ctx) {
+          if (process.env.BEACHSIDE_FAKE_CAPTURE_NEEDS_SANDBOX === "1" && !target.sandbox)
+            return { status: "unknown", reason: "Capture eligibility needs a source sandbox" };
+
+          return session.snapshotProfiles!(target, ctx);
+        },
         exec: Object.assign(exec, { finiteStdin: "bytes" as const }),
       };
     },

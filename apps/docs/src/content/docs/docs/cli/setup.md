@@ -169,7 +169,7 @@ beachside: setup deps: cache hit (restored in 4s; built 2m ago in 3m12s)
 
 `beachside setup cache ls` lists the caches with their age and build time. `setup cache rm <setup>` deletes one setup's caches, and `setup cache prune` deletes the stale ones (`--dry-run` shows what would go). `gc` prunes stale caches too. `rm` never deletes a cache, because it belongs to the cache, not the sandbox.
 
-Caching needs snapshot capture and restore, plus restore-time support for any `--env`, `--label` or `--ttl` you pass. Where a provider lacks them, the create fails before anything is made; it never runs uncached without saying so.
+Caching needs snapshot capture and restore, plus restore-time support for any `--env`, `--label` or `--ttl` you pass. Where a provider lacks them, the create fails before anything is made. A provider that can only judge capture on a real sandbox, such as Daytona, is checked again after setup; if it refuses there, the create finishes and says the cache was not saved. It never runs uncached without saying so.
 
 :::caution[Secrets end up in caches]
 A step can write a secret to disk, such as an `.npmrc` with `NPM_TOKEN`, and the snapshot keeps it. A setup whose `env` reads from your environment or a password manager is refused for caching unless the setup sets `"cache": { "secrets": "allow" }`. Pass secrets that steps only need at run time with `--env` on the create instead.
