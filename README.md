@@ -74,7 +74,7 @@ beachside ls
 beachside rm web
 ```
 
-Teach your agent to use it with `npx skills add pandemicsyn/beachside --skill beachside-cli -g`. See the [Command line docs](https://beachside.run/docs/cli/).
+Teach your agent to use it with `beachside skill setup`, which installs a skill that always matches the installed CLI. See [Agent skills](https://beachside.run/docs/agents/skills/) for every option. See the [Command line docs](https://beachside.run/docs/cli/).
 
 ## Features
 

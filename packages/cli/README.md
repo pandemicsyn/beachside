@@ -40,7 +40,7 @@ Install the adapter for each provider with `beachside adapter add e2b` (or `dayt
 | `adapter add <provider\|package>[@version]...`, `adapter ls`, `adapter rm <provider\|package>...` | Install, list or remove adapters in `~/.config/beachside/adapters` |
 | `providers` | Official providers, install state and missing credentials |
 | `schema` | Machine-readable description of every command, flag and exit code |
-| `skill [install [--project]]` | Print the agent skill for this CLI, or install it for your coding agents |
+| `skill [show \| setup \| status \| remove]` | Print the agent skill for this CLI, or set it up for your coding agents |
 | `completion <zsh\|bash\|fish>` | Print a shell completion script |
 
 A `<sandbox>` is a store name, a native id held in the store, or `@file.json` holding a saved sandbox reference.
@@ -81,7 +81,7 @@ Completion covers commands, flags, `--provider` ids, `--profile` names from `bea
 
 ## Agent skill
 
-The CLI carries an agent skill that matches its own version. `beachside skill` prints it; `beachside skill install` writes it to `~/.agents/skills/beachside-cli/` and, when `~/.claude` exists, to `~/.claude/skills/beachside-cli/`. Add `--project` to install into the current folder instead. Rerunning updates a copy it wrote; a copy installed another way is left alone.
+The CLI carries an agent skill that matches its own version. `beachside skill` prints the guide; `beachside skill setup` installs a short skill into `~/.agents/skills/beachside-cli/` and, when Claude Code is set up, `~/.claude/skills/beachside-cli/` that tells the agent to read the guide from the installed CLI, so upgrading needs no rerun. Add `--project` to use the current folder, `--agent` to choose agents and `--dry-run` to preview. `beachside skill status` reports each copy and `beachside skill remove` removes what setup installed. A copy installed another way is left alone unless you pass `--force`.
 
 ## Configuration
 

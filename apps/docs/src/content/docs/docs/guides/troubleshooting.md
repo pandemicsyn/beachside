@@ -5,7 +5,7 @@ description: Resolve package, connection, execution, file, and cleanup issues.
 
 ## Package or import not found
 
-Install `beachside` and your adapter package at `0.1.0` or later; `0.0.0` versions are empty placeholders. See [Getting started](/docs/direct-quickstart/). The unrelated `beachside` npm package is not this SDK.
+Install `beachside` and your adapter package from npm at matching versions; `0.0.0` versions are empty placeholders. See [Getting started](/docs/direct-quickstart/).
 
 Import the SDK from `beachside` and your adapter from its separate package:
 
