@@ -15,6 +15,10 @@ beforeEach(async () => {
   await symlink(join(import.meta.dir, "..", "..", "providers", "boxd"), join(scope, "boxd"));
   await symlink(join(import.meta.dir, "..", "..", "providers", "boat"), join(scope, "boat"));
   await symlink(join(import.meta.dir, "..", "..", "providers", "runloop"), join(scope, "runloop"));
+  await symlink(
+    join(import.meta.dir, "..", "..", "providers", "freestyle"),
+    join(scope, "freestyle"),
+  );
 });
 
 afterEach(async () => {
@@ -87,4 +91,32 @@ test("environment-only Runloop setup needs only a key and can opt into internet 
   );
 
   expect(bound.name).toBe("runloop");
+});
+
+test("environment-only Freestyle setup needs only a key and can opt into internet egress", async () => {
+  const env = { HOME: home, FREESTYLE_API_KEY: "key" };
+
+  expect(missingEnv(descriptor("freestyle")!, env)).toEqual([]);
+  expect(
+    resolveProfile({ provider: "freestyle" }, await loadConfig(undefined, env), env).config,
+  ).toEqual({});
+
+  const ready = { ...env, FREESTYLE_NETWORK: "internet" };
+
+  const profile = resolveProfile(
+    { provider: "freestyle" },
+    await loadConfig(undefined, ready),
+    ready,
+  );
+
+  expect(profile.config).toEqual({ network: "internet" });
+
+  const bound = await loadAdapter(
+    profile,
+    home,
+    ready,
+    new SecretReader(ready, new AbortController().signal),
+  );
+
+  expect(bound.name).toBe("freestyle");
 });

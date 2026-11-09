@@ -34,6 +34,7 @@ for (const name of [
   "@beachside/boxd",
   "@beachside/boat",
   "@beachside/runloop",
+  "@beachside/freestyle",
   "@beachside/modal",
   "@beachside/cli",
 ])
@@ -130,6 +131,14 @@ cases.push({
   overrides: [adapterName],
   runtime: `import { runloopAdapter } from "@beachside/runloop"; if (runloopAdapter.name !== "runloop") throw Error("Unexpected adapter");`,
   types: `import { runloopAdapter } from "@beachside/runloop"; const name: string = runloopAdapter.name; void name;`,
+});
+
+cases.push({
+  name: "freestyle",
+  packageName: "@beachside/freestyle",
+  overrides: [adapterName],
+  runtime: `import { freestyleAdapter } from "@beachside/freestyle"; if (freestyleAdapter.name !== "freestyle") throw Error("Unexpected adapter");`,
+  types: `import { freestyleAdapter } from "@beachside/freestyle"; const name: string = freestyleAdapter.name; void name;`,
 });
 
 cases.push({

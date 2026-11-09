@@ -18,6 +18,7 @@
     "@beachside/boxd": "workspace:*",
     "@beachside/boat": "workspace:*",
     "@beachside/runloop": "workspace:*",
+    "@beachside/freestyle": "workspace:*",
     "@beachside/vercel": "workspace:*"
   }
 }

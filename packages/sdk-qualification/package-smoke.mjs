@@ -18,6 +18,7 @@ const packages = [
   ["@beachside/boxd", "packages/providers/boxd"],
   ["@beachside/boat", "packages/providers/boat"],
   ["@beachside/runloop", "packages/providers/runloop"],
+  ["@beachside/freestyle", "packages/providers/freestyle"],
   ["@beachside/vercel", "packages/providers/vercel"],
   ["@beachside/e2b", "packages/providers/e2b"],
   ["beachside", "packages/sdk"],
@@ -78,6 +79,7 @@ async function pack(directory) {
       "@beachside/boxd",
       "@beachside/boat",
       "@beachside/runloop",
+      "@beachside/freestyle",
       "@beachside/cli",
     ].includes(manifest.name)
   ) {
@@ -278,6 +280,26 @@ async function flow() {
   await box.readFile("/home/user/file");
   await snapshot.delete(); await restored.destroy(); await box.destroy(); await client.close();
   return { url };
+}
+void flow;
+`;
+  else if (mode === "freestyle")
+    source = `
+import { Beachside, Image } from "beachside";
+import { freestyleAdapter } from "@beachside/freestyle";
+async function flow() {
+  const client = await Beachside.connect({ adapter: freestyleAdapter, config: { resources: { vcpus: 2 }, preview: { ports: [3000] } }, credentials: { apiKey: "fixture" } });
+  const box = await client.sandboxes.create({ environment: Image.prepared("freestyle/ubuntu-sm"), networkPolicy: "blocked" });
+  const preview = await box.preview(3000);
+  const url: string = preview.url;
+  const suspended = await box.suspend();
+  const preserve: "filesystem" | "filesystem+memory" = suspended.preserve;
+  await box.resume();
+  await box.exec(["true"]);
+  await box.writeFile("/root/file", new Uint8Array([0,255]), { overwrite: true });
+  await box.readFile("/root/file");
+  await box.destroy(); await client.close();
+  return { url, preserve };
 }
 void flow;
 `;
@@ -1127,6 +1149,29 @@ console.log("Packed Runloop imports and local validation passed without provider
 
   for (const runtime of ["node", "bun"])
     console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], runloop)}`);
+
+  const freestyle = join(temporary, "freestyle-consumer");
+  await consumer(
+    freestyle,
+    { ...sdkDeps, "@beachside/freestyle": archiveOverrides["@beachside/freestyle"] },
+    archiveOverrides,
+    `
+import { Beachside } from "beachside";
+import { freestyleAdapter } from "@beachside/freestyle";
+if (freestyleAdapter.name !== "freestyle") throw Error("External adapter identity mismatch");
+if (freestyleAdapter.config.parse({}).network !== "blocked") throw Error("Egress must default to blocked");
+try {
+  await Beachside.connect({ adapter: freestyleAdapter, config: { image: "my-snapshot", resources: { vcpus: 2 } }, credentials: { apiKey: "fixture" } });
+  throw Error("Invalid configuration accepted");
+} catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
+console.log("Packed Freestyle imports and local validation passed without provider IO");
+`,
+  );
+  await checkTypes(freestyle, "freestyle");
+  inspectGraph(freestyle, ["beachside", "@beachside/freestyle"]);
+
+  for (const runtime of ["node", "bun"])
+    console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], freestyle)}`);
 
   const e2bDeps = { ...sdkDeps, "@beachside/e2b": archiveOverrides["@beachside/e2b"] };
 

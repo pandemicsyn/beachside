@@ -82,6 +82,7 @@ Close the connection in an outer `finally`, as in [Getting started](/docs/direct
 | Vercel (disposable mode)                           | Private filesystem                        | Source session stops                      | Fresh processes; RAM is not retained             |
 | Runloop                                            | Private disk                              | May pause briefly; keeps running          | Fresh processes; RAM is not retained             |
 | Boat                                               | Private disk                              | Keeps running; any pause is undocumented  | Fresh processes; RAM is not retained             |
+| Freestyle                                          | Private disk, RAM and process state       | Keeps running; any pause is undocumented  | Resume captured processes in a new VM            |
 
 Daytona captures Linux VMs the same way as containers. It leaves an already-stopped source stopped. Configure `snapshots: { restartAfterCapture: false }` on the adapter to also leave a running source stopped after capture. E2B requires a running source with envd `v0.5.0` or newer. Modal has no snapshot listing, so save the returned reference; see the [Modal adapter notes](https://github.com/pandemicsyn/beachside/tree/main/packages/providers/modal#snapshots).
 
@@ -91,7 +92,7 @@ const captured = await source.snapshot({
 }); // E2B can satisfy this; Daytona rejects before stopping compute.
 ```
 
-Choose what capture keeps once, in adapter setup, with `snapshots: { preserve }` and the exported `Preserve` constants. Every adapter with snapshots accepts it, so the setting carries over when you switch providers. The choice is exact: E2B's `Preserve.FILESYSTEM` skips memory, and restored sandboxes boot fresh. Daytona's `Preserve.FILESYSTEM_AND_MEMORY` captures memory from running Linux VMs; containers reject it before any change. boxd always keeps memory, so it rejects `Preserve.FILESYSTEM` at connect; Modal, Vercel, Runloop and Boat keep files only, so they reject `Preserve.FILESYSTEM_AND_MEMORY` at connect. Omit it to keep the provider's default. A choice the adapter cannot honor rejects before any sandbox changes.
+Choose what capture keeps once, in adapter setup, with `snapshots: { preserve }` and the exported `Preserve` constants. Every adapter with snapshots accepts it, so the setting carries over when you switch providers. The choice is exact: E2B's `Preserve.FILESYSTEM` skips memory, and restored sandboxes boot fresh. Daytona's `Preserve.FILESYSTEM_AND_MEMORY` captures memory from running Linux VMs; containers reject it before any change. boxd and Freestyle always keep memory, so they reject `Preserve.FILESYSTEM` at connect; Modal, Vercel, Runloop and Boat keep files only, so they reject `Preserve.FILESYSTEM_AND_MEMORY` at connect. Omit it to keep the provider's default. A choice the adapter cannot honor rejects before any sandbox changes.
 
 ```ts
 import { Beachside, Preserve } from "beachside";
@@ -111,6 +112,7 @@ Snapshots cost storage until they are deleted or expire. Where the provider supp
 
 - **Vercel** counts from the snapshot's last use. The default is 30 days, and it applies in disposable mode only.
 - **Modal** counts from capture. The default is 30 days.
+- **Freestyle** counts from capture. By default snapshots are kept until deleted, unless your Freestyle plan removes unused ones sooner. `snapshot({ retention: { cleanupAfterSeconds } })` sets it for one capture.
 
 Other adapters reject the setting at connect. Their providers keep snapshots until you delete them, except Daytona, which deactivates snapshots after two weeks without use. `snapshot({ retention: { minimumSeconds } })` checks against the configured expiry before capture.
 
@@ -198,17 +200,17 @@ The [compiled storage example](https://github.com/pandemicsyn/beachside/blob/mai
 
 ### Current combinations
 
-| Workflow                               | Current support                                                                                                                                                                                                                         |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Capture and restore private state      | Daytona, Vercel (disposable mode), Runloop, Modal and Boat filesystem capture; E2B and boxd filesystem and memory capture.                                                                                                              |
-| Capture a sandbox with external mounts | Unsupported by every adapter.                                                                                                                                                                                                           |
-| Restore with selected volumes          | Daytona only: known mount-free filesystem snapshot, fresh execution and `internet` or `daytona-default` networking.                                                                                                                     |
-| Restore with `env`, `labels`, lifetime | All three on Daytona, E2B, Modal and Vercel (Vercel lifetime only in disposable mode; Daytona and E2B env only for filesystem snapshots); Runloop env and lifetime (lifetime unless `idleSeconds` is set); Boat and boxd lifetime only. |
-| Override restore resource sizes        | Unsupported by Daytona, E2B, boxd, Modal and Boat; empty overrides are treated as omitted.                                                                                                                                              |
-| Create a sandbox with volumes          | Daytona writable mounts with optional subpaths; boxd whole-disk read-only or writable mounts.                                                                                                                                           |
-| Manage E2B volumes                     | Private-beta API mapping; live creation was blocked by account HTTP 403. Beachside create-time mounts are unsupported.                                                                                                                  |
-| Manage Vercel volumes                  | Unsupported.                                                                                                                                                                                                                            |
-| Copy or version a volume               | Unsupported by Daytona, E2B and boxd.                                                                                                                                                                                                   |
+| Workflow                               | Current support                                                                                                                                                                                                                                    |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Capture and restore private state      | Daytona, Vercel (disposable mode), Runloop, Modal and Boat filesystem capture; E2B, boxd and Freestyle filesystem and memory capture.                                                                                                              |
+| Capture a sandbox with external mounts | Unsupported by every adapter.                                                                                                                                                                                                                      |
+| Restore with selected volumes          | Daytona only: known mount-free filesystem snapshot, fresh execution and `internet` or `daytona-default` networking.                                                                                                                                |
+| Restore with `env`, `labels`, lifetime | All three on Daytona, E2B, Modal, Freestyle and Vercel (Vercel lifetime only in disposable mode; Daytona and E2B env only for filesystem snapshots); Runloop env and lifetime (lifetime unless `idleSeconds` is set); Boat and boxd lifetime only. |
+| Override restore resource sizes        | Unsupported by Daytona, E2B, boxd, Modal, Boat and Freestyle; empty overrides are treated as omitted.                                                                                                                                              |
+| Create a sandbox with volumes          | Daytona writable mounts with optional subpaths; boxd whole-disk read-only or writable mounts.                                                                                                                                                      |
+| Manage E2B volumes                     | Private-beta API mapping; live creation was blocked by account HTTP 403. Beachside create-time mounts are unsupported.                                                                                                                             |
+| Manage Vercel volumes                  | Unsupported.                                                                                                                                                                                                                                       |
+| Copy or version a volume               | Unsupported by Daytona, E2B and boxd.                                                                                                                                                                                                              |
 
 boxd volumes and mounts have deterministic test coverage but no recorded live storage pass. Vercel has no recorded live acceptance. See [tested provider support](/docs/providers/support/) for evidence per workflow.
 
