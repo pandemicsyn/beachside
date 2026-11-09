@@ -169,4 +169,22 @@ export type {
 
 export { SandboxCleanupError } from "./scoped-sandbox";
 
+export { Setup, SetupDefinition, SetupFailedError } from "./setup";
+
+export type {
+  SetupStep,
+  SetupStepOptions,
+  SetupInput,
+  SetupDefinitionInput,
+  SetupDefinitionCache,
+  SetupOutput,
+  SetupEvent,
+  SetupPhase,
+  SetupStepRef,
+  SetupReport,
+  SetupStepReport,
+  SetupRunOptions,
+  SetupCreateOptions,
+} from "./setup";
+
 export type { SandboxScopeOptions, SandboxScopeCallbackOutcome } from "./scoped-sandbox";
