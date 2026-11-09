@@ -95,6 +95,14 @@ const placeholder: SecretSupport = {
   maxSecrets: 16,
 };
 
+test("secret() without a target is a plain secret", () => {
+  const plain = secret(PAT);
+  expect(plain.mode).toBe("plain");
+  expect(plain.rules).toEqual([]);
+  expect(String(plain)).toBe("[secret]");
+  expect(plain.reveal()).toBe(PAT);
+});
+
 test("secret() values never print, serialize or reach recovery references", async () => {
   const value = secret(KEY, { for: "anthropic" });
   expect(value).toBeInstanceOf(Secret);
@@ -109,14 +117,15 @@ test("secret() values never print, serialize or reach recovery references", asyn
   const client = await f.connect();
 
   try {
-    expect((await client.capabilities()).secrets).toEqual(header);
+    expect((await client.capabilities()).secrets).toEqual({ stored: false, brokered: header });
 
     const operation = await client.sandboxes.submitCreate({
-      env: { MODE: "agent", ANTHROPIC_API_KEY: value, GH: secret.exposed(PAT) },
+      env: { MODE: "agent", ANTHROPIC_API_KEY: value, GH: secret(PAT) },
     });
 
     await operation.wait();
     expect(f.creates[0]?.env).toEqual({ MODE: "agent", GH: PAT });
+    expect(f.creates[0]?.secretEnv).toEqual(["GH"]);
     expect(f.creates[0]?.secrets).toEqual([
       {
         env: "ANTHROPIC_API_KEY",
@@ -165,11 +174,13 @@ test("presets and raw hosts expand to header rules", () => {
 
 test("invalid secrets fail without echoing values", () => {
   for (const make of [
+    // @ts-expect-error A target needs `for` or `hosts`; the compiler refuses an empty one.
     () => secret(KEY, {}),
     () => secret(KEY, { hosts: ["not a host"] }),
     // oxlint-disable-next-line anti-slop/require-safety-comment-for-type-assertion -- Exercise an unknown preset from JavaScript.
     () => secret(KEY, { for: "nope" as "npm" }),
     () => secret("", { for: "npm" }),
+    () => secret(""),
     () => secret(`${KEY}\n`, { for: "npm" }),
   ]) {
     let error: unknown;
@@ -190,7 +201,7 @@ test("adapters without brokering refuse before any effect, never falling back to
   const client = await f.connect();
 
   try {
-    expect((await client.capabilities()).secrets).toBeNull();
+    expect((await client.capabilities()).secrets).toEqual({ stored: false, brokered: null });
 
     const check = await client.sandboxes.checkCreate({
       env: { ANTHROPIC_API_KEY: secret(KEY, { for: "anthropic" }) },
@@ -202,8 +213,8 @@ test("adapters without brokering refuse before any effect, never falling back to
     ).rejects.toBeInstanceOf(UnsupportedFeatureError);
     expect(f.creates).toHaveLength(0);
 
-    // Exposed secrets are ordinary env and work wherever create env does.
-    await client.sandboxes.create({ env: { GH_TOKEN: secret.exposed(PAT) } });
+    // Plain secrets are env with a secret marker and work wherever create env does.
+    await client.sandboxes.create({ env: { GH_TOKEN: secret(PAT) } });
     expect(f.creates[0]?.env).toEqual({ GH_TOKEN: PAT });
     expect(f.creates[0]?.secrets).toBeUndefined();
   } finally {

@@ -8,17 +8,34 @@ import { AdapterError } from "./errors";
  * - `header`: the provider's egress proxy sets the whole header for the bound hosts; the
  *   environment variable holds a fixed Beachside placeholder (E2B, Vercel, Freestyle, Modal).
  */
-export type SecretDelivery = "placeholder" | "header";
+export type SecretDelivery = "placeholder" | "header" | "gateway";
 
 export type SecretSupport = {
   delivery: SecretDelivery;
-  /** Can broker `basic` headers (git over HTTPS). Placeholder swaps cannot see inside base64. */
+  /** Can broker `basic` headers (git over HTTPS). */
   basicAuth: boolean;
   /** Accepts `*.example.com` host patterns. */
   wildcardHosts: boolean;
   /** Most brokered secrets one sandbox can carry. */
   maxSecrets: number;
+  /** Only these hosts can be brokered (a gateway's known services); absent means any host. */
+  hosts?: readonly string[];
+  /**
+   * Provider secrets are shared by name across the account's sandboxes: a second sandbox with
+   * the same variable name and a different value changes it for both.
+   */
+  shared?: boolean;
 };
+
+/** Names of `env` entries that hold plain secrets. */
+export const SecretEnvNames = z
+  .array(
+    z
+      .string()
+      .max(256)
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+  )
+  .max(256);
 
 export const SecretHeaderFormat = z.enum(["raw", "bearer", "basic"]);
 
@@ -122,7 +139,7 @@ export function secretsProblem(
   if (!bindings?.length) return null;
 
   if (!support)
-    return "Brokered secrets are unsupported by this adapter. Use secret.exposed(...) to put the value in the sandbox environment instead";
+    return "Targeted secrets are unsupported by this adapter: it cannot keep a value out of the sandbox. Use secret(value) without a target to put the value in the sandbox environment instead";
 
   if (bindings.length > support.maxSecrets)
     return `This adapter brokers at most ${support.maxSecrets} secrets per sandbox`;
@@ -138,10 +155,13 @@ export function secretsProblem(
       headers.add(key);
 
       if (rule.header.format === "basic" && !support.basicAuth)
-        return `Secret ${binding.env}: ${rule.host} needs Basic auth, which this adapter's placeholder swap cannot broker. Use secret.exposed(...), or a preset without that host (github-api instead of github)`;
+        return `Secret ${binding.env}: ${rule.host} needs Basic auth, which this adapter cannot broker. Use a plain secret(value), or a preset without that host (github-api instead of github)`;
 
       if (rule.host.startsWith("*.") && !support.wildcardHosts)
         return `Secret ${binding.env}: wildcard host ${rule.host} is unsupported by this adapter`;
+
+      if (support.hosts && !support.hosts.includes(rule.host))
+        return `Secret ${binding.env}: this adapter brokers only ${support.hosts.join(", ")}, not ${rule.host}. Use a plain secret() to put the value in the sandbox instead`;
     }
 
   return null;

@@ -107,7 +107,7 @@ test("brokered secrets become per-sandbox Daytona secrets mounted as placeholder
   const client = await f.connect();
 
   try {
-    expect((await client.capabilities()).secrets).toMatchObject({
+    expect((await client.capabilities()).secrets?.brokered).toMatchObject({
       delivery: "placeholder",
       basicAuth: true,
     });

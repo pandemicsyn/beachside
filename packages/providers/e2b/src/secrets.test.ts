@@ -76,7 +76,7 @@ test("E2B brokers secrets as egress header rules with placeholders in env", asyn
   });
 
   try {
-    expect((await client.capabilities()).secrets).toMatchObject({
+    expect((await client.capabilities()).secrets?.brokered).toMatchObject({
       delivery: "header",
       basicAuth: true,
     });

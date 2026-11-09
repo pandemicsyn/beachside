@@ -274,7 +274,20 @@ export type CreateDevboxBody = {
   launch_parameters: LaunchParameters;
   tunnel: { auth_mode: "open" | "authenticated" };
   environment_variables?: Record<string, string>;
+  /** Environment variable name to account secret name; the devbox gets the real value. */
+  secrets?: Record<string, string>;
+  /** Environment variable prefix to gateway config and account secret; the devbox gets a token. */
+  gateways?: Record<string, { gateway: string; secret: string }>;
 };
+
+export type GatewayConfigBody = {
+  name: string;
+  endpoint: string;
+  auth_mechanism: { type: "bearer" } | { type: "header"; key: string };
+  description: string;
+};
+
+const GatewayConfig = z.object({ id: Id });
 
 export type NetworkPolicyBody = {
   name: string;
@@ -489,6 +502,37 @@ export function createRunloopClient(apiKey: string, fetch: Fetch = globalThis.fe
         {},
         { json: JSON.stringify(body) },
       ),
+    /** Values are encrypted at rest and never returned; the response is ignored. */
+    async createSecret(name: string, value: string, signal: AbortSignal) {
+      const response = await send(
+        "POST",
+        "/v1/secrets",
+        signal,
+        {},
+        { json: JSON.stringify({ name, value }) },
+      );
+
+      await response.body?.cancel().catch(() => undefined);
+    },
+    async deleteSecret(name: string, signal: AbortSignal) {
+      const response = await send("POST", `/v1/secrets/${encode(name)}/delete`, signal);
+
+      await response.body?.cancel().catch(() => undefined);
+    },
+    createGatewayConfig: (body: GatewayConfigBody, signal: AbortSignal) =>
+      json(
+        GatewayConfig,
+        "POST",
+        "/v1/gateway-configs",
+        signal,
+        {},
+        { json: JSON.stringify(body) },
+      ),
+    async deleteGatewayConfig(id: string, signal: AbortSignal) {
+      const response = await send("POST", `/v1/gateway-configs/${encode(id)}/delete`, signal);
+
+      await response.body?.cancel().catch(() => undefined);
+    },
     getBlueprint: (id: string, signal: AbortSignal) =>
       json(Blueprint, "GET", `/v1/blueprints/${encode(id)}`, signal),
     listBlueprints: (query: { name: string; limit: number }, signal: AbortSignal) =>

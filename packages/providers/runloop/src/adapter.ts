@@ -17,6 +17,9 @@ import {
   type AttemptContext,
   type CreateInput,
   type RestoreOptions,
+  type SecretBinding,
+  type SecretSupport,
+  secretValues,
   type ExecInput,
   type Fact,
   type FileWriteInput,
@@ -40,6 +43,7 @@ import {
   refusedBeforeEffect,
   RUNLOOP_API,
   type CreateDevboxBody,
+  type GatewayConfigBody,
   type Devbox,
   type Execution,
   type Fetch,
@@ -71,7 +75,36 @@ const MARK = {
   submission: "beachside_submission",
   /** Requested egress (`blocked` or `internet`), so recovery can check the policy without the token. */
   network: "beachside_network",
+  /** Account secrets created for this devbox, comma-separated; destroy deletes them. */
+  secrets: "beachside_secrets",
+  /** Gateway configs created for this devbox, comma-separated; destroy deletes them. */
+  gateways: "beachside_gateways",
 } as const;
+
+/**
+ * Runloop's Agent Gateway endpoint. The docs name it for requests built outside the devbox;
+ * the devbox's own `<NAME>_URL` variable holds the same gateway.
+ */
+export const GATEWAY_URL = "https://gateway.labs.runloop.ai";
+
+/** Base URL variables that point the standard clients at the gateway, by brokered host. */
+const GATEWAY_BASE_URL = new Map([
+  ["api.anthropic.com", "ANTHROPIC_BASE_URL"],
+  ["api.openai.com", "OPENAI_BASE_URL"],
+]);
+
+/**
+ * Brokered secrets go through Runloop's Agent Gateway: the devbox variable holds a token bound
+ * to that devbox, and the client's base URL points at the gateway, which adds the real key.
+ * Only clients with a standard base URL variable can be redirected, so only those hosts qualify.
+ */
+const SECRET_SUPPORT: SecretSupport = {
+  delivery: "gateway",
+  basicAuth: false,
+  wildcardHosts: false,
+  maxSecrets: 8,
+  hosts: [...GATEWAY_BASE_URL.keys()],
+};
 
 /** Name of the account network policy the adapter uses for `network: "blocked"`. */
 export const BLOCKED_POLICY_NAME = "beachside-blocked";
@@ -278,10 +311,92 @@ type ImagePlan =
   | {};
 
 type PreparedCreate = CreateInput & {
-  plan: { image: ImagePlan; policy: string | null };
+  plan: { image: ImagePlan; policy: string | null; gateways: GatewayPlan[] };
 };
 
-type PreparedDestroy = Sandbox & { alreadyShutdown: boolean };
+type GatewayPlan = {
+  binding: SecretBinding;
+  endpoint: string;
+  auth: GatewayConfigBody["auth_mechanism"];
+  baseUrl: string;
+};
+
+/** Account resources a create made for one devbox, as recorded in its metadata. */
+type Owned = { secrets: string[]; gateways: string[] };
+
+type PreparedDestroy = Sandbox & { alreadyShutdown: boolean; owned: Owned };
+
+/** The account resources a devbox's metadata names. */
+function owned(devbox: Devbox | null): Owned {
+  const list = (key: string) =>
+    (devbox?.metadata?.[key] ?? "").split(",").filter((name) => Id.safeParse(name).success);
+
+  return { secrets: list(MARK.secrets), gateways: list(MARK.gateways) };
+}
+
+/** Plan one gateway per brokered secret, or explain why Runloop cannot broker it. */
+function gatewayPlans(input: CreateInput): GatewayPlan[] {
+  const plans: GatewayPlan[] = [];
+
+  for (const binding of input.secrets ?? []) {
+    const [rule, ...more] = binding.rules;
+
+    if (!rule || more.length)
+      throw new AdapterError(
+        "UNSUPPORTED",
+        `Secret ${binding.env}: a Runloop gateway serves one host; name one preset or host per secret`,
+      );
+
+    const baseUrl = GATEWAY_BASE_URL.get(rule.host);
+
+    if (!baseUrl)
+      throw new AdapterError(
+        "UNSUPPORTED",
+        `Secret ${binding.env}: Runloop brokers only ${[...GATEWAY_BASE_URL.keys()].join(", ")}`,
+      );
+
+    const name = rule.header.name.toLowerCase();
+
+    const auth: GatewayConfigBody["auth_mechanism"] | undefined =
+      rule.header.format === "raw"
+        ? { type: "header", key: name }
+        : rule.header.format === "bearer" && name === "authorization"
+          ? { type: "bearer" }
+          : undefined;
+
+    if (!auth)
+      throw new AdapterError(
+        "UNSUPPORTED",
+        `Secret ${binding.env}: Runloop gateways send a raw header or an Authorization bearer token`,
+      );
+
+    if (input.env?.[baseUrl] !== undefined || plans.some((plan) => plan.baseUrl === baseUrl))
+      throw new AdapterError(
+        "UNSUPPORTED",
+        `Secret ${binding.env}: Runloop brokers ${rule.host} by setting ${baseUrl}, which is already set`,
+      );
+
+    if (input.networkPolicy !== "internet")
+      throw new AdapterError(
+        "UNSUPPORTED",
+        'Brokered secrets on Runloop need network: "internet"; the blocked policy denies the gateway',
+      );
+
+    plans.push({ binding, endpoint: `https://${rule.host}`, auth, baseUrl });
+  }
+
+  return plans;
+}
+
+/** Account secret names allow letters, digits and underscores; derive them from the attempt. */
+function ownedName(submissionId: string, index: number) {
+  const key = submissionId
+    .replace(/[^A-Za-z0-9]/g, "")
+    .slice(0, 32)
+    .toUpperCase();
+
+  return `BEACHSIDE_${key}_${index}`;
+}
 
 const profile: SnapshotProfile = {
   id: "runloop-disk",
@@ -581,11 +696,14 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         if (plan.status !== "supported") throw new AdapterError("UNSUPPORTED", plan.reason);
       }
 
+      const gateways = gatewayPlans(input);
+
       return {
         ...input,
         plan: {
           image: image ?? (await resolveImage(input.image.value, ctx)),
           policy: input.networkPolicy === "blocked" ? await findBlockedPolicy(ctx) : null,
+          gateways,
         },
       };
     };
@@ -742,6 +860,119 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
       return null;
     };
 
+    /** Delete account resources made for one devbox; returns those that may remain. */
+    const release = async (resources: Owned, signal: AbortSignal): Promise<string[]> => {
+      const left: string[] = [];
+
+      const attempt = async (remove: () => Promise<void>, label: string) => {
+        try {
+          await remove();
+        } catch (error) {
+          if (failure(error).status !== 404) left.push(label);
+        }
+      };
+
+      for (const name of resources.secrets)
+        await attempt(
+          () => native.deleteSecret(name, signalFor(readContext(signal))),
+          `runloop:secret:${name}`,
+        );
+
+      for (const id of resources.gateways)
+        await attempt(
+          () => native.deleteGatewayConfig(id, signalFor(readContext(signal))),
+          `runloop:gateway-config:${id}`,
+        );
+
+      return left;
+    };
+
+    /**
+     * Store plain and brokered secret values as account secrets and make one gateway config per
+     * brokered secret, all named for this attempt. Values never reach messages: native errors
+     * are redacted with them.
+     */
+    const provision = async (
+      input: PreparedCreate,
+      ctx: AttemptContext,
+    ): Promise<
+      | { status: "ready"; owned: Owned; body: Pick<CreateDevboxBody, "secrets" | "gateways"> }
+      | {
+          status: "failed";
+          result: ReturnType<AttemptContext["reject"]> | ReturnType<AttemptContext["unknown"]>;
+        }
+    > => {
+      const made: Owned = { secrets: [], gateways: [] };
+      const plain = input.secretEnv ?? [];
+
+      const values = [
+        ...plain.map((env) => input.env?.[env] ?? ""),
+        ...secretValues(input.secrets),
+      ];
+
+      const body: Pick<CreateDevboxBody, "secrets" | "gateways"> = {};
+
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Native client throws are normalized at this boundary.
+      const failed = async (error: unknown, reason: string) => {
+        const native = failure(error);
+
+        let message = native.error.message;
+
+        for (const value of values.filter(Boolean).sort((a, b) => b.length - a.length))
+          message = message.replaceAll(value, "[secret]");
+        const left = await release(made, ctx.signal);
+
+        return {
+          status: "failed" as const,
+          result:
+            refusedBeforeEffect(native) && !left.length
+              ? ctx.reject(native.error.code, message)
+              : ctx.unknown(`${reason}; ${left.join(", ") || "it"} may remain; do not replay`),
+        };
+      };
+
+      const store = async (value: string) => {
+        const name = ownedName(ctx.submissionId, made.secrets.length);
+        await native.createSecret(name, value, signalFor(readContext(ctx.signal)));
+        made.secrets.push(name);
+
+        return name;
+      };
+
+      try {
+        for (const env of plain) {
+          body.secrets ??= {};
+          body.secrets[env] = await store(input.env?.[env] ?? "");
+        }
+      } catch (error) {
+        return failed(error, "Runloop secret creation was not confirmed");
+      }
+
+      for (const plan of input.plan.gateways) {
+        try {
+          const secret = await store(plan.binding.value);
+
+          const config = await native.createGatewayConfig(
+            {
+              name: `beachside-${ownedName(ctx.submissionId, made.gateways.length).toLowerCase()}`,
+              endpoint: plan.endpoint,
+              auth_mechanism: plan.auth,
+              description: "Beachside brokered secret; deleted with its devbox",
+            },
+            signalFor(readContext(ctx.signal)),
+          );
+
+          made.gateways.push(config.id);
+          body.gateways ??= {};
+          body.gateways[plan.binding.env] = { gateway: config.id, secret };
+        } catch (error) {
+          return failed(error, "Runloop gateway setup was not confirmed");
+        }
+      }
+
+      return { status: "ready", owned: made, body };
+    };
+
     const makeCreation = (snapshotId?: string) => ({
       recovery: { version: 1, token: CreateToken },
       async submit(input: PreparedCreate, ctx: AttemptContext<z.infer<typeof CreateToken>>) {
@@ -754,18 +985,39 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
           policy = ensured.policy;
         }
 
-        const body: CreateDevboxBody = {
-          ...(snapshotId === undefined ? input.plan.image : { snapshot_id: snapshotId }),
-          metadata: {
-            [MARK.operation]: ctx.operationId,
-            [MARK.submission]: ctx.submissionId,
-            [MARK.network]: input.networkPolicy,
-          },
-          launch_parameters: launchParameters(config, size, policy, input.lifetimeSeconds),
-          tunnel: { auth_mode: config.preview.access === "public" ? "open" : "authenticated" },
+        const provisioned = await provision(input, ctx);
+
+        if (provisioned.status === "failed") return provisioned.result;
+        const made = provisioned.owned;
+
+        const metadata: CreateDevboxBody["metadata"] = {
+          [MARK.operation]: ctx.operationId,
+          [MARK.submission]: ctx.submissionId,
+          [MARK.network]: input.networkPolicy,
         };
 
-        if (input.env && Object.keys(input.env).length) body.environment_variables = input.env;
+        if (made.secrets.length) metadata[MARK.secrets] = made.secrets.join(",");
+
+        if (made.gateways.length) metadata[MARK.gateways] = made.gateways.join(",");
+
+        const body: CreateDevboxBody = {
+          ...(snapshotId === undefined ? input.plan.image : { snapshot_id: snapshotId }),
+          metadata,
+          launch_parameters: launchParameters(config, size, policy, input.lifetimeSeconds),
+          tunnel: { auth_mode: config.preview.access === "public" ? "open" : "authenticated" },
+          ...provisioned.body,
+        };
+
+        // Plain secrets reach the devbox through account secrets, never the definition.
+        const stored = new Set(input.secretEnv);
+
+        const env = Object.fromEntries(
+          Object.entries(input.env ?? {}).filter(([name]) => !stored.has(name)),
+        );
+
+        for (const plan of input.plan.gateways) env[plan.baseUrl] = GATEWAY_URL;
+
+        if (Object.keys(env).length) body.environment_variables = env;
 
         let id: string;
 
@@ -775,7 +1027,16 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
           if (error instanceof AdapterError && error.code === "INTERNAL")
             return ctx.unknown("Runloop create acknowledgement has no usable devbox id");
 
-          return rejection(ctx, error, "Runloop create response was not confirmed");
+          const native = failure(error);
+
+          if (!refusedBeforeEffect(native))
+            return ctx.unknown("Runloop create response was not confirmed; do not replay");
+
+          const left = await release(made, ctx.signal);
+
+          return left.length
+            ? ctx.unknown(`${native.error.message}; ${left.join(", ")} may remain`)
+            : ctx.reject(native.error.code, native.error.message);
         }
 
         try {
@@ -1097,7 +1358,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
     };
 
     // A restore boots fresh from the disk snapshot, so env applies as on create.
-    const restoreOptions: RestoreOptions = { env: true };
+    const restoreOptions: RestoreOptions = { env: true, secrets: true };
 
     const result: AdapterSession<
       PreparedCreate,
@@ -1116,6 +1377,9 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
         fileWrite: { overwrite: true, noClobber: false },
         createEnv: true,
+        // Plain secrets live in Runloop account secrets, not the devbox definition.
+        secretStore: true,
+        secrets: SECRET_SUPPORT,
       },
       create: {
         ...makeCreation(),
@@ -1192,18 +1456,27 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
               "Runloop devbox is unavailable in the verified account",
             );
 
-          return { ...input, alreadyShutdown: devbox.status === "shutdown" };
+          return {
+            ...input,
+            alreadyShutdown: devbox.status === "shutdown",
+            owned: owned(devbox),
+          };
         },
         async submit(input, ctx) {
-          if (input.alreadyShutdown) return { computeStopped: true, retainedResources: [] };
+          // Account secrets and gateway configs belong to the devbox; leftovers are reported.
+          const stopped = async () => ({
+            computeStopped: true,
+            retainedResources: await release(input.owned, ctx.signal),
+          });
+
+          if (input.alreadyShutdown) return stopped();
           const token = { id: Id.parse(input.id) };
           await ctx.checkpoint(token);
 
           try {
             const devbox = await native.shutdown(token.id, signalFor(readContext(ctx.signal)));
 
-            if (devbox.id === token.id && devbox.status === "shutdown")
-              return { computeStopped: true, retainedResources: [] };
+            if (devbox.id === token.id && devbox.status === "shutdown") return stopped();
           } catch (error) {
             const native = failure(error);
 
@@ -1218,7 +1491,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
               (await find(token.id, read))?.status === "shutdown" ? true : undefined,
             );
 
-            if (done) return { computeStopped: true, retainedResources: [] };
+            if (done) return stopped();
           } catch {
             /* Shutdown is acknowledged; completion continues through observation. */
           }
@@ -1232,7 +1505,11 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
             return ctx.unknown("Runloop shutdown identity is unavailable; do not replay");
           const devbox = await find(token.data.id, ctx);
 
-          if (devbox?.status === "shutdown") return { computeStopped: true, retainedResources: [] };
+          if (devbox?.status === "shutdown")
+            return {
+              computeStopped: true,
+              retainedResources: await release(owned(devbox), ctx.signal),
+            };
 
           if (!devbox || devbox.status === "failure")
             return ctx.unknown(

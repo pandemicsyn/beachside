@@ -88,6 +88,7 @@ import {
   type SnapshotPlan,
   type CreatePlan,
   type DirectCapabilities,
+  type SecretSupport,
 } from "@beachside/adapter";
 import { z } from "zod";
 import {
@@ -2478,7 +2479,10 @@ export class AdapterDirectClient {
       images: [...support.images],
       imageBuild: !!this.session.imageBuild,
       createEnv: !!support.createEnv,
-      secrets: support.secrets ? { ...support.secrets } : null,
+      secrets: {
+        stored: !!support.secretStore,
+        brokered: support.secrets ? brokeredCapability(support.secrets) : null,
+      },
       lifetime: support.lifetime ? { ...support.lifetime } : null,
       network: [...support.network],
       exec: !!this.session.exec && !!support.exec,
@@ -2534,6 +2538,7 @@ export class AdapterDirectClient {
           requirements: request.requirements,
           mounts: request.mounts,
           env: request.env,
+          secretEnv: request.secretEnv,
           secrets: request.secrets,
           lifetimeSeconds: request.lifecycle?.lifetimeSeconds,
         },
@@ -2602,6 +2607,7 @@ export class AdapterDirectClient {
         requirements: request.requirements,
         mounts: request.mounts,
         env: request.env,
+        secretEnv: request.secretEnv,
         secrets: request.secrets,
         lifetimeSeconds: request.lifecycle?.lifetimeSeconds,
       },
@@ -3351,4 +3357,10 @@ export async function connectDirect<
   } finally {
     budget.dispose();
   }
+}
+
+function brokeredCapability(support: SecretSupport) {
+  const { hosts, ...rest } = support;
+
+  return hosts ? { ...rest, hosts: [...hosts] } : rest;
 }

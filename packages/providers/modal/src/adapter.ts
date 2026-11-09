@@ -432,6 +432,8 @@ export function createModalAdapter(
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          // Modal's SDK sends create env as an ephemeral Modal Secret, never the sandbox definition.
+          secretStore: true,
           lifetime: { minSeconds: 1, maxSeconds: MAX_LIFETIME_SECONDS },
         },
         create: {

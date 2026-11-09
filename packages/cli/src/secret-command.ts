@@ -1,7 +1,7 @@
-import { secret, type SecretOptions } from "beachside";
+import { secret } from "beachside";
 import type { Flags } from "./commands";
 import { usage } from "./output";
-import { secretSourceKind } from "./secrets";
+import { secretSourceKind, targetFrom } from "./secrets";
 import type { Session } from "./session";
 import { listAll } from "./store";
 
@@ -20,20 +20,15 @@ export async function secretCommand(session: Session, flags: Flags): Promise<num
   const records = (await listAll(await session.store(), "sandbox")).map((entry) => entry.record);
 
   const rows = Object.entries(named).map(([name, config]) => {
-    const options: SecretOptions = {};
-
-    if (config.for) options.for = config.for;
-
-    if (config.hosts) options.hosts = config.hosts;
+    const { value, ...fields } = config;
+    const target = targetFrom(fields, `secrets.${name}`);
 
     return {
       name,
-      mode: config.exposed ? ("exposed" as const) : ("brokered" as const),
+      mode: target ? ("brokered" as const) : ("plain" as const),
       preset: config.for ?? null,
-      hosts: config.exposed
-        ? []
-        : [...new Set(secret("probe", options).rules.map((rule) => rule.host))],
-      source: secretSourceKind(config.value),
+      hosts: target ? [...new Set(secret("probe", target).rules.map((rule) => rule.host))] : [],
+      source: secretSourceKind(value),
       usedBy: records
         .filter((record) => record.secrets?.some((bound) => bound.named === name))
         .map((record) => record.name),

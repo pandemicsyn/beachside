@@ -173,7 +173,7 @@ export type { SandboxScopeOptions, SandboxScopeCallbackOutcome } from "./scoped-
 
 export { secret, Secret } from "./secrets";
 
-export type { SecretOptions, EnvValue } from "./secrets";
+export type { SecretOptions, SecretTarget, EnvValue } from "./secrets";
 
 export { SECRET_PRESETS } from "@beachside/adapter";
 

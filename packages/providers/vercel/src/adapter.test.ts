@@ -1928,7 +1928,7 @@ test("brokered secrets become header transforms on an allow-all custom policy", 
   });
 
   try {
-    expect((await client.capabilities()).secrets).toMatchObject({ delivery: "header" });
+    expect((await client.capabilities()).secrets?.brokered).toMatchObject({ delivery: "header" });
 
     const box = await client.sandboxes.create({
       env: { MODE: "x", ANTHROPIC_API_KEY: secret(KEY, { for: "anthropic" }) },
@@ -1961,7 +1961,7 @@ test("brokered secrets become header transforms on an allow-all custom policy", 
   });
 
   try {
-    expect((await refusing.capabilities()).secrets).toBeNull();
+    expect((await refusing.capabilities()).secrets?.brokered).toBeNull();
     await expect(
       refusing.sandboxes.create({ env: { K: secret(KEY, { for: "anthropic" }) } }),
     ).rejects.toThrow(/unsupported/i);

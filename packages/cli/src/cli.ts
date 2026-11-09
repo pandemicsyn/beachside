@@ -125,7 +125,7 @@ const createFlags = {
     multiple: true,
     value: "K=secret",
     description:
-      "Credential kept out of the sandbox: K=<named secret> or K=<source>@<preset|host>[,...]; append :exposed to put the value in env (repeatable)",
+      "Secret for the sandbox env: K=<named secret> or K=<source> (env:, gh:, op://, bws://, pass://); add @<preset|host>[,...] to keep the value out of the sandbox (repeatable)",
   },
   build: {
     type: "boolean",

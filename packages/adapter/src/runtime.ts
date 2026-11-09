@@ -21,8 +21,8 @@ import {
 import { LifecycleInput, SuspendResult, ResumeResult, RenewInput, RenewResult } from "./lifecycle";
 import { z } from "zod";
 import { lifetimeProblem } from "./lifetime";
-import { SecretBindings, secretsProblem } from "./secrets";
-import { restoreOptionProblem } from "./state";
+import { SecretBindings, SecretEnvNames, secretsProblem } from "./secrets";
+import { createEnvProblem, restoreOptionProblem } from "./state";
 import {
   CreateEnv,
   CreateSandboxInput,
@@ -185,6 +185,7 @@ const CreateInputSchema = z.strictObject({
   mounts: z.array(MountSpec).max(32).optional(),
   env: CreateEnv.optional(),
   secrets: SecretBindings.optional(),
+  secretEnv: SecretEnvNames.optional(),
   lifetimeSeconds: z.number().int().positive().safe().optional(),
 });
 
@@ -649,11 +650,9 @@ function checkCapability(
 
     if (request.env && !Object.keys(request.env).length) delete request.env;
 
-    if (request.env && !session.supports.createEnv)
-      throw new AdapterError(
-        "UNSUPPORTED",
-        "Create-time environment variables are unsupported by this adapter",
-      );
+    const envProblem = createEnvProblem(session.supports, request.env, request.secretEnv);
+
+    if (envProblem) throw new AdapterError("UNSUPPORTED", envProblem);
 
     if (request.secrets && !request.secrets.length) delete request.secrets;
     const secrets = secretsProblem(session.supports.secrets, request.secrets);
@@ -662,6 +661,11 @@ function checkCapability(
 
     if (request.secrets?.some((binding) => request.env && Object.hasOwn(request.env, binding.env)))
       throw new AdapterError("INVALID_ARGUMENT", "A secret and an env entry share a name");
+
+    if (request.secretEnv && !request.secretEnv.length) delete request.secretEnv;
+
+    if (request.secretEnv?.some((name) => !request.env || !Object.hasOwn(request.env, name)))
+      throw new AdapterError("INVALID_ARGUMENT", "Secret env names must be env entries");
     const lifetime = lifetimeProblem(session.supports.lifetime, request.lifetimeSeconds);
 
     if (lifetime) throw new AdapterError("UNSUPPORTED", lifetime);

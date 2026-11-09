@@ -78,7 +78,7 @@ async function resourceRead<T>(
 /** SDK restore input; native RestoreRequest remains fully resolved. */
 export type RestoreInput = Omit<
   RestoreRequest,
-  "networkPolicy" | "lifetimeSeconds" | "env" | "secrets"
+  "networkPolicy" | "lifetimeSeconds" | "env" | "secrets" | "secretEnv"
 > & {
   /**
    * Environment for the restored sandbox. `secret(...)` values are brokered like on create, and
@@ -187,6 +187,8 @@ export class AdapterSnapshot {
 
     if (split.env) rest.env = split.env;
     else delete rest.env;
+
+    if (split.secretEnv) rest.secretEnv = split.secretEnv;
 
     if (split.secrets) {
       if (split.secrets.some((binding) => split.env && Object.hasOwn(split.env, binding.env)))

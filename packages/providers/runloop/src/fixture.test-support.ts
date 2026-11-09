@@ -75,6 +75,10 @@ const CreateBody = z
       .default({}),
     tunnel: z.object({ auth_mode: z.enum(["open", "authenticated"]) }).optional(),
     environment_variables: z.record(z.string(), z.string()).optional(),
+    secrets: z.record(z.string(), z.string()).optional(),
+    gateways: z
+      .record(z.string(), z.object({ gateway: z.string(), secret: z.string() }))
+      .optional(),
   })
   .default({ metadata: {}, launch_parameters: {} });
 
@@ -134,6 +138,9 @@ export function runloopFixture() {
   const executions = new Map<string, FixtureExecution>();
   const snapshots = new Map<string, FixtureSnapshot>();
   const policies = new Map<string, FixturePolicy>();
+  /** Account secrets by name; the fixture keeps values so tests can check what was stored. */
+  const accountSecrets = new Map<string, string>();
+  const gatewayConfigs = new Map<string, { name: string; endpoint: string; auth: Json }>();
   const calls: Call[] = [];
   const effects = { create: 0, destroy: 0, release: 0 };
   const commands: string[] = [];
@@ -298,6 +305,46 @@ export function runloopFixture() {
       const page = all.slice(start, start + limit);
 
       return json(200, { devboxes: page.map(view), has_more: start + limit < all.length });
+    }
+
+    if (method === "POST" && path === "/v1/secrets") {
+      const body = z.object({ name: z.string().regex(/^\w+$/), value: z.string() }).parse(raw);
+
+      if (accountSecrets.has(body.name)) return error(409, "secret exists");
+      accountSecrets.set(body.name, body.value);
+
+      return json(200, { id: `sec_${++sequence}`, name: body.name, create_time_ms: 1 });
+    }
+
+    const secretDelete = /^\/v1\/secrets\/(\w+)\/delete$/.exec(path);
+
+    if (method === "POST" && secretDelete?.[1]) {
+      if (!accountSecrets.delete(secretDelete[1])) return error(404);
+
+      return json(200, { id: "sec", name: secretDelete[1] });
+    }
+
+    if (method === "POST" && path === "/v1/gateway-configs") {
+      const body = z
+        .object({ name: z.string(), endpoint: z.string(), auth_mechanism: z.json() })
+        .parse(raw);
+
+      const id = `gwc_${++sequence}`;
+      gatewayConfigs.set(id, {
+        name: body.name,
+        endpoint: body.endpoint,
+        auth: body.auth_mechanism,
+      });
+
+      return json(200, { id, name: body.name, endpoint: body.endpoint });
+    }
+
+    const gatewayDelete = /^\/v1\/gateway-configs\/(\w+)\/delete$/.exec(path);
+
+    if (method === "POST" && gatewayDelete?.[1]) {
+      if (!gatewayConfigs.delete(gatewayDelete[1])) return error(404);
+
+      return json(200, { id: gatewayDelete[1] });
     }
 
     if (method === "GET" && path === "/v1/network-policies") {
@@ -570,6 +617,8 @@ export function runloopFixture() {
     devboxes,
     snapshots,
     policies,
+    accountSecrets,
+    gatewayConfigs,
     workdir,
     logQueries,
     count: (method: string, pattern: RegExp) =>

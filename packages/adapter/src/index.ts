@@ -92,6 +92,12 @@ export type CreateInput = {
    */
   secrets?: import("./secrets").SecretBinding[];
   /**
+   * Names in `env` whose values are plain secrets. Adapters with a secret store
+   * (`supports.secretStore`) keep these there instead of in the plain sandbox definition;
+   * others treat them as ordinary env. Never persist the values.
+   */
+  secretEnv?: string[];
+  /**
    * Wall-clock lifetime for this sandbox, replacing the setup `lifecycle.lifetimeSeconds`.
    * The runtime checks it against `supports.lifetime` before `prepare`.
    */
@@ -357,6 +363,8 @@ export type Guarantees<C extends Command["kind"] = Command["kind"]> = {
    * Absent rejects any create `secrets`; Beachside never falls back to plain env.
    */
   secrets?: import("./secrets").SecretSupport;
+  /** Plain secrets (`CreateInput.secretEnv`) are kept in the provider's secret store. */
+  secretStore?: boolean;
   /**
    * Per-create `lifetimeSeconds` this connection applies natively, in whole seconds. Absent
    * rejects a per-create lifetime; the setup lifetime still applies.

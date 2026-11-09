@@ -1,7 +1,13 @@
 import { filesystem, directoryValue, statValue } from "./filesystem";
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { NotFoundError, type Disk, type Machine, type Snapshot } from "@boxd-sh/sdk";
+import {
+  MACHINE_SPEC_VERSION,
+  NotFoundError,
+  type Disk,
+  type Machine,
+  type Snapshot,
+} from "@boxd-sh/sdk";
 import {
   AdapterError,
   AdapterFilesystemError,
@@ -142,10 +148,48 @@ const CreateToken = z.strictObject({
   stage: z.enum(["created", "expiry-installed", "ready"]),
 });
 
+/** boxd exports each secret under its own name, so names are environment variable names. */
+const SecretName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/);
+
 const DestroyToken = z.strictObject({
   id: Id,
   mounts: z.array(z.strictObject({ id: Id, path: z.string().max(4096) })).max(128),
+  /** Unattached secrets the machine's spec named; removed once no machine lists them. */
+  secrets: z.array(SecretName).max(64).optional(),
 });
+
+/** One secret a create stores before the machine exists. */
+type SecretPut = { name: string; value: string; domains?: string[] };
+
+/**
+ * Secrets for a create: private unattached secrets reach only machines whose spec lists them.
+ * A plain secret holds the real value; a host-bound one leaves a `bxds_` placeholder in the
+ * machine, which boxd swaps for the value in HTTPS requests to its hosts.
+ */
+function secretPuts(input: {
+  env?: Record<string, string>;
+  secretEnv?: string[];
+  secrets?: import("@beachside/adapter").SecretBinding[];
+}): SecretPut[] {
+  return [
+    ...(input.secretEnv ?? []).map((name) => ({ name, value: input.env?.[name] ?? "" })),
+    ...(input.secrets ?? []).map((binding) => ({
+      name: binding.env,
+      value: binding.value,
+      domains: [...new Set(binding.rules.map((rule) => rule.host))],
+    })),
+  ];
+}
+
+/** Host-bound boxd secrets: placeholder swap in URL, headers (Basic included) and body. */
+const SECRET_SUPPORT = {
+  delivery: "placeholder" as const,
+  basicAuth: true,
+  wildcardHosts: true,
+  maxSecrets: 64,
+  // Secrets are named by their variable, so two sandboxes using one name share its value.
+  shared: true,
+};
 
 const DiskToken = z.strictObject({ id: Id });
 
@@ -169,7 +213,10 @@ const SnapshotDeleteToken = z.strictObject({ id: SnapshotId });
 
 type Created = z.infer<typeof CreateToken>;
 
-type DestroyPrepared = DestroyInput & { mounts: { id: string; path: string }[] };
+type DestroyPrepared = DestroyInput & {
+  mounts: { id: string; path: string }[];
+  secrets: string[];
+};
 
 function state(native: Machine["status"]): SandboxState {
   switch (native) {
@@ -539,12 +586,88 @@ export function createBoxdAdapter(
       };
 
       /** Create from an image, or restore an exact snapshot generation; then expiry and readiness. */
+      /**
+       * Delete the named private unattached secrets that no machine's spec lists any more;
+       * returns those that may remain. A secret another sandbox still lists is kept for it.
+       */
+      const releaseSecrets = async (names: readonly string[], signal: AbortSignal) => {
+        if (!names.length) return [];
+        let listed: { name: string; scope: string; boundMachines: number }[];
+
+        try {
+          listed = await native.run(readContext(signal), () =>
+            native.secrets.list({ org: org.slug }),
+          );
+        } catch {
+          return names.map((name) => `boxd:secret:${name}`);
+        }
+
+        const left: string[] = [];
+
+        for (const name of names) {
+          const secret = listed.find(
+            (item) => item.name === name && item.scope === "private-unattached",
+          );
+
+          if (!secret || secret.boundMachines > 0) continue;
+
+          try {
+            await native.run(readContext(signal), () =>
+              native.secrets.delete(name, { scope: "private-unattached", org: org.slug }),
+            );
+          } catch (error) {
+            if (nativeError(error).code !== "NOT_FOUND") left.push(`boxd:secret:${name}`);
+          }
+        }
+
+        return left;
+      };
+
       const launch = async (
-        source:
-          | { image: string; mounts: MountSpec[]; lifetimeSeconds?: number }
-          | { snapshot: { id: string; version: number }; lifetimeSeconds?: number },
+        source: (
+          | { image: string; mounts: MountSpec[] }
+          | { snapshot: { id: string; version: number } }
+        ) & { lifetimeSeconds?: number; secrets: SecretPut[] },
         ctx: AttemptContext<Created>,
       ) => {
+        // Values never reach messages: native errors are redacted with them.
+        const hidden = [credentials.apiKey, ...source.secrets.map((put) => put.value)];
+
+        for (const [index, put] of source.secrets.entries())
+          try {
+            await native.run(readContext(ctx.signal), () =>
+              native.secrets.set(put.name, put.value, {
+                scope: "private-unattached",
+                org: org.slug,
+                domains: put.domains,
+              }),
+            );
+          } catch (error) {
+            const left = await releaseSecrets(
+              source.secrets.slice(0, index + 1).map((done) => done.name),
+              ctx.signal,
+            );
+
+            const rejected = createRejection(error, hidden);
+
+            return rejected && !left.length
+              ? ctx.reject(
+                  rejected.code,
+                  rejected.message.replace("sandbox creation", "secret storage"),
+                )
+              : ctx.unknown(
+                  `boxd secret ${put.name} was not confirmed; ${left.join(", ") || "it"} may remain; do not replay`,
+                );
+          }
+
+        const spec = source.secrets.length
+          ? {
+              version: MACHINE_SPEC_VERSION,
+              isolated: true,
+              secrets: source.secrets.map((put) => put.name),
+            }
+          : undefined;
+
         const lifetimeSeconds =
           source.lifetimeSeconds !== undefined
             ? machineLifetime(source.lifetimeSeconds)
@@ -578,10 +701,10 @@ export function createBoxdAdapter(
               native.machines.create(
                 "image" in source
                   ? {
-                      image: source.image,
+                      // A spec create starts from the cluster default image; prepare checks it.
+                      ...(spec ? { spec } : { image: source.image, isolated: true }),
                       name: nativeName(ctx.submissionId),
                       org: org.slug,
-                      isolated: true,
                       config: {
                         vcpu,
                         proxies,
@@ -599,6 +722,7 @@ export function createBoxdAdapter(
                       name: nativeName(ctx.submissionId),
                       org: org.slug,
                       isolated: true,
+                      spec,
                       config: { proxies, autoSuspendTimeout: 0 },
                     },
               ),
@@ -611,11 +735,15 @@ export function createBoxdAdapter(
               "boxd machine exists; creation metadata could not be verified",
               partial(acknowledged, ctx),
             );
-          const rejected = createRejection(error, [credentials.apiKey]);
+          const rejected = createRejection(error, hidden);
 
-          return rejected
-            ? ctx.reject(rejected.code, rejected.message)
-            : ctx.unknown("boxd create response was not confirmed; do not replay");
+          if (!rejected)
+            return ctx.unknown("boxd create response was not confirmed; do not replay");
+          const left = await releaseSecrets(spec?.secrets ?? [], ctx.signal);
+
+          return left.length
+            ? ctx.unknown(`${rejected.message}; ${left.join(", ")} may remain`)
+            : ctx.reject(rejected.code, rejected.message);
         }
 
         if (!Id.safeParse(machine.id).success)
@@ -927,6 +1055,9 @@ export function createBoxdAdapter(
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           lifetime: { minSeconds: 1, maxSeconds: Number.MAX_SAFE_INTEGER },
+          // Plain secrets live in boxd's secret store; create env is otherwise unavailable.
+          secretStore: true,
+          secrets: SECRET_SUPPORT,
         },
         create: {
           recovery: { version: 1, token: CreateToken },
@@ -941,6 +1072,12 @@ export function createBoxdAdapter(
                 "UNSUPPORTED",
                 "boxd requires OCI images and internet policy; regions and labels are unavailable",
               );
+
+            if (secretPuts(input).length && input.image.value !== cluster.defaultImage)
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "boxd attaches secrets through a machine spec, which starts from the default image; use the default image or a snapshot",
+              );
             await mountCheck(input, ctx);
 
             return input;
@@ -951,6 +1088,7 @@ export function createBoxdAdapter(
                 image: input.image.value,
                 mounts: input.mounts ?? [],
                 lifetimeSeconds: input.lifetimeSeconds,
+                secrets: secretPuts(input),
               },
               ctx,
             ),
@@ -1007,7 +1145,11 @@ export function createBoxdAdapter(
         destroy: {
           recovery: { version: 1, token: DestroyToken },
           async prepare(input, ctx) {
-            await requireMachine(input, ctx);
+            const machine = await requireMachine(input, ctx);
+
+            const secrets = (machine.spec?.secrets ?? []).filter(
+              (name) => SecretName.safeParse(name).success,
+            );
 
             const attached = (await disks(ctx)).filter((disk) =>
               disk.attachments.some((attachment) => attachment.machineId === input.id),
@@ -1031,10 +1173,10 @@ export function createBoxdAdapter(
                 "boxd retained mount identity exceeds recovery bound",
               );
 
-            return { ...input, mounts };
+            return { ...input, mounts, secrets };
           },
           async submit(input, ctx) {
-            const token = { id: input.id, mounts: input.mounts };
+            const token = { id: input.id, mounts: input.mounts, secrets: input.secrets };
             await ctx.checkpoint(token);
 
             try {
@@ -1049,7 +1191,10 @@ export function createBoxdAdapter(
               if (!(await find(input.id, readContext(ctx.signal))))
                 return {
                   computeStopped: true,
-                  retainedResources: token.mounts.map((mount) => mount.id),
+                  retainedResources: [
+                    ...token.mounts.map((mount) => mount.id),
+                    ...(await releaseSecrets(token.secrets, ctx.signal)),
+                  ],
                   mountDurability: token.mounts.map((mount) => ({
                     volume: reference("volume", mount.id),
                     path: mount.path,
@@ -1072,7 +1217,10 @@ export function createBoxdAdapter(
               ? ctx.pending(token.data, { pollAfterMs: 500 })
               : {
                   computeStopped: true,
-                  retainedResources: token.data.mounts.map((mount) => mount.id),
+                  retainedResources: [
+                    ...token.data.mounts.map((mount) => mount.id),
+                    ...(await releaseSecrets(token.data.secrets ?? [], ctx.signal)),
+                  ],
                   mountDurability: token.data.mounts.map((mount) => ({
                     volume: reference("volume", mount.id),
                     path: mount.path,
@@ -1470,8 +1618,11 @@ export function createBoxdAdapter(
         },
         snapshotRestore: {
           recovery: { version: 1, token: CreateToken },
-          // boxd has no create-time env or labels; the lifetime applies as on create.
-          options: { lifetime: { minSeconds: 1, maxSeconds: Number.MAX_SAFE_INTEGER } },
+          // boxd has no create-time env or labels; secrets and the lifetime apply as on create.
+          options: {
+            lifetime: { minSeconds: 1, maxSeconds: Number.MAX_SAFE_INTEGER },
+            secrets: true,
+          },
           async prepare(input, ctx) {
             if (input.request.resources || input.request.mounts?.length)
               throw new AdapterError(
@@ -1493,6 +1644,7 @@ export function createBoxdAdapter(
                   version: checkedSnapshot(input.snapshot)!,
                 },
                 lifetimeSeconds: input.request.lifetimeSeconds,
+                secrets: secretPuts(input.request),
               },
               ctx,
             ),

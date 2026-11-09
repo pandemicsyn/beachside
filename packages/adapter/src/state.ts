@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { AdapterError } from "./errors";
 import { LifetimeLimits, lifetimeProblem } from "./lifetime";
-import { SecretBindings, secretsProblem } from "./secrets";
-import type { CreateInput, ReadContext, RuntimeSession, Sandbox } from "./index";
+import { SecretBindings, SecretEnvNames, secretsProblem } from "./secrets";
+import type { CreateInput, Guarantees, ReadContext, RuntimeSession, Sandbox } from "./index";
 
 export const ResourceKind = z.enum([
   "sandbox",
@@ -303,6 +303,8 @@ export const RestoreRequest = z.strictObject({
   env: z.record(z.string(), z.string()).optional(),
   /** Brokered secrets for the restored sandbox; checked like create secrets. */
   secrets: SecretBindings.optional(),
+  /** Names in `env` that hold plain secrets. */
+  secretEnv: SecretEnvNames.optional(),
   labels: z.record(z.string().min(1).max(64), z.string().max(256)).optional(),
   /** This sandbox's lifetime, replacing the adapter setup's. */
   lifetimeSeconds: z.number().int().positive().safe().optional(),
@@ -321,12 +323,35 @@ export const RestoreOptions = z.strictObject({
 
 export type RestoreOptions = z.infer<typeof RestoreOptions>;
 
+/**
+ * Why this adapter cannot set this create-time env, or null. Plain secrets (`secretEnv`) also
+ * work on an adapter without create env when it keeps them in a provider secret store.
+ */
+export function createEnvProblem(
+  supports: Pick<Guarantees, "createEnv" | "secretStore">,
+  env: Readonly<Record<string, string>> | undefined,
+  secretEnv: readonly string[] | undefined,
+): string | null {
+  if (supports.createEnv || !env) return null;
+  const stored = new Set(supports.secretStore ? secretEnv : []);
+
+  if (Object.keys(env).some((name) => !stored.has(name)))
+    return supports.secretStore
+      ? "Create-time environment variables are unsupported by this adapter; it accepts only secret() values"
+      : "Create-time environment variables are unsupported by this adapter";
+
+  return null;
+}
+
 /** Why a restore request asks for an option this adapter does not apply, or null. */
 export function restoreOptionProblem(
   options: RestoreOptions | undefined,
-  request: Pick<RestoreRequest, "env" | "secrets" | "labels" | "lifetimeSeconds">,
+  request: Pick<RestoreRequest, "env" | "secretEnv" | "secrets" | "labels" | "lifetimeSeconds">,
 ): string | null {
-  if (request.env && Object.keys(request.env).length && !options?.env)
+  // Plain secrets restore through the secret store when the adapter brokers restore secrets.
+  const stored = new Set(options?.secrets ? request.secretEnv : []);
+
+  if (Object.keys(request.env ?? {}).some((name) => !stored.has(name)) && !options?.env)
     return "Restore-time environment variables are unsupported by this adapter";
 
   if (request.secrets?.length && !options?.secrets)
@@ -942,11 +967,9 @@ export async function checkCreate(
       reason: `Network policy '${input.networkPolicy}' is unsupported by this connection; supported policies: ${session.supports.network.join(", ") || "none"}. Configure a separate connection with the requested policy if the adapter supports it.`,
     };
 
-  if (input.env && Object.keys(input.env).length && !session.supports.createEnv)
-    return {
-      status: "unsupported",
-      reason: "Create-time environment variables are unsupported by this adapter",
-    };
+  const env = createEnvProblem(session.supports, input.env, input.secretEnv);
+
+  if (env) return { status: "unsupported", reason: env };
   const secrets = secretsProblem(session.supports.secrets, input.secrets);
 
   if (secrets) return { status: "unsupported", reason: secrets };
@@ -955,7 +978,7 @@ export async function checkCreate(
   if (lifetime) return { status: "unsupported", reason: lifetime };
 
   // Read-only capability hooks never need (possibly secret) environment values.
-  const { env: _env, secrets: _secrets, ...probe } = input;
+  const { env: _env, secrets: _secrets, secretEnv: _secretEnv, ...probe } = input;
 
   if (input.mounts?.length) {
     const mounts = z.array(MountSpec).max(32).parse(input.mounts);
@@ -1036,15 +1059,23 @@ export const DirectCapabilities = z.strictObject({
   network: z.array(z.string()),
   /** `create({ env })` sets sandbox-wide environment variables on this connection. */
   createEnv: z.boolean().optional(),
-  /** How `secret()` values are kept out of the sandbox on this connection; null when they cannot be. */
+  /** How `secret()` values are handled on this connection. */
   secrets: z
     .strictObject({
-      delivery: z.enum(["placeholder", "header"]),
-      basicAuth: z.boolean(),
-      wildcardHosts: z.boolean(),
-      maxSecrets: z.number().int().nonnegative(),
+      /** Plain secrets go to the provider's secret store rather than the sandbox definition. */
+      stored: z.boolean(),
+      /** How targeted secrets are kept out of the sandbox; null when they cannot be. */
+      brokered: z
+        .strictObject({
+          delivery: z.enum(["placeholder", "header", "gateway"]),
+          basicAuth: z.boolean(),
+          wildcardHosts: z.boolean(),
+          maxSecrets: z.number().int().nonnegative(),
+          hosts: z.array(z.string()).optional(),
+          shared: z.boolean().optional(),
+        })
+        .nullable(),
     })
-    .nullable()
     .optional(),
   /** Per-create `lifecycle.lifetimeSeconds` range on this connection; null when only setup sets it. */
   lifetime: LifetimeLimits.nullable().optional(),

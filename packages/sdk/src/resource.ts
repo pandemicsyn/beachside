@@ -78,8 +78,8 @@ export type CreateInput = {
    * Environment variables for every command, process and terminal in the sandbox,
    * including after reopen. A per-call `env` entry overrides the same key. Values are
    * never saved in recovery references or included in errors and telemetry. Wrap a
-   * credential in `secret(value, { for: "anthropic" })` to keep it out of the sandbox
-   * entirely, or `secret.exposed(value)` to mark it as a credential that may be visible.
+   * credential in `secret(value)` so the adapter can keep it in the provider's secret
+   * store, or `secret(value, { for: "anthropic" })` to keep it out of the sandbox entirely.
    */
   env?: Record<string, EnvValue>;
   /**
@@ -501,11 +501,12 @@ export type ValidatedCreate = Omit<CreateInput, "network" | "env"> & {
   environment: ImageInput;
   networkPolicy: string;
   env?: Record<string, string>;
+  secretEnv?: string[];
   secrets?: SecretBinding[];
 };
 
 export function validateCreate(
-  input: (CreateInput & { secrets?: SecretBinding[] }) | undefined,
+  input: (CreateInput & { secrets?: SecretBinding[]; secretEnv?: string[] }) | undefined,
   defaultEnvironment?: ImageInput,
   defaultNetworkPolicy = "blocked",
   networkPolicyAliases?: Readonly<Record<string, string>>,
@@ -516,8 +517,9 @@ export function validateCreate(
   if (input !== undefined && !raw)
     throw new BeachsideError("INVALID_ARGUMENT", "Invalid create request");
   // Already-validated requests are re-checked with their brokered bindings intact.
-  const { secrets: bound, ...rest } = raw ?? {};
-  const { env, secrets: split } = splitEnv(rest.env);
+  const { secrets: bound, secretEnv: boundEnv, ...rest } = raw ?? {};
+  const { env, secrets: split, secretEnv: splitSecretEnv } = splitEnv(rest.env);
+  const secretEnv = [...(boundEnv ?? []), ...(splitSecretEnv ?? [])];
   const given = bound === undefined ? undefined : SecretBindings.safeParse(bound);
 
   if (given && !given.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid secrets");
@@ -534,6 +536,12 @@ export function validateCreate(
     if (secrets.some((binding) => request.env && Object.hasOwn(request.env, binding.env)))
       throw new BeachsideError("INVALID_ARGUMENT", "A secret and an env entry share a name");
     request.secrets = secrets;
+  }
+
+  if (secretEnv.length) {
+    if (secretEnv.some((name) => !request.env || !Object.hasOwn(request.env, name)))
+      throw new BeachsideError("INVALID_ARGUMENT", "Invalid secret env names");
+    request.secretEnv = [...new Set(secretEnv)];
   }
 
   return request;

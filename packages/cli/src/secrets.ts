@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import type { Json } from "@beachside/adapter";
-import { BeachsideError, SECRET_PRESETS, secret, type Secret, type SecretOptions } from "beachside";
+import { BeachsideError, SECRET_PRESETS, secret, type Secret, type SecretTarget } from "beachside";
 import { z } from "zod";
 import type { Env } from "./config";
 import { CliError, usage } from "./output";
@@ -228,13 +228,12 @@ const Preset = z.enum(Object.keys(SECRET_PRESETS) as [keyof typeof SECRET_PRESET
 export const SecretConfig = z.strictObject({
   /** A literal, env:NAME, gh:, op://, bws:// or pass:// */
   value: z.string().min(1),
+  /** With `for` or `hosts` the value is kept out of the sandbox; without, it is a plain secret. */
   for: Preset.optional(),
-  hosts: z.array(z.string().min(1)).max(32).optional(),
+  hosts: z.array(z.string().min(1)).min(1).max(32).optional(),
   header: z.string().min(1).optional(),
   format: z.enum(["raw", "bearer", "basic"]).optional(),
   username: z.string().min(1).optional(),
-  /** Put the real value in the sandbox environment instead of brokering it. */
-  exposed: z.boolean().optional(),
 });
 
 export type SecretConfig = z.infer<typeof SecretConfig>;
@@ -242,7 +241,7 @@ export type SecretConfig = z.infer<typeof SecretConfig>;
 /** What the store keeps about a sandbox's secret: never the value or where it came from. */
 export const SecretRecord = z.strictObject({
   env: z.string().min(1),
-  mode: z.enum(["brokered", "exposed"]),
+  mode: z.enum(["plain", "brokered"]),
   hosts: z.array(z.string()),
   /** The beachside.json secret it came from, when named. */
   named: z.string().optional(),
@@ -254,8 +253,8 @@ export type SecretRecord = z.infer<typeof SecretRecord>;
 export type SecretSpec = {
   env: string;
   source: string;
-  exposed: boolean;
-  options: SecretOptions;
+  /** Where the value is used; absent for a plain secret. */
+  target?: SecretTarget;
   named?: string;
   /** Whether the value may be a literal (only from beachside.json). */
   literal: boolean;
@@ -263,17 +262,39 @@ export type SecretSpec = {
 
 const EnvName = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-function rulesFor(options: SecretOptions, where: string) {
+const SecretName = /^[a-z0-9][a-z0-9_-]{0,62}$/;
+
+type TargetFields = Omit<SecretConfig, "value">;
+
+/** A target from preset and hosts, checked now so a bad host fails before any value is read. */
+export function targetFrom(fields: TargetFields, where: string): SecretTarget | undefined {
+  const { for: preset, hosts, ...header } = fields;
+  const [first, ...more] = hosts ?? [];
+  let target: SecretTarget | undefined;
+
+  if (first !== undefined) target = { ...header, hosts: [first, ...more] };
+
+  if (preset !== undefined) target = { ...target, ...header, for: preset };
+
+  if (!target) {
+    if (Object.keys(header).length) throw usage(`${where}: header, format and username need hosts`);
+
+    return undefined;
+  }
+
   try {
-    return [...secret("probe", options).rules];
+    secret("probe", target);
   } catch (error) {
     throw usage(`${where}: ${error instanceof BeachsideError ? error.message : String(error)}`);
   }
+
+  return target;
 }
 
 /**
- * `--secret NAME=<named>` uses a secret from beachside.json; `--secret NAME=<source>@<preset|host>[,...]`
- * brokers a value to a preset's or listed hosts; a trailing `:exposed` puts the real value in env.
+ * `--secret NAME=<named>` uses a secret from beachside.json; `--secret NAME=<source>` puts the
+ * value in the sandbox as a plain secret; `--secret NAME=<source>@<preset|host>[,...]` keeps it
+ * out of the sandbox, added by the provider to HTTPS requests for those hosts.
  */
 export function parseSecretFlags(
   entries: readonly string[],
@@ -287,81 +308,62 @@ export function parseSecretFlags(
 
     if (!EnvName.test(env))
       throw usage(
-        "--secret expects NAME=<named secret> or NAME=<source>@<preset|host>[:exposed]",
+        "--secret expects NAME=<named secret>, NAME=<source> or NAME=<source>@<preset|host>",
         "e.g. --secret ANTHROPIC_API_KEY=op://Dev/anthropic/key@anthropic",
       );
 
     if (specs.some((spec) => spec.env === env)) throw usage(`--secret ${env} is given twice`);
-    let rest = entry.slice(split + 1);
-    const exposed = rest.endsWith(":exposed");
-
-    if (exposed) rest = rest.slice(0, -":exposed".length);
+    const rest = entry.slice(split + 1);
     const at = rest.lastIndexOf("@");
 
     // A bare name refers to beachside.json; anything else is a value source.
-    if (at < 0 && !exposed && /^[a-z0-9][a-z0-9_-]{0,62}$/.test(rest)) {
+    if (at < 0 && SecretName.test(rest)) {
       const config = named?.[rest];
 
       if (!config)
         throw usage(
           `--secret ${env}=${rest} names no secret in beachside.json`,
           named && Object.keys(named).length
-            ? `named secrets: ${Object.keys(named).join(", ")}; or give <source>@<preset|host>`
-            : "add it to the secrets block of beachside.json, or give <source>@<preset|host>",
+            ? `named secrets: ${Object.keys(named).join(", ")}; or give a source such as env:NAME or op://...`
+            : "add it to the secrets block of beachside.json, or give a source such as env:NAME or op://...",
         );
-      specs.push(namedSpec(env, rest, config));
+      const { value, ...fields } = config;
+      const spec: SecretSpec = { env, source: value, named: rest, literal: true };
+      const target = targetFrom(fields, `secrets.${rest}`);
+
+      if (target) spec.target = target;
+      specs.push(spec);
       continue;
     }
 
     const source = at < 0 ? rest : rest.slice(0, at);
 
-    const targets =
-      at < 0
-        ? []
-        : rest
-            .slice(at + 1)
-            .split(",")
-            .filter(Boolean);
-
     if (!source) throw usage(`--secret ${env} needs a value source before @`);
-    const presets = targets.filter((target) => Object.hasOwn(SECRET_PRESETS, target));
+    const spec: SecretSpec = { env, source, literal: false };
 
-    if (presets.length > 1) throw usage(`--secret ${env} names more than one preset`);
-    const options: SecretOptions = {};
+    if (at >= 0) {
+      const targets = rest
+        .slice(at + 1)
+        .split(",")
+        .filter(Boolean);
 
-    if (presets[0]) options.for = Preset.parse(presets[0]);
-    const hosts = targets.filter((target) => !presets.includes(target));
+      if (!targets.length) throw usage(`--secret ${env} needs a preset or host after @`);
+      const presets = targets.filter((target) => Object.hasOwn(SECRET_PRESETS, target));
 
-    if (hosts.length) options.hosts = hosts;
+      if (presets.length > 1) throw usage(`--secret ${env} names more than one preset`);
+      const hosts = targets.filter((target) => !presets.includes(target));
+      const fields: TargetFields = {};
 
-    if (!exposed) {
-      if (!targets.length) throw usage(`--secret ${env} needs @<preset|host>, or :exposed`);
-      rulesFor(options, `--secret ${env}`);
+      if (presets[0]) fields.for = Preset.parse(presets[0]);
+
+      if (hosts.length) fields.hosts = hosts;
+      spec.target = targetFrom(fields, `--secret ${env}`);
     }
 
-    specs.push({ env, source, exposed, options, literal: false });
+    specs.push(spec);
   }
 
   return specs;
-}
-
-function namedSpec(env: string, name: string, config: SecretConfig): SecretSpec {
-  const options: SecretOptions = {};
-
-  if (config.for) options.for = config.for;
-
-  if (config.hosts) options.hosts = config.hosts;
-
-  if (config.header) options.header = config.header;
-
-  if (config.format) options.format = config.format;
-
-  if (config.username) options.username = config.username;
-  const exposed = config.exposed ?? false;
-
-  if (!exposed) rulesFor(options, `secrets.${name}`);
-
-  return { env, source: config.value, exposed, options, named: name, literal: true };
 }
 
 /** Read each value once and wrap it; records carry names, modes and hosts only. */
@@ -379,7 +381,7 @@ export async function resolveSecrets(
     let wrapped: Secret;
 
     try {
-      wrapped = spec.exposed ? secret.exposed(value) : secret(value, spec.options);
+      wrapped = secret(value, spec.target);
     } catch (error) {
       throw usage(`${where}: ${error instanceof BeachsideError ? error.message : String(error)}`);
     }

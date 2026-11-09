@@ -2117,13 +2117,14 @@ describe("secrets", () => {
     return texts.join("\n");
   }
 
-  test("--secret brokers named and inline secrets; only exposed values reach env", async () => {
+  test("--secret brokers targeted secrets; only plain secrets reach env", async () => {
     await writeConfig({
       default: "fake",
       profiles: { fake: { module: fixture, export: "fake" } },
       secrets: {
         anthropic: { value: "env:MY_ANTHROPIC_KEY", for: "anthropic" },
         internal: { value: LITERAL, hosts: ["api.internal.example"], header: "x-token" },
+        decrypt: { value: "env:DECRYPT_SOURCE" },
       },
     });
 
@@ -2143,10 +2144,17 @@ describe("secrets", () => {
         "--secret",
         "NPM_TOKEN=env:NPM_SOURCE@npm",
         "--secret",
-        "GH_TOKEN=env:GH_SOURCE:exposed",
+        "GH_TOKEN=env:GH_SOURCE",
+        "--secret",
+        "DECRYPT_KEY=decrypt",
         "--json",
       ],
-      { MY_ANTHROPIC_KEY: KEY, NPM_SOURCE: NPM, GH_SOURCE: EXPOSED },
+      {
+        MY_ANTHROPIC_KEY: KEY,
+        NPM_SOURCE: NPM,
+        GH_SOURCE: EXPOSED,
+        DECRYPT_SOURCE: "decrypt-value-1",
+      },
     );
 
     expect(created.code).toBe(0);
@@ -2167,13 +2175,15 @@ describe("secrets", () => {
       },
       { env: "INTERNAL", mode: "brokered", hosts: ["api.internal.example"], named: "internal" },
       { env: "NPM_TOKEN", mode: "brokered", hosts: ["registry.npmjs.org"] },
-      { env: "GH_TOKEN", mode: "exposed", hosts: [] },
+      { env: "GH_TOKEN", mode: "plain", hosts: [] },
+      { env: "DECRYPT_KEY", mode: "plain", hosts: [], named: "decrypt" },
     ]);
 
     const [resource] = await fakeResources();
     expect(resource?.env).toEqual({
       MODE: "agent",
       GH_TOKEN: EXPOSED,
+      DECRYPT_KEY: "decrypt-value-1",
       ANTHROPIC_API_KEY: "beachside:ANTHROPIC_API_KEY",
       INTERNAL: "beachside:INTERNAL",
       NPM_TOKEN: "beachside:NPM_TOKEN",
@@ -2195,6 +2205,14 @@ describe("secrets", () => {
         preset: null,
         hosts: ["api.internal.example"],
         source: "literal",
+        usedBy: ["box"],
+      },
+      {
+        name: "decrypt",
+        mode: "plain",
+        preset: null,
+        hosts: [],
+        source: "env:DECRYPT_SOURCE",
         usedBy: ["box"],
       },
     ]);
@@ -2228,7 +2246,7 @@ describe("secrets", () => {
       [["--secret", `K=${LITERAL}@npm`], "needs a value source"],
       [["--secret", "K=nope"], "names no secret in beachside.json"],
       [["--secret", "K=env:UNSET_SOURCE@npm"], "not set in this environment"],
-      [["--secret", "K=env:NPM_SOURCE"], "needs @<preset|host>, or :exposed"],
+      [["--secret", "K=env:NPM_SOURCE@"], "needs a preset or host after @"],
       [["--secret", "K=env:NPM_SOURCE@not a host"], "Invalid secret host"],
       [["--env", "K=1", "--secret", "K=env:NPM_SOURCE@npm"], "both --env and --secret"],
     ] as const) {
