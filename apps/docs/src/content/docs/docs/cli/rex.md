@@ -101,11 +101,14 @@ rex -S https://beachside-rex.<your-tailnet>.ts.net ls
 
 ## Clean up
 
+If you used `--with rex`, `beachside rm rex` does both steps. By hand, log Rex out of your tailnet first, then remove the sandbox:
+
 ```sh
+beachside exec rex -- rex server tailscale logout
 beachside rm rex
 ```
 
-Because the key is ephemeral, Tailscale removes the device from your tailnet after the sandbox is gone. It can stay listed as offline for several minutes first.
+`logout` takes the device off your tailnet at once. Use it rather than `rex server tailscale off`, which keeps the login, so the device stays listed as offline until Tailscale's ephemeral cleanup removes it, and its name stays taken until then.
 
 ## Troubleshooting
 

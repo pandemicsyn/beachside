@@ -147,7 +147,7 @@ beachside create --name dev --with herdr
 | `rex`   | A [Rex](https://www.superlogical.com/rex/docs) server on Rex's own Tailscale. Add its `https://` address in Rex.   |
 | `herdr` | A Tailscale SSH device for [herdr](https://herdr.dev). Run the printed `herdr --remote ssh://…` command to attach. |
 
-`create` prints how to connect when it finishes, and `inspect` shows it again. `--with` implies `--network internet`, because the sandbox downloads the server and reaches Tailscale. The tailnet setup is the same for both: see [Set up Tailscale once](/docs/cli/rex/#set-up-tailscale-once). Devices are named `beachside-<sandbox>`, and `rm` logs the herdr device out before the sandbox goes. If setup fails after the sandbox exists, `create` exits 8 and keeps the sandbox, so you can look inside or remove it.
+`create` prints how to connect when it finishes, and `inspect` shows it again. `--with` implies `--network internet`, because the sandbox downloads the server and reaches Tailscale. The tailnet setup is the same for both: see [Set up Tailscale once](/docs/cli/rex/#set-up-tailscale-once). Devices are named `beachside-<sandbox>`, and `rm` logs each device out of your tailnet before the sandbox goes, so it doesn't linger offline. If setup fails after the sandbox exists, `create` exits 8 and keeps the sandbox, so you can look inside or remove it.
 
 herdr connects over Tailscale SSH, so it also needs an `ssh` rule in your tailnet policy:
 

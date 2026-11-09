@@ -345,27 +345,35 @@ export async function setupAddons(
   }
 }
 
-/** Log a herdr device out of the tailnet before its sandbox goes away. Best effort. */
+/** The script that logs each add-on's device out of the tailnet. */
+const logoutScripts: Record<AddonName, string> = {
+  // `logout` directly: after `off`, Rex keeps the saved login and the device lingers offline.
+  rex: "rex server tailscale logout",
+  herdr: `${asRoot}\n$S tailscale --socket="$HOME/.local/state/beachside/tailscale/tailscaled.sock" logout`,
+};
+
+/**
+ * Log each add-on's device out before its sandbox goes away, so it leaves the tailnet at once
+ * instead of lingering offline and holding its name. Best effort.
+ */
 export async function teardownAddons(
-  box: SandboxHandle<true>,
+  shell: Shell,
   addons: AddonRecord[],
   signal: AbortSignal,
 ): Promise<void> {
-  if (!addons.some((addon) => addon.name === "herdr")) return;
-
-  try {
-    await box.exec(
-      {
-        command: {
-          kind: "shell",
-          script: `${asRoot}\n$S tailscale --socket="$HOME/.local/state/beachside/tailscale/tailscaled.sock" logout`,
+  for (const addon of addons) {
+    try {
+      await shell(
+        {
+          what: `Logging ${addon.name} out`,
+          script: logoutScripts[addon.name],
+          deadlineSeconds: 30,
         },
-        deadlineSeconds: 30,
-      },
-      { signal },
-    );
-  } catch {
-    // Ephemeral devices leave the tailnet on their own once the sandbox is gone.
+        signal,
+      );
+    } catch {
+      // Ephemeral devices leave the tailnet on their own once the sandbox is gone.
+    }
   }
 }
 

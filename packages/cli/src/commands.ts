@@ -1142,7 +1142,8 @@ async function removeOne(
     return { kind: "removed", item: { name: record.name, result: "gone", retainedResources: [] } };
   }
 
-  if (record.addons?.length) await teardownAddons(box, record.addons, session.ctx.signal);
+  if (record.addons?.length)
+    await teardownAddons(sandboxShell(box), record.addons, session.ctx.signal);
   const destroyed = await box.destroy({ signal: session.ctx.signal });
   await forget(store, target);
 

@@ -9,6 +9,7 @@ import {
   parseAddons,
   setupAddons,
   tailnetKey,
+  teardownAddons,
   type Shell,
 } from "../src/addons";
 import { main } from "../src/cli";
@@ -147,6 +148,26 @@ describe("setupAddons", () => {
     expect(result.failure?.code).toBe("PARTIAL");
     expect(result.failure?.message).toContain("Installing Rex failed (exit 3)");
     expect(result.failure?.message).not.toContain(key);
+  });
+});
+
+describe("teardownAddons", () => {
+  test("logs every device out, Rex with logout rather than off", async () => {
+    const { shell, calls } = scriptedShell([]);
+
+    await teardownAddons(
+      shell,
+      [
+        { name: "rex", hostname: "beachside-web-rex", state: "ready", connect: "https://x" },
+        { name: "herdr", hostname: "beachside-web", state: "failed" },
+      ],
+      AbortSignal.timeout(5000),
+    );
+
+    expect(calls.map((call) => call.script.split("\n").at(-1))).toEqual([
+      "rex server tailscale logout",
+      '$S tailscale --socket="$HOME/.local/state/beachside/tailscale/tailscaled.sock" logout',
+    ]);
   });
 });
 
