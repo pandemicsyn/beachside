@@ -15,6 +15,7 @@ Updated November 9, 2026, at version 0.10.0. This is the only work queue. Contra
 ## Next
 
 - **Add-on follow-ups:** `attach` with keep-alive, `renew`, minting one Tailscale key per sandbox from an OAuth client, and hooks that bring servers back after resume and clear tailnet and pairing state before a snapshot. Deferred until the first `--with` build ships.
+- **Setup scripts:** one `setup` key in the SDK and CLI for scripts and command lists run in a new sandbox, plus `startup` for every boot without processes (restore, filesystem-only resume). Named, provider-neutral `setups` in `beachside.json` (`--setup node`, `--setup ./setup.sh`, `--setup-cmd`), run by Beachside over `exec` with live output, recorded by digest so restores skip finished setup and `--if-not-exists` checks it. `--with` add-ons move onto the same engine. Later: `--cache`, which snapshots after setup and restores that snapshot for the same digest. Design only. (#185)
 - **Secrets:** a `secret(value, { for: "github" })` helper backed by a pluggable credential broker, so tokens reach a sandbox without being written into it. Design only.
 - **Live tests for experimental adapters:** Vercel, Boat, Runloop, Freestyle and Modal have no live passes yet, and boxd has only the basics. See [qualification gaps](#qualification-gaps).
 - **Rebrand cleanup:** deprecate the old `@sandbar-sdk/*` npm packages and redirect the old docs domain.
