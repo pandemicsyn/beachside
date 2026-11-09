@@ -997,6 +997,9 @@ try {
   );
 
   const externalDir = join(temporary, "external-adapter");
+  const adapterManifest = JSON.parse(
+    await readFile(join(root, "packages/adapter/package.json"), "utf8"),
+  );
   await mkdir(join(externalDir, "src"), { recursive: true });
   await writeFile(
     join(externalDir, "package.json"),
@@ -1011,7 +1014,7 @@ try {
         overrides: { "@beachside/adapter": archiveOverrides["@beachside/adapter"] },
         dependencies: {
           "@beachside/adapter": archiveOverrides["@beachside/adapter"],
-          zod: "4.6.5",
+          zod: adapterManifest.dependencies.zod,
         },
       },
       null,
