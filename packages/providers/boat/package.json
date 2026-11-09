@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@boatdev/sdk": "1.9.9",
-    "zod": "4.6.5",
+    "zod": "4.6.6",
     "@beachside/adapter": "workspace:*"
   },
   "devDependencies": {

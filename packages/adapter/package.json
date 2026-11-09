@@ -27,7 +27,7 @@
     "build": "rm -rf dist && bun build src/index.ts src/testing.ts src/portable.ts --target node --format esm --outdir dist --external zod && tsc -p tsconfig.build.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../scripts/rewrite-declarations.mjs"
   },
   "dependencies": {
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "license": "Apache-2.0",
   "repository": {

@@ -25,7 +25,7 @@
     "typescript": "5.9.3",
     "wrangler": "4.141.0",
     "@beachside/adapter": "workspace:*",
-    "zod": "4.6.5",
+    "zod": "4.6.6",
     "@beachside/modal": "workspace:*",
     "satteri": "0.10.5",
     "@beachside/daytona": "workspace:*",
