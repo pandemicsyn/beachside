@@ -6,14 +6,14 @@ description: Run a Rex server inside a sandbox and open it from Rex on your Mac 
 [Rex](https://www.superlogical.com/rex/docs) is a terminal workspace with a client and a server. If you run the Rex server inside a sandbox, you get a remote workspace: your sessions, tabs and blocks live in the sandbox, and you open them from Rex on your Mac. Nothing listens on a public port. Rex's built-in Tailscale puts the server on your tailnet, and only your tailnet can reach it.
 
 :::caution[Experimental]
-Rex is in beta. This recipe has been verified end to end on boxd, on E2B (with the extra step below) and on plain Linux hosts. Daytona's lower tiers block the Rex download, because their sandboxes only reach an allowlist of hosts.
+Rex is in beta. This recipe has been verified end to end on boxd, Freestyle, E2B (with the extra step below) and plain Linux hosts. Daytona's lower tiers block the Rex download, because their sandboxes only reach an allowlist of hosts.
 :::
 
 ## What you need
 
 - Rex beta on your Mac.
 - A Tailscale tailnet with MagicDNS and HTTPS certificates turned on.
-- A provider whose sandboxes can reach the internet, including Tailscale's control servers. boxd and E2B both work, and the examples use whichever profile is your default.
+- A provider whose sandboxes can reach the internet, including Tailscale's control servers. boxd, Freestyle and E2B all work, and the examples use whichever profile is your default.
 
 ## Set up Tailscale once
 
@@ -53,6 +53,8 @@ beachside exec rex -- sh -c 'curl -fsSL https://pkgs.superlogical.com/rex/instal
 
 boxd needs nothing more: its sandboxes have a private IPv4 address and passwordless sudo, so Rex installs and logs in as is. Set `BOXD_ORG` and `BOXD_NETWORK=internet` along with `BOXD_API_KEY` (see [configuration](/docs/cli/configuration/)).
 
+Freestyle needs nothing more either. Its VMs block outbound traffic by default, so set `FREESTYLE_NETWORK=internet` along with `FREESTYLE_API_KEY`, or pass `--network internet` as above.
+
 On E2B, give the sandbox a routable address first. E2B sandboxes only have a link-local IPv4 address, so Tailscale thinks the machine is offline and never logs in ([e2b-dev/runtime#3780](https://github.com/e2b-dev/runtime/issues/3780)):
 
 ```sh
@@ -62,29 +64,29 @@ beachside exec rex -- sudo ip addr add 192.0.0.8/32 dev eth0 noprefixroute
 Start the server, then turn on Tailscale with the key sent over stdin. The key never touches the sandbox's disk, command line or env:
 
 ```sh
-beachside exec rex -- rex server start --tailscale-hostname rex-sandbox
+beachside exec rex -- rex server start --tailscale-hostname beachside-rex
 
 printf %s "$TAILSCALE_AUTH_KEY" | beachside exec rex --stdin -- \
   rex server tailscale on \
-  --hostname rex-sandbox \
+  --hostname beachside-rex \
   --auth-key-file - \
   --allow-tailnet-members
 ```
 
-It takes two steps because `rex server start` runs in the background and can't read the key from stdin. The server keeps running after `exec` returns, joins your tailnet as `rex-sandbox`, and logs in within a few seconds. The first HTTPS certificate takes up to a minute. To watch it start, run `beachside exec rex -- rex server logs`. It's ready when you see `tailnet https listener ready`.
+It takes two steps because `rex server start` runs in the background and can't read the key from stdin. The server keeps running after `exec` returns, joins your tailnet as `beachside-rex`, and logs in within a few seconds. The first HTTPS certificate takes up to a minute. To watch it start, run `beachside exec rex -- rex server logs`. It's ready when you see `tailnet https listener ready`.
 
 ## Open it from your Mac
 
 In Rex, open the session picker, choose **Add Remote Host…** and enter:
 
 ```text
-https://rex-sandbox.<your-tailnet>.ts.net
+https://beachside-rex.<your-tailnet>.ts.net
 ```
 
 The Rex CLI works too:
 
 ```sh
-rex -S https://rex-sandbox.<your-tailnet>.ts.net ls
+rex -S https://beachside-rex.<your-tailnet>.ts.net ls
 ```
 
 ## Clean up
@@ -93,7 +95,7 @@ rex -S https://rex-sandbox.<your-tailnet>.ts.net ls
 beachside rm rex
 ```
 
-Because the key is ephemeral, the device disappears from your tailnet shortly after the sandbox is gone.
+Because the key is ephemeral, Tailscale removes the device from your tailnet after the sandbox is gone. It can stay listed as offline for several minutes first.
 
 ## Troubleshooting
 
@@ -103,7 +105,7 @@ Because the key is ephemeral, the device disappears from your tailnet shortly af
 
 **On E2B, the server waits at "needs login" with no error.** The sandbox only has a link-local address. Add `192.0.0.8/32` to `eth0` as shown above, before the first start.
 
-**The first connection fails with "TLS handshake did not finish in time".** The certificate wasn't ready yet, and Rex's client gives up on the handshake after a few seconds. Wait for `tailnet https listener ready`, or warm the endpoint once with `curl -s -m 60 -o /dev/null https://rex-sandbox.<your-tailnet>.ts.net`, then connect again.
+**The first connection fails with "TLS handshake did not finish in time".** The certificate wasn't ready yet, and Rex's client gives up on the handshake after a few seconds. Wait for `tailnet https listener ready`, or warm the endpoint once with `curl -s -m 60 -o /dev/null https://beachside-rex.<your-tailnet>.ts.net`, then connect again.
 
 **The install script can't download Rex.** The sandbox has no internet access. Pass `--network internet`, or use a provider tier that allows it.
 
