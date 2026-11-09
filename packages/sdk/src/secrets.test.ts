@@ -110,6 +110,7 @@ test("secret() values never print, serialize or reach recovery references", asyn
 
   try {
     expect((await client.capabilities()).secrets).toEqual(header);
+
     const operation = await client.sandboxes.submitCreate({
       env: { MODE: "agent", ANTHROPIC_API_KEY: value, GH: secret.exposed(PAT) },
     });
@@ -180,7 +181,7 @@ test("invalid secrets fail without echoing values", () => {
     }
 
     expect(error).toBeInstanceOf(BeachsideError);
-    expect(String((error as Error).message)).not.toContain(KEY);
+    expect(String(error)).not.toContain(KEY);
   }
 });
 
@@ -190,6 +191,7 @@ test("adapters without brokering refuse before any effect, never falling back to
 
   try {
     expect((await client.capabilities()).secrets).toBeNull();
+
     const check = await client.sandboxes.checkCreate({
       env: { ANTHROPIC_API_KEY: secret(KEY, { for: "anthropic" }) },
     });
@@ -223,6 +225,7 @@ test("placeholder adapters refuse Basic-auth hosts and name the way out", async 
     }
 
     expect(error).toBeInstanceOf(UnsupportedFeatureError);
+    // SAFETY: the line above checked the error is an UnsupportedFeatureError.
     expect(JSON.stringify((error as UnsupportedFeatureError).unmetRequirements)).toContain(
       "github-api",
     );

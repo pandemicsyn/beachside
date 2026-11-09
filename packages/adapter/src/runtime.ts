@@ -603,6 +603,7 @@ function checkCapability(
       throw new AdapterError("INVALID_ARGUMENT", "Invalid restore env");
 
     if (value.request.secrets && !value.request.secrets.length) delete value.request.secrets;
+
     const problem =
       restoreOptionProblem(session.snapshotRestore?.options, value.request) ??
       secretsProblem(session.supports.secrets, value.request.secrets);

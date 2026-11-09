@@ -244,7 +244,7 @@ export function envWithSecretPlaceholders(
   bindings: readonly SecretBinding[] | undefined,
 ): Record<string, string> | undefined {
   if (!bindings?.length) return env ? { ...env } : undefined;
-  const result: Record<string, string> = { ...env };
+  const result = { ...env };
 
   for (const binding of bindings) result[binding.env] = secretPlaceholder(binding.env);
 

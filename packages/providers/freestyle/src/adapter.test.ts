@@ -609,6 +609,7 @@ test("brokered secrets become inline egress TLS rules and the VM holds only a pl
       env: { OPENAI_API_KEY: secret(KEY, { for: "openai" }) },
     });
 
+    // SAFETY: the fixture records each create's parsed JSON body.
     const body = creates(fixture)[0]?.body as { tls?: { rules: unknown[] } };
     expect(body.tls?.rules).toEqual([
       {

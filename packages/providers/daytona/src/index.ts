@@ -1123,7 +1123,7 @@ export class DaytonaDriver implements ProviderDriver {
     if (input.signal?.aborted) return uncertain("Daytona creation wait was aborted");
 
     // Native messages never echo environment or secret values.
-    const hidden: Record<string, string> = { ...input.env };
+    const hidden = { ...input.env };
 
     for (const [index, value] of secretValues(input.secrets).entries())
       hidden[`beachside-secret-${index}`] = value;
@@ -1331,6 +1331,7 @@ export class DaytonaDriver implements ProviderDriver {
           false,
           hidden,
         );
+
         const leftover = mounts.length ? await this.deleteSandboxSecrets(sandboxName) : [];
 
         if (leftover.length || result.status !== "rejected")

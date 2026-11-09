@@ -15,7 +15,12 @@ afterEach(() => {
 });
 
 function fixtureTransport(creates: Parameters<E2BTransport["create"]>[0][]): E2BTransport {
-  const record: E2BRecord = { id: "sandbox_secret", templateId: "base", metadata: {}, state: "running" };
+  const record: E2BRecord = {
+    id: "sandbox_secret",
+    templateId: "base",
+    metadata: {},
+    state: "running",
+  };
 
   return {
     async verifyAuth() {},
@@ -75,6 +80,7 @@ test("E2B brokers secrets as egress header rules with placeholders in env", asyn
       delivery: "header",
       basicAuth: true,
     });
+
     const operation = await client.sandboxes.submitCreate({
       env: {
         MODE: "agent",
@@ -102,8 +108,10 @@ test("E2B brokers secrets as egress header rules with placeholders in env", asyn
 });
 
 test("E2B native create sends network rules and redacts brokered values from rejections", async () => {
-  const bodies: { network?: { rules?: Record<string, unknown> }; envVars?: Record<string, string> }[] =
-    [];
+  const bodies: {
+    network?: { rules?: Record<string, { transform: { headers: Record<string, string> } }[]> };
+    envVars?: Record<string, string>;
+  }[] = [];
 
   // SAFETY: This deterministic fetch boundary matches Bun's fetch/preconnect shape and receives only fixture credentials.
   globalThis.fetch = Object.assign(
@@ -117,7 +125,20 @@ test("E2B native create sends network rules and redacts brokered values from rej
         const body = z
           .object({
             envVars: z.record(z.string(), z.string()).optional(),
-            network: z.object({ rules: z.record(z.string(), z.unknown()).optional() }).optional(),
+            network: z
+              .object({
+                rules: z
+                  .record(
+                    z.string(),
+                    z.array(
+                      z.object({
+                        transform: z.object({ headers: z.record(z.string(), z.string()) }),
+                      }),
+                    ),
+                  )
+                  .optional(),
+              })
+              .optional(),
           })
           .parse(await request.json());
 

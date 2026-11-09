@@ -2100,6 +2100,152 @@ describe("create-time environment", () => {
   });
 });
 
+describe("secrets", () => {
+  const KEY = "CANARY-cli-brokered-key";
+  const NPM = "CANARY-cli-npm-token";
+  const EXPOSED = "CANARY-cli-exposed-token";
+  const LITERAL = "CANARY-cli-literal-value";
+
+  async function storeText() {
+    const directory = join(dir, "state");
+    const files = await readdir(directory, { recursive: true }).catch(() => []);
+
+    const texts = await Promise.all(
+      files.map((file) => readFile(join(directory, String(file)), "utf8").catch(() => "")),
+    );
+
+    return texts.join("\n");
+  }
+
+  test("--secret brokers named and inline secrets; only exposed values reach env", async () => {
+    await writeConfig({
+      default: "fake",
+      profiles: { fake: { module: fixture, export: "fake" } },
+      secrets: {
+        anthropic: { value: "env:MY_ANTHROPIC_KEY", for: "anthropic" },
+        internal: { value: LITERAL, hosts: ["api.internal.example"], header: "x-token" },
+      },
+    });
+
+    const created = await cli(
+      [
+        "create",
+        "--name",
+        "box",
+        "--prepared",
+        "fake-starter",
+        "--env",
+        "MODE=agent",
+        "--secret",
+        "ANTHROPIC_API_KEY=anthropic",
+        "--secret",
+        "INTERNAL=internal",
+        "--secret",
+        "NPM_TOKEN=env:NPM_SOURCE@npm",
+        "--secret",
+        "GH_TOKEN=env:GH_SOURCE:exposed",
+        "--json",
+      ],
+      { MY_ANTHROPIC_KEY: KEY, NPM_SOURCE: NPM, GH_SOURCE: EXPOSED },
+    );
+
+    expect(created.code).toBe(0);
+    const output = `${created.stdout}${created.stderr}`;
+    const store = await storeText();
+
+    for (const value of [KEY, NPM, EXPOSED, LITERAL]) {
+      expect(output).not.toContain(value);
+      expect(store).not.toContain(value);
+    }
+
+    expect(envelope(created).data.secrets).toEqual([
+      {
+        env: "ANTHROPIC_API_KEY",
+        mode: "brokered",
+        hosts: ["api.anthropic.com"],
+        named: "anthropic",
+      },
+      { env: "INTERNAL", mode: "brokered", hosts: ["api.internal.example"], named: "internal" },
+      { env: "NPM_TOKEN", mode: "brokered", hosts: ["registry.npmjs.org"] },
+      { env: "GH_TOKEN", mode: "exposed", hosts: [] },
+    ]);
+
+    const [resource] = await fakeResources();
+    expect(resource?.env).toEqual({
+      MODE: "agent",
+      GH_TOKEN: EXPOSED,
+      ANTHROPIC_API_KEY: "beachside:ANTHROPIC_API_KEY",
+      INTERNAL: "beachside:INTERNAL",
+      NPM_TOKEN: "beachside:NPM_TOKEN",
+    });
+
+    const listed = envelope(await cli(["secret", "ls", "--json"])).data;
+    expect(listed.secrets).toEqual([
+      {
+        name: "anthropic",
+        mode: "brokered",
+        preset: "anthropic",
+        hosts: ["api.anthropic.com"],
+        source: "env:MY_ANTHROPIC_KEY",
+        usedBy: ["box"],
+      },
+      {
+        name: "internal",
+        mode: "brokered",
+        preset: null,
+        hosts: ["api.internal.example"],
+        source: "literal",
+        usedBy: ["box"],
+      },
+    ]);
+    expect(listed.inline.map((row: { env: string }) => row.env)).toEqual(["NPM_TOKEN", "GH_TOKEN"]);
+  });
+
+  test("gh: reads the local gh login token once and brokers it for GitHub", async () => {
+    const bin = join(dir, "bin");
+    await mkdir(bin);
+    await writeFile(
+      join(bin, "gh"),
+      `#!/bin/sh\n[ "$1 $2" = "auth token" ] && echo ${KEY}-gh || exit 3\n`,
+    );
+    await chmod(join(bin, "gh"), 0o755);
+
+    const created = await cli(
+      ["create", "--prepared", "fake-starter", "--secret", "GH_TOKEN=gh:@github", "--json"],
+      { PATH: `${bin}:${process.env.PATH ?? ""}` },
+    );
+
+    expect(created.code).toBe(0);
+    expect(`${created.stdout}${created.stderr}`).not.toContain(KEY);
+    expect(envelope(created).data.secrets).toEqual([
+      { env: "GH_TOKEN", mode: "brokered", hosts: ["api.github.com", "github.com"] },
+    ]);
+    expect((await fakeResources())[0]?.env).toEqual({ GH_TOKEN: "beachside:GH_TOKEN" });
+  });
+
+  test("bad or unreadable --secret values fail before anything is created", async () => {
+    for (const [args, message] of [
+      [["--secret", `K=${LITERAL}@npm`], "needs a value source"],
+      [["--secret", "K=nope"], "names no secret in beachside.json"],
+      [["--secret", "K=env:UNSET_SOURCE@npm"], "not set in this environment"],
+      [["--secret", "K=env:NPM_SOURCE"], "needs @<preset|host>, or :exposed"],
+      [["--secret", "K=env:NPM_SOURCE@not a host"], "Invalid secret host"],
+      [["--env", "K=1", "--secret", "K=env:NPM_SOURCE@npm"], "both --env and --secret"],
+    ] as const) {
+      const result = await cli(["create", "--prepared", "fake-starter", ...args, "--json"], {
+        NPM_SOURCE: NPM,
+      });
+
+      expect(result.code).not.toBe(0);
+      expect(envelope(result).error.message).toContain(message);
+      expect(`${result.stdout}${result.stderr}`).not.toContain(LITERAL);
+    }
+
+    expect(await fakeResources()).toHaveLength(0);
+    expect(await storeText()).toBe("");
+  });
+});
+
 describe("streaming exec output", () => {
   let terminations: string;
 

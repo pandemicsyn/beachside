@@ -247,6 +247,7 @@ export class AdapterSnapshot {
     if (input.secrets && !input.secrets.length) delete input.secrets;
 
     if (input.labels && !Object.keys(input.labels).length) delete input.labels;
+
     const unsupported =
       restoreOptionProblem(this.client.session.snapshotRestore?.options, input) ??
       secretsProblem(this.client.session.supports.secrets, input.secrets);

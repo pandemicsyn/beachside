@@ -6,7 +6,13 @@ const KEY = "CANARY-daytona-brokered-key";
 
 function fixture(options: { rejectSandbox?: boolean } = {}) {
   const secrets = new Map<string, { id: string; name: string; value: string; hosts: string[] }>();
-  const sandboxBodies: Record<string, unknown>[] = [];
+
+  const sandboxBodies: {
+    name: string;
+    env?: Record<string, string>;
+    secrets?: Record<string, string>[];
+  }[] = [];
+
   const deleted: string[] = [];
 
   const fetchImpl: typeof fetch = Object.assign(
@@ -46,9 +52,9 @@ function fixture(options: { rejectSandbox?: boolean } = {}) {
         const name = url.searchParams.get("name") ?? "";
 
         return Response.json({
-          items: [...secrets.values()]
-            .filter((item) => item.name.includes(name))
-            .map(({ id, name }) => ({ id, name })),
+          items: [...secrets.values()].flatMap((item) =>
+            item.name.includes(name) ? [{ id: item.id, name: item.name }] : [],
+          ),
           total: secrets.size,
           nextCursor: null,
         });
@@ -141,7 +147,7 @@ test("a refused sandbox create deletes its secrets and never echoes the value", 
     }
 
     expect(error).toBeInstanceOf(Error);
-    expect(String((error as Error).message)).not.toContain(KEY);
+    expect(String(error)).not.toContain(KEY);
     expect(f.secrets.size).toBe(0);
     expect(f.deleted).toEqual(["sec-1"]);
   } finally {

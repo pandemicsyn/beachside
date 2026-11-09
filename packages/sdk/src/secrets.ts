@@ -72,6 +72,7 @@ export function secret(value: string, options: SecretOptions): Secret {
   try {
     rules = secretRules(options ?? {});
   } catch (error) {
+    // SAFETY: secretRules throws only plain Errors with value-free messages.
     throw new BeachsideError("INVALID_ARGUMENT", (error as Error).message);
   }
 
@@ -86,10 +87,14 @@ secret.exposed = function exposed(value: string): Secret {
 export type EnvValue = string | Secret;
 
 /** Split public env into plain environment (exposed secrets included) and brokered bindings. */
-export function splitEnv(env: Readonly<Record<string, EnvValue>> | undefined): {
+export type SplitEnv = {
+  /** Plain environment, exposed secrets included. */
   env?: Record<string, string>;
+  /** Brokered bindings for the adapter. */
   secrets?: SecretBinding[];
-} {
+};
+
+export function splitEnv(env: Readonly<Record<string, EnvValue>> | undefined): SplitEnv {
   if (env === undefined || env === null) return {};
   const plain: Record<string, string> = {};
   const secrets: SecretBinding[] = [];
@@ -119,7 +124,7 @@ export function splitEnv(env: Readonly<Record<string, EnvValue>> | undefined): {
     secrets.push(binding.data);
   }
 
-  const result: { env?: Record<string, string>; secrets?: SecretBinding[] } = {};
+  const result: SplitEnv = {};
 
   if (Object.keys(plain).length) result.env = plain;
 

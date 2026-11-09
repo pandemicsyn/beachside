@@ -1929,9 +1929,11 @@ test("brokered secrets become header transforms on an allow-all custom policy", 
 
   try {
     expect((await client.capabilities()).secrets).toMatchObject({ delivery: "header" });
+
     const box = await client.sandboxes.create({
       env: { MODE: "x", ANTHROPIC_API_KEY: secret(KEY, { for: "anthropic" }) },
     });
+
     expect(box.id).toBeString();
 
     const body = JSON.parse(

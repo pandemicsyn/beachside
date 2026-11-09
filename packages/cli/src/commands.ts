@@ -18,8 +18,10 @@ import {
   type SandboxHandle,
   type SandboxList,
   type SandboxListEntry,
+  type Secret,
 } from "beachside";
 import { z } from "zod";
+import { parseSecretFlags, resolveSecrets } from "./secrets";
 import { searchProjectAdapters, valueAvailable, type Env, type LoadedConfig } from "./config";
 import {
   CliError,
@@ -118,6 +120,8 @@ type CreateRequest = {
   retrySeconds?: number;
   /** `--with`: servers to install once the sandbox exists. */
   addons: AddonName[];
+  /** `--secret` entries, parsed and read once the config is loaded. */
+  secrets: string[];
 };
 
 /** Create flags a restore cannot honor: the snapshot fixes the image. */
@@ -170,6 +174,7 @@ function createRequest(flags: Flags, env: Record<string, string> = {}): CreateRe
     snapshot,
     retrySeconds: retry === undefined ? undefined : parseDuration(retry, "retry"),
     addons,
+    secrets: flags.strings("secret"),
   };
 }
 
@@ -273,12 +278,14 @@ async function envFlags(session: Session, flags: Flags): Promise<Record<string, 
 }
 
 /** The create input; `--image` is resolved after connecting, because it depends on the provider. */
-function createInput(request: CreateRequest): CreateInput {
+function createInput(request: CreateRequest, secrets: Record<string, Secret> = {}): CreateInput {
+  const env = { ...request.env, ...secrets };
+
   return {
     environment: request.prepared ? Image.prepared(request.prepared) : undefined,
     network: request.network,
     labels: Object.keys(request.labels).length ? request.labels : undefined,
-    env: Object.keys(request.env).length ? request.env : undefined,
+    env: Object.keys(env).length ? env : undefined,
     lifecycle:
       request.lifetimeSeconds === undefined
         ? undefined
@@ -425,6 +432,12 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
     }
   }
 
+  // Secrets are read before anything is claimed or created, so a missing one costs nothing.
+  const specs = parseSecretFlags(request.secrets, (await session.config()).value.secrets);
+  const twice = specs.find((spec) => Object.hasOwn(request.env, spec.env));
+
+  if (twice) throw usage(`${twice.env} is given as both --env and --secret`);
+  const secrets = await resolveSecrets(specs, session.secrets);
   const limit = await session.limit();
 
   if (limit !== null && (await liveCount(store)) >= limit)
@@ -434,25 +447,23 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
       "remove some with `beachside rm`, or raise limits.maxSandboxes in beachside.json",
     );
 
-  const claimed = await claimName(
-    store,
-    {
-      format: 1,
-      kind: "sandbox",
-      status: "creating",
-      profile: profile.name,
-      provider: profile.provider,
-      createdAt: new Date().toISOString(),
-      labels: request.labels,
-      image: source ? `snapshot:${source.name}` : (image ?? request.prepared),
-      reference: null,
-    },
-    request.name,
-    request.ifNotExists,
-  );
+  const pending: Omit<SandboxRecord, "name"> = {
+    format: 1,
+    kind: "sandbox",
+    status: "creating",
+    profile: profile.name,
+    provider: profile.provider,
+    createdAt: new Date().toISOString(),
+    labels: request.labels,
+    image: source ? `snapshot:${source.name}` : (image ?? request.prepared),
+    reference: null,
+  };
+
+  if (secrets.records.length) pending.secrets = secrets.records;
+  const claimed = await claimName(store, pending, request.name, request.ifNotExists);
 
   let client: BeachsideClient<true>;
-  const input = createInput(request);
+  const input = createInput(request, secrets.env);
 
   try {
     client = await session.connect(profile);
@@ -564,6 +575,7 @@ function sandboxSummary(record: SandboxRecord) {
     image: record.image ?? null,
     adopted: record.adopted ?? false,
     addons: record.addons ?? [],
+    secrets: record.secrets ?? [],
   };
 }
 

@@ -522,6 +522,7 @@ export function validateCreate(
 
   if (given && !given.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid secrets");
   const secrets = given || split ? [...(given?.data ?? []), ...(split ?? [])] : undefined;
+
   const request = validateCreateRequest(
     raw ? { ...rest, env } : undefined,
     defaultEnvironment,
@@ -539,7 +540,7 @@ export function validateCreate(
 }
 
 function validateCreateRequest(
-  input: Omit<CreateInput, "env"> & { env?: Record<string, string> } | undefined,
+  input: (Omit<CreateInput, "env"> & { env?: Record<string, string> }) | undefined,
   defaultEnvironment?: ImageInput,
   defaultNetworkPolicy = "blocked",
   networkPolicyAliases?: Readonly<Record<string, string>>,

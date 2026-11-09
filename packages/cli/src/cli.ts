@@ -29,6 +29,7 @@ import { imageCommand } from "./images";
 import { snapshotCommand } from "./snapshots";
 import { skillCommand } from "./skill";
 import { adapterCommand } from "./adapters";
+import { secretCommand } from "./secret-command";
 import { gcCommand } from "./gc";
 import { complete, completionCommand, formatCompletion } from "./completion";
 import type { Env } from "./config";
@@ -119,6 +120,13 @@ const createFlags = {
     value: "path",
     description: "Read K=V lines into the sandbox environment (repeatable; --env wins)",
   },
+  secret: {
+    type: "string",
+    multiple: true,
+    value: "K=secret",
+    description:
+      "Credential kept out of the sandbox: K=<named secret> or K=<source>@<preset|host>[,...]; append :exposed to put the value in env (repeatable)",
+  },
   build: {
     type: "boolean",
     description: "Build --image now if this provider needs a build and none is recorded",
@@ -198,7 +206,7 @@ export const commands: readonly CommandSpec[] = [
     name: "create",
     summary: "Create a sandbox and print its name",
     usage:
-      "beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]... [--with rex|herdr]...",
+      "beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]... [--secret K=secret]... [--with rex|herdr]...",
     flags: {
       ...createFlags,
       "if-not-exists": {
@@ -219,6 +227,8 @@ export const commands: readonly CommandSpec[] = [
       "beachside create --name web --network internet",
       "beachside create --name job-42 --if-not-exists --json",
       "beachside create --name ci --env-file .env --env API_TOKEN",
+      "beachside create --name agent --network internet --secret ANTHROPIC_API_KEY=op://Dev/anthropic/key@anthropic",
+      "beachside create --name agent --network internet --secret GH_TOKEN=github",
       "beachside create --name job-42 --ttl 1h",
       "beachside create --name job-42 --retry 5m --json",
       "beachside create --name web --with rex",
@@ -505,6 +515,16 @@ export const commands: readonly CommandSpec[] = [
       "beachside adapter rm e2b",
     ],
     run: adapterCommand,
+  },
+  {
+    name: "secret",
+    summary: "List the named secrets in beachside.json and the sandboxes using them, never values",
+    usage: "beachside secret ls",
+    flags: {},
+    passthrough: false,
+    remoteExit: false,
+    examples: ["beachside secret ls", "beachside secret ls --json"],
+    run: secretCommand,
   },
   {
     name: "providers",

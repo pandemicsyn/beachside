@@ -59,6 +59,11 @@ const id = z
 const policy = z.enum(["blocked", "internet", "vercel-deny-all", "vercel-allow-all"]);
 
 /** Deprecated native spellings, resolved to portable names for config and SDK inputs. */
+/** The create-time policy: a mode, or per-host header transforms on top of allow-all. */
+type NativeNetworkPolicy =
+  | { mode: string }
+  | { allow: Record<string, { transform: { headers: Record<string, string> }[] }[]> };
+
 // Header transforms on the egress proxy; the sandbox sees only a Beachside placeholder.
 const SECRET_SUPPORT: SecretSupport = {
   delivery: "header",
@@ -373,9 +378,11 @@ export function createVercelAdapter(
       await client.json(`/v2/sandboxes?project=${project.id}&limit=1`, signal, page);
       const image = config.image;
       const mode = networkPolicy === "blocked" ? "deny-all" : "allow-all";
+
       // Brokered secrets turn allow-all into a custom policy: every host plus header transforms.
       const modeMatches = (actual: string | undefined) =>
         actual === mode || (mode === "allow-all" && actual === "custom");
+
       const route = (sandboxId: string) => `/v2/sandboxes/sessions/${id.parse(sandboxId)}`;
 
       const scope = {
@@ -996,13 +1003,19 @@ export function createVercelAdapter(
             const secretHosts = secretHeadersByHost(input.secrets);
             const env = envWithSecretPlaceholders(input.env, input.secrets);
             const expectedMode = secretHosts.size ? "custom" : mode;
-            const allow: Record<string, { transform: { headers: Record<string, string> }[] }[]> =
-              { "*": [] };
 
-            for (const [host, headers] of secretHosts) allow[host] = [{ transform: [{ headers }] }];
-
-            const nativePolicy: { allow: typeof allow } | { mode: string } = secretHosts.size
-              ? { allow }
+            const nativePolicy: NativeNetworkPolicy = secretHosts.size
+              ? {
+                  allow: {
+                    "*": [],
+                    ...Object.fromEntries(
+                      [...secretHosts].map(([host, headers]) => [
+                        host,
+                        [{ transform: [{ headers }] }],
+                      ]),
+                    ),
+                  },
+                }
               : { mode };
 
             if (config.persistent) retention.keepLastSnapshots = { count: 1, deleteEvicted: true };

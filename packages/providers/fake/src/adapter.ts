@@ -16,6 +16,7 @@ import {
   type ProcessStartContext,
   type Scope,
   type ObserveContext,
+  envWithSecretPlaceholders,
 } from "@beachside/adapter";
 import type { DriverResult } from "@beachside-internal/provider-spi";
 import { fakeProvider } from "./client";
@@ -540,7 +541,12 @@ export function createFakeAdapter(options: {
         }),
         snapshotRestore: {
           recovery: { version: 1, token: Token },
-          options: { env: true, labels: true, lifetime: { minSeconds: 1, maxSeconds: 86_400 } },
+          options: {
+            env: true,
+            labels: true,
+            secrets: true,
+            lifetime: { minSeconds: 1, maxSeconds: 86_400 },
+          },
           async prepare(input) {
             if (input.request.resources || input.request.mounts?.length)
               throw new AdapterError("UNSUPPORTED", "Fake restores take no sizing or mounts");
@@ -559,7 +565,7 @@ export function createFakeAdapter(options: {
                 image: input.snapshot.nativeId,
                 networkPolicy: input.request.networkPolicy,
                 labels: input.request.labels,
-                env: input.request.env,
+                env: envWithSecretPlaceholders(input.request.env, input.request.secrets),
                 lifetimeSeconds: input.request.lifetimeSeconds,
               }),
               ctx,
@@ -682,6 +688,7 @@ export function createFakeAdapter(options: {
           exec: { commands: ["argv", "shell"], maxOutputBytes: caps.maxOutputBytes },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          secrets: { delivery: "header", basicAuth: true, wildcardHosts: true, maxSecrets: 64 },
           lifetime: { minSeconds: 1, maxSeconds: 86_400 },
         },
         create: {
@@ -701,7 +708,8 @@ export function createFakeAdapter(options: {
               image: result.effectiveImage,
               networkPolicy: input.networkPolicy,
               labels: input.labels,
-              env: input.env,
+              // The fake has no proxy: the sandbox sees the placeholder and never the value.
+              env: envWithSecretPlaceholders(input.env, input.secrets),
               lifetimeSeconds: input.lifetimeSeconds,
             };
           },
