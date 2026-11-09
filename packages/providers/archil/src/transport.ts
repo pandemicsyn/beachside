@@ -2,25 +2,12 @@ import { AdapterError, type AdapterErrorCode, type Json } from "@beachside/adapt
 import type { Sandbox } from "disk";
 import { z } from "zod";
 
-/**
- * Archil control planes that run sandboxes, from the official SDK's region table and the
- * regions page. `gcp-us-central1` serves storage only, so it is not offered.
- */
-export const REGION_NAMES = ["aws-us-east-1", "aws-us-west-2", "aws-eu-west-1"] as const;
+import type { NativeFetch } from "./regions";
 
-export type Region = (typeof REGION_NAMES)[number];
-
-export const REGIONS = {
-  "aws-us-east-1": "https://control.green.us-east-1.aws.prod.archil.com",
-  "aws-us-west-2": "https://control.green.us-west-2.aws.prod.archil.com",
-  "aws-eu-west-1": "https://control.green.eu-west-1.aws.prod.archil.com",
-} as const satisfies Record<Region, string>;
+export { REGION_NAMES, REGIONS, type NativeFetch, type Region } from "./regions";
 
 /** Largest control-plane response body the adapter accepts, before decoding. */
 export const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
-
-/** The fetch signature the adapter accepts; tests inject a deterministic fixture. */
-export type NativeFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 /** A refused or unreadable call, with the native status and code when Archil answered. */
 export type NativeFailure = {
@@ -156,7 +143,11 @@ function failureFor(
     code: nativeCode || undefined,
     error: new AdapterError(
       code,
-      `Archil API ${status}${label ? ` ${label}` : ""}${detail ? `: ${detail}` : ""}`,
+      `Archil API ${status}${label ? ` ${label}` : ""}${detail ? `: ${detail}` : ""}${
+        nativeCode === "sandbox_network_plan_required"
+          ? "; on the Free plan, use network archil-managed"
+          : ""
+      }`,
     ),
   };
 }

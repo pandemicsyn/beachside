@@ -103,7 +103,8 @@ export const providers: readonly ProviderDescriptor[] = [
     config: {
       // Each Archil region has its own control plane, so the region is always explicit.
       region: { env: "ARCHIL_REGION", required: true },
-      // Egress defaults to blocked; ARCHIL_NETWORK=internet opts out.
+      // Egress defaults to blocked; ARCHIL_NETWORK=internet opts out, and Free plans need
+      // ARCHIL_NETWORK=archil-managed (Archil's managed allowlist).
       network: { env: "ARCHIL_NETWORK", required: false },
     },
   },

@@ -45,7 +45,11 @@ test("create sends an explicit image, exact size, session budget, blocked egress
   const client = await connect({ resources: { vcpus: 1.5, memoryMiB: 3000 } });
 
   try {
-    expect((await client.capabilities()).network).toEqual(["blocked", "internet"]);
+    expect((await client.capabilities()).network).toEqual([
+      "blocked",
+      "internet",
+      "archil-managed",
+    ]);
     const box = await client.sandboxes.create({ env: { GREETING: "hi" } });
 
     expect(creates(fixture)[0]?.body).toMatchObject({
@@ -105,6 +109,39 @@ test("a Free-plan policy refusal is UNSUPPORTED, and a managed allowlist never p
     expect(fixture.effects.create).toBe(1);
   } finally {
     await client.close();
+  }
+});
+
+test("archil-managed takes the Free plan's managed allowlist and is refused as open egress", async () => {
+  const free = setup({ plan: "free" });
+  const freeClient = await free.connect({ network: "archil-managed" });
+
+  try {
+    await expect(freeClient.sandboxes.create({ network: "blocked" })).rejects.toThrow(
+      /archil-managed/,
+    );
+
+    const box = await freeClient.sandboxes.create();
+    expect(creates(free.fixture).at(-1)?.body).not.toHaveProperty("network");
+    expect((await box.exec(["printf", "ok"])).stdoutText()).toBe("ok");
+
+    const { snapshot } = await box.snapshot();
+    const restored = await snapshot.restore({ requireIndependentLifecycle: false });
+    expect(free.fixture.sandboxes.get(restored.id)?.managed).toBe(true);
+  } finally {
+    await freeClient.close();
+  }
+
+  const paid = setup();
+  const paidClient = await paid.connect();
+
+  try {
+    expect((await paidClient.capabilities()).network).toContain("archil-managed");
+    await expect(paidClient.sandboxes.create({ network: "archil-managed" })).rejects.toBeInstanceOf(
+      OutcomeUnknownError,
+    );
+  } finally {
+    await paidClient.close();
   }
 });
 

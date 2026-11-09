@@ -7,4 +7,4 @@ export {
 
 export { archil, type ArchilOptions } from "./factory";
 
-export { REGIONS as ARCHIL_REGIONS, type Region as ArchilRegion } from "./transport";
+export { REGIONS as ARCHIL_REGIONS, type Region as ArchilRegion } from "./regions";

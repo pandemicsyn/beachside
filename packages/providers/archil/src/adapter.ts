@@ -56,15 +56,8 @@ import {
   type ProcessOptions,
 } from "./process";
 import { checkEnv, commandLine } from "./shell";
-import {
-  createControl,
-  nativeFailure,
-  refusedBeforeEffect,
-  REGION_NAMES,
-  REGIONS,
-  type NativeFailure,
-  type NativeFetch,
-} from "./transport";
+import { createControl, nativeFailure, refusedBeforeEffect, type NativeFailure } from "./transport";
+import { REGION_NAMES, REGIONS, type NativeFetch } from "./regions";
 
 /** Setup default image, sent explicitly: Archil's REST and SDK documentation disagree on theirs. */
 export const DEFAULT_IMAGE = "node:24-bookworm";
@@ -105,6 +98,30 @@ const HOLDER_PREFIX = "bs-snap-";
 
 const PreparedImageId = /^[0-9a-f]{64}$/;
 
+/**
+ * Egress policies: `blocked` denies all egress and `internet` leaves it open, both custom
+ * policies that need a paid plan. `archil-managed` sends no policy and requires Archil's
+ * managed allowlist, which is what every Free-plan sandbox gets.
+ */
+const NETWORK_POLICIES = ["blocked", "internet", "archil-managed"] as const;
+
+const NetworkPolicy = z.enum(NETWORK_POLICIES);
+
+type NetworkPolicy = z.infer<typeof NetworkPolicy>;
+
+/** The request's policy, refused unless Archil can apply it exactly. */
+function networkPolicy(value: string | undefined): NetworkPolicy {
+  const parsed = NetworkPolicy.safeParse(value);
+
+  if (!parsed.success)
+    throw new AdapterError(
+      "UNSUPPORTED",
+      "Archil network policies are blocked, internet and archil-managed",
+    );
+
+  return parsed.data;
+}
+
 const OciImage = z
   .string()
   .min(1)
@@ -118,8 +135,8 @@ const Configuration = z.strictObject({
   region: z.enum(REGION_NAMES),
   /** Control-plane URL override, for tests and private deployments. */
   baseUrl: z.url().optional(),
-  /** `blocked` denies all egress; `internet` leaves egress open (paid plans for both). */
-  network: z.enum(["blocked", "internet"]).default("blocked"),
+  /** `blocked` or `internet` (paid plans), or `archil-managed` (Free plan's allowlist). */
+  network: NetworkPolicy.default("blocked"),
   /** Default image: an OCI reference, or a 64-hex image id from `beachside image build`. */
   image: OciImage.optional(),
   /** Exact minimums mapped onto `vcpu_count` and `mem_size_mib`. */
@@ -252,7 +269,7 @@ const PortToken = Port.extend({ token: z.string().regex(/^[^\r\n]{1,8192}$/) });
 const CreateToken = z.strictObject({
   name: Name,
   id: Id.optional(),
-  network: z.enum(["blocked", "internet"]),
+  network: NetworkPolicy,
   mounts: z.array(MountSpecSchema).max(32).optional(),
 });
 
@@ -311,7 +328,7 @@ const filesystemProfile: SnapshotProfile = {
 
 /** A restore forks the holder; it keeps the holder's size and network policy. */
 const restoreSupport = {
-  networkPolicies: ["blocked", "internet"],
+  networkPolicies: [...NETWORK_POLICIES],
   resources: false,
   mounts: false,
   independentLifecycle: false,
@@ -612,7 +629,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
       /** The portable name of a sandbox's egress policy, or null for any other policy. */
       const policyOf = (value: z.infer<typeof Network>) =>
         value.managed
-          ? null
+          ? "archil-managed"
           : value.egress?.default === "deny"
             ? "blocked"
             : value.egress?.default === undefined || value.egress.default === "allow"
@@ -954,13 +971,16 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             partial(wire.sandbox_id, identity),
           );
 
-        // Free accounts get Archil's managed allowlist whatever the request said.
-        if (token.network === "internet") {
+        // A sandbox created without a policy gets open egress on paid plans and Archil's
+        // managed allowlist on Free; only the one requested counts as ready.
+        if (token.network !== "blocked") {
           const policy = policyOf(await network(wire.sandbox_id, ctx));
 
-          if (policy !== "internet")
+          if (policy !== token.network)
             return ctx.unknown(
-              "Archil applied its managed Free-plan egress allowlist, not internet access; destroy this sandbox or use a Developer plan",
+              token.network === "internet"
+                ? "Archil applied its managed Free-plan egress allowlist, not internet access; destroy this sandbox, use network archil-managed, or use a paid plan"
+                : "Archil left egress open instead of its managed allowlist, which only Free plans apply; destroy this sandbox and use blocked or internet",
               partial(wire.sandbox_id, identity),
             );
         }
@@ -1617,7 +1637,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
         defaultNetworkPolicy: config.network,
         supports: {
           images: ["oci", "prepared"],
-          network: ["blocked", "internet"],
+          network: [...NETWORK_POLICIES],
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
@@ -1635,11 +1655,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             if (input.image.kind === "oci" && !OciImage.safeParse(input.image.value).success)
               throw new AdapterError("INVALID_ARGUMENT", "Invalid OCI image reference");
 
-            if (input.networkPolicy !== "blocked" && input.networkPolicy !== "internet")
-              throw new AdapterError(
-                "UNSUPPORTED",
-                "Archil network policies are blocked and internet",
-              );
+            networkPolicy(input.networkPolicy);
 
             if (input.region !== undefined && input.region !== config.region)
               throw new AdapterError(
@@ -1666,7 +1682,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
 
             const token: CreateToken = {
               name,
-              network: input.networkPolicy === "internet" ? "internet" : "blocked",
+              network: networkPolicy(input.networkPolicy),
             };
 
             if (input.mounts?.length) token.mounts = input.mounts;
@@ -2492,7 +2508,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
               },
               {
                 name,
-                network: input.request.networkPolicy === "internet" ? "internet" : "blocked",
+                network: networkPolicy(input.request.networkPolicy),
               },
               ctx,
               partialRestore,
