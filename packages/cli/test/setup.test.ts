@@ -330,6 +330,21 @@ describe("setup caches", () => {
     expect(envelope(hit).data.setup.cache).toMatchObject({ status: "hit" });
   });
 
+  test("a capture that waits for its source restart is continued and saved", async () => {
+    await useDeps();
+    const env = { BEACHSIDE_FAKE_RESTART_PENDING: "1" };
+
+    const built = await cli(["create", "--name", "one", "--setup", "deps", "--json"], env);
+
+    expect(built.code).toBe(0);
+    expect(envelope(built).data.setup.cache).toMatchObject({ status: "built" });
+    expect(await caches()).toMatchObject([{ setup: "deps", status: "captured" }]);
+
+    const hit = await cli(["create", "--name", "two", "--setup", "deps", "--json"], env);
+
+    expect(envelope(hit).data.setup.cache).toMatchObject({ status: "hit" });
+  });
+
   test("a miss builds the cache after setup and before startup; a hit restores it", async () => {
     await useDeps();
 

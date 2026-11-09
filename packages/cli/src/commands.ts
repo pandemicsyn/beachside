@@ -1356,8 +1356,22 @@ function cacheCapture(
       );
     } catch (cause) {
       caching.outcome = { status: "skipped", key: plan.key };
+      const reason = describeError(cause).message;
+
+      // A capture can stop its source and fail before restarting it; startup would then fail too.
+      const state = await box
+        .inspect()
+        .then((info) => info.state)
+        .catch(() => "unknown");
+
+      if (state !== "running")
+        throw new CliError(
+          "OUTCOME_UNKNOWN",
+          `setup ${plan.setup}: the cache capture failed and left ${created.record.name} ${state} (${reason})`,
+          `\`beachside snapshot inspect ${plan.name}\` checks the capture again and restarts the sandbox; or \`beachside rm ${created.record.name}\``,
+        );
       out.note(
-        `setup ${plan.setup}: the sandbox is set up but the cache was not saved (${describeError(cause).message})`,
+        `setup ${plan.setup}: the sandbox is set up but the cache was not saved (${reason})`,
       );
 
       return;

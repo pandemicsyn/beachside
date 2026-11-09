@@ -8,6 +8,7 @@ import {
   type SnapshotResult,
 } from "beachside";
 import { z } from "zod";
+import { awaitingRestart, continueCapture } from "./capture";
 import { expandHome } from "./config";
 import { CliError, describeError, usage } from "./output";
 import type { ResolvedProfile } from "./providers";
@@ -447,9 +448,17 @@ export async function captureCache(
   }
 
   try {
-    result = await box.snapshot(labels ? { labels: { [CACHE_LABEL]: plan.key } } : {}, {
-      signal: session.ctx.signal,
-    });
+    try {
+      result = await box.snapshot(labels ? { labels: { [CACHE_LABEL]: plan.key } } : {}, {
+        signal: session.ctx.signal,
+      });
+    } catch (cause) {
+      // Daytona holds the source's restart for an explicit continuation once its snapshot is ready.
+      const pending = awaitingRestart(cause);
+
+      if (!pending) throw cause;
+      result = await continueCapture(session, client, pending);
+    }
   } catch (cause) {
     const report = describeError(cause);
 

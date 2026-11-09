@@ -244,58 +244,56 @@ export const snapshotting = bindAdapter(snapshottingDefinition, {}, {});
  * Snapshots whose capture completes but leaves the source restart unsent, like a Daytona capture
  * that outlives the adapter's wait: only an explicit continuation finishes it.
  */
-export const restartPending = bindAdapter(
-  defineAdapter({
-    name: "fake",
-    displayName: "Fake test provider whose captures wait for an explicit restart",
-    config: z.strictObject({}),
-    credentials: z.strictObject({}),
-    async connect({ host }) {
-      const session = await snapshottingDefinition.connect({ config: {}, credentials: {}, host });
-      const capture = session.snapshotCapture;
-      const observe = capture && "observe" in capture ? capture.observe : undefined;
+const restartPendingDefinition = defineAdapter({
+  name: "fake",
+  displayName: "Fake test provider whose captures wait for an explicit restart",
+  config: z.strictObject({}),
+  credentials: z.strictObject({}),
+  async connect({ host }) {
+    const session = await snapshottingDefinition.connect({ config: {}, credentials: {}, host });
+    const capture = session.snapshotCapture;
+    const observe = capture && "observe" in capture ? capture.observe : undefined;
 
-      if (!capture || !("submit" in capture) || !observe)
-        throw new Error("The snapshotting fake has no recoverable capture");
+    if (!capture || !("submit" in capture) || !observe)
+      throw new Error("The snapshotting fake has no recoverable capture");
 
-      return {
-        ...session,
-        snapshotCapture: {
-          ...capture,
-          async submit(input, ctx) {
-            const result = await capture.submit(input, ctx);
+    return {
+      ...session,
+      snapshotCapture: {
+        ...capture,
+        async submit(input, ctx) {
+          const result = await capture.submit(input, ctx);
 
-            if (!("snapshot" in result)) return result;
+          if (!("snapshot" in result)) return result;
 
-            return ctx.unknown("Capture completed; source restart requires explicit continuation", {
-              kind: "snapshot_capture",
-              status: "partial",
-              snapshot: { ...result.snapshot.reference, kind: "snapshot" },
-              capture: result.capture,
-              restart: { status: "not-submitted" },
-            });
-          },
-          async continue(attempt, ctx) {
-            // Set to leave the capture uncertain, as an interrupted CLI would.
-            if (process.env.BEACHSIDE_FAKE_HOLD_RESTART === "1")
-              return ctx.unknown("Source restart was not sent");
-
-            const observed = await observe(attempt, {
-              signal: ctx.signal,
-              deadline: Date.now() + 5000,
-              pending: ctx.pending,
-              unknown: ctx.unknown,
-            });
-
-            return observed ?? ctx.unknown("Fake capture is not visible yet");
-          },
+          return ctx.unknown("Capture completed; source restart requires explicit continuation", {
+            kind: "snapshot_capture",
+            status: "partial",
+            snapshot: { ...result.snapshot.reference, kind: "snapshot" },
+            capture: result.capture,
+            restart: { status: "not-submitted" },
+          });
         },
-      };
-    },
-  }),
-  {},
-  {},
-);
+        async continue(attempt, ctx) {
+          // Set to leave the capture uncertain, as an interrupted CLI would.
+          if (process.env.BEACHSIDE_FAKE_HOLD_RESTART === "1")
+            return ctx.unknown("Source restart was not sent");
+
+          const observed = await observe(attempt, {
+            signal: ctx.signal,
+            deadline: Date.now() + 5000,
+            pending: ctx.pending,
+            unknown: ctx.unknown,
+          });
+
+          return observed ?? ctx.unknown("Fake capture is not visible yet");
+        },
+      },
+    };
+  },
+});
+
+export const restartPending = bindAdapter(restartPendingDefinition, {}, {});
 
 const streamedFiles = process.env.BEACHSIDE_FAKE_FILES;
 
@@ -481,7 +479,13 @@ export const localShell = bindAdapter(
     config: z.strictObject({}),
     credentials: z.strictObject({}),
     async connect({ host }) {
-      const session = await snapshottingDefinition.connect({ config: {}, credentials: {}, host });
+      // With BEACHSIDE_FAKE_RESTART_PENDING, captures wait for an explicit restart, like Daytona.
+      const base =
+        process.env.BEACHSIDE_FAKE_RESTART_PENDING === "1"
+          ? restartPendingDefinition
+          : snapshottingDefinition;
+
+      const session = await base.connect({ config: {}, credentials: {}, host });
 
       const exec = async (input: ExecInput) => {
         const home = localHome(input.sandbox.id);
