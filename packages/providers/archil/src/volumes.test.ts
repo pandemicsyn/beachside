@@ -28,6 +28,9 @@ test("disks mount at create, survive destroy and can be explicitly deleted", asy
     });
 
     await expect(box.snapshot()).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    // Archil would delete the disk under the running sandbox; the adapter refuses.
+    await expect(volume.delete()).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(fixture.disks.size).toBe(1);
     await expect(box.destroy()).rejects.toMatchObject({ code: "UNSUPPORTED" });
 
     const cleanup = await box.destroy({ storage: "allow-unconfirmed" });

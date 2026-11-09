@@ -69,11 +69,23 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-/** Exit code from a native result; cancelled, timed-out and signalled exits have none. */
-export function exitCode(result: SandboxProcessResult): number | null {
-  return result.exitCode !== undefined && Number.isInteger(result.exitCode)
-    ? result.exitCode
-    : null;
+/** Shell-convention exit codes for the signals this adapter sends: 128 plus the number. */
+const SIGNALLED = { SIGTERM: 143, SIGKILL: 137 } as const;
+
+/**
+ * Exit code from a native result. Archil reports a process a signal ended as exit code -1,
+ * so a negative code becomes the shell convention only for a signal this handle sent;
+ * cancelled, timed-out and other signalled exits have none.
+ */
+export function exitCode(
+  result: SandboxProcessResult,
+  sent?: keyof typeof SIGNALLED,
+): number | null {
+  if (result.exitCode === undefined || !Number.isInteger(result.exitCode)) return null;
+
+  if (result.exitCode >= 0) return result.exitCode;
+
+  return sent ? SIGNALLED[sent] : null;
 }
 
 const QueuedSocket = z.object({
@@ -182,8 +194,11 @@ export function observeProcess(
     }
   };
 
+  /** The last signal this handle delivered, which explains a negative native exit code. */
+  let sent: keyof typeof SIGNALLED | undefined;
+
   const finish = (result: SandboxProcessResult) => {
-    const code = exitCode(result);
+    const code = exitCode(result, sent);
 
     if (input.format === "text" && !outputDetached && !detached)
       for (const stream of ["stdout", "stderr"] as const) {
@@ -280,8 +295,12 @@ export function observeProcess(
       return { status: "requested" as const };
     }
 
+    // Set before sending: the exit can arrive before the signal command returns.
+    sent = name === "SIGKILL" ? "SIGKILL" : "SIGTERM";
+
     const code = await options.signalCommand(
-      `p=$(cat ${quote(reference.pidFile)} 2>/dev/null) && [ -n "$p" ] && kill -${name === "SIGKILL" ? "KILL" : "TERM"} "$p" 2>/dev/null`,
+      // The process group first, so the program and its children all get the signal.
+      `p=$(cat ${quote(reference.pidFile)} 2>/dev/null) && [ -n "$p" ] && { kill -${name === "SIGKILL" ? "KILL" : "TERM"} -- "-$p" 2>/dev/null || kill -${name === "SIGKILL" ? "KILL" : "TERM"} "$p" 2>/dev/null; }`,
       context,
     );
 

@@ -338,6 +338,21 @@ function digest(prefix: string, value: string): string {
   return `${prefix}${createHash("sha256").update(value).digest("hex").slice(0, 24)}`;
 }
 
+/**
+ * Archil reports no fork parent, so a restore's name ends with a tag of the snapshot holder
+ * it forks; deleting the snapshot finds its restores by that tag.
+ */
+function holderTag(holderId: string): string {
+  return holderId
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]/g, "")
+    .slice(0, 12);
+}
+
+function restoreName(submissionId: string, holderId: string): string {
+  return `${attemptName(submissionId)}-${holderTag(holderId)}`;
+}
+
 function attemptName(submissionId: string): string {
   return digest("bs-", submissionId);
 }
@@ -2499,7 +2514,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             if (!holder?.checkpoint)
               return ctx.reject("NOT_FOUND", "Archil snapshot has no restorable checkpoint");
 
-            const name = attemptName(ctx.submissionId);
+            const name = restoreName(ctx.submissionId, holder.sandbox_id);
 
             return launch(
               {
@@ -2555,7 +2570,21 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
         snapshotDelete: {
           recovery: { version: 1, token: DeleteToken },
           async prepare(ref, ctx) {
-            await requireHolder(ref, ctx);
+            const holder = await requireHolder(ref, ctx);
+            const tag = `-${holderTag(holder.sandbox_id)}`;
+
+            // Archil checks a holder's state before its forks, so a delete that tried first
+            // would stop the holder (discarding its memory) before learning it is still in use.
+            const restore = (await listAll(ctx)).find(
+              (wire) =>
+                wire.name.endsWith(tag) && wire.status !== "deleting" && wire.status !== "deleted",
+            );
+
+            if (restore)
+              throw new AdapterError(
+                "CONFLICT",
+                `Sandbox ${restore.sandbox_id} was restored from this Archil snapshot and still depends on it; destroy it first`,
+              );
 
             return ref;
           },
@@ -2800,6 +2829,20 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             const disk = await findDisk(checkedVolume(ref), ctx);
 
             if (!disk) throw new AdapterError("NOT_FOUND", "Archil disk is unavailable");
+
+            // Archil deletes a disk out from under a sandbox that mounts it; refuse instead.
+            const mounted = (await listAll(ctx)).find(
+              (wire) =>
+                wire.status !== "deleting" &&
+                wire.status !== "deleted" &&
+                wire.mounts?.some((mount) => mount.disk_id === disk.id),
+            );
+
+            if (mounted)
+              throw new AdapterError(
+                "CONFLICT",
+                `Archil disk is mounted on sandbox ${mounted.sandbox_id}; destroy that sandbox first`,
+              );
 
             return ref;
           },

@@ -53,7 +53,7 @@ Archil's Free plan allows 5 concurrent sandboxes, 30-minute sessions and one vCP
 
 ## What works
 
-Everything below is tested against a simulated Archil API and process connection on every change. It has not been checked against the live service yet, so the adapter stays experimental and the [support page](/docs/providers/support/) lists no live pass.
+Everything below is tested against a simulated Archil API and process connection on every change. It has also been checked by hand against the live service, on the Free plan in `aws-us-east-1` with `network: "archil-managed"` and the default image, in November 2026: commands, files, processes, reopening, terminals, protected previews, renewal, pause/resume, snapshot capture and restore, and volumes. Those checks have not yet run through Beachside's provider qualification suite, so the adapter stays experimental and the [support page](/docs/providers/support/) lists no recorded live pass.
 
 | Feature           | Support                                                                                                                                                                                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -80,7 +80,7 @@ Archil has no standalone snapshot. It keeps a checkpoint when a sandbox pauses o
 
 Restore forks the holder. With memory, the restored sandbox resumes the captured processes; with `Preserve.FILESYSTEM`, it cold-boots from the captured disk. The holder briefly runs the captured processes between the fork and the pause.
 
-Forks are children of what they fork, and Archil refuses to delete a sandbox that has children. So a source cannot be deleted while it has snapshots, and a snapshot cannot be deleted while sandboxes restored from it exist. `destroy()` on such a source stops it and reports it as retained; `snapshot.delete()` with live restores fails with `CONFLICT`. Delete restores first, then the snapshot, then the source. Because of this, `snapshot.restore()` rejects by default; pass `requireIndependentLifecycle: false` to accept the dependency:
+Forks are children of what they fork, and Archil refuses to delete a sandbox that has children. So a source cannot be deleted while it has snapshots, and a snapshot cannot be deleted while sandboxes restored from it exist. `destroy()` on such a source stops it and reports it as retained. Archil does not report a sandbox's fork parent, so each restore's name ends with a tag of its snapshot, and `snapshot.delete()` with live restores fails with `CONFLICT` before anything changes. Delete restores first, then the snapshot, then the source. Because of this, `snapshot.restore()` rejects by default; pass `requireIndependentLifecycle: false` to accept the dependency:
 
 ```ts
 const { snapshot } = await box.snapshot();
@@ -91,13 +91,13 @@ Archil can only fork a sandbox with mounted disks once it is stopped, so capturi
 
 ## Commands, processes and files
 
-Archil runs one shell command line per process over a WebSocket and streams raw stdout and stderr bytes. argv is single-quoted into that command line, so arguments with quotes, newlines or `$` arrive unchanged. A process keeps running when its connection drops, and reattaches by id at the byte offset it last read; a lost `exec` connection reattaches up to three times before reporting `OUTCOME_UNKNOWN`. Background processes record a PID file, so `signal()` reaches the program itself and the exit code reflects the signal (`143` for `SIGTERM`, `137` for `SIGKILL`). A command that passes its deadline reports `exitCode: null`.
+Archil runs one shell command line per process over a WebSocket and streams raw stdout and stderr bytes. argv is single-quoted into that command line, so arguments with quotes, newlines or `$` arrive unchanged. A process keeps running when its connection drops, and reattaches by id at the byte offset it last read; a lost `exec` connection reattaches up to three times before reporting `OUTCOME_UNKNOWN`. Background processes record a PID file, so `signal()` reaches the program's process group. Archil reports a signalled process as exit code `-1`; when the signal came from that handle, the adapter reports the shell convention instead (`143` for `SIGTERM`, `137` for `SIGKILL`), and otherwise no exit code. A command that passes its deadline reports `exitCode: null`.
 
 Archil has no file API for sandboxes. Buffered reads use the official SDK's chunked reader; writes, streamed transfers and metadata run through a small Python 3 helper in the sandbox that writes beside the target and publishes with an atomic rename, or a hard link when the target must not be replaced. Your image needs `sh`, `dd` and Python 3; the default `node:24-bookworm` has them.
 
 ## Destroy and recovery
 
-`destroy()` stops the sandbox, deletes it, and waits until Archil no longer returns it. Disks mounted on it survive.
+`destroy()` stops the sandbox, deletes it, and waits until Archil no longer returns it. Disks mounted on it survive. Archil does not confirm that a mounted disk's last writes are durable when its sandbox stops, so destroying a sandbox with mounts needs `destroy({ storage: "allow-unconfirmed" })`. Archil would delete a disk out from under a sandbox that mounts it, so `volume.delete()` is refused with `CONFLICT` until no sandbox mounts it.
 
 Beachside sends each mutation once and the adapter adds no retries; the SDK's own retries are bypassed by an adapter-owned single-attempt client. Each create, capture and restore carries an adapter-chosen `bs-…` name derived from its submission, so a create whose response was lost is found by that name instead of being resent. A refusal Archil answers with a 4xx is reported as that error; a lost response or a 5xx is `OUTCOME_UNKNOWN`.
 

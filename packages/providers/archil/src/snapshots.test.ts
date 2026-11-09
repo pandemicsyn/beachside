@@ -72,12 +72,15 @@ test("capture pauses the source, forks its checkpoint into a parked holder and r
 
     const restored = await captured.snapshot.restore({ requireIndependentLifecycle: false });
     expect(fixture.sandboxes.get(restored.id)?.parent).toBe(holder?.id);
+    expect(fixture.sandboxes.get(restored.id)?.name).toEndWith(
+      `-${holder?.id.replaceAll("-", "").slice(0, 12)}`,
+    );
     expect(
       fixture.calls.filter((call) => call.path === `/api/sandboxes/${holder?.id}/fork`).at(-1)
         ?.body,
     ).toMatchObject({ checkpoint: holder?.checkpoint });
 
-    // The restore still forks from the holder, so Archil refuses the delete before any stop.
+    // The restore still forks from the holder, so the delete is refused before any stop.
     await expect(captured.snapshot.delete()).rejects.toMatchObject({ code: "CONFLICT" });
     expect(holder?.status).toBe("paused");
 

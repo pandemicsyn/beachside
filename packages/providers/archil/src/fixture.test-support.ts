@@ -274,6 +274,10 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
       }
 
       if (!action && method === "DELETE") {
+        // Archil checks the state first, then forks (as the live service does).
+        if (!["stopped", "exited", "failed"].includes(box.status))
+          return failure(409, "sandbox_not_stopped", "The sandbox must be stopped");
+
         const children = [...sandboxes.values()].filter((child) => child.parent === box.id);
 
         if (children.length)
@@ -282,9 +286,6 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
             "sandbox_has_children",
             `The sandbox has ${children.length} child disks that must be deleted first`,
           );
-
-        if (!["stopped", "exited", "failed"].includes(box.status))
-          return failure(409, "sandbox_not_stopped", "The sandbox must be stopped");
 
         sandboxes.delete(box.id);
         effects.destroy++;
@@ -570,7 +571,10 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
           ? { status: "timed_out" }
           : proc.killed
             ? { status: "cancelled" }
-            : { status: code === 0 ? "completed" : "failed", exit_code: code };
+            : child.signalCode
+              ? // Archil reports a signalled process as exit code -1.
+                { status: "failed", exit_code: -1 }
+              : { status: code === 0 ? "completed" : "failed", exit_code: code };
 
         for (const viewer of proc.sockets)
           send(viewer, { type: "exit", ...proc.exit, cursor: proc.cursor });
