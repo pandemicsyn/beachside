@@ -48,15 +48,16 @@ console.log((await box.inspect()).resources); // { status: "known", value: { vcp
 
 When no native size is big enough, `Beachside.connect` rejects with `UNSUPPORTED` before contacting the provider, and the message names the provider's largest size. `inspect().resources` reports the size the sandbox actually has, or `unknown` when the provider does not say.
 
-| Adapter | How `resources` is applied                                                                                    |
-| ------- | ------------------------------------------------------------------------------------------------------------- |
-| boxd    | Smallest size class: 1, 2, 4 or 8 vCPUs with 4 GiB of memory per vCPU.                                        |
-| Vercel  | Smallest vCPU count (1 or an even number up to 32) with 2 GiB per vCPU. Your plan's limit still applies.      |
-| Boat    | Smallest machine type: `small` 2/4 GiB, `default` 4/8 GiB, `large` 8/16 GiB, `xlarge` 16/32 GiB.              |
-| Runloop | Smallest size from `X_SMALL` 0.5/1 GiB to `XX_LARGE` 8/32 GiB, then a custom 16 vCPU size with 32 or 64 GiB.  |
-| Modal   | Reserved exactly as given; `vcpus` may be fractional. Reported only when both numbers are set.                |
-| Daytona | Applied when the adapter builds a snapshot from an OCI image. A prepared snapshot must already meet the size. |
-| E2B     | Applied when the adapter builds a template from an OCI image. A prepared template must already meet the size. |
+| Adapter   | How `resources` is applied                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| boxd      | Smallest size class: 1, 2, 4 or 8 vCPUs with 4 GiB of memory per vCPU.                                                          |
+| Vercel    | Smallest vCPU count (1 or an even number up to 32) with 2 GiB per vCPU. Your plan's limit still applies.                        |
+| Boat      | Smallest machine type: `small` 2/4 GiB, `default` 4/8 GiB, `large` 8/16 GiB, `xlarge` 16/32 GiB.                                |
+| Runloop   | Smallest size from `X_SMALL` 0.5/1 GiB to `XX_LARGE` 8/32 GiB, then a custom 16 vCPU size with 32 or 64 GiB.                    |
+| Freestyle | Smallest Ubuntu base snapshot: `freestyle/ubuntu-sm` 2/4 GiB up to `freestyle/ubuntu-2xl` 32/64 GiB. Not with a custom `image`. |
+| Modal     | Reserved exactly as given; `vcpus` may be fractional. Reported only when both numbers are set.                                  |
+| Daytona   | Applied when the adapter builds a snapshot from an OCI image. A prepared snapshot must already meet the size.                   |
+| E2B       | Applied when the adapter builds a template from an OCI image. A prepared template must already meet the size.                   |
 
 Daytona and E2B fix a sandbox's size when they build its snapshot or template. With `resources` set, they build OCI images (including `images.build`) at that size, rounded up to whole vCPUs and whole GiB on Daytona or an even number of MiB on E2B. Before creating from a prepared image, they read its size and reject with `UNSUPPORTED` if it is smaller or unreported, so E2B's public `base` template is rejected. Snapshot restores keep the size of the captured sandbox.
 
@@ -133,6 +134,7 @@ Pass the returned `nextCursor` to read the next page; it is absent on the last p
 | [boxd (experimental)](/docs/providers/boxd/)             | `provider-scope` (verified org)                   | `unknown` ownership; `null` for machines without a UUID.                                                                   | No labels (`null`); creation time.          |
 | [Vercel Sandbox (experimental)](/docs/providers/vercel/) | Sessions: `provider-scope`; persistent: `managed` | `unknown` ownership with no creation receipt. Persistent references keep the native generation used to reopen by name.     | Labels; creation time of the named sandbox. |
 | [Runloop (experimental)](/docs/providers/runloop/)       | `provider-scope` (verified account)               | `unknown` ownership.                                                                                                       | No labels (`null`); creation time.          |
+| [Freestyle (experimental)](/docs/providers/freestyle/)   | `provider-scope` (API key's account)              | `unknown` ownership.                                                                                                       | Labels; creation time.                      |
 | Modal (experimental)                                     | `provider-scope` (verified App)                   | Always `null`: the Modal adapter cannot reopen sandboxes.                                                                  | Labels; no creation time (`null`).          |
 
 `operations.inventory()` remains available and returns only `id` and `state`.
@@ -163,6 +165,7 @@ A per-create lifetime replaces the setup value for that sandbox. An adapter neve
 | Modal (experimental)                                     | up to 24 hours         |                                                 |
 | [Runloop (experimental)](/docs/providers/runloop/)       | 60 seconds to 48 hours | Not when `lifecycle.idleSeconds` is set.        |
 | [Boat (experimental)](/docs/providers/boat/)             | 60 seconds to 30 days  |                                                 |
+| [Freestyle (experimental)](/docs/providers/freestyle/)   | 60 seconds to 30 days  | Counted from creation, including paused time.   |
 
 Older adapter-specific names still work for one minor release and reject when set together with `lifecycle.lifetimeSeconds`: E2B, Vercel and Modal `timeoutSeconds`, Daytona `ttlMinutes`, and boxd's top-level `lifetimeSeconds`. From the command line, `beachside create --ttl 30m` and `beachside run --ttl 2h` set a per-create lifetime.
 

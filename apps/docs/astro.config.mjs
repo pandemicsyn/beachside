@@ -120,6 +120,7 @@ export default defineConfig({
             { slug: "docs/providers/boat", label: "Boat", badge: "exp" },
             { slug: "docs/providers/boxd", label: "boxd", badge: "exp" },
             { slug: "docs/providers/runloop", label: "Runloop", badge: "exp" },
+            { slug: "docs/providers/freestyle", label: "Freestyle", badge: "exp" },
             { slug: "docs/providers/vercel", badge: "exp" },
           ],
         },

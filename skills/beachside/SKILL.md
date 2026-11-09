@@ -1,6 +1,6 @@
 ---
 name: beachside
-description: Build application code that creates and drives cloud sandboxes with the Beachside TypeScript SDK (beachside) on Daytona, E2B, boxd, Boat, Runloop or Vercel. Use when writing or changing code that imports beachside or an @beachside/<provider> adapter, or when asked to run untrusted or generated code in a sandbox from a Node.js or Bun service.
+description: Build application code that creates and drives cloud sandboxes with the Beachside TypeScript SDK (beachside) on Daytona, E2B, boxd, Boat, Runloop, Freestyle or Vercel. Use when writing or changing code that imports beachside or an @beachside/<provider> adapter, or when asked to run untrusted or generated code in a sandbox from a Node.js or Bun service.
 ---
 
 # Build with the Beachside SDK
@@ -15,14 +15,15 @@ Beachside is one TypeScript API over several sandbox providers. The application 
 
 ## Connect
 
-| Provider               | Package              | Connect with                                                                                                                                                               |
-| ---------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E2B                    | `@beachside/e2b`     | `Beachside.connect({ adapter: e2bAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                      |
-| Daytona                | `@beachside/daytona` | `Beachside.connect({ adapter: daytonaAdapter, credentials: { apiKey }, config: { target: "us", environment: Image.prepared("<snapshot>"), network: "daytona-default" } })` |
-| boxd                   | `@beachside/boxd`    | `Beachside.connect({ adapter: boxdAdapter, credentials: { apiKey }, config: { org, network: "internet" } })`                                                               |
-| Boat                   | `@beachside/boat`    | `Beachside.connect({ adapter: boatAdapter, credentials: { apiKey }, config: { network: "internet" } })`                                                                    |
-| Runloop (experimental) | `@beachside/runloop` | `Beachside.connect({ adapter: runloopAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                  |
-| Vercel                 | `@beachside/vercel`  | `Beachside.connect({ adapter: vercelAdapter, credentials: { token }, config: { teamId, projectId } })`                                                                     |
+| Provider                 | Package                | Connect with                                                                                                                                                               |
+| ------------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E2B                      | `@beachside/e2b`       | `Beachside.connect({ adapter: e2bAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                      |
+| Daytona                  | `@beachside/daytona`   | `Beachside.connect({ adapter: daytonaAdapter, credentials: { apiKey }, config: { target: "us", environment: Image.prepared("<snapshot>"), network: "daytona-default" } })` |
+| boxd                     | `@beachside/boxd`      | `Beachside.connect({ adapter: boxdAdapter, credentials: { apiKey }, config: { org, network: "internet" } })`                                                               |
+| Boat                     | `@beachside/boat`      | `Beachside.connect({ adapter: boatAdapter, credentials: { apiKey }, config: { network: "internet" } })`                                                                    |
+| Runloop (experimental)   | `@beachside/runloop`   | `Beachside.connect({ adapter: runloopAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                  |
+| Freestyle (experimental) | `@beachside/freestyle` | `Beachside.connect({ adapter: freestyleAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                |
+| Vercel                   | `@beachside/vercel`    | `Beachside.connect({ adapter: vercelAdapter, credentials: { token }, config: { teamId, projectId } })`                                                                     |
 
 Every adapter uses this same `{ adapter, credentials, config }` shape, including third-party ones. Each first-party package also exports a factory named after the provider that takes credentials and config in one object, such as `Beachside.connect(e2b({ apiKey }))`; prefer the split form unless the code picks a provider at run time. Older Vercel code imported the definition as `vercel`; it is now `vercelAdapter`, and `vercel` is the factory.
 
@@ -115,6 +116,7 @@ Never build a reference by hand from a sandbox id. `get()` never creates or resu
 - **boxd:** needs `network: "internet"` and an org; files over 1 MiB stream underneath, and writes need `overwrite: true`.
 - **Boat:** needs `network: "internet"`; files live under `/home/user` or `/tmp`, are capped at 5 MiB and need `overwrite: true`. Sandboxes get none of the Boat account's secrets unless `environment` names one. `suspend()` archives the disk; `resume()` starts a fresh machine.
 - **Runloop (experimental; sign-ups are invite-only):** egress is blocked by default (the adapter manages a deny-all `beachside-blocked` network policy); pass `network: "internet"` to allow it. Files need `overwrite: true`. `suspend()` keeps the disk only; `snapshot()` captures the disk, and restores start fresh processes. `preview(port)` returns a URL plus an auth header unless `preview.access` is `"public"`.
+- **Freestyle (experimental):** egress is blocked by default (an empty Freestyle firewall); pass `network: "internet"` to allow it. Images are Freestyle snapshots such as `freestyle/ubuntu-sm`, not OCI images. Snapshots keep memory and disk, and a restore resumes the captured processes. `suspend()` pauses the VM with its memory and `resume()` continues the same processes. Streamed processes, terminals and file streams work; file copy, move, stat and no-clobber writes need Python 3 in the image (the Ubuntu bases are expected to have it). Previews are public `style.dev` URLs, published on first use.
 - **Vercel:** disposable Node 24 sandboxes with blocked networking by default; no stdin, process streams, snapshots or volumes; files need `overwrite: true`.
 
 Check `await client.sandboxes.checkCreate(input)` before an unusual create; it is read-only and reports `supported`, `unsupported`, `unavailable` or `unknown`.
