@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "freestyle": "0.2.21",
-    "zod": "4.6.5",
+    "zod": "4.6.6",
     "@beachside/adapter": "workspace:*"
   },
   "devDependencies": {
