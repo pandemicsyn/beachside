@@ -30,6 +30,16 @@ import {
   type ExecSummary,
   type Output,
 } from "./output";
+import {
+  addonLabel,
+  addonLines,
+  parseAddons,
+  sandboxShell,
+  setupAddons,
+  tailnetKey,
+  teardownAddons,
+  type AddonName,
+} from "./addons";
 import { imageEnvironment } from "./images";
 import { missingEnv, providers, resolveAdapterModule, type ResolvedProfile } from "./providers";
 import type { Session } from "./session";
@@ -106,6 +116,8 @@ type CreateRequest = {
   snapshot?: string;
   /** `--retry`: keep retrying a create the provider refused before any effect, for this long. */
   retrySeconds?: number;
+  /** `--with`: servers to install once the sandbox exists. */
+  addons: AddonName[];
 };
 
 /** Create flags a restore cannot honor: the snapshot fixes the image. */
@@ -119,6 +131,17 @@ function createRequest(flags: Flags, env: Record<string, string> = {}): CreateRe
   const ttl = flags.string("ttl");
   const retry = flags.string("retry");
   const snapshot = flags.string("snapshot");
+  const addons = parseAddons(flags.strings("with"));
+  const network = flags.string("network") ?? (addons.length ? "internet" : undefined);
+  const labels = parsePairs(flags.strings("label"), "label");
+
+  if (addons.length && network !== "internet")
+    throw usage(
+      `--with ${addons.join(",")} needs --network internet`,
+      "the sandbox downloads the server and reaches Tailscale's control servers",
+    );
+
+  if (addons.length) labels[addonLabel] = addons.join("-");
 
   if (snapshot) {
     const conflicting = notWithSnapshot.find((name) => flags.has(name));
@@ -136,12 +159,13 @@ function createRequest(flags: Flags, env: Record<string, string> = {}): CreateRe
     ifNotExists: flags.bool("if-not-exists"),
     image: flags.string("image"),
     prepared: flags.string("prepared"),
-    network: flags.string("network"),
-    labels: parsePairs(flags.strings("label"), "label"),
+    network,
+    labels,
     env,
     lifetimeSeconds: ttl === undefined ? undefined : parseDuration(ttl, "ttl"),
     snapshot,
     retrySeconds: retry === undefined ? undefined : parseDuration(retry, "retry"),
+    addons,
   };
 }
 
@@ -459,12 +483,14 @@ async function createOnce(session: Session, request: CreateRequest): Promise<Cre
     if (report.outcome === "rejected") {
       await store.remove("sandbox", claimed.record.name, claimed.version);
 
-      // Adapters without a default image reject an argument-free create in SDK terms.
+      // Adapters without a default image reject an argument-free create in SDK terms, but so
+      // does any other bad input (an E2B lifetime over its cap), so the message stays the
+      // provider's and only the hint suggests an image.
       if (report.code === "INVALID_ARGUMENT" && !input.environment && !source)
         throw new CliError(
           "INVALID_ARGUMENT",
-          `${profile.provider} needs an image for this sandbox: ${report.message}`,
-          "pass --prepared <id> (a provider template or snapshot) or --image <oci-ref>",
+          `${profile.provider} rejected this sandbox: ${report.message}`,
+          "if the provider needs an image, pass --prepared <id> (a provider template or snapshot) or --image <oci-ref>",
         );
       throw cause;
     }
@@ -533,6 +559,7 @@ function sandboxSummary(record: SandboxRecord) {
     labels: record.labels,
     image: record.image ?? null,
     adopted: record.adopted ?? false,
+    addons: record.addons ?? [],
   };
 }
 
@@ -596,12 +623,13 @@ export async function findTarget(session: Session, target: string): Promise<Targ
 }
 
 export async function createCommand(session: Session, flags: Flags): Promise<number> {
-  const created = await createSandbox(
-    session,
-    createRequest(flags, await envFlags(session, flags)),
-  );
+  const request = createRequest(flags, await envFlags(session, flags));
+  const key = request.addons.length ? tailnetKey(session.ctx.env) : undefined;
+  const created = await createSandbox(session, request);
 
   if (created.unrecorded) throw unrecordedError(created);
+
+  if (key && !created.existing) await installAddons(session, created, request.addons, key);
 
   session.ctx.out.success(
     {
@@ -609,10 +637,38 @@ export async function createCommand(session: Session, flags: Flags): Promise<num
       existing: created.existing,
       reference: created.record.reference,
     },
-    created.record.name,
+    [created.record.name, ...addonLines(created.record.addons ?? [])].join("\n"),
   );
 
   return 0;
+}
+
+/** Run `--with` setup and record what is ready, also when a later add-on fails. */
+async function installAddons(
+  session: Session,
+  created: Created,
+  names: AddonName[],
+  key: string,
+): Promise<void> {
+  const { out, signal } = session.ctx;
+
+  const result = await setupAddons(
+    sandboxShell(created.box),
+    created.record.name,
+    names,
+    key,
+    signal,
+    out,
+  );
+
+  const store = await session.store();
+  const current = await store.get("sandbox", created.record.name);
+
+  created.record.addons = result.ready;
+
+  if (current) await store.update("sandbox", created.record.name, created.record, current.version);
+
+  if (result.failure) throw result.failure;
 }
 
 async function stateOf(
@@ -902,6 +958,7 @@ export async function inspectCommand(session: Session, flags: Flags): Promise<nu
     `state     ${info.state}${info.nativeState ? ` (${info.nativeState})` : ""}`,
     `expires   ${info.expires.status === "known" ? `${info.expires.at} (${info.expires.action})` : info.expires.status}`,
     `observed  ${info.observedAt}`,
+    ...addonLines(record.addons ?? []),
   ];
 
   session.ctx.out.success(
@@ -1088,6 +1145,7 @@ async function removeOne(
     return { kind: "removed", item: { name: record.name, result: "gone", retainedResources: [] } };
   }
 
+  if (record.addons?.length) await teardownAddons(box, record.addons, session.ctx.signal);
   const destroyed = await box.destroy({ signal: session.ctx.signal });
   await forget(store, target);
 

@@ -45,23 +45,24 @@ With `--json`, stdout holds exactly one document: `{ok:true,data}` or `{ok:false
 Create a sandbox and print its name.
 
 ```sh
-beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]...
+beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]... [--with rex|herdr]...
 ```
 
-| Flag                 | Description                                                                                                          |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `--name <name>`      | Store name (default: generated, like sb-1a2b3)                                                                       |
-| `--image <oci-ref>`  | OCI image, e.g. python:3.12; default is the profile's image                                                          |
-| `--prepared <id>`    | Provider-prepared image id (template, snapshot name)                                                                 |
-| `--network <policy>` | blocked or internet; default is the profile's policy                                                                 |
-| `--label <k=v>`      | Label to set (repeatable)                                                                                            |
-| `--env <K=V>`        | Environment variable for every command in the sandbox (repeatable; K alone copies it from here)                      |
-| `--env-file <path>`  | Read K=V lines into the sandbox environment (repeatable; --env wins)                                                 |
-| `--build`            | Build --image now if this provider needs a build and none is recorded                                                |
-| `--ttl <duration>`   | Destroy the sandbox after this long even if nothing removes it, e.g. 30m or 2h; default is the profile's lifetime    |
-| `--snapshot <name>`  | Restore a snapshot recorded by `beachside snapshot create` instead of an image                                       |
-| `--retry <duration>` | Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m |
-| `--if-not-exists`    | Return the named sandbox if it is still alive instead of failing                                                     |
+| Flag                 | Description                                                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `--name <name>`      | Store name (default: generated, like sb-1a2b3)                                                                                          |
+| `--image <oci-ref>`  | OCI image, e.g. python:3.12; default is the profile's image                                                                             |
+| `--prepared <id>`    | Provider-prepared image id (template, snapshot name)                                                                                    |
+| `--network <policy>` | blocked or internet; default is the profile's policy                                                                                    |
+| `--label <k=v>`      | Label to set (repeatable)                                                                                                               |
+| `--env <K=V>`        | Environment variable for every command in the sandbox (repeatable; K alone copies it from here)                                         |
+| `--env-file <path>`  | Read K=V lines into the sandbox environment (repeatable; --env wins)                                                                    |
+| `--build`            | Build --image now if this provider needs a build and none is recorded                                                                   |
+| `--ttl <duration>`   | Destroy the sandbox after this long even if nothing removes it, e.g. 30m or 2h; default is the profile's lifetime                       |
+| `--snapshot <name>`  | Restore a snapshot recorded by `beachside snapshot create` instead of an image                                                          |
+| `--retry <duration>` | Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m                    |
+| `--if-not-exists`    | Return the named sandbox if it is still alive instead of failing                                                                        |
+| `--with <server>`    | Install and start a server reachable over your tailnet: rex or herdr (repeatable; needs TAILSCALE_AUTH_KEY, implies --network internet) |
 
 Examples:
 
@@ -71,6 +72,7 @@ beachside create --name job-42 --if-not-exists --json
 beachside create --name ci --env-file .env --env API_TOKEN
 beachside create --name job-42 --ttl 1h
 beachside create --name job-42 --retry 5m --json
+beachside create --name web --with rex
 ```
 
 ## ls

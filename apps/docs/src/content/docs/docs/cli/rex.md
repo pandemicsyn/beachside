@@ -42,6 +42,16 @@ Merge this into your existing policy. Don't add any grant with `tag:beachside` a
 
 Keep the key out of your shell history. For example, put it in an env file that only you can read and export it as `TAILSCALE_AUTH_KEY`.
 
+## Start it with one command
+
+With the auth key in `TAILSCALE_AUTH_KEY`, one command does every step below:
+
+```sh
+beachside create --name rex --ttl 2h --with rex
+```
+
+It prints the `https://beachside-rex.<your-tailnet>.ts.net` address once Rex is ready, usually within a minute, and `beachside inspect rex` shows it again. To see what it runs, or to do it by hand, read on.
+
 ## Start a Rex server in a sandbox
 
 Create the sandbox and install Rex:
