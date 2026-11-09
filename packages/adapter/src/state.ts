@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AdapterError } from "./errors";
 import { LifetimeLimits, lifetimeProblem } from "./lifetime";
+import { SecretBindings, secretsProblem } from "./secrets";
 import type { CreateInput, ReadContext, RuntimeSession, Sandbox } from "./index";
 
 export const ResourceKind = z.enum([
@@ -300,6 +301,8 @@ export const RestoreRequest = z.strictObject({
   mounts: z.array(MountSpec).max(32).optional(),
   /** Sandbox-wide environment for the restored sandbox; the runtime checks it like create env. */
   env: z.record(z.string(), z.string()).optional(),
+  /** Brokered secrets for the restored sandbox; checked like create secrets. */
+  secrets: SecretBindings.optional(),
   labels: z.record(z.string().min(1).max(64), z.string().max(256)).optional(),
   /** This sandbox's lifetime, replacing the adapter setup's. */
   lifetimeSeconds: z.number().int().positive().safe().optional(),
@@ -310,6 +313,8 @@ export type RestoreRequest = z.infer<typeof RestoreRequest>;
 /** The create options a restore applies; anything else rejects before an effect. */
 export const RestoreOptions = z.strictObject({
   env: z.boolean().optional(),
+  /** Brokers `secrets` on the restored sandbox, with the adapter's `supports.secrets`. */
+  secrets: z.boolean().optional(),
   labels: z.boolean().optional(),
   lifetime: LifetimeLimits.optional(),
 });
@@ -319,10 +324,13 @@ export type RestoreOptions = z.infer<typeof RestoreOptions>;
 /** Why a restore request asks for an option this adapter does not apply, or null. */
 export function restoreOptionProblem(
   options: RestoreOptions | undefined,
-  request: Pick<RestoreRequest, "env" | "labels" | "lifetimeSeconds">,
+  request: Pick<RestoreRequest, "env" | "secrets" | "labels" | "lifetimeSeconds">,
 ): string | null {
   if (request.env && Object.keys(request.env).length && !options?.env)
     return "Restore-time environment variables are unsupported by this adapter";
+
+  if (request.secrets?.length && !options?.secrets)
+    return "Restore-time brokered secrets are unsupported by this adapter";
 
   if (request.labels && Object.keys(request.labels).length && !options?.labels)
     return "Restore-time labels are unsupported by this adapter";
@@ -939,12 +947,15 @@ export async function checkCreate(
       status: "unsupported",
       reason: "Create-time environment variables are unsupported by this adapter",
     };
+  const secrets = secretsProblem(session.supports.secrets, input.secrets);
+
+  if (secrets) return { status: "unsupported", reason: secrets };
   const lifetime = lifetimeProblem(session.supports.lifetime, input.lifetimeSeconds);
 
   if (lifetime) return { status: "unsupported", reason: lifetime };
 
   // Read-only capability hooks never need (possibly secret) environment values.
-  const { env: _env, ...probe } = input;
+  const { env: _env, secrets: _secrets, ...probe } = input;
 
   if (input.mounts?.length) {
     const mounts = z.array(MountSpec).max(32).parse(input.mounts);
@@ -1025,6 +1036,16 @@ export const DirectCapabilities = z.strictObject({
   network: z.array(z.string()),
   /** `create({ env })` sets sandbox-wide environment variables on this connection. */
   createEnv: z.boolean().optional(),
+  /** How `secret()` values are kept out of the sandbox on this connection; null when they cannot be. */
+  secrets: z
+    .strictObject({
+      delivery: z.enum(["placeholder", "header"]),
+      basicAuth: z.boolean(),
+      wildcardHosts: z.boolean(),
+      maxSecrets: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .optional(),
   /** Per-create `lifecycle.lifetimeSeconds` range on this connection; null when only setup sets it. */
   lifetime: LifetimeLimits.nullable().optional(),
   exec: z.boolean(),

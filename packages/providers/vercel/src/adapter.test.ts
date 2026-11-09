@@ -9,7 +9,7 @@ import {
   type Json,
 } from "@beachside/adapter";
 import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
-import { Image, Preserve, Beachside, type ExecInput } from "beachside";
+import { Image, Preserve, Beachside, secret, type ExecInput } from "beachside";
 import { createVercelAdapter } from "./adapter";
 import type { VercelTransport } from "./transport";
 
@@ -126,6 +126,9 @@ export function fixture() {
         if (createStatus !== 200) return json(createError, createStatus);
         const input = JSON.parse(String(init.body));
         expect(input).toMatchObject({ projectId: "project-fixture" });
+
+        // Like Vercel, report a policy with transforms as custom.
+        if (input.networkPolicy.allow) input.networkPolicy = { mode: "custom" };
         expect(input.tags.beachsideSubmission).toBeString();
 
         const session = {
@@ -1911,5 +1914,57 @@ test("Vercel redacts multi-line and long create env values before shortening nat
     }
   } finally {
     await client.close();
+  }
+});
+
+test("brokered secrets become header transforms on an allow-all custom policy", async () => {
+  const KEY = "CANARY-vercel-model-key";
+  const native = fixture();
+
+  const client = await Beachside.connect({
+    adapter: native.adapter,
+    config: { ...config, network: "internet" },
+    credentials,
+  });
+
+  try {
+    expect((await client.capabilities()).secrets).toMatchObject({ delivery: "header" });
+    const box = await client.sandboxes.create({
+      env: { MODE: "x", ANTHROPIC_API_KEY: secret(KEY, { for: "anthropic" }) },
+    });
+    expect(box.id).toBeString();
+
+    const body = JSON.parse(
+      String(native.requests.find((r) => r.url.pathname === "/api/v3/sandboxes")?.init.body),
+    );
+
+    expect(body.env).toEqual({ MODE: "x", ANTHROPIC_API_KEY: "beachside:ANTHROPIC_API_KEY" });
+    expect(body.networkPolicy).toEqual({
+      allow: {
+        "*": [],
+        "api.anthropic.com": [{ transform: [{ headers: { "x-api-key": KEY } }] }],
+      },
+    });
+    expect(JSON.stringify(box.reference)).not.toContain(KEY);
+  } finally {
+    await client.close();
+  }
+
+  const blocked = fixture();
+
+  const refusing = await Beachside.connect({
+    adapter: blocked.adapter,
+    config: { ...config, network: "blocked" },
+    credentials,
+  });
+
+  try {
+    expect((await refusing.capabilities()).secrets).toBeNull();
+    await expect(
+      refusing.sandboxes.create({ env: { K: secret(KEY, { for: "anthropic" }) } }),
+    ).rejects.toThrow(/unsupported/i);
+    expect(blocked.effects.create).toBe(0);
+  } finally {
+    await refusing.close();
   }
 });

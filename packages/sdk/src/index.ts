@@ -170,3 +170,11 @@ export type {
 export { SandboxCleanupError } from "./scoped-sandbox";
 
 export type { SandboxScopeOptions, SandboxScopeCallbackOutcome } from "./scoped-sandbox";
+
+export { secret, Secret } from "./secrets";
+
+export type { SecretOptions, EnvValue } from "./secrets";
+
+export { SECRET_PRESETS } from "@beachside/adapter";
+
+export type { SecretPreset, SecretSupport } from "@beachside/adapter";

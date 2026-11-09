@@ -35,6 +35,10 @@ import {
   PreserveSchema,
   listedLabels,
   listedTime,
+  envWithSecretPlaceholders,
+  secretHeadersByHost,
+  secretValues,
+  type SecretSupport,
 } from "@beachside/adapter";
 import {
   boundedBody,
@@ -55,6 +59,14 @@ const id = z
 const policy = z.enum(["blocked", "internet", "vercel-deny-all", "vercel-allow-all"]);
 
 /** Deprecated native spellings, resolved to portable names for config and SDK inputs. */
+// Header transforms on the egress proxy; the sandbox sees only a Beachside placeholder.
+const SECRET_SUPPORT: SecretSupport = {
+  delivery: "header",
+  basicAuth: true,
+  wildcardHosts: true,
+  maxSecrets: 32,
+};
+
 const networkPolicyAliases = {
   "vercel-deny-all": "blocked",
   "vercel-allow-all": "internet",
@@ -361,6 +373,9 @@ export function createVercelAdapter(
       await client.json(`/v2/sandboxes?project=${project.id}&limit=1`, signal, page);
       const image = config.image;
       const mode = networkPolicy === "blocked" ? "deny-all" : "allow-all";
+      // Brokered secrets turn allow-all into a custom policy: every host plus header transforms.
+      const modeMatches = (actual: string | undefined) =>
+        actual === mode || (mode === "allow-all" && actual === "custom");
       const route = (sandboxId: string) => `/v2/sandboxes/sessions/${id.parse(sandboxId)}`;
 
       const scope = {
@@ -481,8 +496,8 @@ export function createVercelAdapter(
           ) ||
           JSON.stringify(value.routes.map((v) => v.port).sort((a, b) => a - b)) !==
             JSON.stringify([...config.ports].sort((a, b) => a - b)) ||
-          value.sandbox.networkPolicy?.mode !== mode ||
-          value.session.networkPolicy?.mode !== mode
+          !modeMatches(value.sandbox.networkPolicy?.mode) ||
+          !modeMatches(value.session.networkPolicy?.mode)
         )
           throw new AdapterError("CONFLICT", "Persistent sandbox identity or routing changed");
       };
@@ -929,6 +944,15 @@ export function createVercelAdapter(
             )
               throw new AdapterError("UNSUPPORTED", "Unsupported Vercel creation option");
 
+            // Vercel only transforms headers on hosts the policy allows, so brokering would widen
+            // a blocked sandbox's network.
+            if (input.secrets?.length && networkPolicy === "blocked")
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "Vercel brokers secrets only with network internet: its header rules also allow the host",
+              );
+            secretHeadersByHost(input.secrets);
+
             if (input.requirements?.snapshot) {
               if (config.persistent)
                 throw new AdapterError("UNSUPPORTED", "Reusable capture requires disposable mode");
@@ -969,6 +993,17 @@ export function createVercelAdapter(
               : `beachside-${crypto.randomUUID()}`;
 
             const retention: NativeRetention = {};
+            const secretHosts = secretHeadersByHost(input.secrets);
+            const env = envWithSecretPlaceholders(input.env, input.secrets);
+            const expectedMode = secretHosts.size ? "custom" : mode;
+            const allow: Record<string, { transform: { headers: Record<string, string> }[] }[]> =
+              { "*": [] };
+
+            for (const [host, headers] of secretHosts) allow[host] = [{ transform: [{ headers }] }];
+
+            const nativePolicy: { allow: typeof allow } | { mode: string } = secretHosts.size
+              ? { allow }
+              : { mode };
 
             if (config.persistent) retention.keepLastSnapshots = { count: 1, deleteEvicted: true };
 
@@ -987,10 +1022,10 @@ export function createVercelAdapter(
               resources: { vcpus },
               ports: config.ports,
               failoverRegions: [],
-              networkPolicy: { mode },
+              networkPolicy: nativePolicy,
               tags: { ...input.labels, beachsideSubmission: ctx.submissionId },
               // Native session defaults; every command inherits them unless its own env overrides.
-              env: input.env && Object.keys(input.env).length ? input.env : undefined,
+              env: env && Object.keys(env).length ? env : undefined,
             };
 
             let acknowledgement;
@@ -1003,7 +1038,7 @@ export function createVercelAdapter(
                 requestBody,
                 undefined,
                 // Create-time environment values may be secrets; a native echo never reaches a message.
-                Object.values(input.env ?? {}),
+                [...Object.values(input.env ?? {}), ...secretValues(input.secrets)],
               );
             } catch (error) {
               if (!(error instanceof VercelRequestRejected)) throw error;
@@ -1062,8 +1097,8 @@ export function createVercelAdapter(
                   .sort((a, b) => a - b),
               ) === JSON.stringify([...config.ports].sort((a, b) => a - b)) &&
               (!sourceSnapshotId || result.session.sourceSnapshotId === sourceSnapshotId) &&
-              result.session.networkPolicy?.mode === mode &&
-              result.sandbox.networkPolicy?.mode === mode;
+              result.session.networkPolicy?.mode === expectedMode &&
+              result.sandbox.networkPolicy?.mode === expectedMode;
 
             const token: z.infer<typeof createToken> = {
               version: 1,
@@ -1120,8 +1155,8 @@ export function createVercelAdapter(
                 value.session.region !== config.region ||
                 value.session.vcpus !== vcpus ||
                 value.session.timeout !== lifetimeSeconds * 1000 ||
-                value.session.networkPolicy?.mode !== mode ||
-                value.sandbox.networkPolicy?.mode !== mode ||
+                !modeMatches(value.session.networkPolicy?.mode) ||
+                !modeMatches(value.sandbox.networkPolicy?.mode) ||
                 !new RegExp(`^${image.split(":")[0]}@sha256:[a-f0-9]{64}$`).test(
                   value.sandbox.image ?? "",
                 ) ||
@@ -1174,7 +1209,7 @@ export function createVercelAdapter(
             const value = await get(token.sessionId, readSignal(ctx));
 
             if (
-              value.networkPolicy?.mode !== mode ||
+              !modeMatches(value.networkPolicy?.mode) ||
               (token.sourceSnapshotId && value.sourceSnapshotId !== token.sourceSnapshotId)
             )
               return ctx.unknown("Acknowledged session network policy mismatch");
@@ -1389,6 +1424,7 @@ export function createVercelAdapter(
           exec: { commands: ["argv", "shell"], maxOutputBytes: maxBytes },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          secrets: networkPolicy === "blocked" ? undefined : SECRET_SUPPORT,
           lifetime: createLifetime,
         },
         suspensionCapabilities: async () =>
@@ -2023,7 +2059,7 @@ export function createVercelAdapter(
         snapshotRestore: {
           recovery: { version: 1, token: createToken },
           // A restore boots a new session from the filesystem snapshot, so options apply as on create.
-          options: { env: true, labels: true, lifetime: createLifetime },
+          options: { env: true, labels: true, lifetime: createLifetime, secrets: true },
           prepare: async (input, ctx) => {
             checkSnapshot(input.snapshot);
             const labels = Object.keys(input.request.labels ?? {});
@@ -2043,6 +2079,12 @@ export function createVercelAdapter(
               input.request.mounts?.length
             )
               throw new AdapterError("UNSUPPORTED", "Unsupported restore configuration");
+
+            if (input.request.secrets?.length && networkPolicy === "blocked")
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "Vercel brokers secrets only with network internet: its header rules also allow the host",
+              );
             const value = await getSnapshot(input.snapshot, ctx);
 
             if (value.status !== "created")
@@ -2073,6 +2115,7 @@ export function createVercelAdapter(
                 networkPolicy,
                 labels: input.request.labels,
                 env: input.request.env,
+                secrets: input.request.secrets,
                 lifetimeSeconds: input.request.lifetimeSeconds,
               },
               ctx,

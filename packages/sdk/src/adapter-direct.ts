@@ -2478,6 +2478,7 @@ export class AdapterDirectClient {
       images: [...support.images],
       imageBuild: !!this.session.imageBuild,
       createEnv: !!support.createEnv,
+      secrets: support.secrets ? { ...support.secrets } : null,
       lifetime: support.lifetime ? { ...support.lifetime } : null,
       network: [...support.network],
       exec: !!this.session.exec && !!support.exec,
@@ -2533,6 +2534,7 @@ export class AdapterDirectClient {
           requirements: request.requirements,
           mounts: request.mounts,
           env: request.env,
+          secrets: request.secrets,
           lifetimeSeconds: request.lifecycle?.lifetimeSeconds,
         },
         { signal, deadline: Date.now() + 30_000 },
@@ -2600,6 +2602,7 @@ export class AdapterDirectClient {
         requirements: request.requirements,
         mounts: request.mounts,
         env: request.env,
+        secrets: request.secrets,
         lifetimeSeconds: request.lifecycle?.lifetimeSeconds,
       },
       (result, ref) => {
