@@ -13,7 +13,6 @@ import {
   type AddonRecord,
   type Shell,
 } from "../src/addons";
-import { main } from "../src/cli";
 import { Output } from "../src/output";
 
 type Call = { script: string; stdin?: string };
@@ -254,8 +253,6 @@ describe("create --with", () => {
       token,
       testMode: true,
     });
-    process.env.BEACHSIDE_FAKE_URL = server.url.origin;
-    process.env.BEACHSIDE_FAKE_TOKEN = token;
     await writeFile(
       join(root, "beachside.json"),
       JSON.stringify({
@@ -270,25 +267,26 @@ describe("create --with", () => {
     await rm(root, { recursive: true, force: true });
   });
 
+  // A child process, so the fixture adapter binds to this file's fake server rather than one
+  // another test file's import already bound in this process.
   async function run(args: string[], extra: Record<string, string> = {}) {
-    let stdout = "";
-
-    const code = await main(args, {
+    const child = Bun.spawn(["bun", join(import.meta.dir, "..", "src", "main.ts"), ...args], {
+      cwd: root,
       env: {
+        PATH: process.env.PATH ?? "",
         HOME: root,
         BEACHSIDE_CONFIG: join(root, "beachside.json"),
         BEACHSIDE_STATE_DIR: join(root, "state"),
+        BEACHSIDE_FAKE_URL: server.url.origin,
+        BEACHSIDE_FAKE_TOKEN: token,
         ...extra,
       },
-      cwd: root,
-      signal: new AbortController().signal,
-      stdin: async function* () {},
-      stderrTerminal: false,
-      streams: {
-        stdout: (chunk) => (stdout += new TextDecoder().decode(Buffer.from(chunk))),
-        stderr: () => {},
-      },
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
     });
+
+    const [stdout, code] = await Promise.all([new Response(child.stdout).text(), child.exited]);
 
     return { code, json: JSON.parse(stdout) };
   }
