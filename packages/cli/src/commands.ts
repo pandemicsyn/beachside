@@ -38,6 +38,7 @@ import {
   tailnetKey,
   teardownAddons,
   type AddonName,
+  type AddonRecord,
 } from "./addons";
 import { imageEnvironment } from "./images";
 import { missingEnv, providers, resolveAdapterModule, type ResolvedProfile } from "./providers";
@@ -133,6 +134,12 @@ function createRequest(flags: Flags, env: Record<string, string> = {}): CreateRe
   const addons = parseAddons(flags.strings("with"));
   const network = flags.string("network") ?? (addons.length ? "internet" : undefined);
   const labels = parsePairs(flags.strings("label"), "label");
+
+  if (addons.length && snapshot)
+    throw usage(
+      "--snapshot cannot be combined with --with",
+      "a restored sandbox can carry the original's tailnet login; create it without --snapshot",
+    );
 
   if (addons.length && network !== "internet")
     throw usage(
@@ -628,6 +635,8 @@ export async function createCommand(session: Session, flags: Flags): Promise<num
 
   if (key && !created.existing) await installAddons(session, created, request.addons, key);
 
+  if (created.existing) requireAddons(created.record, request.addons);
+
   session.ctx.out.success(
     {
       ...sandboxSummary(created.record),
@@ -640,7 +649,21 @@ export async function createCommand(session: Session, flags: Flags): Promise<num
   return 0;
 }
 
-/** Run `--with` setup and record what is ready, also when a later add-on fails. */
+/** `--if-not-exists` found the sandbox: it must already have every requested add-on ready. */
+function requireAddons(record: SandboxRecord, names: AddonName[]): void {
+  const missing = names.filter(
+    (name) => !record.addons?.some((addon) => addon.name === name && addon.state === "ready"),
+  );
+
+  if (missing.length)
+    throw new CliError(
+      "CONFLICT",
+      `${record.name} exists but has no ready ${missing.join(", ")}`,
+      `remove it with \`beachside rm ${record.name}\` and create it again, or pick another --name`,
+    );
+}
+
+/** Run `--with` setup, saving each add-on's state as it goes. */
 async function installAddons(
   session: Session,
   created: Created,
@@ -649,6 +672,16 @@ async function installAddons(
 ): Promise<void> {
   const { out, signal } = session.ctx;
 
+  const store = await session.store();
+
+  const save = async (addons: AddonRecord[]) => {
+    created.record.addons = addons;
+    const current = await store.get("sandbox", created.record.name);
+
+    if (current)
+      await store.update("sandbox", created.record.name, created.record, current.version);
+  };
+
   const result = await setupAddons(
     sandboxShell(created.box),
     created.record.name,
@@ -656,14 +689,8 @@ async function installAddons(
     key,
     signal,
     out,
+    save,
   );
-
-  const store = await session.store();
-  const current = await store.get("sandbox", created.record.name);
-
-  created.record.addons = result.ready;
-
-  if (current) await store.update("sandbox", created.record.name, created.record, current.version);
 
   if (result.failure) throw result.failure;
 }

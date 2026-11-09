@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +10,7 @@ import {
   setupAddons,
   tailnetKey,
   teardownAddons,
+  type AddonRecord,
   type Shell,
 } from "../src/addons";
 import { main } from "../src/cli";
@@ -62,6 +63,11 @@ describe("add-on helpers", () => {
 
 describe("setupAddons", () => {
   const key = "tskey-auth-secret";
+  let saved: AddonRecord[][] = [];
+
+  beforeEach(() => {
+    saved = [];
+  });
 
   test("rex: installs, starts, joins with the key over stdin only, and reports its address", async () => {
     const { shell, calls } = scriptedShell([
@@ -78,10 +84,13 @@ describe("setupAddons", () => {
       key,
       AbortSignal.timeout(90_000),
       quietOutput(),
+      async (addons) => {
+        saved.push(addons);
+      },
     );
 
     expect(result.failure).toBeUndefined();
-    expect(result.ready).toEqual([
+    expect(result.addons).toEqual([
       {
         name: "rex",
         hostname: "beachside-web",
@@ -95,6 +104,11 @@ describe("setupAddons", () => {
     ]);
     expect(calls[0]!.script).toContain("192.0.0.8/32");
     expect(calls.some((call) => call.script.includes(".local/state/rex/tsnet"))).toBe(true);
+    // On record as setting-up before it can join, so a killed create still logs it out on rm.
+    expect(saved.map((addons) => addons.map((addon) => addon.state))).toEqual([
+      ["setting-up"],
+      ["ready"],
+    ]);
   }, 90_000);
 
   test("herdr: Tailscale SSH device and the herdr command for it", async () => {
@@ -109,9 +123,12 @@ describe("setupAddons", () => {
       key,
       AbortSignal.timeout(10_000),
       quietOutput(),
+      async (addons) => {
+        saved.push(addons);
+      },
     );
 
-    expect(result.ready).toEqual([
+    expect(result.addons).toEqual([
       {
         name: "herdr",
         hostname: "beachside-web",
@@ -124,7 +141,7 @@ describe("setupAddons", () => {
       "up --auth-key=file:/dev/stdin --ssh --timeout=120s --hostname='beachside-web'",
     );
     expect(calls.some((call) => call.script.includes("--statedir="))).toBe(true);
-    expect(addonLines(result.ready)).toEqual([
+    expect(addonLines(result.addons)).toEqual([
       "herdr     herdr --remote ssh://ubuntu@beachside-web.tail1.ts.net",
     ]);
   });
@@ -141,13 +158,17 @@ describe("setupAddons", () => {
       key,
       AbortSignal.timeout(10_000),
       quietOutput(),
+      async (addons) => {
+        saved.push(addons);
+      },
     );
 
-    expect(result.ready).toEqual([{ name: "rex", hostname: "beachside-web", state: "failed" }]);
-    expect(addonLines(result.ready)).toEqual(["rex       setup failed (beachside-web)"]);
+    expect(result.addons).toEqual([{ name: "rex", hostname: "beachside-web", state: "failed" }]);
+    expect(addonLines(result.addons)).toEqual(["rex       setup failed (beachside-web)"]);
     expect(result.failure?.code).toBe("PARTIAL");
     expect(result.failure?.message).toContain("Installing Rex failed (exit 3)");
     expect(result.failure?.message).not.toContain(key);
+    expect(saved.at(-1)).toEqual([{ name: "rex", hostname: "beachside-web", state: "failed" }]);
   });
 });
 
@@ -175,7 +196,15 @@ describe("the routable IPv4 check", () => {
   async function addsAddress(addresses: string): Promise<boolean> {
     const { shell, calls } = scriptedShell([[/install\.sh/, { exitCode: 3 }]]);
 
-    await setupAddons(shell, "web", ["rex"], "k", AbortSignal.timeout(5000), quietOutput());
+    await setupAddons(
+      shell,
+      "web",
+      ["rex"],
+      "k",
+      AbortSignal.timeout(5000),
+      quietOutput(),
+      async () => {},
+    );
 
     const dir = await mkdtemp(join(tmpdir(), "beachside-ip-"));
     const log = join(dir, "added");
@@ -283,6 +312,25 @@ describe("create --with", () => {
       (await run(["create", "--with", "rex", "--network", "blocked", "--json"], env)).code,
     ).toBe(2);
     expect((await run(["create", "--with", "orca", "--json"], env)).code).toBe(2);
+    expect((await run(["create", "--with", "rex", "--snapshot", "base", "--json"], env)).code).toBe(
+      2,
+    );
     expect(await stored()).toEqual([]);
+  });
+
+  test("--if-not-exists refuses a sandbox that lacks the requested add-on", async () => {
+    const env = { TAILSCALE_AUTH_KEY: "tskey-auth-x" };
+
+    expect(
+      (await run(["create", "--name", "plain", "--prepared", "fake-starter", "--json"])).code,
+    ).toBe(0);
+
+    const again = await run(
+      ["create", "--name", "plain", "--if-not-exists", "--with", "rex", "--json"],
+      env,
+    );
+
+    expect(again.json.error.code).toBe("CONFLICT");
+    expect(again.json.error.message).toContain("has no ready rex");
   });
 });

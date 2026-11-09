@@ -114,6 +114,17 @@ The Rex CLI works too:
 rex -S https://beachside-rex.<your-tailnet>.ts.net ls
 ```
 
+## Customize the sandbox
+
+The sandbox is an ordinary Beachside sandbox, so the usual tools work with `--with rex`:
+
+- **Install more software** after create, with `beachside exec rex -- sudo apt-get install -y ripgrep` or `beachside sh rex '<script>'`. You can also install it from a Rex terminal once you're connected, since that's a shell in the sandbox.
+- **Start from your own image** with `--image <oci-ref>` or `--prepared <id>`, with your tools baked in. If the image already has `rex`, setup skips the install, so create is faster too. Don't bake a Rex that has joined a tailnet into the image.
+- **Bring a project** with `beachside push rex`, and set variables for every command with `--env` or `--env-file`.
+- **Size and lifetime:** `--ttl` sets how long the sandbox lives. CPU and memory come from the profile's `config.resources` (see [configuration](/docs/cli/configuration/)).
+
+`--snapshot` can't be combined with `--with`. A restored sandbox can still be logged in to your tailnet as the original, so start from an image instead.
+
 ## Clean up
 
 If you used `--with rex`, `beachside rm rex` does both steps. By hand, log Rex out of your tailnet first, then remove the sandbox:

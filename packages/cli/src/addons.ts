@@ -15,8 +15,11 @@ export const AddonRecord = z.strictObject({
   name: z.enum(addonNames),
   /** The tailnet device name the add-on asked for. */
   hostname: z.string().min(1),
-  /** `failed` keeps a half-set-up add-on on record so `rm` still logs its device out. */
-  state: z.enum(["ready", "failed"]),
+  /**
+   * `setting-up` is saved before the add-on can join the tailnet and `failed` after a failed
+   * setup, so `rm` still logs its device out.
+   */
+  state: z.enum(["setting-up", "ready", "failed"]),
   /** How to reach it once ready: Rex's https address, or the herdr command. */
   connect: z.string().min(1).optional(),
 });
@@ -156,7 +159,9 @@ async function setupRex(
     signal,
   );
 
-  // Old tsnet state (a restored snapshot, an earlier start) makes Rex ignore the auth key.
+  // Old tsnet state, such as one baked into an image, makes Rex ignore the auth key and would
+  // share another sandbox's identity. `create` refuses --snapshot with --with, so a restored
+  // sandbox never reaches this.
   await run(
     shell,
     {
@@ -301,7 +306,14 @@ async function setupHerdr(
   };
 }
 
-/** Install and start each add-on in order. The sandbox is kept on failure, for inspection. */
+/** Saves the add-ons as they stand, so an interrupted create still leaves them on record. */
+export type SaveAddons = (addons: AddonRecord[]) => Promise<void>;
+
+/**
+ * Install and start each add-on in order. Each one is saved as `setting-up` before it can join
+ * the tailnet and again once it is ready, so `rm` can log its device out even if this process
+ * dies partway. The sandbox is kept on failure, for inspection.
+ */
 export async function setupAddons(
   shell: Shell,
   sandbox: string,
@@ -309,9 +321,9 @@ export async function setupAddons(
   key: string,
   signal: AbortSignal,
   out: Output,
-): Promise<{ ready: AddonRecord[]; failure?: CliError }> {
-  const ready: AddonRecord[] = [];
-  let current: AddonRecord | undefined;
+  save: SaveAddons,
+): Promise<{ addons: AddonRecord[]; failure?: CliError }> {
+  const addons: AddonRecord[] = [];
 
   try {
     await run(shell, { what: "Checking the network", script: routableIpv4 }, signal);
@@ -319,24 +331,37 @@ export async function setupAddons(
     for (const name of names) {
       const hostname = addonHostname(name, sandbox, names);
 
-      current = { name, hostname, state: "failed" };
-      ready.push(
+      addons.push({ name, hostname, state: "setting-up" });
+      await save([...addons]);
+      addons[addons.length - 1] =
         name === "rex"
           ? await setupRex(shell, hostname, key, signal, out)
-          : await setupHerdr(shell, hostname, key, signal, out),
-      );
-      current = undefined;
+          : await setupHerdr(shell, hostname, key, signal, out);
+      await save([...addons]);
     }
 
-    return { ready };
+    return { addons };
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
 
+    const pending = names.filter(
+      (name) => !addons.some((addon) => addon.name === name && addon.state === "ready"),
+    );
+
+    for (const [index, addon] of addons.entries())
+      if (addon.state === "setting-up") addons[index] = { ...addon, state: "failed" };
+
+    try {
+      await save([...addons]);
+    } catch {
+      // The `setting-up` entry already on record still lets `rm` log the device out.
+    }
+
     return {
-      ready: current ? [...ready, current] : ready,
+      addons,
       failure: new CliError(
         "PARTIAL",
-        `Created ${sandbox}, but setting up ${names.filter((name) => !ready.some((done) => done.name === name)).join(", ")} failed: ${message}`,
+        `Created ${sandbox}, but setting up ${pending.join(", ")} failed: ${message}`,
         `inspect it with \`beachside exec ${sandbox} -- …\`, or remove it with \`beachside rm ${sandbox}\``,
         { sandbox },
         "partial",
@@ -382,7 +407,8 @@ export function addonLines(addons: AddonRecord[]): string[] {
   return addons.map((addon) => {
     const name = addon.name.padEnd(10);
 
-    if (addon.state === "failed") return `${name}setup failed (${addon.hostname})`;
+    if (addon.state !== "ready")
+      return `${name}setup ${addon.state === "failed" ? "failed" : "unfinished"} (${addon.hostname})`;
 
     return addon.name === "rex"
       ? `${name}${addon.connect}  (in Rex: Add Remote Host…)`
