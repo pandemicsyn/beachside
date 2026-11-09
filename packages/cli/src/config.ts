@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 import { CliError, usage } from "./output";
+import { SetupConfig, SetupName } from "./setups";
 
 export type Env = Readonly<Record<string, string | undefined>>;
 
@@ -19,6 +20,8 @@ export const ProfileConfig = z
     export: z.string().min(1).max(128).optional(),
     config: z.record(z.string(), z.json()).optional(),
     credentials: z.record(z.string(), z.string()).optional(),
+    /** Named setups every create with this profile runs first (skip with --no-default-setup). */
+    setup: z.array(SetupName).optional(),
   })
   .refine((profile) => profile.provider || profile.module, {
     message: "A profile needs a provider or a module",
@@ -36,6 +39,10 @@ export const CliConfig = z.strictObject({
   images: z.strictObject({ autoBuild: z.boolean().optional() }).optional(),
   /** Also load adapters from the working directory's node_modules (off: a checkout could plant one). */
   adapters: z.strictObject({ searchProject: z.boolean().optional() }).optional(),
+  /** Named, provider-neutral setups for `--setup <name>`. */
+  setups: z.record(SetupName, SetupConfig).optional(),
+  /** Also read setups from a checkout's `.beachside/setup.json` (off: a checkout could plant one). */
+  projectSetups: z.boolean().optional(),
 });
 
 export type CliConfig = z.infer<typeof CliConfig>;
@@ -116,6 +123,15 @@ export function searchProjectAdapters(config: LoadedConfig, env: Env): boolean {
   if (fromEnv !== undefined && fromEnv !== "") return fromEnv === "1" || fromEnv === "true";
 
   return config.value.adapters?.searchProject ?? false;
+}
+
+/** Whether `.beachside/setup.json` in the working tree is read; BEACHSIDE_PROJECT_SETUPS wins. */
+export function readProjectSetups(config: LoadedConfig, env: Env): boolean {
+  const fromEnv = env.BEACHSIDE_PROJECT_SETUPS;
+
+  if (fromEnv !== undefined && fromEnv !== "") return fromEnv === "1" || fromEnv === "true";
+
+  return config.value.projectSetups ?? false;
 }
 
 export function maxSandboxes(config: LoadedConfig, env: Env): number | null {

@@ -145,6 +145,7 @@ const managementExitCodes = new Map([
   ["SECRET_UNAVAILABLE", 5],
   ["UNAUTHENTICATED", 5],
   ["FORBIDDEN", 5],
+  ["SETUP_FAILED", 9],
 ]);
 
 /** Exit codes for commands other than exec and run. */

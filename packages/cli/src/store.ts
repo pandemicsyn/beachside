@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ResourceReference, type RecoveryReference } from "beachside";
 import { z } from "zod";
 import { AddonRecord } from "./addons";
+import { SetupRecord } from "./setups";
 import { CliError, usage } from "./output";
 
 export const RecordName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/);
@@ -27,6 +28,8 @@ export const SandboxRecord = z.strictObject({
   adopted: z.literal(true).optional(),
   /** Servers `create --with` set up, with how to reach each one. Absent without --with. */
   addons: z.array(AddonRecord).optional(),
+  /** What `--setup` ran and how it ended. Absent when no setup ran. */
+  setup: SetupRecord.optional(),
   /** The SDK's operation reference for an uncertain create; the SDK validates it on recovery. */
   recovery: z
     .custom<RecoveryReference>(
@@ -101,6 +104,20 @@ export const SnapshotRecord = z.strictObject({
     .custom<RecoveryReference>(
       (value) => z.record(z.string(), z.unknown()).safeParse(value).success,
     )
+    .optional(),
+  /** Set on setup caches: the snapshot belongs to the cache, never to a sandbox. */
+  cache: z
+    .strictObject({
+      key: z.string().regex(/^[0-9a-f]{32}$/),
+      /** The named setups or paths it caches, for `setup cache ls` and `setup cache rm`. */
+      setup: z.string().min(1),
+      builtAt: z.iso.datetime({ offset: true }),
+      buildSeconds: z.number().nonnegative().nullable(),
+      /** After this the next create rebuilds it; nothing is deleted on a timer. */
+      maxAgeSeconds: z.number().int().positive(),
+      /** Set while a create builds or rebuilds it: the claim other creates respect. */
+      claimedAt: z.iso.datetime({ offset: true }).optional(),
+    })
     .optional(),
 });
 

@@ -5,12 +5,12 @@ import {
   BeachsideError,
   type BeachsideClient,
   type CreateInput,
-  type RecoveryReference,
   type SandboxHandle,
   type SnapshotInfo,
   type SnapshotResult,
 } from "beachside";
 import { findTarget, type Flags } from "./commands";
+import { awaitingRestart, continueCapture } from "./capture";
 import { CliError, describeError, usage } from "./output";
 import type { Session } from "./session";
 import {
@@ -33,37 +33,6 @@ const CaptureResult = z.looseObject({
 });
 
 const DeleteResult = z.looseObject({ deleted: z.literal(true) });
-
-/**
- * The recovery reference of a capture whose snapshot exists but whose source restart was never
- * sent. Daytona leaves a capture this way when it outlives the adapter's own wait; only an
- * explicit continuation sends the restart.
- */
-function awaitingRestart(cause: unknown): RecoveryReference | null {
-  if (!(cause instanceof BeachsideError) || !cause.reference) return null;
-
-  const { outcome } = cause;
-
-  return outcome?.kind === "snapshot_capture" && outcome.restart?.status === "not-submitted"
-    ? cause.reference
-    : null;
-}
-
-/** Send the pending restart of such a capture once, then wait for the capture's result. */
-async function continueCapture(
-  session: Session,
-  client: BeachsideClient<true>,
-  reference: RecoveryReference,
-): Promise<SnapshotResult> {
-  const handle = await client.recover(reference);
-
-  if (handle.kind !== "snapshot_capture")
-    throw new Error(`Recovered ${handle.kind}, not a capture`);
-  session.ctx.out.note("the snapshot is ready; restarting the source sandbox");
-  await handle.continue({ signal: session.ctx.signal });
-
-  return handle.wait({ signal: session.ctx.signal });
-}
 
 async function findSnapshot(store: StateStore, name: string): Promise<Entry> {
   const found = await store.get("snapshot", checkName(name));
@@ -639,7 +608,11 @@ export async function restoreSnapshot(
   const snapshot = await client.snapshots.get(SnapshotReference.parse(record.reference));
   const { network, env, labels, lifecycle } = input;
 
-  return snapshot.restore({ network, env, labels, lifecycle }, { signal: session.ctx.signal });
+  // The CLI runs the snapshot's recorded startup itself once the sandbox is on record.
+  return snapshot.restore(
+    { network, env, labels, lifecycle, recordedStartup: "skip" },
+    { signal: session.ctx.signal },
+  );
 }
 
 export const snapshotActions = ["create", "ls", "inspect", "rm", "forget"] as const;

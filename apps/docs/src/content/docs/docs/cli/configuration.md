@@ -20,7 +20,7 @@ Set `BEACHSIDE_PROVIDER` (or pass `--provider`) and the provider's own variables
 | `vercel`    | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                         |
 | `modal`     | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `MODAL_APP_NAME`, `MODAL_ENVIRONMENT` |
 
-`beachside providers` shows which of these are missing. boxd and Boat always allow internet egress, so their adapters ask you to choose that explicitly with `BOXD_NETWORK=internet` or `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
+`beachside providers` shows which of these are missing. `BOXD_ORG` is the ID (`org-…`) or slug of the boxd org your API key defaults to; `boxd auth` shows your current org context. Daytona has no default image, so each Daytona `create` or `run` needs `--prepared <snapshot>` (such as `daytona-small`) or `--image`. boxd and Boat always allow internet egress, so their adapters ask you to choose that explicitly with `BOXD_NETWORK=internet` or `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
 
 ## Profiles
 
@@ -55,6 +55,21 @@ The CLI picks a profile from `--profile`, then `BEACHSIDE_PROFILE`, then `--prov
 `provider` names an official adapter (`@beachside/<provider>`). `module` and `export` load any other adapter, either an adapter definition or an already configured adapter; a relative path is relative to `beachside.json`.
 
 Each sandbox remembers the profile that created it, so later commands on it use the same profile whatever is selected now.
+
+## Setups
+
+`setups` names setup steps that `--setup <name>` runs after a sandbox starts, and a profile's `setup` lists the ones its sandboxes get by default:
+
+```json
+{
+  "profiles": { "e2b": { "provider": "e2b", "setup": ["node"] } },
+  "setups": {
+    "node": { "setup": ["fnm install 22"], "network": "internet" }
+  }
+}
+```
+
+See [Set up a sandbox](/docs/cli/setup/) for steps, startup, env and failures. `"projectSetups": true` (or `BEACHSIDE_PROJECT_SETUPS=1`) also reads setups from a checkout's `.beachside/setup.json`.
 
 ## Credentials
 

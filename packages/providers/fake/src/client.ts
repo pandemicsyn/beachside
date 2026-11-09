@@ -422,6 +422,7 @@ export class FakeProviderDriver implements ProviderDriver {
     scope: NativeScope;
     identity: InvocationIdentity;
     sandbox: SandboxRef;
+    labels?: Record<string, string> | undefined;
   }) {
     let value: z.infer<typeof FakeHttpJson>;
 

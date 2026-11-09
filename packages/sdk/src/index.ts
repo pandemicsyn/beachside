@@ -118,6 +118,7 @@ export type {
   SandboxList,
   SandboxListEntry,
   SandboxListInput,
+  SnapshotListInput,
 } from "./resources";
 
 export {
@@ -168,5 +169,25 @@ export type {
 } from "./process-output";
 
 export { SandboxCleanupError } from "./scoped-sandbox";
+
+export { Setup, SetupDefinition, SetupFailedError } from "./setup";
+
+export type {
+  SetupParallel,
+  SetupStep,
+  SetupStepOptions,
+  SetupInput,
+  SetupDefinitionInput,
+  SetupOutput,
+  SetupEvent,
+  SetupPhase,
+  SetupStepRef,
+  SetupReport,
+  SetupStepReport,
+  SetupRunOptions,
+  SetupCreateOptions,
+} from "./setup";
+
+export type { RunSetupOptions } from "./setup-flow";
 
 export type { SandboxScopeOptions, SandboxScopeCallbackOutcome } from "./scoped-sandbox";

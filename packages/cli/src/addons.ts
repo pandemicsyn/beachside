@@ -1,4 +1,11 @@
-import { NonzeroExitError, type ExecOutput, type SandboxHandle } from "beachside";
+import {
+  NonzeroExitError,
+  SetupFailedError,
+  type ExecOutput,
+  type SandboxHandle,
+  type SetupRunOptions,
+  type SetupStepOptions,
+} from "beachside";
 import { z } from "zod";
 import { CliError, usage, type Output } from "./output";
 import { shellQuote } from "./transfer";
@@ -66,13 +73,58 @@ export function addonHostname(name: AddonName, sandbox: string, all: AddonName[]
   return name === "rex" && all.includes("herdr") ? `${base}-rex` : base;
 }
 
-type Step = { what: string; script: string; stdin?: string; deadlineSeconds?: number };
+/**
+ * One add-on script. `read` marks a step that only looks (a log, a status) and whose stdout the
+ * add-on needs; every other step installs or starts something and runs as a setup step.
+ */
+type Step = {
+  what: string;
+  script: string;
+  stdin?: string;
+  deadlineSeconds?: number;
+  read?: boolean;
+};
 
 /** What a setup script printed and how it ended. */
 export type ShellResult = { exitCode: number | null; stdout: string; stderr: string };
 
 /** Runs one shell script in the sandbox; `sandboxShell` builds it from a handle. */
 export type Shell = (step: Step, signal: AbortSignal) => Promise<ShellResult>;
+
+/**
+ * The production shell: install and start steps run on Beachside's setup engine (live output,
+ * the same failure reporting as `--setup`, outside the sandbox's own setup record); reads run as
+ * plain commands, since the add-on needs what they print.
+ */
+export function setupShell(box: SandboxHandle<true>, progress: SetupRunOptions): Shell {
+  const plain = sandboxShell(box);
+
+  return async (step, signal) => {
+    if (step.read) return plain(step, signal);
+
+    const setupStep: SetupStepOptions = {
+      run: step.script,
+      name: step.what,
+      timeoutSeconds: step.deadlineSeconds ?? 300,
+    };
+
+    if (step.stdin !== undefined) setupStep.stdin = step.stdin;
+
+    try {
+      await box.runSetup({ setup: [setupStep], record: false, ...progress }, { signal });
+
+      return { exitCode: 0, stdout: "", stderr: "" };
+    } catch (cause) {
+      if (!(cause instanceof SetupFailedError)) throw cause;
+
+      return {
+        exitCode: cause.exitCode,
+        stdout: cause.stdoutTail,
+        stderr: cause.stderrTail || cause.message,
+      };
+    }
+  };
+}
 
 export function sandboxShell(box: SandboxHandle<true>): Shell {
   return async (step, signal) => {
@@ -202,7 +254,11 @@ async function rexAddress(shell: Shell, signal: AbortSignal): Promise<string> {
   while (Date.now() < deadline) {
     const logs = await run(
       shell,
-      { what: "Reading the Rex server log", script: "rex server logs 2>&1 | tail -n 200 || true" },
+      {
+        what: "Reading the Rex server log",
+        script: "rex server logs 2>&1 | tail -n 200 || true",
+        read: true,
+      },
       signal,
     );
 
@@ -289,6 +345,7 @@ async function setupHerdr(
     {
       what: "Reading the tailnet name",
       script: `${asRoot}\nid -un\n$S tailscale ${socket} status --json --peers=false`,
+      read: true,
     },
     signal,
   );

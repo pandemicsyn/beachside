@@ -9,7 +9,7 @@ const run = (command, args) => {
   if (result.status !== 0) throw new Error(`${command} failed`);
 };
 
-for (const fixture of ["qualify", "http", "benchmark", "faults"]) {
+for (const fixture of ["qualify", "http", "faults"]) {
   run("bun", [
     "build",
     `packages/sdk-qualification/observability/${fixture}.ts`,
@@ -34,9 +34,6 @@ for (const runtime of ["node", "bun"]) {
 
   run(runtime === "node" ? (process.env.BEACHSIDE_NODE_BINARY ?? "node") : runtime, [
     "packages/sdk-qualification/dist/observability-http.mjs",
-  ]);
-  run(runtime === "node" ? (process.env.BEACHSIDE_NODE_BINARY ?? "node") : runtime, [
-    "packages/sdk-qualification/dist/observability-benchmark.mjs",
   ]);
   run(runtime === "node" ? (process.env.BEACHSIDE_NODE_BINARY ?? "node") : runtime, [
     "packages/sdk-qualification/dist/observability-faults.mjs",

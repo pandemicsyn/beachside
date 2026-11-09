@@ -597,10 +597,15 @@ test("snapshots capture, list, inspect, restore and delete with exact identities
     ).rejects.toMatchObject({ code: "UNSUPPORTED" });
     expect(fixture.snapshots.size).toBe(0);
 
-    const { snapshot } = await source.snapshot();
+    await expect(source.snapshot({ labels: { beachside_submission: "x" } })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+
+    const { snapshot } = await source.snapshot({ labels: { "beachside.setup-cache": "k1" } });
     expect(snapshot.reference.ownership).toBe("verified-created");
     expect(structuredClone(fixture.snapshots.get(snapshot.id)?.metadata)).toMatchObject({
       beachside_submission: expect.any(String),
+      "beachside.setup-cache": "k1",
     });
     expect((await source.inspect()).state).toBe("running");
 
@@ -614,6 +619,11 @@ test("snapshots capture, list, inspect, restore and delete with exact identities
 
     const listed = await client.snapshots.list({ limit: 10 });
     expect(listed.items.map((item) => item.reference.nativeId)).toEqual([snapshot.id]);
+    // Labels come back without the adapter's own markers.
+    expect(listed.items[0]?.labels).toEqual({ "beachside.setup-cache": "k1" });
+    expect(
+      (await client.snapshots.list({ labels: { "beachside.setup-cache": "k1" } })).items,
+    ).toHaveLength(1);
 
     const restored = await snapshot.restore();
     expect(restored.id).not.toBe(source.id);
