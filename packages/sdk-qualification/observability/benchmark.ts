@@ -69,17 +69,6 @@ context.disable();
 
 manager.disable();
 
-for (const concurrency of [1, 4]) {
-  const baseline = measurements.find(
-    (m) => m.mode === "disabled" && m.concurrency === concurrency,
-  )!.medianWorkloadMs;
-
-  for (const entry of measurements.filter((m) => m.concurrency === concurrency)) {
-    if (entry.medianWorkloadMs - baseline > 1)
-      throw new Error("Tracing exceeded the 1ms incremental workload budget");
-  }
-}
-
 console.log(
   JSON.stringify(
     {
@@ -93,3 +82,16 @@ console.log(
     2,
   ),
 );
+
+for (const concurrency of [1, 4]) {
+  const baseline = measurements.find(
+    (m) => m.mode === "disabled" && m.concurrency === concurrency,
+  )!.medianWorkloadMs;
+
+  for (const entry of measurements.filter((m) => m.concurrency === concurrency)) {
+    if (entry.medianWorkloadMs - baseline > 1)
+      throw new Error(
+        `Tracing exceeded the 1ms incremental workload budget (${entry.mode}, concurrency ${concurrency})`,
+      );
+  }
+}
