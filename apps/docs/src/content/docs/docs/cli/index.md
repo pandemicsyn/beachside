@@ -132,6 +132,38 @@ Add `--json`, or set `BEACHSIDE_JSON=1`, and stdout holds exactly one JSON docum
 
 The [command reference](/docs/cli/reference/) lists every exit code, and `beachside schema` prints all commands, flags and exit codes as JSON.
 
+## Servers in a sandbox
+
+`--with` installs a server in a new sandbox and puts it on your [Tailscale](https://tailscale.com) tailnet, so you can open it from your own machine without a public port:
+
+```sh
+export TAILSCALE_AUTH_KEY=...   # reusable, ephemeral, tagged tag:beachside
+beachside create --name web --with rex
+beachside create --name dev --with herdr
+```
+
+| Server  | What you get                                                                                                       |
+| ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `rex`   | A [Rex](https://www.superlogical.com/rex/docs) server on Rex's own Tailscale. Add its `https://` address in Rex.   |
+| `herdr` | A Tailscale SSH device for [herdr](https://herdr.dev). Run the printed `herdr --remote ssh://…` command to attach. |
+
+`create` prints how to connect when it finishes, and `inspect` shows it again. `--with` implies `--network internet`, because the sandbox downloads the server and reaches Tailscale. The tailnet setup is the same for both: see [Set up Tailscale once](/docs/cli/rex/#set-up-tailscale-once). Devices are named `beachside-<sandbox>`, and `rm` logs each device out of your tailnet before the sandbox goes, so it doesn't linger offline. If setup fails after the sandbox exists, `create` exits 8 and keeps the sandbox, so you can look inside or remove it.
+
+herdr connects over Tailscale SSH, so it also needs an `ssh` rule in your tailnet policy:
+
+```json
+"ssh": [
+  {
+    "action": "accept",
+    "src": ["autogroup:member"],
+    "dst": ["tag:beachside"],
+    "users": ["autogroup:nonroot", "root"]
+  }
+]
+```
+
+On the first connect, herdr asks you to accept the device's SSH host key and to install its server in the sandbox.
+
 ## Status on terminal tabs
 
 Inside [Rex](https://www.superlogical.com/rex/docs/build/program-status), commands that create, change or wait on sandboxes (`create`, `run`, `exec`, `sh`, `rm`, `gc`, `cp`, `push`, `image build`, `snapshot create`, and others) show their progress on the terminal tab: a spinner while they work, then done or failed. `run` also says which step it is on: pushing files, running the command, or destroying the sandbox. `cp` and `push` into a sandbox show a progress bar while the files upload. When `run`, `exec` or `sh` finishes after more than 30 seconds, you also get a desktop notification.

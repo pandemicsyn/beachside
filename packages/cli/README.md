@@ -25,6 +25,7 @@ Install the adapter for each provider with `beachside adapter add e2b` (or `dayt
 | Command | What it does |
 | --- | --- |
 | `create [--name] [--image <oci-ref> \| --prepared <id>] [--network] [--label k=v] [--if-not-exists]` | Create a sandbox, print its name |
+| `create --with rex\|herdr` | Also install a server reachable over your Tailscale tailnet (needs `TAILSCALE_AUTH_KEY`); prints how to connect. See [Remote workspace with Rex](https://beachside.run/docs/cli/rex/) |
 | `ls [--offline]` | List store records with live state (`running`, `gone`, `unreachable`, ...) |
 | `inspect <sandbox>` | State, expiry and reference |
 | `rm <sandbox>... \| --all [--force]` | Destroy and forget; only sandboxes this CLI created unless `--force`. `--all` skips the others and reports them |

@@ -198,12 +198,19 @@ export const commands: readonly CommandSpec[] = [
     name: "create",
     summary: "Create a sandbox and print its name",
     usage:
-      "beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]...",
+      "beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]... [--with rex|herdr]...",
     flags: {
       ...createFlags,
       "if-not-exists": {
         type: "boolean",
         description: "Return the named sandbox if it is still alive instead of failing",
+      },
+      with: {
+        type: "string",
+        multiple: true,
+        value: "server",
+        description:
+          "Install and start a server reachable over your tailnet: rex or herdr (repeatable; needs TAILSCALE_AUTH_KEY, implies --network internet)",
       },
     },
     passthrough: false,
@@ -214,6 +221,7 @@ export const commands: readonly CommandSpec[] = [
       "beachside create --name ci --env-file .env --env API_TOKEN",
       "beachside create --name job-42 --ttl 1h",
       "beachside create --name job-42 --retry 5m --json",
+      "beachside create --name web --with rex",
     ],
     run: createCommand,
   },
