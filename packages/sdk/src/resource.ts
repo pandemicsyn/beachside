@@ -11,6 +11,7 @@ import { z } from "zod";
 import { type EnvValue, splitEnv } from "./secrets";
 import { SecretBindings, type SecretBinding } from "@beachside/adapter";
 import type { AdapterImage, AdapterSnapshot, AdapterVolume } from "./resources";
+import type { SetupCreateOptions } from "./setup";
 import {
   CreateEnv,
   CreateSandboxInput,
@@ -87,7 +88,7 @@ export type CreateInput = {
    * An adapter that cannot apply it exactly (or by rounding up) rejects before any effect.
    */
   lifecycle?: { lifetimeSeconds?: number };
-};
+} & SetupCreateOptions;
 
 export type ExecInput = {
   command: ExecCommand;

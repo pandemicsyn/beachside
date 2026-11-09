@@ -169,3 +169,72 @@ test("restore applies env, labels and lifetime where the adapter declares them, 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("capture sets labels where the adapter keeps them, and list filters by them", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "beachside-fake-snapshot-labels-"));
+  const token = "long-fake-snapshot-labels-token";
+
+  const server = await startFakeProviderServer({
+    hostname: "127.0.0.1",
+    port: 0,
+    statePath: join(directory, "state.json"),
+    token,
+    testMode: true,
+  });
+
+  const fake = createFakeAdapter({
+    url: `http://127.0.0.1:${server.port}`,
+    token,
+    snapshots: true,
+  });
+
+  /** The fake without native snapshot labels. */
+  const unlabelled = defineAdapter({
+    name: "fake",
+    config: z.strictObject({}),
+    credentials: z.strictObject({}),
+    async connect(input) {
+      const session = await fake.connect(input);
+      const { labels: _labels, ...capture } = session.snapshotCapture!;
+
+      return { ...session, snapshotCapture: capture };
+    },
+  });
+
+  const client = await Beachside.connect({ adapter: fake, config: {}, credentials: {} });
+  const plain = await Beachside.connect({ adapter: unlabelled, config: {}, credentials: {} });
+
+  try {
+    const box = await client.sandboxes.create({ environment: Image.prepared("fake-starter") });
+    const { snapshot } = await box.snapshot({ labels: { "beachside.setup-cache": "k1" } });
+
+    await box.snapshot();
+    expect((await client.snapshots.list()).items).toHaveLength(2);
+
+    const found = await client.snapshots.list({ labels: { "beachside.setup-cache": "k1" } });
+
+    expect(found.items.map((info) => [info.reference.nativeId, info.labels])).toEqual([
+      [snapshot.id, { "beachside.setup-cache": "k1" }],
+    ]);
+    expect(
+      (await client.snapshots.list({ labels: { "beachside.setup-cache": "k2" } })).items,
+    ).toEqual([]);
+    expect((await client.capabilities()).snapshots.capture).toMatchObject({
+      value: { labels: true },
+    });
+
+    // Without native labels, a labelled capture is refused before anything is captured.
+    const other = await plain.sandboxes.get(box.reference!);
+
+    await expect(other.snapshot({ labels: { a: "b" } })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+    expect((await client.snapshots.list()).items).toHaveLength(2);
+    await box.destroy();
+  } finally {
+    await client.close();
+    await plain.close();
+    await server.stop(true);
+    await rm(directory, { recursive: true, force: true });
+  }
+});

@@ -34,6 +34,7 @@ import {
   type SnapshotInfo,
   type SnapshotProfile,
   listedTime,
+  listedLabels,
 } from "@beachside/adapter";
 import { filesResult, parseWrapper, quote, wrapperScript, type WrapperResult } from "./exec";
 import {
@@ -413,7 +414,7 @@ const profile: SnapshotProfile = {
 
 const snapshotSupport = {
   status: "supported" as const,
-  value: { profiles: [profile], defaultProfileId: profile.id },
+  value: { profiles: [profile], defaultProfileId: profile.id, labels: true },
 };
 
 export type RunloopAdapterOptions = {
@@ -1156,6 +1157,8 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
       restore,
       dependencies: [],
       nativeDependencies: null,
+      // User labels are the snapshot's metadata without the adapter's own markers.
+      labels: listedLabels(snapshot.metadata ?? undefined, (key) => key.startsWith("beachside_")),
     });
 
     /** Snapshot status, or null once Runloop no longer has it. */
@@ -1756,6 +1759,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         },
       }),
       snapshotCapture: {
+        labels: true,
         recovery: { version: 1, token: CaptureToken },
         async prepare(input, ctx) {
           if (input.sandbox.reference) checkedRef(input.sandbox.reference);
@@ -1767,6 +1771,13 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
           if (input.request.retention?.cleanupAfterSeconds !== undefined)
             throw new AdapterError("UNSUPPORTED", "Runloop has no scheduled snapshot deletion");
 
+          // Labels become snapshot metadata beside the adapter's own `beachside_` markers.
+          if (Object.keys(input.request.labels ?? {}).some((key) => key.startsWith("beachside_")))
+            throw new AdapterError(
+              "INVALID_ARGUMENT",
+              "Snapshot label keys starting with beachside_ are reserved",
+            );
+
           return input;
         },
         async submit(input, ctx) {
@@ -1775,7 +1786,11 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
           try {
             snapshot = await native.snapshotDiskAsync(
               input.sandbox.id,
-              { [MARK.operation]: ctx.operationId, [MARK.submission]: ctx.submissionId },
+              {
+                ...input.request.labels,
+                [MARK.operation]: ctx.operationId,
+                [MARK.submission]: ctx.submissionId,
+              },
               signalFor(readContext(ctx.signal)),
             );
           } catch (error) {

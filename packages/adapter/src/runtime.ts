@@ -75,7 +75,7 @@ export type RuntimeSession = Omit<
   suspend?: unknown;
   resume?: unknown;
   renew?: unknown;
-  snapshotCapture?: unknown;
+  snapshotCapture?: object & { labels?: boolean };
   snapshotRestore?: { mountInput?: "specs"; options?: import("./state").RestoreOptions };
   snapshotDelete?: unknown;
   imageDelete?: unknown;

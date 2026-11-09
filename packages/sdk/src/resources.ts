@@ -1,5 +1,7 @@
 import { freezeReference } from "./freeze-reference";
 import { type EnvValue, splitEnv } from "./secrets";
+import { applySetup, prepareSetup } from "./setup-flow";
+import { hasSetupKeys, splitSetup, type SetupCreateOptions } from "./setup";
 import { CreateEnv } from "@beachside/adapter/portable";
 import { z } from "zod";
 import {
@@ -9,6 +11,7 @@ import {
   assertResourceIdentity,
   MountSpec,
   SnapshotInfo,
+  SnapshotLabels,
   ImageInfo,
   VolumeInfo,
   RestoreRequest,
@@ -79,22 +82,23 @@ async function resourceRead<T>(
 export type RestoreInput = Omit<
   RestoreRequest,
   "networkPolicy" | "lifetimeSeconds" | "env" | "secrets" | "secretEnv"
-> & {
-  /**
-   * Environment for the restored sandbox. `secret(...)` values are brokered like on create, and
-   * reject before any effect where the adapter cannot broker them on restore.
-   */
-  env?: Record<string, EnvValue>;
-  /** Outbound network policy; omitted uses the adapter setup default. */
-  network?: NetworkPolicy;
-  /**
-   * Lifetime for the restored sandbox only, replacing the adapter setup's. Like `env` and
-   * `labels`, it rejects before any effect where the adapter cannot apply it on restore.
-   */
-  lifecycle?: { lifetimeSeconds?: number };
-  /** @deprecated Use `network`. */
-  networkPolicy?: string;
-};
+> &
+  SetupCreateOptions & {
+    /**
+     * Environment for the restored sandbox. `secret(...)` values apply like on create, and
+     * reject before any effect where the adapter cannot apply them on restore.
+     */
+    env?: Record<string, EnvValue>;
+    /** Outbound network policy; omitted uses the adapter setup default. */
+    network?: NetworkPolicy;
+    /**
+     * Lifetime for the restored sandbox only, replacing the adapter setup's. Like `env` and
+     * `labels`, it rejects before any effect where the adapter cannot apply it on restore.
+     */
+    lifecycle?: { lifetimeSeconds?: number };
+    /** @deprecated Use `network`. */
+    networkPolicy?: string;
+  };
 
 export type WaitOptions = ReadOptions & { pollMs?: number };
 
@@ -163,6 +167,11 @@ export class AdapterSnapshot {
     request: RestoreInput = {},
     options: WaitOptions = {},
   ): Promise<OperationHandle<SandboxHandle<true>, OperationKind>> {
+    if (hasSetupKeys(request))
+      throw new BeachsideError(
+        "INVALID_ARGUMENT",
+        "Setup runs with snapshot.restore(); after submitRestore(), call box.runSetup()",
+      );
     const ref = checkedResource(this.client, this.reference, "snapshot");
     // SDK-only deprecated empty-object alias for release R and R+1.
     const legacy = z.record(z.string(), z.unknown()).safeParse(request?.mounts);
@@ -312,9 +321,24 @@ export class AdapterSnapshot {
       { ...options, resource: ref, mounts: input.mounts, networkPolicy: input.networkPolicy },
     );
   }
-  /** Restore requires no recorded native mounts and confirmed mountHandling: "none". */
+  /**
+   * Restore requires no recorded native mounts and confirmed mountHandling: "none". Setup the
+   * snapshot already holds is skipped; requested setup it lacks runs, then startup (requested,
+   * or the startup the snapshot recorded).
+   */
   async restore(input: RestoreInput = {}, options: WaitOptions = {}): Promise<SandboxHandle<true>> {
-    return (await this.submitRestore(input, options)).wait(options);
+    const { setupOptions, rest } = splitSetup(input);
+    const resolved = await prepareSetup(setupOptions);
+    const box = await (await this.submitRestore(rest, options)).wait(options);
+
+    if (!this.client.session.exec) {
+      if (resolved)
+        throw new BeachsideError("UNSUPPORTED", "Setup needs exec, which this adapter lacks");
+
+      return box;
+    }
+
+    return applySetup(box, box.setupHost(), resolved, setupOptions, "restored", options.signal);
   }
   submitDelete(
     options: WaitOptions = {},
@@ -492,10 +516,14 @@ export function resourceManagers(client: AdapterDirectClient) {
 
       return new AdapterSnapshot(client, info.reference);
     },
-    async list(input: SandboxListInput = {}) {
+    async list(input: SnapshotListInput = {}) {
       client.ensureOpen();
 
-      const request = validateResourceInput(PageInput, input, "Invalid snapshot inventory request");
+      const { labels: wanted, ...request } = validateResourceInput(
+        SnapshotPageInput,
+        input,
+        "Invalid snapshot inventory request",
+      );
 
       if (!client.session.snapshotList)
         throw new BeachsideError("UNSUPPORTED", "Snapshot inventory is unsupported");
@@ -513,6 +541,11 @@ export function resourceManagers(client: AdapterDirectClient) {
         .parse(page);
 
       checked.items.forEach((info) => checkedResource(client, info.reference, "snapshot"));
+
+      if (wanted)
+        checked.items = checked.items.filter((info) =>
+          Object.entries(wanted).every(([key, value]) => info.labels?.[key] === value),
+        );
 
       return checked;
     },
@@ -629,8 +662,16 @@ const PageInput = InventoryInput.extend({
   limit: InventoryInput.shape.limit.default(DEFAULT_SANDBOX_LIST_LIMIT),
 });
 
+const SnapshotPageInput = PageInput.extend({ labels: SnapshotLabels.optional() });
+
 /** Optional page selection for `list()` calls; `limit` is 1-100 and defaults to 50. */
 export type SandboxListInput = { cursor?: string; limit?: number };
+
+/**
+ * `snapshots.list()` input. `labels` keeps only snapshots carrying every given label, on this
+ * page: a filtered page can be short, so follow `nextCursor` until it is absent.
+ */
+export type SnapshotListInput = SandboxListInput & { labels?: Record<string, string> };
 
 /**
  * One listed sandbox; `reference` is null when the adapter cannot verify a reopenable identity.

@@ -424,7 +424,10 @@ export type AdapterSession<
   snapshotCapture?: Mutation<
     import("./resources").SnapshotCaptureInput,
     import("./resources").SnapshotCaptureValue
-  >;
+  > & {
+    /** Capture sets `request.labels` on the snapshot natively; others reject labels before prepare. */
+    labels?: boolean;
+  };
   snapshotRestore?: Mutation<import("./resources").SnapshotRestoreInput, CreateValue> & {
     /** Opt into the coordinated array input; absent hooks receive mount-free requests only. */
     mountInput?: "specs";

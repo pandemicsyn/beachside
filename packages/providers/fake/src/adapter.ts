@@ -410,6 +410,7 @@ export function createFakeAdapter(options: {
         restore: restoreSupport,
         dependencies: [],
         nativeDependencies: null,
+        labels: image.labels ?? null,
       });
 
       const requireSnapshot = async (ref: ResourceReference) => {
@@ -455,6 +456,7 @@ export function createFakeAdapter(options: {
           };
         },
         snapshotCapture: {
+          labels: true,
           recovery: { version: 1, token: CaptureToken },
           async submit(input, ctx) {
             await ctx.checkpoint({ submissionId: ctx.submissionId, sandbox: input.sandbox.id });
@@ -463,6 +465,7 @@ export function createFakeAdapter(options: {
               scope,
               identity: identity(ctx),
               sandbox: native(input.sandbox.id),
+              labels: input.request.labels,
             });
 
             if (result.status === "rejected") return ctx.reject("CONFLICT", result.reason);

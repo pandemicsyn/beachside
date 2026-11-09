@@ -123,8 +123,15 @@ export const SnapshotRequirements = z.strictObject({
 
 export type SnapshotRequirements = z.infer<typeof SnapshotRequirements>;
 
+/** User labels on a snapshot, set at capture where the adapter supports them. */
+export const SnapshotLabels = z
+  .record(z.string().min(1).max(64), z.string().max(256))
+  .refine((labels) => Object.keys(labels).length <= 32, "At most 32 snapshot labels");
+
 export const SnapshotRequest = z.strictObject({
   requirements: SnapshotRequirements.optional(),
+  /** Labels to set on the snapshot; rejected before an effect where the adapter has none. */
+  labels: SnapshotLabels.optional(),
   consistency: z.literal("caller-quiesced").optional(),
   retention: z
     .strictObject({
@@ -391,6 +398,12 @@ export const SnapshotInfo = z.strictObject({
     .array(z.strictObject({ kind: z.string().min(1).max(128), id: z.string().min(1).max(512) }))
     .max(128)
     .nullable(),
+  /** User labels the provider returned, adapter markers removed; null or absent when it keeps none. */
+  labels: z
+    .record(z.string().min(1).max(256), z.string().max(1024))
+    .refine((labels) => Object.keys(labels).length <= 64, "At most 64 listed labels")
+    .nullable()
+    .optional(),
 });
 
 export type SnapshotInfo = z.infer<typeof SnapshotInfo>;
@@ -669,6 +682,8 @@ export const SnapshotSupport = z.discriminatedUnion("status", [
     value: z.strictObject({
       profiles: z.array(SnapshotProfile).max(128),
       defaultProfileId: z.string().min(1).max(128),
+      /** Whether capture sets user labels on the snapshot. */
+      labels: z.boolean().optional(),
     }),
   }),
   ...(["unsupported", "unavailable", "unknown"] as const).map((status) =>
@@ -702,7 +717,7 @@ export type StateCapabilities = {
     renew: Support<import("./lifecycle").RenewLimits>;
   };
   snapshots: {
-    capture: Support<{ profiles: SnapshotProfile[]; defaultProfileId: string }>;
+    capture: Support<{ profiles: SnapshotProfile[]; defaultProfileId: string; labels?: boolean }>;
     restore: Support<RestoreCapabilities>;
     inspect: Support<{}>;
     list: Support<{ coverage: "provider-scope" | "managed" }>;
@@ -782,7 +797,7 @@ export async function stateCapabilities(
   target: { sandbox?: Sandbox; create?: CreateInput },
   context: ReadContext,
 ): Promise<StateCapabilities> {
-  const capture =
+  const capture: StateCapabilities["snapshots"]["capture"] =
     session.snapshotCapture && session.snapshotProfiles
       ? SnapshotSupport.parse(
           await readBeforeDeadline(
@@ -791,6 +806,9 @@ export async function stateCapabilities(
           ),
         )
       : unsupportedState();
+
+  if (capture.status === "supported" && session.snapshotCapture?.labels)
+    capture.value.labels = true;
 
   const resources = session.resourceCapabilities
     ? await readBeforeDeadline(
@@ -891,6 +909,12 @@ export function resolveSnapshot(
 
   if (support.status !== "supported") return support;
   const input = parsed.data;
+
+  if (input.labels && Object.keys(input.labels).length && !support.value.labels)
+    return {
+      status: "unsupported",
+      reason: "Capture-time snapshot labels are unsupported by this adapter",
+    };
   const interruption = ["none", "pause", "stop", "terminate"];
 
   const selected = support.value.profiles.find(

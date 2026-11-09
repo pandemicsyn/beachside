@@ -15,6 +15,7 @@ import {
   rmCommand,
   runCommand,
   shCommand,
+  setupCommand,
 } from "./commands";
 import {
   commandExitCode,
@@ -85,6 +86,66 @@ const globalFlags = {
   version: { type: "boolean", short: "V", description: "Print the CLI version" },
 } satisfies Record<string, FlagSpec>;
 
+/** Flags that pick what runs in a sandbox after it starts; shared by create, run and setup. */
+const setupFlags = {
+  setup: {
+    type: "string",
+    multiple: true,
+    value: "name|path",
+    description:
+      "Run a named setup from beachside.json or a local script once the sandbox starts (repeatable, comma-separated)",
+  },
+  "setup-cmd": {
+    type: "string",
+    multiple: true,
+    value: "shell",
+    description: "Run a shell line as a setup step, after --setup (repeatable)",
+  },
+  startup: {
+    type: "string",
+    multiple: true,
+    value: "path",
+    description:
+      "Run a local script every time the sandbox comes up without its processes, such as after a restore (repeatable)",
+  },
+  "startup-cmd": {
+    type: "string",
+    multiple: true,
+    value: "shell",
+    description: "Run a shell line as a startup step (repeatable)",
+  },
+  "no-default-setup": {
+    type: "boolean",
+    description: "Skip the setups the profile lists by default",
+  },
+  "quiet-setup": {
+    type: "boolean",
+    description: "Show setup step names and failures, not their output",
+  },
+  "setup-timeout": {
+    type: "string",
+    value: "duration",
+    description: "Overall limit for setup and startup, e.g. 45m (default 30m; each step 10m)",
+  },
+} satisfies Record<string, FlagSpec>;
+
+/** Setup cache controls; shared by create and run. */
+const cacheFlags = {
+  cache: {
+    type: "boolean",
+    description:
+      "Cache this setup as a snapshot and restore it next time, even if no named setup asks for it",
+  },
+  "no-cache": {
+    type: "boolean",
+    description: "Neither use nor build a setup cache for this sandbox",
+  },
+  "refresh-cache": {
+    type: "boolean",
+    description: "Build the setup cache again now, replacing the current one",
+  },
+} satisfies Record<string, FlagSpec>;
+
 const createFlags = {
   name: {
     type: "string",
@@ -148,6 +209,8 @@ const createFlags = {
     description:
       "Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m",
   },
+  ...setupFlags,
+  ...cacheFlags,
 } satisfies Record<string, FlagSpec>;
 
 const execFlags = {
@@ -206,12 +269,16 @@ export const commands: readonly CommandSpec[] = [
     name: "create",
     summary: "Create a sandbox and print its name",
     usage:
-      "beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]... [--secret K=secret]... [--with rex|herdr]...",
+      "beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]... [--secret K=secret]... [--setup <name|path>]... [--setup-cmd <shell>]... [--with rex|herdr]...",
     flags: {
       ...createFlags,
       "if-not-exists": {
         type: "boolean",
         description: "Return the named sandbox if it is still alive instead of failing",
+      },
+      "rm-on-failure": {
+        type: "boolean",
+        description: "Remove the sandbox if its setup fails, instead of keeping it to look at",
       },
       with: {
         type: "string",
@@ -232,6 +299,9 @@ export const commands: readonly CommandSpec[] = [
       "beachside create --name job-42 --ttl 1h",
       "beachside create --name job-42 --retry 5m --json",
       "beachside create --name web --with rex",
+      "beachside create --name web --setup node --setup-cmd 'npm i -g pnpm'",
+      "beachside create --name web --setup ./setup.sh --startup-cmd 'pnpm dev > /tmp/dev.log 2>&1 &'",
+      "beachside create --name web --setup node --cache",
     ],
     run: createCommand,
   },
@@ -295,7 +365,8 @@ export const commands: readonly CommandSpec[] = [
   },
   {
     name: "gc",
-    summary: "Destroy the provider's sandboxes that carry the given labels, such as a killed job's",
+    summary:
+      "Destroy the provider's sandboxes that carry the given labels, such as a killed job's, and prune stale setup caches",
     usage: "beachside gc --label k=v... [--older-than <duration>] [--dry-run]",
     flags: {
       label: {
@@ -368,6 +439,7 @@ export const commands: readonly CommandSpec[] = [
       "beachside run -- python3 -c 'print(2 + 2)'",
       "beachside run --network internet -- curl -sI https://example.com",
       "beachside run --push . --timeout 15m --ttl 30m -- sh -c 'npm ci && npm test'",
+      "beachside run --push . --setup-cmd 'npm ci' -- npm test",
     ],
     run: runCommand,
   },
@@ -439,6 +511,35 @@ export const commands: readonly CommandSpec[] = [
       "beachside snapshot rm deps",
     ],
     run: snapshotCommand,
+  },
+  {
+    name: "setup",
+    summary: "Run setup in an existing sandbox, or list the named setups",
+    usage:
+      "beachside setup <sandbox> [--setup <name|path>]... [--setup-cmd <shell>]... [--force] | setup ls | setup cache ls|rm <setup>|prune [--dry-run]",
+    flags: {
+      ...setupFlags,
+      force: {
+        type: "boolean",
+        description: "Run every step, even ones the sandbox already has",
+      },
+      "dry-run": {
+        type: "boolean",
+        description: "setup cache rm and prune: list what would be deleted and change nothing",
+      },
+    },
+    passthrough: false,
+    remoteExit: false,
+    examples: [
+      "beachside setup ls",
+      "beachside setup web",
+      "beachside setup web --setup playwright",
+      "beachside setup web --setup node --force",
+      "beachside setup cache ls",
+      "beachside setup cache rm node",
+      "beachside setup cache prune --dry-run",
+    ],
+    run: setupCommand,
   },
   {
     name: "cp",
@@ -606,6 +707,11 @@ export const exitCodes = [
   { code: 6, meaning: "outcome unknown: an effect may have happened, inspect before retrying" },
   { code: 7, meaning: "retryable: rate limit, capacity or unavailable before any effect" },
   { code: 8, meaning: "partial: some steps were confirmed; read error.known" },
+  {
+    code: 9,
+    meaning:
+      "setup failed: a setup or startup step exited nonzero or timed out; error.known.sandbox names the sandbox if it was kept",
+  },
   { code: 125, meaning: "exec/run: the CLI or provider failed; details in the error" },
   {
     code: 130,

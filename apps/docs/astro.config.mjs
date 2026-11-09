@@ -91,6 +91,7 @@ export default defineConfig({
           items: [
             { slug: "docs/cli", label: "Overview" },
             { slug: "docs/cli/configuration" },
+            { slug: "docs/cli/setup" },
             { slug: "docs/cli/shell-and-agents" },
             { slug: "docs/cli/ci" },
             { slug: "docs/cli/rex", badge: "exp" },
@@ -101,6 +102,7 @@ export default defineConfig({
           label: "Using the SDK",
           items: [
             { slug: "docs/guides/resources" },
+            { slug: "docs/guides/setup" },
             { slug: "docs/guides/snapshots-and-volumes" },
             { slug: "docs/guides/files-and-output" },
             { slug: "docs/guides/text-streaming", label: "Processes and streaming" },

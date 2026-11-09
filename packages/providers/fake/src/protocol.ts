@@ -22,6 +22,8 @@ export const FakeImage = z.strictObject({
   source: z.string().min(1).max(1024).nullable(),
   submissionId: z.string().min(1).max(128).nullable(),
   createdAt: z.iso.datetime().nullable(),
+  /** User labels set at snapshot capture. */
+  labels: z.record(z.string().min(1).max(64), z.string().max(256)).optional(),
 });
 
 export type FakeImage = z.infer<typeof FakeImage>;
@@ -110,6 +112,7 @@ export const FakeAction = z.discriminatedUnion("kind", [
     scope: NativeScope,
     identity: InvocationIdentity,
     sandbox: SandboxRef,
+    labels: z.record(z.string().min(1).max(64), z.string().max(256)).optional(),
   }),
   z.strictObject({
     kind: z.literal("snapshotList"),
