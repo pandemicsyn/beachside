@@ -32,6 +32,10 @@ Scope is the account id from `GET /v1/accounts/me` plus the fixed `https://api.r
 | `lifecycle.idleSeconds` | Suspend after this idle time instead of a fixed lifetime. Not combined with `lifetimeSeconds`. |
 | `preview.access` | `protected` (default) previews need the returned auth header; `public` URLs are open. |
 
+## Secrets
+
+A plain `secret(value)` becomes a Runloop account secret named for the create attempt and is mapped into the devbox with `secrets`, so the value is not part of the devbox definition. A brokered secret for `api.anthropic.com` or `api.openai.com` (the `anthropic` and `openai` presets) also becomes an account secret, plus a gateway config for that endpoint: the devbox variable holds a token bound to the devbox, and the adapter sets `ANTHROPIC_BASE_URL` or `OPENAI_BASE_URL` to `https://gateway.labs.runloop.ai`, where Runloop adds the real key. Other hosts, more than one host per secret, Basic auth, a caller-set base URL and `network: "blocked"` (whose policy denies the gateway) are refused before any call. The devbox metadata records the secrets and gateway configs, and destroy deletes them; any that remain are reported in `retainedResources`.
+
 ## Behavior
 
 - **Create** sends `beachside_operation`/`beachside_submission` metadata, a tunnel and create-time `env`, then waits for `running`. A lost response is recovered by finding the marker, never by resending.

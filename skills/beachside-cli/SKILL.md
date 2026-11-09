@@ -112,14 +112,15 @@ beachside run --json --label run=ci-42 --ttl 1h --timeout 45m -- ./ci.sh
 beachside gc --label run=ci-42 --dry-run --json   # if the job was killed
 ```
 
-Give the sandbox a credential without exposing it (the provider adds it to HTTPS requests; the sandbox sees a placeholder):
+Pass credentials with `--secret`, never `--env`. `K=<source>` is plain (the sandbox gets the real value; for keys a tool must read itself); `K=<source>@<preset|host>` is brokered (the provider adds it to HTTPS requests; the sandbox sees a placeholder):
 
 ```sh
+beachside create --json --name vpn --secret TS_AUTHKEY=env:TS_AUTHKEY
 beachside create --json --name agent --network internet --secret ANTHROPIC_API_KEY=env:ANTHROPIC_API_KEY@anthropic
 beachside create --json --name pr --network internet --secret GH_TOKEN=github   # a named secret in beachside.json
 ```
 
-Never pass a key with `--env` when `--secret` works. `beachside secret ls --json` lists the named secrets. Exit code 4 means the provider cannot broker it; ask the user before falling back to `:exposed`.
+Broker API keys when you can. `beachside secret ls --json` lists the named secrets. Exit code 4 means the provider cannot broker it; ask the user before dropping the `@` to make it plain.
 
 Copy results back before removing a sandbox: `beachside cp job-1:/home/user/out/report.json ./report.json`.
 

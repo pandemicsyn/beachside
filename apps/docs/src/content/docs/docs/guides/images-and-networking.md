@@ -121,7 +121,7 @@ await box.exec({ command: { kind: "argv", argv: ["node", "app.js"] }, env: { NOD
 
 The variables belong to the sandbox: they still apply after `sandboxes.get(reference)` reopens it in another process, without passing them again. Names match `[A-Za-z_][A-Za-z0-9_]*`; values are strings without NUL. A request holds at most 128 variables and 64 KiB of names and values. Invalid input rejects with `INVALID_ARGUMENT` before any provider call, and the message never repeats a name or value. An empty `env` asks for nothing.
 
-Values are often secrets, so Beachside never writes them into operation references, recovery tokens, telemetry or its own error messages, and adapters redact an echoed value from provider error text. The provider still stores them with the sandbox, and any process inside it can read them.
+Values are often secrets, so Beachside never writes them into operation references, recovery tokens, telemetry or its own error messages, and adapters redact an echoed value from provider error text. The provider still stores them with the sandbox, and any process inside it can read them. Wrap credentials in [`secret()`](/docs/guides/secrets/) to keep them in a provider secret store where there is one, or out of the sandbox entirely.
 
 | Provider       | Create-time `env`                                                               |
 | -------------- | ------------------------------------------------------------------------------- |

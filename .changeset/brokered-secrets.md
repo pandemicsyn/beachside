@@ -6,12 +6,16 @@
 "@beachside/vercel": minor
 "@beachside/freestyle": minor
 "@beachside/daytona": minor
+"@beachside/boxd": minor
+"@beachside/runloop": minor
+"@beachside/modal": minor
 ---
 
-Give a sandbox a credential without putting the real value inside it. Wrap an env value in `secret(value, { for: "anthropic" })` (or `hosts: [...]`): the sandbox sees a placeholder, and the provider's egress proxy adds the value to HTTPS requests for those hosts.
+Secrets for sandboxes. Wrap an env value in `secret()` and Beachside never prints it, saves it or puts it in an error message.
 
-- **Providers:** E2B, Vercel and Freestyle set the header from a network rule; Daytona mounts a per-sandbox Daytona secret and deletes it with the sandbox. Other adapters refuse brokered secrets before creating anything, and `capabilities().secrets` says which can.
+- **Plain:** `secret(value)` gives the sandbox the real value, for Tailscale, SSH, signing or decryption keys. Runloop, boxd and Modal keep it in their secret store rather than the sandbox definition; `capabilities().secrets.stored` says so.
+- **Brokered:** `secret(value, { for: "anthropic" })` (or `hosts: [...]`) keeps the value out of the sandbox. The sandbox sees a placeholder, and the provider adds the value to HTTPS requests for those hosts. E2B, Vercel and Freestyle set the header from a network rule; Daytona and boxd swap a placeholder; Runloop routes `anthropic` and `openai` through its Agent Gateway. Other adapters refuse before creating anything. The type requires `for` or `hosts`.
 - **Presets:** `anthropic`, `openai`, `github` (API and git over HTTPS), `github-api` and `npm`.
-- **Exposed:** `secret.exposed(value)` puts the real value in env when a tool needs it, still redacted everywhere Beachside prints or saves.
-- **CLI:** `--secret NAME=<named secret>` or `NAME=<source>@<preset|host>[:exposed]` on `create` and `run`, a `secrets` block in `beachside.json`, the `gh:` source for your `gh` login, and `beachside secret ls`. Values are never stored.
-- **Adapter authors:** `supports.secrets` declares delivery, Basic auth, wildcard hosts and a limit; `CreateInput.secrets` and restore `secrets` carry the bindings.
+- **CLI:** `--secret NAME=<named secret>`, `NAME=<source>` (plain) or `NAME=<source>@<preset|host>` (brokered) on `create` and `run`, a `secrets` block in `beachside.json`, the `gh:` source for your `gh` login, and `beachside secret ls`. Values are never stored.
+- **boxd:** moves to `@boxd-sh/sdk` 0.3.0 for machine specs.
+- **Adapter authors:** `supports.secrets` declares brokered delivery (`header`, `placeholder` or `gateway`), Basic auth, wildcard hosts, hosts and a limit; `supports.secretStore` declares a store for plain secrets; `CreateInput.secrets` and `CreateInput.secretEnv` carry them, on create and restore.

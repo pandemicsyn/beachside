@@ -89,36 +89,36 @@ References also work in a provider's environment variable, for example `E2B_API_
 
 ## Secrets
 
-`--secret` gives a sandbox a credential without putting the real value inside it. The sandbox sees a placeholder, and the provider adds the value to HTTPS requests for the secret's hosts. See [Secrets](/docs/guides/secrets/) for how each provider does it.
+`--secret` gives a sandbox a credential that Beachside never prints or stores. A plain secret puts the real value in the sandbox environment; add `@` and a preset or host to broker it instead, so the sandbox sees a placeholder and the provider adds the value to HTTPS requests for those hosts. See [Secrets](/docs/guides/secrets/) for how each provider handles both.
 
 Name the secrets you reuse in a top-level `secrets` block:
 
 ```json
 {
   "secrets": {
+    "tailscale": { "value": "op://Dev/tailscale/authkey" },
     "anthropic": { "value": "op://Dev/anthropic/api-key", "for": "anthropic" },
     "npm": { "value": "env:NPM_TOKEN", "hosts": ["registry.npmjs.org"] },
-    "github": { "value": "gh:", "for": "github" },
-    "signing": { "value": "op://Dev/signing/key", "exposed": true }
+    "github": { "value": "gh:", "for": "github" }
   }
 }
 ```
 
-Then pass `--secret NAME=<secret name>`, or give the source inline as `NAME=<source>@<preset|host>[,host...]`:
+Then pass `--secret NAME=<secret name>`, or give the source inline as `NAME=<source>`, adding `@<preset|host>[,host...]` to broker it:
 
 ```sh
+beachside create --secret TS_AUTHKEY=tailscale --secret DECRYPT_KEY=op://Dev/release/key
 beachside create --network internet --secret ANTHROPIC_API_KEY=anthropic --secret GH_TOKEN=github
 beachside create --network internet --secret NPM_TOKEN=env:NPM_TOKEN@npm
-beachside create --secret SIGNING_KEY=op://Dev/signing/key:exposed
 ```
 
 - **Sources:** `env:NAME`, `op://`, `bws://`, `pass://` (as for credentials), and `gh:` for the token of your local `gh auth login`. A literal value is allowed only in `beachside.json`, never on the command line, where it would land in shell history.
 - **Presets:** `anthropic`, `openai`, `github`, `github-api` and `npm`. Hosts default to an `Authorization: Bearer` header; set `header`, `format` and `username` in `beachside.json` to change that.
-- **Exposed:** `:exposed` (or `"exposed": true`) puts the real value in the sandbox environment. Use it only when a tool needs the value itself.
+- **Plain or brokered:** a secret without `for` or `hosts` is plain. Anything in the sandbox can read a plain secret, so broker API keys when the provider can.
 
 `gh:` carries every scope your `gh` login has, usually all your repositories. For a long-lived or shared sandbox, prefer a fine-grained token limited to the repositories it needs.
 
-Values are read once per command and never stored. The sandbox record keeps each secret's name, mode and hosts; `beachside secret ls` lists the named secrets and the sandboxes using them. A provider that cannot keep a value out of the sandbox refuses `create` with exit code 4.
+Values are read once per command and never stored. The sandbox record keeps each secret's name, kind and hosts; `beachside secret ls` lists the named secrets and the sandboxes using them. A provider that cannot broker a secret refuses `create` with exit code 4, before creating anything.
 
 ## Limits
 
