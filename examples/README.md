@@ -114,7 +114,7 @@ The server uses `OPENCODE_MODEL` when set, otherwise OpenCode's default. A keyed
 
 The guest needs Linux on x64 or arm64 with `curl`, `sha256sum`, GNU `tar`, `git`, `setsid` and `/bin/sh`, outbound access to `registry.npmjs.org` and your model service, and `sudo` when the project path does not exist and the sandbox user cannot create it. The host needs `git` and `tar`. The box keeps running until `down` or its lifetime ends, and is billed meanwhile; sandboxes carry the labels `beachside-example=opencode-box` and `opencode-box=<name>`, so `beachside gc --label beachside-example=opencode-box` finds strays.
 
-`box` has offline tests only. It has not been run against a live provider yet.
+`up`, `pull` and `down` passed live on E2B (`base` template) on November 8, 2026: the server kept running after `up`, its API answered with the password through the preview proxy, and `pull` brought a commit made in the box back to the checkout. Not yet run live: an agent edit with a keyed model, the interactive `attach` client, and Daytona.
 
 For offline checks after package builds:
 
