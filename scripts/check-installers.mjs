@@ -35,6 +35,7 @@ for (const name of [
   "@beachside/boat",
   "@beachside/runloop",
   "@beachside/freestyle",
+  "@beachside/archil",
   "@beachside/modal",
   "@beachside/cli",
 ])
@@ -139,6 +140,14 @@ cases.push({
   overrides: [adapterName],
   runtime: `import { freestyleAdapter } from "@beachside/freestyle"; if (freestyleAdapter.name !== "freestyle") throw Error("Unexpected adapter");`,
   types: `import { freestyleAdapter } from "@beachside/freestyle"; const name: string = freestyleAdapter.name; void name;`,
+});
+
+cases.push({
+  name: "archil",
+  packageName: "@beachside/archil",
+  overrides: [adapterName],
+  runtime: `import { archilAdapter } from "@beachside/archil"; if (archilAdapter.name !== "archil") throw Error("Unexpected adapter");`,
+  types: `import { archilAdapter } from "@beachside/archil"; const name: string = archilAdapter.name; void name;`,
 });
 
 cases.push({

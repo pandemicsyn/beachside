@@ -1148,6 +1148,7 @@ describe("beachside CLI against the fake provider", () => {
         "boat",
         "runloop",
         "freestyle",
+        "archil",
         "vercel",
         "modal",
       ]);

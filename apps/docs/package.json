@@ -33,6 +33,7 @@
     "@beachside/boxd": "workspace:*",
     "@beachside/boat": "workspace:*",
     "@beachside/runloop": "workspace:*",
-    "@beachside/freestyle": "workspace:*"
+    "@beachside/freestyle": "workspace:*",
+    "@beachside/archil": "workspace:*"
   }
 }

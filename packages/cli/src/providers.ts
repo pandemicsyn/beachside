@@ -95,6 +95,19 @@ export const providers: readonly ProviderDescriptor[] = [
     config: { network: { env: "FREESTYLE_NETWORK", required: false } },
   },
   {
+    id: "archil",
+    module: "@beachside/archil",
+    export: "archilAdapter",
+    experimental: true,
+    credentials: { apiKey: "ARCHIL_API_KEY" },
+    config: {
+      // Each Archil region has its own control plane, so the region is always explicit.
+      region: { env: "ARCHIL_REGION", required: true },
+      // Egress defaults to blocked; ARCHIL_NETWORK=internet opts out.
+      network: { env: "ARCHIL_NETWORK", required: false },
+    },
+  },
+  {
     id: "vercel",
     module: "@beachside/vercel",
     export: "vercelAdapter",

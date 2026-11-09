@@ -492,6 +492,13 @@ export const providerStatus: ProviderStatus[] = [
     note: "Not yet tested against the live Freestyle service.",
   },
   {
+    id: "archil",
+    name: "Archil",
+    href: "/docs/providers/archil/",
+    experimental: true,
+    note: "Not yet tested against the live Archil service.",
+  },
+  {
     id: "modal",
     name: "Modal",
     experimental: true,

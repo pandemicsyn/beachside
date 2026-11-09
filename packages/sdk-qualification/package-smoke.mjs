@@ -19,6 +19,7 @@ const packages = [
   ["@beachside/boat", "packages/providers/boat"],
   ["@beachside/runloop", "packages/providers/runloop"],
   ["@beachside/freestyle", "packages/providers/freestyle"],
+  ["@beachside/archil", "packages/providers/archil"],
   ["@beachside/vercel", "packages/providers/vercel"],
   ["@beachside/e2b", "packages/providers/e2b"],
   ["beachside", "packages/sdk"],
@@ -80,6 +81,7 @@ async function pack(directory) {
       "@beachside/boat",
       "@beachside/runloop",
       "@beachside/freestyle",
+      "@beachside/archil",
       "@beachside/cli",
     ].includes(manifest.name)
   ) {
@@ -299,6 +301,29 @@ async function flow() {
   await box.writeFile("/root/file", new Uint8Array([0,255]), { overwrite: true });
   await box.readFile("/root/file");
   await box.destroy(); await client.close();
+  return { url, preserve };
+}
+void flow;
+`;
+  else if (mode === "archil")
+    source = `
+import { Beachside, Preserve } from "beachside";
+import { archilAdapter } from "@beachside/archil";
+async function flow() {
+  const client = await Beachside.connect({ adapter: archilAdapter, config: { region: "aws-us-east-1", resources: { vcpus: 2, memoryMiB: 4096 }, snapshots: { preserve: Preserve.FILESYSTEM } }, credentials: { apiKey: "fixture" } });
+  const volume = await client.volumes.create({ name: "workspace" });
+  const box = await client.sandboxes.create({ networkPolicy: "blocked", mounts: [volume.at("/workspace")] });
+  const preview = await box.preview(3000);
+  const url: string = preview.url;
+  const { snapshot } = await box.snapshot();
+  const restored = await snapshot.restore({ requireIndependentLifecycle: false });
+  const suspended = await box.suspend();
+  const preserve: "filesystem" | "filesystem+memory" = suspended.preserve;
+  await box.resume();
+  await box.exec(["true"]);
+  await box.writeFile("/root/file", new Uint8Array([0,255]), { overwrite: true });
+  await box.readFile("/root/file");
+  await restored.destroy(); await snapshot.delete(); await box.destroy(); await client.close();
   return { url, preserve };
 }
 void flow;
@@ -1177,6 +1202,29 @@ console.log("Packed Freestyle imports and local validation passed without provid
 
   for (const runtime of ["node", "bun"])
     console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], freestyle)}`);
+
+  const archil = join(temporary, "archil-consumer");
+  await consumer(
+    archil,
+    { ...sdkDeps, "@beachside/archil": archiveOverrides["@beachside/archil"] },
+    archiveOverrides,
+    `
+import { Beachside } from "beachside";
+import { archilAdapter } from "@beachside/archil";
+if (archilAdapter.name !== "archil") throw Error("External adapter identity mismatch");
+if (archilAdapter.config.parse({ region: "aws-us-east-1" }).network !== "blocked") throw Error("Egress must default to blocked");
+try {
+  await Beachside.connect({ adapter: archilAdapter, config: {}, credentials: { apiKey: "fixture" } });
+  throw Error("Invalid configuration accepted");
+} catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
+console.log("Packed Archil imports and local validation passed without provider IO");
+`,
+  );
+  await checkTypes(archil, "archil");
+  inspectGraph(archil, ["beachside", "@beachside/archil"]);
+
+  for (const runtime of ["node", "bun"])
+    console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], archil)}`);
 
   const e2bDeps = { ...sdkDeps, "@beachside/e2b": archiveOverrides["@beachside/e2b"] };
 
