@@ -36,7 +36,7 @@ def rename(a,b):
   if fn is not None and fn(-100,os.fsencode(a),-100,os.fsencode(b),1)==0: return
   e=ctypes.get_errno() if fn is not None else errno.ENOSYS
   if e not in (errno.ENOSYS,errno.EINVAL): raise OSError(e,os.strerror(e))
-  if stat.S_ISDIR(os.lstat(a).st_mode): raise OSError(errno.ENOSYS,'no-clobber directory moves need renameat2')
+  if stat.S_ISDIR(os.lstat(a).st_mode): raise OSError(e,os.strerror(e)) if e==errno.EINVAL else OSError(errno.ENOSYS,'no-clobber directory moves need renameat2')
   os.link(a,b,follow_symlinks=False);os.unlink(a)
 def publish(a,b):
  global published
