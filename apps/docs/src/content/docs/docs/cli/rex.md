@@ -50,7 +50,22 @@ With the auth key in `TAILSCALE_AUTH_KEY`, one command does every step below:
 beachside create --name rex --ttl 2h --with rex
 ```
 
-It prints the `https://beachside-rex.<your-tailnet>.ts.net` address once Rex is ready, usually within a minute, and `beachside inspect rex` shows it again. To see what it runs, or to do it by hand, read on.
+It prints the `https://beachside-rex.<your-tailnet>.ts.net` address once Rex is ready, usually within a minute, and `beachside inspect rex` shows it again.
+
+Behind the scenes, `--with rex` runs the same steps as the manual recipe below:
+
+1. Creates the sandbox with `--network internet`, and refuses if `TAILSCALE_AUTH_KEY` is missing before creating anything.
+2. Gives the sandbox a routable IPv4 address if it only has a link-local one, as on E2B.
+3. Installs Rex with its official install script, unless `rex` is already there.
+4. Clears any old Rex Tailscale state in `~/.local/state/rex/tsnet`, then runs `rex server start --tailscale-hostname beachside-<name>`.
+5. Runs `rex server tailscale on --auth-key-file - --allow-tailnet-members` with the key on stdin. The key never touches the sandbox's disk, command line or env.
+6. Waits up to 150 seconds for `tailnet https listener ready` in `rex server logs` and reads the address from it.
+7. Makes one request to that address, so the first certificate is issued before you connect.
+8. Records the address with the sandbox, for `inspect`.
+
+`beachside rm` runs `rex server tailscale logout` before it destroys the sandbox. If a step fails, `create` exits 8 with the failed step's error and keeps the sandbox, so you can look inside with `beachside exec` or remove it.
+
+To do it by hand, read on.
 
 ## Start a Rex server in a sandbox
 
