@@ -8,6 +8,8 @@ import type {
 } from "./adapter-direct";
 import type { OperationKind, RetainedArtifact, Scope } from "@beachside/adapter";
 import { z } from "zod";
+import { type EnvValue, splitEnv } from "./secrets";
+import { SecretBindings, type SecretBinding } from "@beachside/adapter";
 import type { AdapterImage, AdapterSnapshot, AdapterVolume } from "./resources";
 import type { SetupCreateOptions } from "./setup";
 import {
@@ -76,9 +78,11 @@ export type CreateInput = {
   /**
    * Environment variables for every command, process and terminal in the sandbox,
    * including after reopen. A per-call `env` entry overrides the same key. Values are
-   * never saved in recovery references or included in errors and telemetry.
+   * never saved in recovery references or included in errors and telemetry. Wrap a
+   * credential in `secret(value)` so the adapter can keep it in the provider's secret
+   * store, or `secret(value, { for: "anthropic" })` to keep it out of the sandbox entirely.
    */
-  env?: Record<string, string>;
+  env?: Record<string, EnvValue>;
   /**
    * Lifetime for this sandbox only, replacing the adapter setup's `lifecycle.lifetimeSeconds`.
    * An adapter that cannot apply it exactly (or by rounding up) rejects before any effect.
@@ -494,12 +498,62 @@ export function resolveNetworkPolicy(
   return Object.hasOwn(aliases, requested) ? aliases[requested]! : requested;
 }
 
+export type ValidatedCreate = Omit<CreateInput, "network" | "env"> & {
+  environment: ImageInput;
+  networkPolicy: string;
+  env?: Record<string, string>;
+  secretEnv?: string[];
+  secrets?: SecretBinding[];
+};
+
 export function validateCreate(
-  input: CreateInput | undefined,
+  input: (CreateInput & { secrets?: SecretBinding[]; secretEnv?: string[] }) | undefined,
   defaultEnvironment?: ImageInput,
   defaultNetworkPolicy = "blocked",
   networkPolicyAliases?: Readonly<Record<string, string>>,
-): Omit<CreateInput, "network"> & { environment: ImageInput; networkPolicy: string } {
+): ValidatedCreate {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- JavaScript callers can pass any create input.
+  const raw = typeof input === "object" && input !== null ? input : undefined;
+
+  if (input !== undefined && !raw)
+    throw new BeachsideError("INVALID_ARGUMENT", "Invalid create request");
+  // Already-validated requests are re-checked with their brokered bindings intact.
+  const { secrets: bound, secretEnv: boundEnv, ...rest } = raw ?? {};
+  const { env, secrets: split, secretEnv: splitSecretEnv } = splitEnv(rest.env);
+  const secretEnv = [...(boundEnv ?? []), ...(splitSecretEnv ?? [])];
+  const given = bound === undefined ? undefined : SecretBindings.safeParse(bound);
+
+  if (given && !given.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid secrets");
+  const secrets = given || split ? [...(given?.data ?? []), ...(split ?? [])] : undefined;
+
+  const request = validateCreateRequest(
+    raw ? { ...rest, env } : undefined,
+    defaultEnvironment,
+    defaultNetworkPolicy,
+    networkPolicyAliases,
+  );
+
+  if (secrets) {
+    if (secrets.some((binding) => request.env && Object.hasOwn(request.env, binding.env)))
+      throw new BeachsideError("INVALID_ARGUMENT", "A secret and an env entry share a name");
+    request.secrets = secrets;
+  }
+
+  if (secretEnv.length) {
+    if (secretEnv.some((name) => !request.env || !Object.hasOwn(request.env, name)))
+      throw new BeachsideError("INVALID_ARGUMENT", "Invalid secret env names");
+    request.secretEnv = [...new Set(secretEnv)];
+  }
+
+  return request;
+}
+
+function validateCreateRequest(
+  input: (Omit<CreateInput, "env"> & { env?: Record<string, string> }) | undefined,
+  defaultEnvironment?: ImageInput,
+  defaultNetworkPolicy = "blocked",
+  networkPolicyAliases?: Readonly<Record<string, string>>,
+): ValidatedCreate {
   const parsed = z
     .strictObject({
       environment: z
@@ -562,7 +616,7 @@ export function validateCreate(
         "Configure an adapter environment (daytona({ environment: ... })) or pass create({ environment: ... })",
       );
 
-    return validateCreate(
+    return validateCreateRequest(
       { ...parsed.data, environment: defaultEnvironment },
       undefined,
       defaultNetworkPolicy,
@@ -595,10 +649,11 @@ export function validateCreate(
 
   if (!contract.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid create request");
 
-  const resolved: Omit<CreateInput, "network"> & {
-    environment: ImageInput;
-    networkPolicy: string;
-  } = { ...request, environment: parsed.data.environment, networkPolicy };
+  const resolved: ValidatedCreate = {
+    ...request,
+    environment: parsed.data.environment,
+    networkPolicy,
+  };
 
   if (env) resolved.env = env;
 

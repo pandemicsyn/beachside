@@ -1,6 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
 import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
-import { Image, NonzeroExitError, OutcomeUnknownError, Preserve, Beachside } from "beachside";
+import {
+  Image,
+  NonzeroExitError,
+  OutcomeUnknownError,
+  Preserve,
+  Beachside,
+  UnsupportedFeatureError,
+  secret,
+} from "beachside";
 import type { z } from "zod";
 import { createRunloopAdapter, uuidv7 } from "./adapter";
 import { runloopFixture } from "./fixture.test-support";
@@ -183,6 +191,77 @@ test("create records the attempt, sets lifetime, tunnel and env, and resolves bl
     expect(createBodies(fixture).at(-1)?.body).toMatchObject({
       launch_parameters: { keep_alive_time_seconds: 7200 },
     });
+  } finally {
+    await client.close();
+  }
+});
+
+test("plain secrets go to account secrets, brokered ones through the gateway, removed on destroy", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+  const KEY = "CANARY-runloop-model-key";
+  const TS = "CANARY-runloop-tailscale";
+
+  try {
+    expect((await client.capabilities()).secrets).toMatchObject({
+      stored: true,
+      brokered: { delivery: "gateway", hosts: ["api.anthropic.com", "api.openai.com"] },
+    });
+
+    const box = await client.sandboxes.create({
+      env: {
+        MODE: "agent",
+        TS_AUTHKEY: secret(TS),
+        ANTHROPIC_API_KEY: secret(KEY, { for: "anthropic" }),
+      },
+    });
+
+    const body = createBodies(fixture)[0]?.body;
+    expect(JSON.stringify(body)).not.toContain(KEY);
+    expect(JSON.stringify(body)).not.toContain(TS);
+    expect(body).toMatchObject({
+      environment_variables: {
+        MODE: "agent",
+        ANTHROPIC_BASE_URL: "https://gateway.labs.runloop.ai",
+      },
+      secrets: { TS_AUTHKEY: expect.stringMatching(/^BEACHSIDE_\w+_0$/) },
+      gateways: {
+        ANTHROPIC_API_KEY: {
+          gateway: expect.stringMatching(/^gwc_/),
+          secret: expect.stringMatching(/^BEACHSIDE_\w+_1$/),
+        },
+      },
+    });
+    expect([...fixture.accountSecrets.values()].sort()).toEqual([KEY, TS].sort());
+    expect([...fixture.gatewayConfigs.values()]).toEqual([
+      {
+        name: expect.stringMatching(/^beachside-/),
+        endpoint: "https://api.anthropic.com",
+        auth: { type: "header", key: "x-api-key" },
+      },
+    ]);
+
+    await box.destroy();
+    expect(fixture.accountSecrets.size).toBe(0);
+    expect(fixture.gatewayConfigs.size).toBe(0);
+
+    // Hosts without a standard base URL variable, and blocked egress, refuse before any effect.
+    await expect(
+      client.sandboxes.create({ env: { GH_TOKEN: secret(KEY, { for: "github-api" }) } }),
+    ).rejects.toBeInstanceOf(UnsupportedFeatureError);
+    await expect(
+      client.sandboxes.create({
+        networkPolicy: "blocked",
+        env: { OPENAI_API_KEY: secret(KEY, { for: "openai" }) },
+      }),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(fixture.accountSecrets.size).toBe(0);
+    expect(createBodies(fixture)).toHaveLength(1);
+
+    // A refused devbox create removes the secrets made for it.
+    fixture.failNext(/^POST \/v1\/devboxes$/, fixture.error(400, "bad"));
+    await expect(client.sandboxes.create({ env: { TS_AUTHKEY: secret(TS) } })).rejects.toThrow();
+    expect(fixture.accountSecrets.size).toBe(0);
   } finally {
     await client.close();
   }

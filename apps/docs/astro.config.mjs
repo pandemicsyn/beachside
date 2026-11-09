@@ -108,6 +108,7 @@ export default defineConfig({
             { slug: "docs/guides/text-streaming", label: "Processes and streaming" },
             { slug: "docs/guides/preview-access", label: "HTTP previews" },
             { slug: "docs/guides/images-and-networking" },
+            { slug: "docs/guides/secrets" },
             { slug: "docs/guides/recovery" },
             { slug: "docs/observability" },
             { slug: "docs/guides/troubleshooting" },

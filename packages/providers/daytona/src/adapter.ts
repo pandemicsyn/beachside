@@ -307,6 +307,7 @@ const MARKER_LABELS = new Set([
   "beachside.submission",
   "beachside.operation",
   "beachside.imageSnapshot",
+  "beachside.secrets",
 ]);
 
 // Retained labels are summaries; mountDurability preserves the full scoped native identity.
@@ -846,6 +847,7 @@ export function createDaytonaAdapter(
         options: {
           env: true,
           labels: true,
+          secrets: true,
           lifetime: { minSeconds: 1, maxSeconds: Number.MAX_SAFE_INTEGER },
         },
         recovery: { version: 1, token: RestoreToken },
@@ -892,6 +894,7 @@ export function createDaytonaAdapter(
             mounts: input.request.mounts,
             labels: input.request.labels,
             env: input.request.env,
+            secrets: input.request.secrets,
             ttlMinutes:
               input.request.lifetimeSeconds === undefined
                 ? undefined
@@ -1097,6 +1100,14 @@ export function createDaytonaAdapter(
           exec: { commands: ["argv", "shell"], maxOutputBytes: caps.maxOutputBytes },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          // Daytona secrets: the sandbox env holds a dtn_secret_ placeholder that the egress proxy
+          // swaps for the value in HTTPS headers to the secret's hosts, Basic auth included.
+          secrets: {
+            delivery: "placeholder",
+            basicAuth: true,
+            wildcardHosts: true,
+            maxSecrets: 16,
+          },
           // Rounded up to whole minutes; inspect reports the native expiry.
           lifetime: { minSeconds: 1, maxSeconds: Number.MAX_SAFE_INTEGER },
         },
@@ -1221,6 +1232,7 @@ export function createDaytonaAdapter(
               labels: input.labels,
               mounts: input.mounts,
               env: input.env,
+              secrets: input.secrets,
               ttlMinutes:
                 input.lifetimeSeconds === undefined
                   ? undefined
@@ -1237,6 +1249,7 @@ export function createDaytonaAdapter(
               labels: input.labels,
               mounts: input.mounts,
               env: input.env,
+              secrets: input.secrets,
               ttlMinutes: input.ttlMinutes,
               signal: ctx.signal,
             });

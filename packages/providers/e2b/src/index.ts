@@ -25,6 +25,9 @@ import {
   nativeDeadline,
   type SandboxInfo,
   type SandboxReference,
+  envWithSecretPlaceholders,
+  secretHeadersByHost,
+  type SecretSupport,
 } from "@beachside/adapter";
 import { createHash } from "node:crypto";
 import { ProcessReference } from "./process-native";
@@ -332,6 +335,14 @@ function executionPaths(submissionId: string) {
 }
 
 /** The E2B definition uses the same public adapter contract as external adapters. */
+/** E2B's egress proxy sets the whole header per host, so Basic auth (git) works too. */
+const SECRET_SUPPORT: SecretSupport = {
+  delivery: "header",
+  basicAuth: true,
+  wildcardHosts: true,
+  maxSecrets: 32,
+};
+
 export function createE2BAdapter(transportFactory?: (options: { apiKey: string }) => E2BTransport) {
   return defineAdapter({
     name: "e2b",
@@ -869,6 +880,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          secrets: SECRET_SUPPORT,
           // Under a minute rounds up to E2B's minimum, which inspect reports as the real expiry.
           lifetime: { minSeconds: 1, maxSeconds: MAX_LIFETIME_SECONDS },
         },
@@ -1072,7 +1084,11 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
                 signal: ctx.signal,
               };
 
-              if (input.env) request.env = input.env;
+              const env = envWithSecretPlaceholders(input.env, input.secrets);
+
+              if (env) request.env = env;
+
+              if (input.secrets?.length) request.headerRules = secretHeadersByHost(input.secrets);
               const id = await transport.create(request);
 
               if (!nativeId.test(id)) return ctx.unknown("E2B create returned an invalid ID");

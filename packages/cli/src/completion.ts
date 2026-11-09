@@ -204,6 +204,9 @@ export async function complete(
     return none;
   }
 
+  if (command.name === "secret")
+    return positionals.length === 0 ? { candidates: [{ value: "ls" }], directive: 0 } : none;
+
   if (command.name === "adapter") {
     if (positionals.length === 0)
       return { candidates: adapterActions.map((action) => ({ value: action })), directive: 0 };

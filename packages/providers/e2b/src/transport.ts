@@ -266,6 +266,8 @@ export type E2BTransport = {
     volumeMounts?: Record<string, string>;
     /** Native sandbox-wide `envs`; values may be secrets and never enter messages. */
     env?: Record<string, string>;
+    /** Headers the egress proxy sets per host; values are brokered secrets. */
+    headerRules?: Map<string, Record<string, string>>;
     signal?: AbortSignal;
   }): Promise<string>;
   get(id: string): Promise<E2BRecord | null>;
@@ -951,7 +953,17 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
           timeoutMs: input.timeoutMs,
           lifecycle: { onTimeout: "kill", autoResume: false },
           allowInternetAccess: input.allowInternetAccess,
-          network: { allowPublicTraffic: input.allowPublicTraffic ?? false },
+          network: {
+            allowPublicTraffic: input.allowPublicTraffic ?? false,
+            rules: input.headerRules?.size
+              ? Object.fromEntries(
+                  [...input.headerRules].map(([host, headers]) => [
+                    host,
+                    [{ transform: { headers } }],
+                  ]),
+                )
+              : undefined,
+          },
           volumeMounts: input.volumeMounts,
           envs: input.env,
           signal: input.signal,
@@ -959,7 +971,14 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
 
         return sandbox.sandboxId;
       } catch (error) {
-        throw createRejection(error, apiKey, Object.values(input.env ?? {})) ?? error;
+        throw (
+          createRejection(error, apiKey, [
+            ...Object.values(input.env ?? {}),
+            ...[...(input.headerRules?.values() ?? [])].flatMap((headers) =>
+              Object.values(headers),
+            ),
+          ]) ?? error
+        );
       }
     },
     get,

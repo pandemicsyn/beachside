@@ -45,6 +45,7 @@ Import from `beachside`.
 | `DirectConnectOptions`        | type      |
 | `DirectoryResult`             | type      |
 | `DirectSandboxHandle`         | type      |
+| `EnvValue`                    | type      |
 | `ExecInput`                   | type      |
 | `ExecOptions`                 | type      |
 | `ExecOutput`                  | type      |
@@ -118,6 +119,13 @@ Import from `beachside`.
 | `SandboxScopeCallbackOutcome` | type      |
 | `SandboxScopeOptions`         | type      |
 | `SandboxState`                | type      |
+| `secret`                      | re-export |
+| `Secret`                      | re-export |
+| `SECRET_PRESETS`              | re-export |
+| `SecretOptions`               | type      |
+| `SecretPreset`                | type      |
+| `SecretSupport`               | type      |
+| `SecretTarget`                | type      |
 | `Setup`                       | re-export |
 | `SetupCreateOptions`          | type      |
 | `SetupDefinition`             | re-export |

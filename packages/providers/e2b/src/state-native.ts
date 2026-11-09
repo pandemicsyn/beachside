@@ -3,6 +3,8 @@ import {
   sandboxReference,
   type SandboxReference,
   type Sandbox,
+  envWithSecretPlaceholders,
+  secretHeadersByHost,
 } from "@beachside/adapter";
 import { z } from "zod";
 import { resourceHistory } from "./resource-history";
@@ -908,6 +910,8 @@ export function e2bState(input: {
       // A memory snapshot resumes its processes with the environment they were captured with.
       options: {
         env: !memory,
+        // Placeholders are environment, so memory restores cannot carry them either.
+        secrets: !memory,
         labels: true,
         lifetime: { minSeconds: 1, maxSeconds: input.maxLifetimeSeconds },
       },
@@ -957,7 +961,12 @@ export function e2bState(input: {
           signal: ctx.signal,
         };
 
-        if (value.request.env) request.env = value.request.env;
+        const env = envWithSecretPlaceholders(value.request.env, value.request.secrets);
+
+        if (env) request.env = env;
+
+        if (value.request.secrets?.length)
+          request.headerRules = secretHeadersByHost(value.request.secrets);
         const id = await transport.create(request);
 
         token.sandboxId = id;

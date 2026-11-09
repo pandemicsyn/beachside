@@ -69,6 +69,8 @@ export * from "./lifetime";
 
 export * from "./preview";
 
+export * from "./secrets";
+
 export type CreateInput = {
   image: Image;
   networkPolicy: string;
@@ -82,6 +84,19 @@ export type CreateInput = {
    * tokens or include them in messages. Requires `supports.createEnv`.
    */
   env?: Record<string, string>;
+  /**
+   * Brokered secrets: each binding's environment variable gets a placeholder and the
+   * provider adds the real value to HTTPS requests for its hosts. Values may never enter
+   * the sandbox, recovery tokens or messages. Requires `supports.secrets`; the runtime
+   * rejects anything the adapter cannot broker before `prepare`.
+   */
+  secrets?: import("./secrets").SecretBinding[];
+  /**
+   * Names in `env` whose values are plain secrets. Adapters with a secret store
+   * (`supports.secretStore`) keep these there instead of in the plain sandbox definition;
+   * others treat them as ordinary env. Never persist the values.
+   */
+  secretEnv?: string[];
   /**
    * Wall-clock lifetime for this sandbox, replacing the setup `lifecycle.lifetimeSeconds`.
    * The runtime checks it against `supports.lifetime` before `prepare`.
@@ -343,6 +358,13 @@ export type Guarantees<C extends Command["kind"] = Command["kind"]> = {
    * and terminal, including after reopen in another process. Absent rejects create `env`.
    */
   createEnv?: boolean;
+  /**
+   * Brokered secrets: how this connection keeps create-time secrets out of the sandbox.
+   * Absent rejects any create `secrets`; Beachside never falls back to plain env.
+   */
+  secrets?: import("./secrets").SecretSupport;
+  /** Plain secrets (`CreateInput.secretEnv`) are kept in the provider's secret store. */
+  secretStore?: boolean;
   /**
    * Per-create `lifetimeSeconds` this connection applies natively, in whole seconds. Absent
    * rejects a per-create lifetime; the setup lifetime still applies.

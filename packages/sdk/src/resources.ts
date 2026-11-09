@@ -1,4 +1,5 @@
 import { freezeReference } from "./freeze-reference";
+import { type EnvValue, splitEnv } from "./secrets";
 import { applySetup, prepareSetup } from "./setup-flow";
 import { hasSetupKeys, splitSetup, type SetupCreateOptions } from "./setup";
 import { CreateEnv } from "@beachside/adapter/portable";
@@ -15,6 +16,7 @@ import {
   VolumeInfo,
   RestoreRequest,
   restoreOptionProblem,
+  secretsProblem,
   VolumeCreateInput,
   InventoryInput,
   SandboxListItem,
@@ -77,8 +79,16 @@ async function resourceRead<T>(
 }
 
 /** SDK restore input; native RestoreRequest remains fully resolved. */
-export type RestoreInput = Omit<RestoreRequest, "networkPolicy" | "lifetimeSeconds"> &
+export type RestoreInput = Omit<
+  RestoreRequest,
+  "networkPolicy" | "lifetimeSeconds" | "env" | "secrets" | "secretEnv"
+> &
   SetupCreateOptions & {
+    /**
+     * Environment for the restored sandbox. `secret(...)` values apply like on create, and
+     * reject before any effect where the adapter cannot apply them on restore.
+     */
+    env?: Record<string, EnvValue>;
     /** Outbound network policy; omitted uses the adapter setup default. */
     network?: NetworkPolicy;
     /**
@@ -182,6 +192,18 @@ export class AdapterSnapshot {
 
     if (!selection.success) throw new BeachsideError("INVALID_ARGUMENT", "Invalid restore request");
     const { network, lifecycle, ...rest } = selection.data;
+    const split = splitEnv(normalized.env);
+
+    if (split.env) rest.env = split.env;
+    else delete rest.env;
+
+    if (split.secretEnv) rest.secretEnv = split.secretEnv;
+
+    if (split.secrets) {
+      if (split.secrets.some((binding) => split.env && Object.hasOwn(split.env, binding.env)))
+        throw new BeachsideError("INVALID_ARGUMENT", "A secret and an env entry share a name");
+      rest.secrets = split.secrets;
+    }
 
     // Report only the bounds; environment keys and values never enter a message.
     if (rest.env !== undefined && !CreateEnv.safeParse(rest.env).success)
@@ -233,8 +255,13 @@ export class AdapterSnapshot {
 
     if (input.env && !Object.keys(input.env).length) delete input.env;
 
+    if (input.secrets && !input.secrets.length) delete input.secrets;
+
     if (input.labels && !Object.keys(input.labels).length) delete input.labels;
-    const unsupported = restoreOptionProblem(this.client.session.snapshotRestore?.options, input);
+
+    const unsupported =
+      restoreOptionProblem(this.client.session.snapshotRestore?.options, input) ??
+      secretsProblem(this.client.session.supports.secrets, input.secrets);
 
     if (unsupported) throw new UnsupportedFeatureError("snapshot restore", [unsupported]);
     const info = await this.inspect(options);

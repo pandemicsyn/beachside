@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { adapterSuite } from "@beachside/adapter/testing";
-import { Beachside, Image, NonzeroExitError, OutcomeUnknownError } from "beachside";
+import { Beachside, Image, NonzeroExitError, OutcomeUnknownError, secret } from "beachside";
 import type { z } from "zod";
 import { createFreestyleAdapter } from "./adapter";
 import { freestyleFixture } from "./fixture.test-support";
@@ -594,6 +594,51 @@ test("create-time env rejects invalid names before any Freestyle effect", async 
       code: "INVALID_ARGUMENT",
     });
     expect(fixture.effects.create).toBe(0);
+  } finally {
+    await client.close();
+  }
+});
+
+test("brokered secrets become inline egress TLS rules and the VM holds only a placeholder", async () => {
+  const KEY = "CANARY-freestyle-model-key";
+  const { fixture, connect } = setup();
+  const client = await connect({ network: "internet" });
+
+  try {
+    const box = await client.sandboxes.create({
+      env: { OPENAI_API_KEY: secret(KEY, { for: "openai" }) },
+    });
+
+    // SAFETY: the fixture records each create's parsed JSON body.
+    const body = creates(fixture)[0]?.body as { tls?: { rules: unknown[] } };
+    expect(body.tls?.rules).toEqual([
+      {
+        action: "allow",
+        domain: "api.openai.com",
+        source: {},
+        destination: { public: true },
+        transform: [{ headers: { authorization: `Bearer ${KEY}` } }],
+      },
+    ]);
+
+    const env = (await box.exec(["/bin/sh", "-c", 'printf "%s" "$OPENAI_API_KEY"'])).stdoutText();
+    expect(env).toBe("beachside:OPENAI_API_KEY");
+    expect(String(fixture.vms.get(box.id)?.files.get("/etc/beachside.env"))).not.toContain(KEY);
+    expect(JSON.stringify(box.reference)).not.toContain(KEY);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a blocked VM refuses brokered secrets before any Freestyle effect", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    await expect(
+      client.sandboxes.create({ env: { K: secret("CANARY", { for: "openai" }) } }),
+    ).rejects.toThrow(/network internet/);
+    expect(creates(fixture)).toHaveLength(0);
   } finally {
     await client.close();
   }

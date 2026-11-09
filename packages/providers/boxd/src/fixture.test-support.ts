@@ -15,7 +15,7 @@ import {
   type ServerUnaryCall,
   type sendUnaryData,
 } from "@grpc/grpc-js";
-import { AccountNamespace, Disks, Machines, Orgs, Snapshots } from "@boxd-sh/sdk";
+import { AccountNamespace, Disks, Machines, Orgs, Secrets, Snapshots } from "@boxd-sh/sdk";
 import { createNativeClient, type CallContext } from "./transport";
 
 type Transport = ConstructorParameters<typeof Machines>[0];
@@ -62,7 +62,27 @@ type MachineRecord = {
   sourceInfo?: { kind: string; name: string; version: number; id: string };
   /** Epoch seconds; boxd reports 0 for machines without a recorded creation time. */
   createdAt?: number;
+  /** The machine spec a spec create sent, as the wire carries it. */
+  spec?: { secrets?: string[]; isolated?: boolean };
 };
+
+/** A stored secret; the fixture keeps the value so tests can check what was stored. */
+type VarRecord = { name: string; scope: string; value: string; domains: string[] };
+
+const VarRequest = z.object({
+  kind: z.string().default(""),
+  name: z.string().default(""),
+  value: z.string().default(""),
+  scope: z.string().default(""),
+  org: z.string().default(""),
+  domains: z.array(z.string()).default([]),
+});
+
+const SpecRequest = z.object({
+  spec: z
+    .object({ secrets: z.array(z.string()).default([]), isolated: z.boolean().default(false) })
+    .optional(),
+});
 
 type SnapshotRecord = {
   snapshotId: string;
@@ -157,7 +177,8 @@ async function methods() {
     disks = new Disks(capture),
     account = new AccountNamespace(capture),
     orgs = new Orgs(capture),
-    snapshots = new Snapshots(capture);
+    snapshots = new Snapshots(capture),
+    secrets = new Secrets(capture);
 
   await Promise.allSettled([
     account.get(),
@@ -165,6 +186,9 @@ async function methods() {
     orgs.list(),
     machines.create({ image: "ubuntu:24.04" }),
     machines.create({ fromSnapshot: "snapshot" }),
+    secrets.set("NAME", "value"),
+    secrets.list(),
+    secrets.delete("NAME"),
     snapshots.create("id", "snapshot"),
     snapshots.get("snapshot"),
     snapshots.list(),
@@ -197,6 +221,7 @@ export async function boxdFixture() {
   const machines = new Map<string, MachineRecord>();
   const disks = new Map<string, DiskRecord>();
   const snapshots = new Map<string, SnapshotRecord>();
+  const vars = new Map<string, VarRecord>();
   let snapshotPendingReads = 0;
   let snapshotFailure: "lose" | "fail" | undefined;
   let restoreLaterVersion = false;
@@ -343,6 +368,7 @@ export async function boxdFixture() {
               botProtection: true,
               proxies: req.config?.network?.proxies ?? [],
               createdAt: 1_800_000_000,
+              spec: SpecRequest.parse(call.request).spec,
             });
 
             for (const volume of req.config?.volumes ?? []) {
@@ -495,6 +521,7 @@ export async function boxdFixture() {
               deleteAtMs: 0,
               botProtection: true,
               proxies: req.config?.network?.proxies ?? [],
+              spec: SpecRequest.parse(call.request).spec,
               sourceInfo: {
                 kind: "snapshot",
                 name: record.name,
@@ -505,6 +532,42 @@ export async function boxdFixture() {
             });
             restoreLaterVersion = false;
             ok({ vmId: id, name: req.name, status: "running" });
+            break;
+          }
+
+          case "SetVar": {
+            const put = VarRequest.parse(call.request);
+            vars.set(`${put.scope}/${put.name}`, {
+              name: put.name,
+              scope: put.scope,
+              value: put.value,
+              domains: put.domains,
+            });
+            ok({ message: "set" });
+            break;
+          }
+
+          case "ListVars": {
+            const bound = (name: string) =>
+              [...machines.values()].filter((machine) => machine.spec?.secrets?.includes(name))
+                .length;
+
+            ok({
+              vars: [...vars.values()].map((item) => ({
+                name: item.name,
+                scope: item.scope,
+                domains: item.domains,
+                boundMachines: bound(item.name),
+              })),
+            });
+            break;
+          }
+
+          case "RemoveVar": {
+            const removal = VarRequest.parse(call.request);
+
+            if (!vars.delete(`${removal.scope}/${removal.name}`)) missing();
+            else ok({ message: "removed" });
             break;
           }
 
@@ -751,6 +814,7 @@ export async function boxdFixture() {
     calls,
     effects,
     machines,
+    vars,
     disks,
     snapshots,
     snapshotPendingReads(value: number) {

@@ -21,7 +21,8 @@ import {
 import { LifecycleInput, SuspendResult, ResumeResult, RenewInput, RenewResult } from "./lifecycle";
 import { z } from "zod";
 import { lifetimeProblem } from "./lifetime";
-import { restoreOptionProblem } from "./state";
+import { SecretBindings, SecretEnvNames, secretsProblem } from "./secrets";
+import { createEnvProblem, restoreOptionProblem } from "./state";
 import {
   CreateEnv,
   CreateSandboxInput,
@@ -183,6 +184,8 @@ const CreateInputSchema = z.strictObject({
   requirements: z.strictObject({ snapshot: SnapshotRequest }).optional(),
   mounts: z.array(MountSpec).max(32).optional(),
   env: CreateEnv.optional(),
+  secrets: SecretBindings.optional(),
+  secretEnv: SecretEnvNames.optional(),
   lifetimeSeconds: z.number().int().positive().safe().optional(),
 });
 
@@ -599,7 +602,12 @@ function checkCapability(
 
     if (value.request.env && !CreateEnv.safeParse(value.request.env).success)
       throw new AdapterError("INVALID_ARGUMENT", "Invalid restore env");
-    const problem = restoreOptionProblem(session.snapshotRestore?.options, value.request);
+
+    if (value.request.secrets && !value.request.secrets.length) delete value.request.secrets;
+
+    const problem =
+      restoreOptionProblem(session.snapshotRestore?.options, value.request) ??
+      secretsProblem(session.supports.secrets, value.request.secrets);
 
     if (problem) throw new AdapterError("UNSUPPORTED", problem);
 
@@ -642,11 +650,22 @@ function checkCapability(
 
     if (request.env && !Object.keys(request.env).length) delete request.env;
 
-    if (request.env && !session.supports.createEnv)
-      throw new AdapterError(
-        "UNSUPPORTED",
-        "Create-time environment variables are unsupported by this adapter",
-      );
+    const envProblem = createEnvProblem(session.supports, request.env, request.secretEnv);
+
+    if (envProblem) throw new AdapterError("UNSUPPORTED", envProblem);
+
+    if (request.secrets && !request.secrets.length) delete request.secrets;
+    const secrets = secretsProblem(session.supports.secrets, request.secrets);
+
+    if (secrets) throw new AdapterError("UNSUPPORTED", secrets);
+
+    if (request.secrets?.some((binding) => request.env && Object.hasOwn(request.env, binding.env)))
+      throw new AdapterError("INVALID_ARGUMENT", "A secret and an env entry share a name");
+
+    if (request.secretEnv && !request.secretEnv.length) delete request.secretEnv;
+
+    if (request.secretEnv?.some((name) => !request.env || !Object.hasOwn(request.env, name)))
+      throw new AdapterError("INVALID_ARGUMENT", "Secret env names must be env entries");
     const lifetime = lifetimeProblem(session.supports.lifetime, request.lifetimeSeconds);
 
     if (lifetime) throw new AdapterError("UNSUPPORTED", lifetime);

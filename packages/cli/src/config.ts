@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
+import { SecretConfig } from "./secrets";
 import { CliError, usage } from "./output";
 import { SetupConfig, SetupName } from "./setups";
 
@@ -39,6 +40,8 @@ export const CliConfig = z.strictObject({
   images: z.strictObject({ autoBuild: z.boolean().optional() }).optional(),
   /** Also load adapters from the working directory's node_modules (off: a checkout could plant one). */
   adapters: z.strictObject({ searchProject: z.boolean().optional() }).optional(),
+  /** Named secrets `--secret NAME=<name>` refers to; values may be references. */
+  secrets: z.record(z.string().regex(/^[a-z0-9][a-z0-9_-]{0,62}$/), SecretConfig).optional(),
   /** Named, provider-neutral setups for `--setup <name>`. */
   setups: z.record(SetupName, SetupConfig).optional(),
   /** Also read setups from a checkout's `.beachside/setup.json` (off: a checkout could plant one). */

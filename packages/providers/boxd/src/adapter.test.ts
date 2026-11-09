@@ -2,7 +2,7 @@ import { z } from "zod";
 import { afterEach, expect, test } from "bun:test";
 import { status } from "@grpc/grpc-js";
 import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
-import { Beachside, OutcomeUnknownError, Preserve } from "beachside";
+import { Beachside, OutcomeUnknownError, Preserve, secret } from "beachside";
 import { createBoxdAdapter } from "./adapter";
 import { boxdFixture } from "./fixture.test-support";
 
@@ -49,6 +49,51 @@ test("boxd setup takes network internet once, under either name", async () => {
     await expect(
       Beachside.connect({ adapter, config, credentials: { apiKey: "fixture-main" } }),
     ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+});
+
+test("boxd secrets are private unattached secrets the machine spec lists, removed on destroy", async () => {
+  const { fixture, connect } = await setup();
+  const client = await connect();
+  const KEY = "CANARY-boxd-model-key";
+  const TS = "CANARY-boxd-tailscale";
+
+  try {
+    expect((await client.capabilities()).secrets).toMatchObject({
+      stored: true,
+      brokered: { delivery: "placeholder", basicAuth: true },
+    });
+
+    const box = await client.sandboxes.create({
+      env: { TS_AUTHKEY: secret(TS), GH_TOKEN: secret(KEY, { for: "github" }) },
+    });
+
+    expect([...fixture.vars.values()]).toEqual([
+      { name: "TS_AUTHKEY", scope: "private-unattached", value: TS, domains: [] },
+      {
+        name: "GH_TOKEN",
+        scope: "private-unattached",
+        value: KEY,
+        domains: ["api.github.com", "github.com"],
+      },
+    ]);
+
+    const created = fixture.calls.find((call) => call.method === "CreateVm");
+    expect(created?.request).toMatchObject({
+      imageRef: "",
+      spec: { isolated: true, secrets: ["TS_AUTHKEY", "GH_TOKEN"] },
+    });
+    expect(JSON.stringify(created?.request)).not.toContain(KEY);
+
+    // Plain env still needs create env, which boxd lacks.
+    await expect(client.sandboxes.create({ env: { MODE: "x" } })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+
+    await box.destroy();
+    expect(fixture.vars.size).toBe(0);
+  } finally {
+    await client.close();
+  }
 });
 
 test("boxd resources pick the smallest size class and inspect reports the real size", async () => {

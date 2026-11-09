@@ -118,6 +118,21 @@ const reopened = await freshClient.sandboxes.get(JSON.parse(await load()));
 
 Never build a reference by hand from a sandbox id. `get()` never creates or resumes anything.
 
+## Credentials
+
+Wrap every credential in `secret()`, never plain env. `secret(value)` is plain: the sandbox gets the real value (Tailscale keys, SSH, signing or decryption keys), and Beachside never prints or saves it. Add a target to broker an API key instead: the sandbox gets a placeholder and the provider adds the real value to HTTPS requests for those hosts.
+
+```ts
+import { secret } from "beachside";
+
+env: {
+  TS_AUTHKEY: secret(process.env.TS_AUTHKEY!),
+  ANTHROPIC_API_KEY: secret(process.env.ANTHROPIC_API_KEY!, { for: "anthropic" }),
+}
+```
+
+Presets: `anthropic`, `openai`, `github`, `github-api`, `npm`; otherwise `{ hosts: [...] }`. Brokering works on E2B, Vercel, Freestyle, Daytona and boxd, and on Runloop for `anthropic` and `openai` (Vercel, Freestyle and Runloop need `network: "internet"`); other adapters refuse with `UnsupportedFeatureError`. Prefer brokering for API keys; if the provider refuses, tell the user before switching to a plain secret. `capabilities().secrets` reports `stored` (plain values kept in a provider secret store) and `brokered`. Guide: https://beachside.run/docs/guides/secrets/
+
 ## Provider differences to respect
 
 - **Daytona:** set the network policy at connection (`"daytona-default"`, or `"internet"` on higher tiers). Omitting it means strict `blocked`, which may be unavailable. Create from an active snapshot in the chosen region.

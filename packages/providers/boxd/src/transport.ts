@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { EventEmitter } from "node:events";
 import { Client, Metadata, credentials as grpcCredentials, status } from "@grpc/grpc-js";
-import { AccountNamespace, Disks, Machines, Orgs, Snapshots } from "@boxd-sh/sdk";
+import { AccountNamespace, Disks, Machines, Orgs, Secrets, Snapshots } from "@boxd-sh/sdk";
 import { AdapterError, type ReadContext } from "@beachside/adapter";
 import { z } from "zod";
 
@@ -516,6 +516,7 @@ export function createNativeClient(
     snapshots: new Snapshots(transport),
     account: new AccountNamespace(transport),
     orgs: new Orgs(transport),
+    secrets: new Secrets(transport),
     run<T>(ctx: CallContext, action: () => Promise<T>) {
       return context.run(ctx, action);
     },

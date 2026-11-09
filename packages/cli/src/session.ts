@@ -27,7 +27,7 @@ export type Context = {
 export class Session {
   private loaded?: LoadedConfig;
   private opened: BeachsideClient<true>[] = [];
-  private readonly secrets: SecretReader;
+  readonly secrets: SecretReader;
 
   constructor(readonly ctx: Context) {
     this.secrets = new SecretReader(ctx.env, ctx.signal);

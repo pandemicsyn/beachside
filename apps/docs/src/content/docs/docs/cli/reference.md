@@ -46,35 +46,36 @@ With `--json`, stdout holds exactly one document: `{ok:true,data}` or `{ok:false
 Create a sandbox and print its name.
 
 ```sh
-beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]... [--setup <name|path>]... [--setup-cmd <shell>]... [--with rex|herdr]...
+beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapshot <name>] [--network <policy>] [--ttl <duration>] [--env K=V]... [--secret K=secret]... [--setup <name|path>]... [--setup-cmd <shell>]... [--with rex|herdr]...
 ```
 
-| Flag                         | Description                                                                                                                             |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `--name <name>`              | Store name (default: generated, like sb-1a2b3)                                                                                          |
-| `--image <oci-ref>`          | OCI image, e.g. python:3.12; default is the profile's image                                                                             |
-| `--prepared <id>`            | Provider-prepared image id (template, snapshot name)                                                                                    |
-| `--network <policy>`         | blocked or internet; default is the profile's policy                                                                                    |
-| `--label <k=v>`              | Label to set (repeatable)                                                                                                               |
-| `--env <K=V>`                | Environment variable for every command in the sandbox (repeatable; K alone copies it from here)                                         |
-| `--env-file <path>`          | Read K=V lines into the sandbox environment (repeatable; --env wins)                                                                    |
-| `--build`                    | Build --image now if this provider needs a build and none is recorded                                                                   |
-| `--ttl <duration>`           | Destroy the sandbox after this long even if nothing removes it, e.g. 30m or 2h; default is the profile's lifetime                       |
-| `--snapshot <name>`          | Restore a snapshot recorded by `beachside snapshot create` instead of an image                                                          |
-| `--retry <duration>`         | Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m                    |
-| `--setup <name\|path>`       | Run a named setup from beachside.json or a local script once the sandbox starts (repeatable, comma-separated)                           |
-| `--setup-cmd <shell>`        | Run a shell line as a setup step, after --setup (repeatable)                                                                            |
-| `--startup <path>`           | Run a local script every time the sandbox comes up without its processes, such as after a restore (repeatable)                          |
-| `--startup-cmd <shell>`      | Run a shell line as a startup step (repeatable)                                                                                         |
-| `--no-default-setup`         | Skip the setups the profile lists by default                                                                                            |
-| `--quiet-setup`              | Show setup step names and failures, not their output                                                                                    |
-| `--setup-timeout <duration>` | Overall limit for setup and startup, e.g. 45m (default 30m; each step 10m)                                                              |
-| `--cache`                    | Cache this setup as a snapshot and restore it next time, even if no named setup asks for it                                             |
-| `--no-cache`                 | Neither use nor build a setup cache for this sandbox                                                                                    |
-| `--refresh-cache`            | Build the setup cache again now, replacing the current one                                                                              |
-| `--if-not-exists`            | Return the named sandbox if it is still alive instead of failing                                                                        |
-| `--rm-on-failure`            | Remove the sandbox if its setup fails, instead of keeping it to look at                                                                 |
-| `--with <server>`            | Install and start a server reachable over your tailnet: rex or herdr (repeatable; needs TAILSCALE_AUTH_KEY, implies --network internet) |
+| Flag                         | Description                                                                                                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--name <name>`              | Store name (default: generated, like sb-1a2b3)                                                                                                                              |
+| `--image <oci-ref>`          | OCI image, e.g. python:3.12; default is the profile's image                                                                                                                 |
+| `--prepared <id>`            | Provider-prepared image id (template, snapshot name)                                                                                                                        |
+| `--network <policy>`         | blocked or internet; default is the profile's policy                                                                                                                        |
+| `--label <k=v>`              | Label to set (repeatable)                                                                                                                                                   |
+| `--env <K=V>`                | Environment variable for every command in the sandbox (repeatable; K alone copies it from here)                                                                             |
+| `--env-file <path>`          | Read K=V lines into the sandbox environment (repeatable; --env wins)                                                                                                        |
+| `--secret <K=secret>`        | Secret for the sandbox env: K=<named secret> or K=<source> (env:, gh:, op://, bws://, pass://); add @<preset\|host>[,...] to keep the value out of the sandbox (repeatable) |
+| `--build`                    | Build --image now if this provider needs a build and none is recorded                                                                                                       |
+| `--ttl <duration>`           | Destroy the sandbox after this long even if nothing removes it, e.g. 30m or 2h; default is the profile's lifetime                                                           |
+| `--snapshot <name>`          | Restore a snapshot recorded by `beachside snapshot create` instead of an image                                                                                              |
+| `--retry <duration>`         | Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m                                                        |
+| `--setup <name\|path>`       | Run a named setup from beachside.json or a local script once the sandbox starts (repeatable, comma-separated)                                                               |
+| `--setup-cmd <shell>`        | Run a shell line as a setup step, after --setup (repeatable)                                                                                                                |
+| `--startup <path>`           | Run a local script every time the sandbox comes up without its processes, such as after a restore (repeatable)                                                              |
+| `--startup-cmd <shell>`      | Run a shell line as a startup step (repeatable)                                                                                                                             |
+| `--no-default-setup`         | Skip the setups the profile lists by default                                                                                                                                |
+| `--quiet-setup`              | Show setup step names and failures, not their output                                                                                                                        |
+| `--setup-timeout <duration>` | Overall limit for setup and startup, e.g. 45m (default 30m; each step 10m)                                                                                                  |
+| `--cache`                    | Cache this setup as a snapshot and restore it next time, even if no named setup asks for it                                                                                 |
+| `--no-cache`                 | Neither use nor build a setup cache for this sandbox                                                                                                                        |
+| `--refresh-cache`            | Build the setup cache again now, replacing the current one                                                                                                                  |
+| `--if-not-exists`            | Return the named sandbox if it is still alive instead of failing                                                                                                            |
+| `--rm-on-failure`            | Remove the sandbox if its setup fails, instead of keeping it to look at                                                                                                     |
+| `--with <server>`            | Install and start a server reachable over your tailnet: rex or herdr (repeatable; needs TAILSCALE_AUTH_KEY, implies --network internet)                                     |
 
 Examples:
 
@@ -82,6 +83,8 @@ Examples:
 beachside create --name web --network internet
 beachside create --name job-42 --if-not-exists --json
 beachside create --name ci --env-file .env --env API_TOKEN
+beachside create --name agent --network internet --secret ANTHROPIC_API_KEY=op://Dev/anthropic/key@anthropic
+beachside create --name agent --network internet --secret GH_TOKEN=github
 beachside create --name job-42 --ttl 1h
 beachside create --name job-42 --retry 5m --json
 beachside create --name web --with rex
@@ -249,39 +252,40 @@ Create a sandbox, run one command, and always destroy it.
 beachside run [create flags] [exec flags] [--keep] [--push <path>] -- <command> [args...]
 ```
 
-| Flag                         | Description                                                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `--name <name>`              | Store name (default: generated, like sb-1a2b3)                                                                       |
-| `--image <oci-ref>`          | OCI image, e.g. python:3.12; default is the profile's image                                                          |
-| `--prepared <id>`            | Provider-prepared image id (template, snapshot name)                                                                 |
-| `--network <policy>`         | blocked or internet; default is the profile's policy                                                                 |
-| `--label <k=v>`              | Label to set (repeatable)                                                                                            |
-| `--env <K=V>`                | Environment variable for this command (repeatable; K alone copies it from here)                                      |
-| `--env-file <path>`          | Read K=V lines into this command's environment (repeatable; --env wins)                                              |
-| `--build`                    | Build --image now if this provider needs a build and none is recorded                                                |
-| `--ttl <duration>`           | Destroy the sandbox after this long even if nothing removes it, e.g. 30m or 2h; default is the profile's lifetime    |
-| `--snapshot <name>`          | Restore a snapshot recorded by `beachside snapshot create` instead of an image                                       |
-| `--retry <duration>`         | Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m |
-| `--setup <name\|path>`       | Run a named setup from beachside.json or a local script once the sandbox starts (repeatable, comma-separated)        |
-| `--setup-cmd <shell>`        | Run a shell line as a setup step, after --setup (repeatable)                                                         |
-| `--startup <path>`           | Run a local script every time the sandbox comes up without its processes, such as after a restore (repeatable)       |
-| `--startup-cmd <shell>`      | Run a shell line as a startup step (repeatable)                                                                      |
-| `--no-default-setup`         | Skip the setups the profile lists by default                                                                         |
-| `--quiet-setup`              | Show setup step names and failures, not their output                                                                 |
-| `--setup-timeout <duration>` | Overall limit for setup and startup, e.g. 45m (default 30m; each step 10m)                                           |
-| `--cache`                    | Cache this setup as a snapshot and restore it next time, even if no named setup asks for it                          |
-| `--no-cache`                 | Neither use nor build a setup cache for this sandbox                                                                 |
-| `--refresh-cache`            | Build the setup cache again now, replacing the current one                                                           |
-| `--cwd <dir>`                | Working directory in the sandbox                                                                                     |
-| `--stdin`                    | Send this process's stdin to the command                                                                             |
-| `--stdin-file <path>`        | Send a local file as the command's stdin                                                                             |
-| `--timeout <duration>`       | Execution deadline, e.g. 90s or 10m (default 300s)                                                                   |
-| `--max-output <size>`        | Captured output limit for buffered and --json output, e.g. 1m                                                        |
-| `--no-stream`                | Print the output when the command ends instead of as it arrives                                                      |
-| `--keep`                     | Keep the sandbox and print its name on stderr                                                                        |
-| `--push <path>`              | Send a local folder to ~/work first and run the command there                                                        |
-| `--exclude <glob>`           | Skip matching paths (repeatable; a pattern without / matches any name)                                               |
-| `--include-ignored`          | Send every file, not only git-tracked and unignored ones                                                             |
+| Flag                         | Description                                                                                                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--name <name>`              | Store name (default: generated, like sb-1a2b3)                                                                                                                              |
+| `--image <oci-ref>`          | OCI image, e.g. python:3.12; default is the profile's image                                                                                                                 |
+| `--prepared <id>`            | Provider-prepared image id (template, snapshot name)                                                                                                                        |
+| `--network <policy>`         | blocked or internet; default is the profile's policy                                                                                                                        |
+| `--label <k=v>`              | Label to set (repeatable)                                                                                                                                                   |
+| `--env <K=V>`                | Environment variable for this command (repeatable; K alone copies it from here)                                                                                             |
+| `--env-file <path>`          | Read K=V lines into this command's environment (repeatable; --env wins)                                                                                                     |
+| `--secret <K=secret>`        | Secret for the sandbox env: K=<named secret> or K=<source> (env:, gh:, op://, bws://, pass://); add @<preset\|host>[,...] to keep the value out of the sandbox (repeatable) |
+| `--build`                    | Build --image now if this provider needs a build and none is recorded                                                                                                       |
+| `--ttl <duration>`           | Destroy the sandbox after this long even if nothing removes it, e.g. 30m or 2h; default is the profile's lifetime                                                           |
+| `--snapshot <name>`          | Restore a snapshot recorded by `beachside snapshot create` instead of an image                                                                                              |
+| `--retry <duration>`         | Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m                                                        |
+| `--setup <name\|path>`       | Run a named setup from beachside.json or a local script once the sandbox starts (repeatable, comma-separated)                                                               |
+| `--setup-cmd <shell>`        | Run a shell line as a setup step, after --setup (repeatable)                                                                                                                |
+| `--startup <path>`           | Run a local script every time the sandbox comes up without its processes, such as after a restore (repeatable)                                                              |
+| `--startup-cmd <shell>`      | Run a shell line as a startup step (repeatable)                                                                                                                             |
+| `--no-default-setup`         | Skip the setups the profile lists by default                                                                                                                                |
+| `--quiet-setup`              | Show setup step names and failures, not their output                                                                                                                        |
+| `--setup-timeout <duration>` | Overall limit for setup and startup, e.g. 45m (default 30m; each step 10m)                                                                                                  |
+| `--cache`                    | Cache this setup as a snapshot and restore it next time, even if no named setup asks for it                                                                                 |
+| `--no-cache`                 | Neither use nor build a setup cache for this sandbox                                                                                                                        |
+| `--refresh-cache`            | Build the setup cache again now, replacing the current one                                                                                                                  |
+| `--cwd <dir>`                | Working directory in the sandbox                                                                                                                                            |
+| `--stdin`                    | Send this process's stdin to the command                                                                                                                                    |
+| `--stdin-file <path>`        | Send a local file as the command's stdin                                                                                                                                    |
+| `--timeout <duration>`       | Execution deadline, e.g. 90s or 10m (default 300s)                                                                                                                          |
+| `--max-output <size>`        | Captured output limit for buffered and --json output, e.g. 1m                                                                                                               |
+| `--no-stream`                | Print the output when the command ends instead of as it arrives                                                                                                             |
+| `--keep`                     | Keep the sandbox and print its name on stderr                                                                                                                               |
+| `--push <path>`              | Send a local folder to ~/work first and run the command there                                                                                                               |
+| `--exclude <glob>`           | Skip matching paths (repeatable; a pattern without / matches any name)                                                                                                      |
+| `--include-ignored`          | Send every file, not only git-tracked and unignored ones                                                                                                                    |
 
 Exits with the remote command's exit code; failures of the CLI itself exit 125.
 
@@ -466,6 +470,21 @@ beachside adapter add daytona vercel --json
 beachside adapter add @acme/beachside-adapter@1.2.0
 beachside adapter ls
 beachside adapter rm e2b
+```
+
+## secret
+
+List the named secrets in beachside.json and the sandboxes using them, never values.
+
+```sh
+beachside secret ls
+```
+
+Examples:
+
+```sh
+beachside secret ls
+beachside secret ls --json
 ```
 
 ## providers

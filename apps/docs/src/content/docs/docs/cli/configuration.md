@@ -87,6 +87,39 @@ A credential can be written three ways:
 
 References also work in a provider's environment variable, for example `E2B_API_KEY=op://Dev/E2B/credential`. If the manager's CLI is not installed the command exits 4; if it can't read the secret it exits 5 and shows the manager's own message.
 
+## Secrets
+
+`--secret` gives a sandbox a credential that Beachside never prints or stores. A plain secret puts the real value in the sandbox environment; add `@` and a preset or host to broker it instead, so the sandbox sees a placeholder and the provider adds the value to HTTPS requests for those hosts. See [Secrets](/docs/guides/secrets/) for how each provider handles both.
+
+Name the secrets you reuse in a top-level `secrets` block:
+
+```json
+{
+  "secrets": {
+    "tailscale": { "value": "op://Dev/tailscale/authkey" },
+    "anthropic": { "value": "op://Dev/anthropic/api-key", "for": "anthropic" },
+    "npm": { "value": "env:NPM_TOKEN", "hosts": ["registry.npmjs.org"] },
+    "github": { "value": "gh:", "for": "github" }
+  }
+}
+```
+
+Then pass `--secret NAME=<secret name>`, or give the source inline as `NAME=<source>`, adding `@<preset|host>[,host...]` to broker it:
+
+```sh
+beachside create --secret TS_AUTHKEY=tailscale --secret DECRYPT_KEY=op://Dev/release/key
+beachside create --network internet --secret ANTHROPIC_API_KEY=anthropic --secret GH_TOKEN=github
+beachside create --network internet --secret NPM_TOKEN=env:NPM_TOKEN@npm
+```
+
+- **Sources:** `env:NAME`, `op://`, `bws://`, `pass://` (as for credentials), and `gh:` for the token of your local `gh auth login`. A literal value is allowed only in `beachside.json`, never on the command line, where it would land in shell history.
+- **Presets:** `anthropic`, `openai`, `github`, `github-api` and `npm`. Hosts default to an `Authorization: Bearer` header; set `header`, `format` and `username` in `beachside.json` to change that.
+- **Plain or brokered:** a secret without `for` or `hosts` is plain. Anything in the sandbox can read a plain secret, so broker API keys when the provider can.
+
+`gh:` carries every scope your `gh` login has, usually all your repositories. For a long-lived or shared sandbox, prefer a fine-grained token limited to the repositories it needs.
+
+Values are read once per command and never stored. The sandbox record keeps each secret's name, kind and hosts; `beachside secret ls` lists the named secrets and the sandboxes using them. A provider that cannot broker a secret refuses `create` with exit code 4, before creating anything.
+
 ## Limits
 
 `limits.maxSandboxes` (or `BEACHSIDE_MAX_SANDBOXES`) caps how many sandboxes the CLI will keep at once. A `create` or `run` over the cap exits 4 before contacting the provider. There is no cap unless you set one. The check is a safety net, not a guarantee: two creates started at the same moment can both pass it.

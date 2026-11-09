@@ -172,7 +172,7 @@ beachside: setup deps: cache hit (restored in 4s; built 2m ago in 3m12s)
 Caching needs snapshot capture and restore, plus restore-time support for any `--env`, `--label` or `--ttl` you pass. Where a provider lacks them, the create fails before anything is made. A provider that can only judge capture on a real sandbox, such as Daytona, is checked again after setup; if it refuses there, the create finishes and says the cache was not saved. It never runs uncached without saying so.
 
 :::caution[Secrets end up in caches]
-A step can write a secret to disk, such as an `.npmrc` with `NPM_TOKEN`, and the snapshot keeps it. A setup whose `env` reads from your environment or a password manager is refused for caching unless the setup sets `"cache": { "secrets": "allow" }`. Pass secrets that steps only need at run time with `--env` on the create instead.
+A step can write a secret to disk, such as an `.npmrc` with `NPM_TOKEN`, and the snapshot keeps it. A setup whose `env` reads from your environment or a password manager is refused for caching unless the setup sets `"cache": { "secrets": "allow" }`. Pass secrets that steps only need at run time with `--secret` on the create instead.
 :::
 
 Caching pays when setup takes more than about 30 seconds and the provider restores faster than it creates and sets up. The timing lines show both.
@@ -181,6 +181,6 @@ In `run --push`, setup runs in the pushed folder, so the cache holds that folder
 
 ## What each step sees
 
-Steps run through the provider's exec, as the sandbox's default user, from its home folder unless `cwd` says otherwise. `user: "root"` runs a step with `sudo -n -E` where the default user is not root. Each step gets the sandbox's environment plus its own `env`; secrets belong in the sandbox env (`--env` or a setup's `env`), not in a step's text.
+Steps run through the provider's exec, as the sandbox's default user, from its home folder unless `cwd` says otherwise. `user: "root"` runs a step with `sudo -n -E` where the default user is not root. Each step gets the sandbox's environment plus its own `env`; secrets belong in the sandbox env (`--secret`, or a setup's `env`), not in a step's text.
 
 Beachside records a digest of each step's command, working folder, user and env names, never env values. Two creates with the same steps get the same digest, so a rotated token does not count as a different setup.

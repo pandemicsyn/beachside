@@ -17,6 +17,9 @@ import {
   AdapterFilesystemError,
   type FileTransferContext,
   type ImageBuildValue,
+  secretHosts,
+  secretValues,
+  type SecretBinding,
 } from "@beachside/adapter";
 import {
   filesystemCommand,
@@ -70,6 +73,11 @@ const Snapshot = z.object({
   state: z.string(),
   regionIds: z.array(z.string()).optional(),
   sandboxClass: z.string().optional(),
+});
+
+const SecretPage = z.object({
+  items: z.array(z.object({ id: z.string().min(1), name: z.string() }).passthrough()),
+  nextCursor: z.string().nullable().optional(),
 });
 
 const NativeSandbox = z.object({
@@ -956,6 +964,8 @@ export class DaytonaDriver implements ProviderDriver {
     mounts?: import("@beachside/adapter").MountSpec[];
     /** Native sandbox-wide environment; never copied into results or messages. */
     env?: Record<string, string>;
+    /** Brokered secrets: one Daytona secret each, mounted as a placeholder and deleted with the sandbox. */
+    secrets?: readonly SecretBinding[];
     /** This sandbox's lifetime in minutes; omitted uses the configured one. */
     ttlMinutes?: number;
     signal?: AbortSignal;
@@ -1107,7 +1117,41 @@ export class DaytonaDriver implements ProviderDriver {
 
     if (input.imageKind === "oci") Object.assign(labels, { "beachside.imageSnapshot": snapshotId });
 
+    // Marks a sandbox whose Daytona secrets destroy must delete.
+    if (input.secrets?.length) Object.assign(labels, { "beachside.secrets": "1" });
+
     if (input.signal?.aborted) return uncertain("Daytona creation wait was aborted");
+
+    // Native messages never echo environment or secret values.
+    const hidden = { ...input.env };
+
+    for (const [index, value] of secretValues(input.secrets).entries())
+      hidden[`beachside-secret-${index}`] = value;
+    let mounted: Record<string, string>[] | undefined;
+
+    if (input.secrets?.length) {
+      const created = await this.createSecrets(name, input.secrets, hidden);
+
+      if (created.status === "unknown") return uncertain(created.reason);
+
+      // A built OCI snapshot is already an effect, so only a prepared image is rejected cleanly.
+      if (created.status === "rejected")
+        return retainedSnapshotId === undefined
+          ? created.result
+          : uncertain("Daytona rejected secret creation after the image build");
+
+      mounted = created.mounts;
+    }
+
+    // A sandbox request refused before any effect leaves no secret behind.
+    const refused = async (result: DaytonaCreateResult): Promise<DaytonaCreateResult> => {
+      if (result.status !== "rejected" || !mounted) return result;
+      const leftover = await this.deleteSandboxSecrets(name);
+
+      return leftover.length
+        ? uncertain(`${result.error.message}; Daytona secrets ${leftover.join(", ")} may remain`)
+        : result;
+    };
 
     try {
       const body = {
@@ -1118,6 +1162,7 @@ export class DaytonaDriver implements ProviderDriver {
         public: false,
         labels,
         env: input.env && Object.keys(input.env).length ? input.env : undefined,
+        secrets: mounted,
         volumes: input.mounts?.map((mount) => ({
           volumeId: mount.volume.nativeId,
           mountPath: mount.path,
@@ -1136,12 +1181,14 @@ export class DaytonaDriver implements ProviderDriver {
 
       // A built OCI snapshot is already an effect, so only a prepared image is rejected cleanly.
       if (!response.ok)
-        return await this.createRejection(
-          response,
-          "sandbox creation",
-          uncertain,
-          retainedSnapshotId !== undefined,
-          input.env,
+        return await refused(
+          await this.createRejection(
+            response,
+            "sandbox creation",
+            uncertain,
+            retainedSnapshotId !== undefined,
+            hidden,
+          ),
         );
       const raw = await boundedJson(response, z.unknown());
 
@@ -1241,6 +1288,99 @@ export class DaytonaDriver implements ProviderDriver {
       return uncertain("Daytona create response unavailable; observe without replay");
     }
   }
+  /** Create one Daytona secret per binding, named after the sandbox so destroy can find them. */
+  private async createSecrets(
+    sandboxName: string,
+    secrets: readonly SecretBinding[],
+    hidden: Record<string, string>,
+  ): Promise<
+    | { status: "created"; mounts: Record<string, string>[] }
+    | { status: "rejected"; result: DaytonaCreateResult }
+    | { status: "unknown"; reason: string }
+  > {
+    const mounts: Record<string, string>[] = [];
+
+    for (const binding of secrets) {
+      const secretName = `${sandboxName}-${binding.env}`;
+      let response: Response;
+
+      try {
+        response = await this.request(
+          "POST",
+          "/secret",
+          JSON.stringify({
+            name: secretName,
+            value: binding.value,
+            hosts: secretHosts(binding),
+            description: "Beachside brokered secret; deleted with its sandbox",
+          }),
+          "application/json",
+        );
+      } catch {
+        return {
+          status: "unknown",
+          reason: `Daytona secret ${secretName} creation outcome unknown; it may remain`,
+        };
+      }
+
+      if (!response.ok) {
+        const result = await this.createRejection(
+          response,
+          "secret creation",
+          (reason) => unknown("", reason),
+          false,
+          hidden,
+        );
+
+        const leftover = mounts.length ? await this.deleteSandboxSecrets(sandboxName) : [];
+
+        if (leftover.length || result.status !== "rejected")
+          return {
+            status: "unknown",
+            reason: `Daytona rejected secret creation; secrets ${leftover.join(", ") || "for this sandbox"} may remain`,
+          };
+
+        return { status: "rejected", result };
+      }
+
+      mounts.push({ [binding.env]: secretName });
+    }
+
+    return { status: "created", mounts };
+  }
+
+  /** Delete every Daytona secret created for this sandbox; returns ids that could not be deleted. */
+  async deleteSandboxSecrets(sandboxName: string): Promise<string[]> {
+    const prefix = `${sandboxName}-`;
+    const failed: string[] = [];
+    let cursor: string | null | undefined;
+
+    try {
+      do {
+        const query = new URLSearchParams({ name: prefix, limit: "200" });
+
+        if (cursor) query.set("cursor", cursor);
+        const response = await this.request("GET", `/secret/paginated?${query}`);
+
+        if (!response.ok) return [`${prefix}*`];
+        const page = await boundedJson(response, SecretPage);
+
+        for (const item of page.items) {
+          if (!item.name.startsWith(prefix)) continue;
+          const deleted = await this.request("DELETE", `/secret/${encodeURIComponent(item.id)}`);
+
+          if (!deleted.ok && deleted.status !== 404) failed.push(item.id);
+        }
+
+        cursor = page.nextCursor;
+      } while (cursor);
+    } catch {
+      return [...failed, `${prefix}*`];
+    }
+
+    return failed;
+  }
+
   private async createRejection(
     response: Response,
     step: string,
@@ -2566,6 +2706,12 @@ export class DaytonaDriver implements ProviderDriver {
       )
         return unknown(input.identity.submissionId, "Daytona deletion identity mismatched");
 
+      // Brokered secrets belong to the sandbox; anything left is reported, never hidden.
+      const leftoverSecrets =
+        value.labels?.["beachside.secrets"] === "1" && value.name?.startsWith("beachside-")
+          ? (await this.deleteSandboxSecrets(value.name)).map((id) => `daytona:secret:${id}`)
+          : [];
+
       if (value.state !== "destroyed") return pending();
 
       if (retainedResources === undefined && value.labels) {
@@ -2579,6 +2725,7 @@ export class DaytonaDriver implements ProviderDriver {
           input.identity.submissionId,
           "Daytona compute is stopped but retained resource evidence is unavailable",
         );
+      retainedResources = [...retainedResources, ...leftoverSecrets];
 
       return {
         status: "completed",

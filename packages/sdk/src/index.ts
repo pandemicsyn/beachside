@@ -191,3 +191,11 @@ export type {
 export type { RunSetupOptions } from "./setup-flow";
 
 export type { SandboxScopeOptions, SandboxScopeCallbackOutcome } from "./scoped-sandbox";
+
+export { secret, Secret } from "./secrets";
+
+export type { SecretOptions, SecretTarget, EnvValue } from "./secrets";
+
+export { SECRET_PRESETS } from "@beachside/adapter";
+
+export type { SecretPreset, SecretSupport } from "@beachside/adapter";
