@@ -2,7 +2,7 @@
 
 **One SDK. Every sandbox.**
 
-A typed TypeScript API to create, run code in, and tear down sandboxes on Daytona, E2B, boxd, Boat, Runloop, Freestyle and Vercel. Keep application workflows consistent while configuring each provider explicitly. Runs on Node.js and Bun.
+A TypeScript API to create, run code in, and tear down sandboxes on providers like Daytona, E2B, boxd, Boat, Runloop, Freestyle and Vercel (and more). Keep application workflows consistent while configuring each provider explicitly.
 
 **[Get started →](https://beachside.run/docs/)** · [Run an agent](https://beachside.run/docs/guides/runnable-agent-examples/) · [beachside.run](https://beachside.run/)
 
@@ -22,7 +22,7 @@ Each provider is a separately installed adapter, and you can bring your own.
 | Modal (exp) | `@beachside/modal` |
 | Your adapter | [`@beachside/adapter`](https://beachside.run/docs/guides/write-an-adapter/) |
 
-"exp" marks experimental adapters. See [Provider support](https://beachside.run/docs/providers/support/) for what each one can do.
+"exp" marks experimental adapters that are less tested. See [Provider support](https://beachside.run/docs/providers/support/) for what each one can do.
 
 ## SDK
 
