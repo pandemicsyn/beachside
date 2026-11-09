@@ -997,9 +997,11 @@ try {
   );
 
   const externalDir = join(temporary, "external-adapter");
+
   const adapterManifest = JSON.parse(
     await readFile(join(root, "packages/adapter/package.json"), "utf8"),
   );
+
   await mkdir(join(externalDir, "src"), { recursive: true });
   await writeFile(
     join(externalDir, "package.json"),
