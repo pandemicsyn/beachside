@@ -1255,7 +1255,15 @@ test("Vercel filesystem snapshot capture/restore/delete retains independent exac
     const unproven = await client.snapshots.get(inventory.items[0]!.reference);
     await expect(unproven.restore()).rejects.toMatchObject({ code: "UNSUPPORTED" });
     expect(native.effects.create).toBe(1);
-    const restored = await snapshot.restore();
+    const restored = await snapshot.restore({ labels: { "beachside.pi": "1" } });
+
+    const createRequest = native.requests
+      .filter(({ url }) => url.pathname === "/api/v3/sandboxes")
+      .at(-1);
+
+    expect(JSON.parse(String(createRequest?.init.body)).tags).toMatchObject({
+      "beachside.pi": "1",
+    });
     expect(restored.id).not.toBe(source.id);
     expect((await restored.inspect()).state).toBe("running");
     await restored.destroy();
@@ -1819,7 +1827,12 @@ test("persistent listing carries native generation evidence and no creation rece
   const client = await Beachside.connect(options);
 
   try {
-    const box = await client.sandboxes.create({ labels: { run: "42" } });
+    expect((await client.capabilities()).createLabels).toBe(true);
+    await expect(
+      client.sandboxes.create({ labels: { beachsideSubmission: "spoof" } }),
+    ).rejects.toThrow("Reserved correlation label");
+    const labels = { run: "42", "beachside.pi": "1" };
+    const box = await client.sandboxes.create({ labels });
     native.logical.set("untagged", {
       ...native.logical.get(box.id)!,
       name: "untagged",
@@ -1830,7 +1843,7 @@ test("persistent listing carries native generation evidence and no creation rece
     expect(page.coverage).toBe("managed");
     expect(page.items.map((item) => item.id)).toEqual([box.id]);
     // Create labels come back from the tags without the adapter's own marker.
-    expect(page.items[0]!.labels).toEqual({ run: "42" });
+    expect(page.items[0]!.labels).toEqual(labels);
     expect(page.items[0]!.createdAt).toBe(
       new Date(native.logical.get(box.id)!.createdAt!).toISOString(),
     );

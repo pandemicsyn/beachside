@@ -1364,6 +1364,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          createLabels: true,
           lifetime: { minSeconds: 60, maxSeconds: MAX_TTL_SECONDS },
         },
         create: {

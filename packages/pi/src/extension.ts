@@ -132,6 +132,15 @@ export default function beachside(pi: ExtensionAPI) {
 
     session = active;
 
+    exit = String(pi.getFlag("beachside-exit") ?? "destroy");
+
+    const profileMismatch = savedProfile && profile !== savedProfile;
+
+    if (profileMismatch)
+      active.block(
+        `This session belongs to Beachside profile ${savedProfile}. Start a new Pi session to switch profiles.`,
+      );
+
     if (active.off) return;
     previousTools = pi.getActiveTools();
     replace(localTools.bash(ctx.cwd), (tools) => tools.bash);
@@ -152,8 +161,6 @@ export default function beachside(pi: ExtensionAPI) {
     pi.setActiveTools(previousTools.filter((name) => name !== "powershell"));
     ctx.ui.setStatus("beachside", `${active.profile} · sandbox pending`);
 
-    exit = String(pi.getFlag("beachside-exit") ?? "destroy");
-
     if (!["destroy", "suspend", "keep"].includes(exit)) {
       active.block("Expected --beachside-exit destroy, suspend, or keep");
       ctx.ui.notify("Expected --beachside-exit destroy, suspend, or keep", "error");
@@ -161,13 +168,7 @@ export default function beachside(pi: ExtensionAPI) {
       return;
     }
 
-    if (savedProfile && profile !== savedProfile) {
-      active.block(
-        `This session belongs to Beachside profile ${savedProfile}. Start a new Pi session to switch profiles.`,
-      );
-
-      return;
-    }
+    if (profileMismatch) return;
 
     if (exit === "suspend") active.requireSuspend();
 

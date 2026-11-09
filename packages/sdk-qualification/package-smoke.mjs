@@ -1663,21 +1663,35 @@ try {
     const [snapshot] = await records("snapshots");
     assert.equal(snapshot.name, "warm");
     assert.equal(snapshot.status, "captured");
+    assert.equal(snapshot.sandbox, record.name);
 
+    process.env.FAKE_DISABLE_CREATE_LABELS = "1";
     const restored = await open(SessionManager.inMemory(cwd), "fake", undefined, { "beachside-snapshot": "warm" });
     try {
       assert.equal(await remoteShell(restored, "echo named restore", false), "named restore");
-      assert.notEqual(saved(restored).at(-1).data.reference.nativeId, parentId);
+      const restoredId = saved(restored).at(-1).data.reference.nativeId;
+      assert.notEqual(restoredId, parentId);
+      const restoredRecord = (await records("sandboxes")).find((item) => item.reference.nativeId === restoredId);
+      assert.equal(restoredRecord.labels["beachside.pi"], "1");
     } finally {
       await close(restored);
     }
     assert.equal((await records("sandboxes")).length, 1);
-
+    await session.prompt("/beachside-off");
+    await assert.rejects(session.prompt("/beachside-snapshot hidden"), /Beachside is off/);
+    assert.equal((await records("snapshots")).length, 1);
+    assert.equal(saved(session).at(-1).data.status, "ready");
+    await close(session, "reload");
+    session = await open(SessionManager.open(parentPath), undefined, undefined, { "beachside-exit": "keep" });
+    await close(session);
+    assert.equal((await records("sandboxes")).length, 1);
+    session = await open(SessionManager.open(parentPath));
   }
 } finally {
   await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
   session.dispose();
 }
+assert.deepEqual(await records("sandboxes"), []);
 `,
   );
   const piGraph = inspectGraph(piConsumer, ["@beachside/pi"]);
@@ -1699,6 +1713,7 @@ export const fake = {
     const capture = session.snapshotCapture;
     return {
       ...session,
+      supports: { ...session.supports, createLabels: process.env.FAKE_DISABLE_CREATE_LABELS !== "1" },
       defaultImage: { kind: "prepared", value: "fake-starter" },
       snapshotCapture: {
         ...capture,

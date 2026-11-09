@@ -252,11 +252,11 @@ export class SandboxSession {
         `--beachside-exit suspend is unavailable for profile ${this.profile}: ${caps.lifecycle.suspend.reason}`,
       );
 
-    const appliedLabels =
-      caps.createLabels &&
-      (!snapshot || (restore.status === "supported" && restore.value.options?.labels))
-        ? labels
-        : undefined;
+    const labelsSupported = snapshot
+      ? restore.status === "supported" && restore.value.options?.labels
+      : caps.createLabels;
+
+    const appliedLabels = labelsSupported ? labels : undefined;
 
     if (snapshot && restore.status !== "supported") throw new Error(restore.reason);
     const source = snapshot ? await client.snapshots.get(snapshot) : undefined;
@@ -432,11 +432,14 @@ export class SandboxSession {
   disable() {
     this.off = true;
     void this.stopRenewal();
-    this.persist({ status: "inactive", ...this.saved, off: true });
+    // Keep a saved sandbox eligible for the configured exit action.
+    this.persist({ ...(this.saved ?? { status: "inactive" }), off: true });
     this.ctx.ui.setStatus("beachside", undefined);
   }
 
   async capture(name: string) {
+    if (this.off) throw new Error("Beachside is off");
+
     return this.use(({ box }) => this.captureSnapshot(box, name));
   }
 
@@ -454,7 +457,7 @@ export class SandboxSession {
       profile: this.profile,
       provider: this.client!.provider,
       createdAt: new Date().toISOString(),
-      sandbox: box.id,
+      sandbox: this.name,
       preserve: null,
       reference: null,
     };
@@ -517,7 +520,13 @@ export class SandboxSession {
       );
     }
 
-    if (!box) return;
+    if (!box) {
+      if (this.saved?.status === "ready")
+        throw new Error(`No reopenable reference for ${this.name}`);
+
+      return;
+    }
+
     await this.destroyBox(box);
     this.persist({
       status: "destroyed",
@@ -582,10 +591,25 @@ export class SandboxSession {
         if (entry.error) this.ctx.ui.notify(entry.error, "error");
       }
 
-      if (reason === "quit") {
-        if (exit === "destroy" && this.saved?.status === "ready" && box) await this.destroy();
+      if (reason === "quit" && !this.blocked && this.saved?.status === "ready") {
+        if (exit === "destroy") await this.destroy();
 
-        if (exit === "suspend" && this.saved?.status === "ready" && box) await box.suspend();
+        if (exit === "suspend") {
+          const signal = this.lifetime.signal;
+          const reference = this.saved.reference;
+
+          const current =
+            box ??
+            (reference
+              ? await (await this.config()).client.sandboxes.get(reference, { signal })
+              : undefined);
+
+          if (!current) throw new Error(`No reopenable reference for ${this.name}`);
+          const info = await current.inspect({ signal });
+
+          if (info.state !== "suspended" && info.state !== "stopped")
+            await current.suspend({ signal });
+        }
       }
     } finally {
       this.lifetime.abort();

@@ -46,6 +46,9 @@ import { startVercelProcess, reopenVercelProcess } from "./process-native";
 import { filesystemHelper, filesystemValue, directorySchema, fileStat } from "./filesystem";
 import { captureHelper, captureSpec, decodeReceipt } from "./capture";
 
+const isReservedLabel = (key: string) =>
+  key.startsWith("beachside") && !key.startsWith("beachside.");
+
 const id = z
   .string()
   .min(1)
@@ -557,7 +560,7 @@ export function createVercelAdapter(
                   ? { ...reference(id), generation: generation(box) }
                   : reference(id),
                 // Create labels are Vercel tags beside the adapter's `beachside` marker.
-                labels: listedLabels(box.tags, (key) => key.startsWith("beachside")),
+                labels: listedLabels(box.tags, isReservedLabel),
                 createdAt: listedTime(box.createdAt),
               };
             }),
@@ -951,7 +954,7 @@ export function createVercelAdapter(
                 "Vercel supports at most four user labels",
               );
 
-            if (Object.keys(input.labels ?? {}).some((key) => key.startsWith("beachside")))
+            if (Object.keys(input.labels ?? {}).some(isReservedLabel))
               throw new AdapterError("INVALID_ARGUMENT", "Reserved correlation label");
 
             return input;
@@ -1389,6 +1392,7 @@ export function createVercelAdapter(
           exec: { commands: ["argv", "shell"], maxOutputBytes: maxBytes },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
+          createLabels: true,
           lifetime: createLifetime,
         },
         suspensionCapabilities: async () =>
@@ -2034,7 +2038,7 @@ export function createVercelAdapter(
                 "Vercel supports at most four user labels",
               );
 
-            if (labels.some((key) => key.startsWith("beachside")))
+            if (labels.some(isReservedLabel))
               throw new AdapterError("INVALID_ARGUMENT", "Reserved correlation label");
 
             if (

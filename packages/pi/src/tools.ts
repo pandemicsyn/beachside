@@ -353,7 +353,7 @@ export function createBeachsideTools(
             if (box.supports("walkFiles")) {
               for await (const entry of box.walkFiles(cwd, {
                 signal,
-                exclude: [".git", "node_modules"],
+                excludeNames: [".git", "node_modules"],
               })) {
                 const name = entry.relativePath;
 

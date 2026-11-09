@@ -136,7 +136,7 @@ See the complete [artifact recipe](https://github.com/pandemicsyn/beachside/blob
 
 Use `walkFiles` to visit a directory tree. It yields `{ name, type, path, relativePath, depth }` for each entry, starting with the root's children at depth 1. The root itself is omitted. Entries are sorted by name within each directory, and each directory is followed by its contents before traversal continues to the next sibling. Symlinks and unknown entry types are yielded without being followed.
 
-Every directory must have a complete listing. Unreadable directories, unknown completeness and exceeded entry limits reject the traversal instead of silently skipping data.
+Every visited directory must have a complete listing. Unreadable directories, unknown completeness and exceeded entry limits reject the traversal instead of silently skipping data. Use `exclude` for exact paths relative to the traversal root and `excludeNames` for exact entry names at any depth. Both skip the contents of matching directories.
 
 ```ts
 for await (const entry of box.walkFiles("/home/user/job", {
