@@ -966,44 +966,148 @@ describe("beachside CLI against the fake provider", () => {
     const installed = (base: string, agent: string) =>
       join(base, agent, "skills", "beachside-cli", "SKILL.md");
 
-    test("prints the bundled skill", async () => {
-      const bundled = await readFile(
+    const results = (data: { installed?: { result: string }[]; removed?: { result: string }[] }) =>
+      (data.installed ?? data.removed ?? []).map((item) => item.result);
+
+    const bundledGuide = () =>
+      readFile(
         join(import.meta.dir, "..", "..", "..", "skills", "beachside-cli", "SKILL.md"),
         "utf8",
       );
 
+    test("prints the bundled guide", async () => {
+      const bundled = await bundledGuide();
+
       expect(await cli(["skill"])).toMatchObject({ code: 0, stdout: bundled });
+      expect(await cli(["skill", "show"])).toMatchObject({ code: 0, stdout: bundled });
     });
 
-    test("install writes .agents and, where Claude Code is set up, .claude", async () => {
+    test("setup writes a stub that reads the guide from the installed CLI", async () => {
       await mkdir(join(dir, ".claude"));
 
-      const first = envelope(await cli(["skill", "install", "--json"]));
+      const first = envelope(await cli(["skill", "setup", "--json"]));
 
-      expect(first.data.installed.map((entry: { result: string }) => entry.result)).toEqual([
-        "written",
-        "written",
-      ]);
-      expect(await readFile(installed(dir, ".claude"), "utf8")).toContain("name: beachside-cli");
+      expect(results(first.data)).toEqual(["written", "written"]);
+      expect(first.data.dryRun).toBe(false);
+
+      const stub = await readFile(installed(dir, ".claude"), "utf8");
+
+      expect(stub).toContain("name: beachside-cli");
+      expect(stub).toContain('beachside-stub: "1"');
+      expect(stub).toContain("Run `beachside skill` and follow the guide it prints.");
+      // The description is the bundled guide's, so agents trigger on the same words.
+      const description = (await bundledGuide()).split("\n")[2];
+      expect(stub.split("\n")[2]).toBe(description);
+      expect(await readFile(installed(dir, ".agents"), "utf8")).toBe(stub);
 
       const again = envelope(await cli(["skill", "install", "--json"]));
 
-      expect(again.data.installed.map((entry: { result: string }) => entry.result)).toEqual([
-        "unchanged",
-        "unchanged",
+      expect(results(again.data)).toEqual(["unchanged", "unchanged"]);
+    });
+
+    test("setup without Claude Code writes only the shared folder", async () => {
+      const data = envelope(await cli(["skill", "setup", "--json"])).data;
+
+      expect(data.installed).toEqual([
+        {
+          location: "shared",
+          agents: ["codex", "opencode", "pi"],
+          path: installed(dir, ".agents"),
+          result: "written",
+        },
       ]);
     });
 
-    test("install never replaces a copy installed another way", async () => {
+    test("--agent picks folders and honors CLAUDE_CONFIG_DIR", async () => {
+      const claudeHome = join(dir, "claude-config");
+
+      const data = envelope(
+        await cli(["skill", "setup", "--agent", "claude", "--json"], {
+          CLAUDE_CONFIG_DIR: claudeHome,
+        }),
+      ).data;
+
+      expect(data.installed.map((item: { path: string }) => item.path)).toEqual([
+        join(claudeHome, "skills", "beachside-cli", "SKILL.md"),
+      ]);
+
+      const unknown = await cli(["skill", "setup", "--agent", "vim", "--json"]);
+
+      expect(unknown.code).toBe(2);
+      expect(envelope(unknown).error.code).toBe("USAGE");
+    });
+
+    test("--dry-run reports changes and writes nothing", async () => {
+      const data = envelope(await cli(["skill", "setup", "--dry-run", "--json"])).data;
+
+      expect(data.dryRun).toBe(true);
+      expect(results(data)).toEqual(["written"]);
+      expect(await readFile(installed(dir, ".agents"), "utf8").catch(() => null)).toBeNull();
+    });
+
+    test("status reports current, outdated, missing and foreign copies", async () => {
+      const states = async () =>
+        envelope(await cli(["skill", "status", "--json"])).data.skills.map(
+          (item: { location: string; state: string }) => `${item.location}:${item.state}`,
+        );
+
+      expect(await states()).toEqual(["shared:missing", "claude:missing"]);
+
+      // A full guide written by an older CLI is ours and outdated.
+      await mkdir(join(installed(dir, ".agents"), ".."), { recursive: true });
+      await writeFile(
+        installed(dir, ".agents"),
+        "old guide\n\n<!-- Installed by `beachside skill install`; rerun it to update this file. -->\n",
+      );
+      await mkdir(join(installed(dir, ".claude"), ".."), { recursive: true });
+      await writeFile(installed(dir, ".claude"), "my own notes\n");
+
+      expect(await states()).toEqual(["shared:outdated", "claude:foreign"]);
+
+      const updated = envelope(await cli(["skill", "setup", "--json"])).data;
+
+      expect(results(updated)).toEqual(["updated", "skipped"]);
+      expect(await states()).toEqual(["shared:current", "claude:foreign"]);
+    });
+
+    test("setup never replaces a copy installed another way unless forced", async () => {
       const foreign = installed(dir, ".agents");
       await mkdir(join(foreign, ".."), { recursive: true });
       await writeFile(foreign, "my own notes\n");
 
-      const result = await cli(["skill", "install", "--json"]);
+      const result = await cli(["skill", "setup", "--json"]);
 
       expect(result.code).toBe(1);
       expect(envelope(result).error.code).toBe("CONFLICT");
+      expect(envelope(result).error.hint).toContain("--force");
       expect(await readFile(foreign, "utf8")).toBe("my own notes\n");
+
+      const forced = envelope(await cli(["skill", "setup", "--force", "--json"])).data;
+
+      expect(results(forced)).toEqual(["replaced"]);
+      expect(await readFile(foreign, "utf8")).toContain("beachside-stub");
+    });
+
+    test("remove deletes only copies this CLI installed", async () => {
+      await mkdir(join(dir, ".claude"));
+      await cli(["skill", "setup"]);
+      await writeFile(installed(dir, ".claude"), "edited by hand\n");
+
+      const dry = envelope(await cli(["skill", "remove", "--dry-run", "--json"])).data;
+
+      expect(results(dry)).toEqual(["removed", "skipped"]);
+      expect(await readFile(installed(dir, ".agents"), "utf8")).toContain("beachside-stub");
+
+      const removed = envelope(await cli(["skill", "remove", "--json"])).data;
+
+      expect(results(removed)).toEqual(["removed", "skipped"]);
+      expect(await readFile(installed(dir, ".agents"), "utf8").catch(() => null)).toBeNull();
+      expect(await readFile(installed(dir, ".claude"), "utf8")).toBe("edited by hand\n");
+
+      expect(results(envelope(await cli(["skill", "remove", "--json"])).data)).toEqual([
+        "missing",
+        "skipped",
+      ]);
     });
 
     test("--project installs into the working directory", async () => {
@@ -1011,7 +1115,7 @@ describe("beachside CLI against the fake provider", () => {
       await mkdir(project);
 
       const result = await cli(
-        ["skill", "install", "--project"],
+        ["skill", "setup", "--project"],
         { HOME: join(dir, "home") },
         undefined,
         project,
@@ -1019,7 +1123,7 @@ describe("beachside CLI against the fake provider", () => {
 
       expect(result.code).toBe(0);
       expect(await readFile(installed(project, ".agents"), "utf8")).toContain(
-        "beachside skill install",
+        "beachside skill setup",
       );
     });
   });
@@ -1043,6 +1147,7 @@ describe("beachside CLI against the fake provider", () => {
         "boxd",
         "boat",
         "runloop",
+        "freestyle",
         "vercel",
         "modal",
       ]);

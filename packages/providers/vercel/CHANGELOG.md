@@ -1,5 +1,22 @@
 # @beachside/vercel
 
+## 0.9.0
+
+### Minor Changes
+
+- [#159](https://github.com/pandemicsyn/beachside/pull/159) [`d137e90`](https://github.com/pandemicsyn/beachside/commit/d137e90e8f7bc271713c8b0776605bf4996196c2) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Make provider setup consistent. Every first-party package now exports its definition as `<provider>Adapter` and a factory named after the provider: `boxd()`, `boat()`, `runloop()`, `modal()` and `vercel()` join `daytona()` and `e2b()`. Docs, examples and skills show the split form, `Beachside.connect({ adapter, credentials, config })`, which works for every adapter.
+
+  Breaking for Vercel: the definition is now `vercelAdapter`, and `vercel` is the factory. Replace `adapter: vercel` with `adapter: vercelAdapter`, or call `Beachside.connect(vercel({ token, teamId, projectId }))`. Passing a factory where a definition belongs now fails with `INVALID_ARGUMENT` and names both forms.
+
+### Patch Changes
+
+- [#169](https://github.com/pandemicsyn/beachside/pull/169) [`1c36875`](https://github.com/pandemicsyn/beachside/commit/1c36875a06d48c7aa7799fa61151a03c122e4c36) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Writing to a path whose folder does not exist yet now creates the missing folders on Daytona, boxd and Vercel, as E2B and Modal already did for writes. This covers `writeFile`, `writeFileStream` and `copyFile`, and E2B `copyFile` now creates them too.
+
+  Daytona no longer leaves `.beachside-exec-*` and `.beachside-write-*` folders in `/tmp` after commands and writes succeed. E2B also removes its command capture files and write stages once an interrupted operation is recovered.
+
+- Updated dependencies [[`d137e90`](https://github.com/pandemicsyn/beachside/commit/d137e90e8f7bc271713c8b0776605bf4996196c2)]:
+  - @beachside/adapter@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes

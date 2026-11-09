@@ -163,7 +163,12 @@ export async function complete(
 
   if (command.name === "skill" && positionals.length === 0)
     return {
-      candidates: [{ value: "install", description: "Install the skill for your agents" }],
+      candidates: [
+        { value: "show", description: "Print the guide the skill gives agents" },
+        { value: "setup", description: "Install the skill for your agents" },
+        { value: "status", description: "Report where the skill is installed" },
+        { value: "remove", description: "Remove the skill this CLI installed" },
+      ],
       directive: 0,
     };
 

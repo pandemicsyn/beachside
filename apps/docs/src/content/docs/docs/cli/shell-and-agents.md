@@ -29,15 +29,15 @@ Sandbox names come from the CLI's own list, so pressing tab never calls a provid
 
 ## Agent skill
 
-The CLI carries an agent skill that teaches coding agents how to use it: check the setup first, always use `--json`, prefer `run` for one-off work, read exit codes, never retry an unknown outcome, and clean up. The skill always matches the installed CLI version.
+The CLI carries an agent skill that teaches coding agents how to use it: check the setup first, always use `--json`, prefer `run` for one-off work, read exit codes, never retry an unknown outcome, report results, and clean up.
 
 ```sh
-beachside skill install            # for you, in every project
-beachside skill install --project  # for this repository only
+beachside skill setup            # for you, in every project
+beachside skill setup --project  # for this repository only
 ```
 
-`install` writes the skill to `.agents/skills/beachside-cli/`, read by most agents, and to `.claude/skills/beachside-cli/` when Claude Code is set up. Run it again after upgrading the CLI to update the skill. It never replaces a copy you installed another way.
+`setup` writes a short skill to `.agents/skills/beachside-cli/`, read by most agents, and to `.claude/skills/beachside-cli/` when Claude Code is set up. The skill tells the agent to run `beachside skill` and follow the guide it prints, so the guide always matches the installed CLI and upgrading needs no rerun. `beachside skill status` shows each copy as `current`, `outdated`, `missing` or `foreign`, and `beachside skill remove` removes what setup installed. Pass `--agent` to choose agents and `--dry-run` to preview. Setup never replaces a copy you installed another way unless you pass `--force`.
 
-`beachside skill` prints the skill, for agents without a skill system: paste it into their instructions.
+`beachside skill` prints the guide, for agents without a skill system: paste it into their instructions.
 
-The skill can also be installed with `npx skills add pandemicsyn/beachside --skill beachside-cli`. See [Agent skills](/docs/agents/skills/) for the SDK skill as well.
+Copies written by older CLIs show as `outdated` until you run `beachside skill setup` once. The skill can also be installed with `npx skills add pandemicsyn/beachside --skill beachside-cli`, which copies the whole guide from the repository instead of following your installed CLI. See [Agent skills](/docs/agents/skills/) for the SDK skill as well.

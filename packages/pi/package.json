@@ -1,6 +1,6 @@
 {
   "name": "@beachside/pi",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": false,
   "type": "module",
   "description": "Run Pi coding tools in Beachside sandboxes.",
@@ -19,7 +19,7 @@
   "dependencies": {
     "@beachside/adapter": "workspace:*",
     "beachside": "workspace:*",
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@beachside-internal/profile": "workspace:*",

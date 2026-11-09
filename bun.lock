@@ -38,13 +38,14 @@
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/freestyle": "workspace:*",
         "@beachside/modal": "workspace:*",
         "@beachside/runloop": "workspace:*",
         "beachside": "workspace:*",
         "satteri": "0.10.5",
         "typescript": "5.9.3",
         "wrangler": "4.141.0",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
     },
     "examples": {
@@ -57,21 +58,21 @@
     },
     "packages/adapter": {
       "name": "@beachside/adapter",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
     },
     "packages/cli": {
       "name": "@beachside/cli",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "bin": {
         "beachside": "./dist/main.js",
       },
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "beachside": "workspace:*",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "@beachside-internal/profile": "workspace:*",
@@ -80,6 +81,7 @@
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/freestyle": "workspace:*",
         "@beachside/modal": "workspace:*",
         "@beachside/runloop": "workspace:*",
         "@beachside/vercel": "workspace:*",
@@ -87,11 +89,11 @@
     },
     "packages/pi": {
       "name": "@beachside/pi",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "beachside": "workspace:*",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "@beachside-internal/profile": "workspace:*",
@@ -110,7 +112,7 @@
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "beachside": "workspace:*",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
     },
     "packages/provider-spi": {
@@ -118,16 +120,16 @@
       "version": "0.0.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
     },
     "packages/providers/boat": {
       "name": "@beachside/boat",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "@boatdev/sdk": "1.9.9",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "beachside": "workspace:*",
@@ -135,12 +137,12 @@
     },
     "packages/providers/boxd": {
       "name": "@beachside/boxd",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "@boxd-sh/sdk": "0.2.15",
         "@grpc/grpc-js": "1.14.5",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "beachside": "workspace:*",
@@ -148,10 +150,10 @@
     },
     "packages/providers/daytona": {
       "name": "@beachside/daytona",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "@beachside-internal/provider-spi": "workspace:*",
@@ -160,11 +162,11 @@
     },
     "packages/providers/e2b": {
       "name": "@beachside/e2b",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "e2b": "2.51.0",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "beachside": "workspace:*",
@@ -176,18 +178,30 @@
       "dependencies": {
         "@beachside-internal/provider-spi": "workspace:*",
         "@beachside/adapter": "workspace:*",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
+      },
+    },
+    "packages/providers/freestyle": {
+      "name": "@beachside/freestyle",
+      "version": "0.9.0",
+      "dependencies": {
+        "@beachside/adapter": "workspace:*",
+        "freestyle": "0.2.21",
+        "zod": "4.6.6",
+      },
+      "devDependencies": {
+        "beachside": "workspace:*",
       },
     },
     "packages/providers/modal": {
       "name": "@beachside/modal",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "@bufbuild/protobuf": "2.0.0",
         "@grpc/grpc-js": "1.14.5",
         "modal": "0.10.1",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "beachside": "workspace:*",
@@ -195,10 +209,10 @@
     },
     "packages/providers/runloop": {
       "name": "@beachside/runloop",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "beachside": "workspace:*",
@@ -206,11 +220,11 @@
     },
     "packages/providers/vercel": {
       "name": "@beachside/vercel",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "tar-stream": "3.2.2",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "@types/tar-stream": "3.1.5",
@@ -219,11 +233,11 @@
     },
     "packages/sdk": {
       "name": "beachside",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "@opentelemetry/api": "1.9.1",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "@beachside-internal/provider-fake": "workspace:*",
@@ -237,13 +251,14 @@
         "@beachside-internal/provider-fake": "workspace:*",
         "@beachside/adapter": "workspace:*",
         "beachside": "workspace:*",
-        "zod": "4.6.5",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "@beachside/boat": "workspace:*",
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/freestyle": "workspace:*",
         "@beachside/runloop": "workspace:*",
         "@beachside/vercel": "workspace:*",
       },
@@ -367,6 +382,8 @@
     "@beachside/daytona": ["@beachside/daytona@workspace:packages/providers/daytona"],
 
     "@beachside/e2b": ["@beachside/e2b@workspace:packages/providers/e2b"],
+
+    "@beachside/freestyle": ["@beachside/freestyle@workspace:packages/providers/freestyle"],
 
     "@beachside/modal": ["@beachside/modal@workspace:packages/providers/modal"],
 
@@ -1226,6 +1243,8 @@
 
     "forwarded-parse": ["forwarded-parse@2.1.2", "", {}, "sha512-alTFZZQDKMporBH77856pXgzhEzaUVmLCDk+egLgIgHst3Tpndzz8MnKe+GzRJRfvVdn69HhpW7cmXzvtLvJAw=="],
 
+    "freestyle": ["freestyle@0.2.21", "", { "dependencies": { "dotenv": "^17.4.2", "ws": "^8.18.0", "yargs": "^17.7.2" }, "optionalDependencies": { "undici": "^7.16.0 || ^8.0.0" }, "bin": { "freestyle": "dist/cli/index.js" } }, "sha512-/RjHww36gz+t0976SgfiCzFtT/NAR3V2lGTfoazbkaZyDSg5x4ucuYQ1luBu37vGPpUpxNBluCxcrBN0cf6mEg=="],
+
     "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
 
     "gaxios": ["gaxios@7.3.1", "", { "dependencies": { "extend": "^3.0.2", "https-proxy-agent": "^7.0.1", "node-fetch": "^3.3.2" } }, "sha512-kB3rzJV7d9juLZh8/56QTXCwQfxyhdOMdyYk1HdQKFtF8TJTDTZQJtixWIwXdE9Jji91mC41DUNpjleo4L4eAQ=="],
@@ -1806,7 +1825,7 @@
 
     "youch-core": ["youch-core@0.3.3", "", { "dependencies": { "@poppinss/exception": "^1.2.2", "error-stack-parser-es": "^1.0.5" } }, "sha512-ho7XuGjLaJ2hWHoK8yFnsUGy2Y5uDpqSTq1FkHLK4/oqKtyUU1AFbOOxY4IpC9f0fTLjwYbslUz0Po5BpD1wrA=="],
 
-    "zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
+    "zod": ["zod@4.6.6", "", {}, "sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA=="],
 
     "zwitch": ["zwitch@2.0.4", "", {}, "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A=="],
 
@@ -1815,6 +1834,8 @@
     "@astrojs/compiler-binding-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.11.3", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.3", "tslib": "^2.4.0" } }, "sha512-zLpS5asjEb7lq8jYLq37N6XKaE41DIexlY1rF/z4/tIl3wo13Sqm28fRyfIsKZD+NZ8mM5RoKkpW/rBcuoSZSg=="],
 
     "@astrojs/compiler-binding-wasm32-wasi/@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
+
+    "@astrojs/sitemap/zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
 
     "@astrojs/yaml2ts/yaml": ["yaml@2.8.3", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg=="],
 
@@ -1860,9 +1881,13 @@
 
     "anymatch/picomatch": ["picomatch@2.3.2", "", {}, "sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA=="],
 
+    "astro/zod": ["zod@4.6.5", "", {}, "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="],
+
     "csso/css-tree": ["css-tree@2.2.1", "", { "dependencies": { "mdn-data": "2.0.28", "source-map-js": "^1.0.1" } }, "sha512-OA0mILzGc1kCOCSJerOeqDxDQ4HOh+G8NbOJFOTgOCzpw7fCBubk0fEyxp8AgOL/jvLgYA/uV0cMbe43ElF1JA=="],
 
     "e2b/@bufbuild/protobuf": ["@bufbuild/protobuf@2.15.0", "", {}, "sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA=="],
+
+    "freestyle/undici": ["undici@8.11.2", "", {}, "sha512-u4UB2/IrKdU6lFxumHmmo1a3fCQO5tzQllRorfoRS63txhrB7xTpSn1PftwC4qEHkOaqP95fCWW4lJzwErwzhQ=="],
 
     "gaxios/https-proxy-agent": ["https-proxy-agent@7.0.6", "", { "dependencies": { "agent-base": "^7.1.2", "debug": "4" } }, "sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw=="],
 

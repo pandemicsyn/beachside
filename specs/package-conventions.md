@@ -13,6 +13,7 @@
 | boxd adapter (experimental) | `@beachside/boxd` | `@beachside/boxd` |
 | Boat adapter (experimental) | `@beachside/boat` | `@beachside/boat` |
 | Runloop adapter (experimental) | `@beachside/runloop` | `@beachside/runloop` |
+| Freestyle adapter (experimental) | `@beachside/freestyle` | `@beachside/freestyle` |
 | Official Vercel adapter | `@beachside/vercel` | `@beachside/vercel` |
 | Command line (`beachside` binary) | `@beachside/cli` | none; run `beachside` |
 | Pi extension and SDK tools | `@beachside/pi` | Pi manifest and `createBeachsideTools` |
@@ -41,8 +42,8 @@ const beachside = await Beachside.connect({
 
 **Accepted user decision — November 7, 2026.** The split form, `Beachside.connect({ adapter, credentials, config })`, is the canonical setup shown in docs, examples, skills and the landing page, because every adapter supports it, including third-party ones. Every first-party package exports:
 
-- the definition as `<provider>Adapter` (`daytonaAdapter`, `e2bAdapter`, `boxdAdapter`, `boatAdapter`, `runloopAdapter`, `modalAdapter`, `vercelAdapter`), and
-- a factory named after the provider (`daytona`, `e2b`, `boxd`, `boat`, `runloop`, `modal`, `vercel`) that takes credentials and config in one object and returns a `BoundAdapter` through `bindAdapter`, with no provider IO.
+- the definition as `<provider>Adapter` (`daytonaAdapter`, `e2bAdapter`, `boxdAdapter`, `boatAdapter`, `runloopAdapter`, `freestyleAdapter`, `modalAdapter`, `vercelAdapter`), and
+- a factory named after the provider (`daytona`, `e2b`, `boxd`, `boat`, `runloop`, `freestyle`, `modal`, `vercel`) that takes credentials and config in one object and returns a `BoundAdapter` through `bindAdapter`, with no provider IO.
 
 Factories are optional sugar; they are most useful when code picks a provider at run time, since every factory returns the same type. Third-party authors may ship a factory with `bindAdapter` from `@beachside/adapter`, but are not required to. `Beachside.connect` validates and verifies the binding and owns the session.
 
@@ -66,7 +67,7 @@ Private implementation workspaces may be bundled into adapter artifacts. Their u
 
 ## Implementation and release acceptance
 
-The initial 0.1.0 fixed, lockstep public release group is `@beachside/adapter`, `beachside`, `@beachside/daytona`, `@beachside/e2b`, `@beachside/boxd`, `@beachside/boat`, `@beachside/runloop`, and `@beachside/vercel`; `@beachside/cli` joins the group from its first release and experimental `@beachside/modal` from 0.7.0. `@beachside/pi` joins from its first release. Separate installation does not require independent release infrastructure. Keep the existing release machinery and release the actual distributable graph.
+The initial 0.1.0 fixed, lockstep public release group is `@beachside/adapter`, `beachside`, `@beachside/daytona`, `@beachside/e2b`, `@beachside/boxd`, `@beachside/boat`, `@beachside/runloop`, and `@beachside/vercel`; `@beachside/cli` joins the group from its first release, experimental `@beachside/modal` from 0.7.0 and experimental `@beachside/freestyle` from its first release. `@beachside/pi` joins from its first release. Separate installation does not require independent release infrastructure. Keep the existing release machinery and release the actual distributable graph.
 
 Qualify real tarballs in isolated consumers: core alone, core plus each released provider, combined Daytona/E2B, and an independently authored adapter. Verify strict NodeNext declarations, Node/Bun execution, private-workspace isolation and npm/pnpm/Bun installation. Archive overrides may resolve transitive local packages without adding undeclared root dependencies.
 

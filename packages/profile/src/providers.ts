@@ -86,6 +86,15 @@ export const providers: readonly ProviderDescriptor[] = [
     config: { network: { env: "RUNLOOP_NETWORK", required: false } },
   },
   {
+    id: "freestyle",
+    module: "@beachside/freestyle",
+    export: "freestyleAdapter",
+    experimental: true,
+    credentials: { apiKey: "FREESTYLE_API_KEY" },
+    // Egress defaults to blocked; FREESTYLE_NETWORK=internet opts out.
+    config: { network: { env: "FREESTYLE_NETWORK", required: false } },
+  },
+  {
     id: "vercel",
     module: "@beachside/vercel",
     export: "vercelAdapter",

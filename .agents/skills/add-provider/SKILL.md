@@ -1,6 +1,6 @@
 ---
 name: add-provider
-description: Write a Beachside adapter that connects a sandbox provider to the Beachside TypeScript SDK with defineAdapter from @beachside/adapter, as an official @beachside/<provider> package or a third-party one. Covers native guarantees, shared setup options, testing, packaging and docs.
+description: Write a Beachside adapter that connects a sandbox provider to the Beachside TypeScript SDK with defineAdapter from @beachside/adapter, as an official @beachside/<provider> package or a third-party one. Use when adding a new sandbox provider, or changing or reviewing an existing adapter's setup options, capabilities, recovery, tests or docs. Covers native guarantees, shared setup options, testing, packaging and docs.
 ---
 
 # Add a Beachside provider

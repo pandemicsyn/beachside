@@ -2,7 +2,7 @@
 
 **One SDK. Every sandbox.**
 
-A typed TypeScript API to create, run code in, and tear down sandboxes on Daytona, E2B, boxd, Boat, Runloop and Vercel. Keep application workflows consistent while configuring each provider explicitly. Runs on Node.js and Bun.
+A typed TypeScript API to create, run code in, and tear down sandboxes on Daytona, E2B, boxd, Boat, Runloop, Freestyle and Vercel. Keep application workflows consistent while configuring each provider explicitly. Runs on Node.js and Bun.
 
 **[Get started →](https://beachside.run/docs/)** · [Run an agent](https://beachside.run/docs/guides/runnable-agent-examples/) · [beachside.run](https://beachside.run/)
 
@@ -17,6 +17,7 @@ Each provider is a separately installed adapter, and you can bring your own.
 | boxd (exp) | `@beachside/boxd` |
 | Boat (exp) | `@beachside/boat` |
 | Runloop (exp) | `@beachside/runloop` |
+| Freestyle (exp) | `@beachside/freestyle` |
 | Vercel (exp) | `@beachside/vercel` |
 | Modal (exp) | `@beachside/modal` |
 | Your adapter | [`@beachside/adapter`](https://beachside.run/docs/guides/write-an-adapter/) |
@@ -75,7 +76,7 @@ beachside ls
 beachside rm web
 ```
 
-Teach your agent to use it with `npx skills add pandemicsyn/beachside --skill beachside-cli -g`. See the [Command line docs](https://beachside.run/docs/cli/).
+Teach your agent to use it with `beachside skill setup`, which installs a skill that always matches the installed CLI. See [Agent skills](https://beachside.run/docs/agents/skills/) for every option. See the [Command line docs](https://beachside.run/docs/cli/).
 
 ## Features
 
