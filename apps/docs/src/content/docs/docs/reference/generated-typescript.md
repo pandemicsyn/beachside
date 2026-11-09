@@ -126,6 +126,7 @@ Import from `beachside`.
 | `SetupFailedError`            | re-export |
 | `SetupInput`                  | type      |
 | `SetupOutput`                 | type      |
+| `SetupParallel`               | type      |
 | `SetupPhase`                  | type      |
 | `SetupReport`                 | type      |
 | `SetupRunOptions`             | type      |

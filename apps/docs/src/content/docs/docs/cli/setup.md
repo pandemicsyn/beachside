@@ -44,6 +44,7 @@ A setup's steps can be:
 - an argv array: `["make", "deps"]`
 - a script path starting with `./`, `../` or `~/`, relative to the file that names it. It is uploaded and run with its shebang (`sh` when it has none).
 - an object with exactly one of `run`, `script` (inline text) or `file`, plus any of `name`, `cwd` (created if missing), `env`, `timeout` (like `90s` or `10m`, default 10m), `user: "root"` and `cache: false`.
+- `{ "parallel": [step, step, ...], "name": "fetch" }`: steps that run at the same time, as one step. It finishes when all of them have, and fails once all have finished if any failed. Their output lines are prefixed with the step's name. Parallel groups are for setup, not startup.
 
 A setup can also say what it needs:
 
@@ -66,6 +67,24 @@ A profile can name setups every sandbox it creates gets first:
 ```
 
 `--no-default-setup` skips them for one create. Restores from a snapshot never apply them, since the snapshot already holds its setup.
+
+### Setups in the repository
+
+A repository can carry its own setups in `.beachside/setup.json`, beside the code they prepare:
+
+```json
+{
+  "setups": {
+    "app": {
+      "setup": ["./scripts/install-system-deps.sh", { "run": "npm ci", "cwd": "~/work" }],
+      "cache": { "files": ["./package-lock.json"] }
+    }
+  },
+  "default": ["app"]
+}
+```
+
+The CLI reads it only when `"projectSetups": true` is in `beachside.json` or `BEACHSIDE_PROJECT_SETUPS=1` is set, because a checkout you didn't write could otherwise choose what runs. It looks in the working folder and its parents, up to the repository root. Script and `cache.files` paths are relative to the folder that holds `.beachside/`. A project setup cannot reuse a name from `beachside.json`. `default` setups run on every create from the checkout, after the profile's, unless `--no-default-setup`.
 
 ## Startup steps
 

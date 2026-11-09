@@ -1,15 +1,16 @@
 import { readFile, stat } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   Setup,
   type SetupEvent,
   type SetupOutput,
   type SetupRunOptions,
   type SetupStep,
+  type SetupParallel,
   type SetupStepOptions,
 } from "beachside";
 import { z } from "zod";
-import { expandHome, type Env, type LoadedConfig } from "./config";
+import { expandHome, readProjectSetups, type Env, type LoadedConfig } from "./config";
 import { CliError, usage, type Output } from "./output";
 import { parseDuration } from "./units";
 
@@ -47,7 +48,16 @@ const StepObject = z
  * A step in beachside.json: a shell line, an argv array or the object form. A string that
  * starts with `./`, `../` or `~/` is a script file instead, relative to the file naming it.
  */
-export const StepConfig = z.union([z.string().min(1), z.array(z.string()).min(1), StepObject]);
+const LeafStep = z.union([z.string().min(1), z.array(z.string()).min(1), StepObject]);
+
+/** Steps that run at the same time, as one setup step. */
+const ParallelStep = z.strictObject({
+  parallel: z.array(LeafStep).min(2).max(32),
+  name: z.string().min(1).max(200).optional(),
+  cache: z.boolean().optional(),
+});
+
+export const StepConfig = z.union([LeafStep, ParallelStep]);
 
 export type StepConfig = z.infer<typeof StepConfig>;
 
@@ -129,18 +139,86 @@ export function hasSetupRequest(request: SetupRequest): boolean {
   );
 }
 
-/** Named setups from the config, plus any found in a project file (phase 4). */
+/** Named setups from the config, plus those in the project's `.beachside/setup.json`. */
 export type SetupCatalog = {
   entries: Map<string, { config: SetupConfig; dir: string; origin: string }>;
+  /** The project file's `default` setups, run after the profile's. */
+  projectDefaults: string[];
+  /** A project file that was found but not read, because project setups are off. */
+  ignoredProjectFile?: string;
 };
 
-export function catalog(loaded: LoadedConfig): SetupCatalog {
+/** `.beachside/setup.json`: setups that live with a repository. */
+export const ProjectSetupFile = z.strictObject({
+  setups: z.record(SetupName, SetupConfig).optional(),
+  /** Setups every create from this checkout gets, unless `--no-default-setup`. */
+  default: z.array(SetupName).optional(),
+});
+
+export const PROJECT_SETUP_FILE = join(".beachside", "setup.json");
+
+/** The nearest `.beachside/setup.json`, looking up from `cwd` to the repository root. */
+async function findProjectFile(cwd: string): Promise<string | null> {
+  for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+    const candidate = join(dir, PROJECT_SETUP_FILE);
+
+    if (await isFile(candidate)) return candidate;
+
+    if ((await exists(join(dir, ".git"))) || dirname(dir) === dir) return null;
+  }
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function catalog(loaded: LoadedConfig, cwd: string, env: Env): Promise<SetupCatalog> {
   const entries: SetupCatalog["entries"] = new Map();
 
   for (const [name, config] of Object.entries(loaded.value.setups ?? {}))
     entries.set(name, { config, dir: loaded.dir, origin: loaded.path });
 
-  return { entries };
+  const file = await findProjectFile(cwd);
+
+  if (!file) return { entries, projectDefaults: [] };
+
+  if (!readProjectSetups(loaded, env))
+    return { entries, projectDefaults: [], ignoredProjectFile: file };
+
+  let parsed: z.infer<typeof ProjectSetupFile>;
+
+  try {
+    const result = ProjectSetupFile.safeParse(JSON.parse(await readFile(file, "utf8")));
+
+    if (!result.success)
+      throw usage(`Invalid ${file}: ${z.prettifyError(result.error).replaceAll("\n", "; ")}`);
+    parsed = result.data;
+  } catch (cause) {
+    if (cause instanceof CliError) throw cause;
+    throw usage(`Cannot read ${file}: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+
+  // Scripts in the project file resolve next to the checkout's root, not inside `.beachside/`.
+  const dir = dirname(dirname(file));
+
+  for (const [name, config] of Object.entries(parsed.setups ?? {})) {
+    const taken = entries.get(name);
+
+    if (taken)
+      throw usage(
+        `Setup ${name} is defined in both ${taken.origin} and ${file}`,
+        "rename one of them",
+      );
+    entries.set(name, { config, dir, origin: file });
+  }
+
+  return { entries, projectDefaults: parsed.default ?? [] };
 }
 
 const filePrefix = /^(\.\.?\/|~\/)/;
@@ -167,6 +245,31 @@ async function toStep(step: StepConfig, dir: string, env: Env, where: string): P
   const value = parsed.data;
 
   if (Array.isArray(value)) return value;
+
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- A validated step is a string, an array or an object.
+  if (typeof value === "object" && "parallel" in value) {
+    const children: SetupStepOptions[] = [];
+
+    for (const child of value.parallel) {
+      const resolved = await toStep(child, dir, env, where);
+
+      // SAFETY: A leaf step resolves to a string, an argv array or the options object.
+      children.push(
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Leaf steps resolve to one of three shapes.
+        typeof resolved === "string" || Array.isArray(resolved)
+          ? { run: resolved as string | string[] }
+          : (resolved as SetupStepOptions),
+      );
+    }
+
+    const group: SetupParallel = { parallel: children };
+
+    if (value.name !== undefined) group.name = value.name;
+
+    if (value.cache !== undefined) group.cache = value.cache;
+
+    return group;
+  }
 
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- A validated step is a string, an array or an object.
   if (typeof value === "string") {
@@ -255,9 +358,11 @@ export async function resolveSetupRequest(
     if (!entry)
       throw usage(
         `Unknown setup ${name}`,
-        known.entries.size
-          ? `choose from ${[...known.entries.keys()].join(", ")}, or pass a script path like ./setup.sh`
-          : "define it under setups in beachside.json, or pass a script path like ./setup.sh",
+        known.ignoredProjectFile
+          ? `${known.ignoredProjectFile} may define it; project setups are off, so set "projectSetups": true in beachside.json or BEACHSIDE_PROJECT_SETUPS=1`
+          : known.entries.size
+            ? `choose from ${[...known.entries.keys()].join(", ")}, or pass a script path like ./setup.sh`
+            : "define it under setups in beachside.json, or pass a script path like ./setup.sh",
       );
 
     for (const base of entry.config.extends ?? []) await visit(base, [...path, name]);
@@ -342,8 +447,11 @@ export async function resolveSetupRequest(
 
 /** Human progress on stderr: a header per step, then its output unless quiet. */
 export function setupProgress(out: Output, quiet: boolean): SetupRunOptions {
-  const label = (event: { phase: string; step: { index: number; total: number; name: string } }) =>
-    `${event.phase} [${event.step.index + 1}/${event.step.total}] ${event.step.name}`;
+  const label = (event: {
+    phase: string;
+    step: { index: number; total: number; name: string; group?: string };
+  }) =>
+    `${event.phase}${event.step.group ? ` ${event.step.group}` : ""} [${event.step.index + 1}/${event.step.total}] ${event.step.name}`;
 
   return {
     onSetupStep: (event: SetupEvent) => {
@@ -354,7 +462,12 @@ export function setupProgress(out: Output, quiet: boolean): SetupRunOptions {
       else if (!quiet) out.note(`${label(event)}: done in ${event.seconds}s`);
     },
     onSetupOutput: (chunk: SetupOutput) => {
-      if (!quiet) out.streams.stderr(chunk.text);
+      if (quiet) return;
+
+      // Steps of a parallel group interleave, so each line says which step wrote it.
+      if (chunk.step.group)
+        out.streams.stderr(chunk.text.replace(/^(?=.)/gm, `[${chunk.step.name}] `));
+      else out.streams.stderr(chunk.text);
     },
   };
 }

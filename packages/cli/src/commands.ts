@@ -246,17 +246,20 @@ async function prepareSetup(
   explicitNetwork: string | undefined,
 ): Promise<CliSetup | null> {
   const loaded = await session.config();
+  const { cwd, env } = session.ctx;
+  const known = await catalog(loaded, cwd, env);
 
   if (!request.noDefaultSetup && !request.snapshot) {
     const profile = await session.profile();
+    const defaults = loaded.value.profiles?.[profile.name]?.setup ?? [];
 
-    request.setup.defaults = loaded.value.profiles?.[profile.name]?.setup ?? [];
+    // Profile defaults first, then the project's; each setup runs once.
+    request.setup.defaults = [...new Set([...defaults, ...known.projectDefaults])];
   }
 
   if (!hasSetupRequest(request.setup)) return null;
 
-  const { cwd, env } = session.ctx;
-  const resolved = await resolveSetupRequest(request.setup, catalog(loaded), cwd, env);
+  const resolved = await resolveSetupRequest(request.setup, known, cwd, env);
 
   if (resolved.network) {
     if (explicitNetwork !== undefined && explicitNetwork !== resolved.network.value)
@@ -980,7 +983,8 @@ async function runSetupSteps(
       onSetupStep: async (event) => {
         await progress.onSetupStep?.(event);
 
-        if (event.type === "note") return;
+        // Steps of a parallel group are recorded as their group.
+        if (event.type === "note" || event.step.group) return;
 
         const step = { phase: event.phase, name: event.step.name };
 
@@ -1198,10 +1202,21 @@ async function setupCacheCommand(session: Session, flags: Flags): Promise<number
 async function setupLs(session: Session): Promise<number> {
   const loaded = await session.config();
   const profile = await session.profile();
-  const defaults = new Set(loaded.value.profiles?.[profile.name]?.setup ?? []);
+  const known = await catalog(loaded, session.ctx.cwd, session.ctx.env);
 
-  const setups = Object.entries(loaded.value.setups ?? {}).map(([name, config]) => ({
+  const defaults = new Set([
+    ...(loaded.value.profiles?.[profile.name]?.setup ?? []),
+    ...known.projectDefaults,
+  ]);
+
+  if (known.ignoredProjectFile)
+    session.ctx.out.note(
+      `${known.ignoredProjectFile} is not read; set "projectSetups": true in beachside.json or BEACHSIDE_PROJECT_SETUPS=1`,
+    );
+
+  const setups = [...known.entries].map(([name, { config, origin }]) => ({
     name,
+    origin,
     default: defaults.has(name),
     extends: config.extends ?? [],
     setupSteps: config.setup?.length ?? 0,
@@ -1218,7 +1233,8 @@ async function setupLs(session: Session): Promise<number> {
       entry.extends.length ? `extends ${entry.extends.join(", ")}` : "",
       entry.network ? `network ${entry.network}` : "",
       entry.cache === false ? "" : "cached",
-      entry.default ? `default for ${profile.name}` : "",
+      entry.default ? "default" : "",
+      entry.origin === loaded.path ? "" : `from ${entry.origin}`,
     ]
       .filter(Boolean)
       .join("  "),
@@ -1274,7 +1290,7 @@ export async function setupCommand(session: Session, flags: Flags): Promise<numb
 
   const loaded = await session.config();
   const { cwd, env } = session.ctx;
-  const resolved = await resolveSetupRequest(request, catalog(loaded), cwd, env);
+  const resolved = await resolveSetupRequest(request, await catalog(loaded, cwd, env), cwd, env);
   const setupEnv: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(resolved.env))

@@ -69,7 +69,7 @@ Each sandbox remembers the profile that created it, so later commands on it use 
 }
 ```
 
-See [Set up a sandbox](/docs/cli/setup/) for steps, startup, env and failures.
+See [Set up a sandbox](/docs/cli/setup/) for steps, startup, env and failures. `"projectSetups": true` (or `BEACHSIDE_PROJECT_SETUPS=1`) also reads setups from a checkout's `.beachside/setup.json`.
 
 ## Credentials
 

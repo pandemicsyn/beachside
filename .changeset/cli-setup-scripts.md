@@ -16,3 +16,5 @@ Setup caches: a setup with `"cache": true` (or `create --cache`) is snapshotted 
 - **Freshness:** caches go stale after `maxAge` (7 days by default) and are rebuilt on the next create.
 - **Secrets:** a setup whose env holds secrets is refused unless it sets `secrets: "allow"`.
 - **Commands:** `beachside setup cache ls|rm|prune` manages caches, and `gc` prunes stale ones. `--no-cache` and `--refresh-cache` control one create.
+
+Setups can also come from a repository: with `"projectSetups": true` or `BEACHSIDE_PROJECT_SETUPS=1`, the CLI reads `.beachside/setup.json` (`setups` plus `default`) from the checkout. A step can be `{ "parallel": [...] }` to run several steps at once as one setup step.

@@ -8,7 +8,19 @@ import { BeachsideError, NonzeroExitError, type ExecOutput } from "./resource";
  */
 
 /** One setup step: a shell line, an argv array, or the object form with options. */
-export type SetupStep = string | readonly string[] | SetupStepOptions;
+export type SetupStep = string | readonly string[] | SetupStepOptions | SetupParallel;
+
+/**
+ * Steps that run at the same time, as one setup step: it finishes when all of them have, and
+ * fails (after the others finish) when any of them fails. Only in `setup`, not `startup`.
+ */
+export type SetupParallel = {
+  parallel: readonly (string | readonly string[] | SetupStepOptions)[];
+  /** Shown in progress output and errors; defaults to the step names joined with `+`. */
+  name?: string;
+  /** `false` runs the group every time, like a step's `cache: false`. */
+  cache?: boolean;
+};
 
 export type SetupStepOptions = {
   /** A shell line (run with `sh -c`) or an argv array (no shell). */
@@ -91,6 +103,13 @@ export const Setup = {
   file(path: string, options: Omit<SetupStepOptions, "run" | "script" | "file"> = {}): SetupStep {
     return { ...options, file: path };
   },
+  /** Run these steps at the same time, as one setup step. */
+  parallel(
+    steps: readonly (string | readonly string[] | SetupStepOptions)[],
+    options: Omit<SetupParallel, "parallel"> = {},
+  ): SetupParallel {
+    return { ...options, parallel: steps };
+  },
 };
 
 /** Live output from a setup or startup step. */
@@ -103,7 +122,13 @@ export type SetupOutput = {
 
 export type SetupPhase = "setup" | "startup";
 
-export type SetupStepRef = { index: number; total: number; name: string };
+export type SetupStepRef = {
+  index: number;
+  total: number;
+  name: string;
+  /** Set on a step inside a parallel group: the group's name. Output may interleave. */
+  group?: string;
+};
 
 /** Progress: a step starting, finishing or being skipped, plus notes such as a setup mismatch. */
 export type SetupEvent =
@@ -196,7 +221,9 @@ export class SetupFailedError extends BeachsideError {
 /** A step ready to run: files read, defaults applied, digest computed. */
 export type ResolvedStep = {
   name: string;
-  kind: "shell" | "argv" | "script";
+  kind: "shell" | "argv" | "script" | "parallel";
+  /** The steps of a parallel group. */
+  children?: ResolvedStep[];
   /** The shell line, the inline script or file content. Empty for argv. */
   text: string;
   argv: string[];
@@ -241,7 +268,15 @@ const StepObject = z
     "a step needs exactly one of run, script or file",
   );
 
-const Step = z.union([z.string().min(1), z.array(z.string()).min(1), StepObject]);
+const LeafStep = z.union([z.string().min(1), z.array(z.string()).min(1), StepObject]);
+
+const ParallelStep = z.strictObject({
+  parallel: z.array(LeafStep).min(2).max(32),
+  name: z.string().min(1).max(200).optional(),
+  cache: z.boolean().optional(),
+});
+
+const Step = z.union([LeafStep, ParallelStep]);
 
 const DefinitionInput = z.strictObject({
   name: z
@@ -372,7 +407,7 @@ function baseName(path: string): string {
   return path.split(/[\\/]/).at(-1) || path;
 }
 
-type StepSource = Exclude<SetupStep, string | readonly string[]>;
+type StepSource = SetupStepOptions;
 
 function stepObject(step: SetupStep): StepSource {
   if (Array.isArray(step)) return { run: [...step] };
@@ -389,6 +424,30 @@ async function resolveStep(step: SetupStep, readFile: ReadSetupFile): Promise<Re
 
   if (!parsed.success)
     throw new BeachsideError("INVALID_ARGUMENT", `Invalid setup step: ${issues(parsed.error)}`);
+
+  const group = ParallelStep.safeParse(step);
+
+  if (group.success) {
+    // SAFETY: The parallel schema matched, so this is the parallel form with its leaf steps.
+    const children = await Promise.all(
+      (step as SetupParallel).parallel.map((child) => resolveStep(child, readFile)),
+    );
+
+    if (children.some((child) => child.stdin !== undefined))
+      throw new BeachsideError("INVALID_ARGUMENT", "Steps in a parallel group cannot take stdin");
+
+    return {
+      name: group.data.name ?? children.map((child) => child.name).join(" + "),
+      kind: "parallel",
+      children,
+      text: "",
+      argv: [],
+      timeoutSeconds: Math.max(...children.map((child) => child.timeoutSeconds)),
+      cache: group.data.cache ?? true,
+      digest: await sha256(JSON.stringify(["parallel", children.map((child) => child.digest)])),
+    };
+  }
+
   const source = stepObject(step);
   let kind: ResolvedStep["kind"];
   let text = "";
@@ -693,6 +752,12 @@ function storedStartup(steps: readonly ResolvedStep[]): SetupState["startup"] {
 }
 
 function rejectStartupStdin(steps: readonly ResolvedStep[]): void {
+  if (steps.some((step) => step.kind === "parallel"))
+    throw new BeachsideError(
+      "INVALID_ARGUMENT",
+      "Startup steps cannot be parallel groups; start background servers with `&` instead",
+    );
+
   if (steps.some((step) => step.stdin !== undefined))
     throw new BeachsideError(
       "INVALID_ARGUMENT",
@@ -721,6 +786,8 @@ class PhaseRunner {
     await this.ctx.onSetupStep?.(event);
   }
   async step(phase: SetupPhase, step: ResolvedStep, ref: SetupStepRef): Promise<SetupStepReport> {
+    if (step.kind === "parallel") return this.group(phase, step, ref);
+
     await this.emit({ type: "start", phase, step: ref });
     const started = Date.now();
     const timeout = AbortSignal.timeout(step.timeoutSeconds * 1000);
@@ -798,6 +865,44 @@ class PhaseRunner {
             ? "ended without an exit code"
             : `failed (exit ${output.exitCode})`,
       });
+    await this.emit({ type: "done", phase, step: ref, exitCode: 0, seconds });
+
+    return {
+      index: ref.index,
+      name: step.name,
+      digest: step.digest,
+      status: "ran",
+      exitCode: 0,
+      seconds,
+    };
+  }
+  /** A parallel group: every child runs; the first failure is thrown once all have finished. */
+  private async group(
+    phase: SetupPhase,
+    step: ResolvedStep,
+    ref: SetupStepRef,
+  ): Promise<SetupStepReport> {
+    const children = step.children ?? [];
+
+    await this.emit({ type: "start", phase, step: ref });
+    const started = Date.now();
+
+    const results = await Promise.allSettled(
+      children.map((child, index) =>
+        this.step(phase, child, {
+          index,
+          total: children.length,
+          name: child.name,
+          group: step.name,
+        }),
+      ),
+    );
+
+    const failed = results.find((result) => result.status === "rejected");
+
+    if (failed) throw failed.reason;
+    const seconds = Math.round((Date.now() - started) / 100) / 10;
+
     await this.emit({ type: "done", phase, step: ref, exitCode: 0, seconds });
 
     return {

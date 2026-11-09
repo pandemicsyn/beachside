@@ -33,6 +33,8 @@ A step is one of:
   - `user: "root"`: runs with `sudo -n -E` where the default user is not root
   - `cache: false`: always runs, even when the sandbox already has it
 
+`Setup.parallel([stepA, stepB], { name })` runs steps at the same time as one setup step. The group finishes when all of them have. If any fails, it throws once the others have finished. It counts as one step for skipping and digests, and is for `setup` only. Progress events and output for its steps carry `step.group`.
+
 `sandboxes.with()` takes the same keys.
 
 ## Progress and failures

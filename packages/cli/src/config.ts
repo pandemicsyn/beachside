@@ -41,6 +41,8 @@ export const CliConfig = z.strictObject({
   adapters: z.strictObject({ searchProject: z.boolean().optional() }).optional(),
   /** Named, provider-neutral setups for `--setup <name>`. */
   setups: z.record(SetupName, SetupConfig).optional(),
+  /** Also read setups from a checkout's `.beachside/setup.json` (off: a checkout could plant one). */
+  projectSetups: z.boolean().optional(),
 });
 
 export type CliConfig = z.infer<typeof CliConfig>;
@@ -121,6 +123,15 @@ export function searchProjectAdapters(config: LoadedConfig, env: Env): boolean {
   if (fromEnv !== undefined && fromEnv !== "") return fromEnv === "1" || fromEnv === "true";
 
   return config.value.adapters?.searchProject ?? false;
+}
+
+/** Whether `.beachside/setup.json` in the working tree is read; BEACHSIDE_PROJECT_SETUPS wins. */
+export function readProjectSetups(config: LoadedConfig, env: Env): boolean {
+  const fromEnv = env.BEACHSIDE_PROJECT_SETUPS;
+
+  if (fromEnv !== undefined && fromEnv !== "") return fromEnv === "1" || fromEnv === "true";
+
+  return config.value.projectSetups ?? false;
 }
 
 export function maxSandboxes(config: LoadedConfig, env: Env): number | null {

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Json } from "@beachside/adapter";
@@ -449,5 +449,68 @@ describe("setup caches", () => {
     expect(unsupported.code).toBe(4);
     expect(envelope(unsupported).error.hint).toContain("--no-cache");
     expect(await storeNames()).toEqual([]);
+  });
+});
+
+describe("project setups and parallel steps", () => {
+  async function projectFile(content: Json) {
+    await mkdir(join(dir, ".git"), { recursive: true });
+    await mkdir(join(dir, ".beachside"), { recursive: true });
+    await writeFile(join(dir, ".beachside", "setup.json"), JSON.stringify(content));
+  }
+
+  test("a project file is read only when project setups are on", async () => {
+    await projectFile({
+      setups: { app: { setup: ["./tools.sh", "echo app >> log"] } },
+      default: ["app"],
+    });
+
+    const off = await cli(["create", "--name", "off", "--setup", "app", "--json"]);
+
+    expect(off.code).toBe(2);
+    expect(envelope(off).error.hint).toContain("projectSetups");
+
+    await writeConfig({ projectSetups: true });
+
+    // The project's default runs without --setup; its script path is relative to the checkout.
+    expect((await cli(["create", "--name", "on"])).code).toBe(0);
+    expect(await homeFile("log")).toBe("script\napp\n");
+
+    const listed = envelope(await cli(["setup", "ls", "--json"])).data.setups;
+
+    expect(listed.find((entry: { name: string }) => entry.name === "app")).toMatchObject({
+      default: true,
+      origin: join(dir, ".beachside", "setup.json"),
+    });
+  });
+
+  test("a project setup cannot shadow one from beachside.json", async () => {
+    await projectFile({ setups: { base: { setup: ["true"] } } });
+    await writeConfig({ projectSetups: true });
+
+    const clash = await cli(["create", "--setup", "base", "--json"]);
+
+    expect(clash.code).toBe(2);
+    expect(envelope(clash).error.message).toContain("is defined in both");
+  });
+
+  test("parallel steps in beachside.json run as one recorded step", async () => {
+    await writeConfig({
+      setups: {
+        ...setups,
+        both: {
+          setup: [{ parallel: ["echo a > a", "./tools.sh"], name: "fetch" }, "cat a >> log"],
+        },
+      },
+    });
+
+    const created = await cli(["create", "--name", "web", "--setup", "both", "--json"]);
+
+    expect(created.code).toBe(0);
+    expect(await homeFile("log")).toBe("script\na\n");
+    expect(envelope(created).data.setup.steps.map((step: { name: string }) => step.name)).toEqual([
+      "fetch",
+      "cat a >> log",
+    ]);
   });
 });

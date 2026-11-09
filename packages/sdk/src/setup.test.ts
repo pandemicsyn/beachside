@@ -545,3 +545,61 @@ test("runSetup can run the startup a sandbox recorded", async () => {
     await client.close();
   }
 });
+
+test("a parallel group runs every step as one setup step and fails after all finish", async () => {
+  const f = fixture();
+  const client = await f.connect();
+  const progress = events();
+
+  try {
+    const box = await client.sandboxes.create({
+      setup: [
+        "echo first >> log",
+        Setup.parallel(["echo a > a", { run: "echo b > b", name: "bee" }], { name: "fetch" }),
+      ],
+      ...progress.callbacks,
+    });
+
+    const home = f.homes.get(box.id)!;
+
+    expect(readFileSync(join(home, "a"), "utf8")).toBe("a\n");
+    expect(readFileSync(join(home, "b"), "utf8")).toBe("b\n");
+    expect(box.setupReport!.setup.map((step) => [step.name, step.status])).toEqual([
+      ["echo first >> log", "ran"],
+      ["fetch", "ran"],
+    ]);
+    // Children report under their group.
+    expect(
+      progress.seen
+        .filter((event) => event.type === "start")
+        .map((event) => [event.step?.name, event.step?.group]),
+    ).toEqual([
+      ["echo first >> log", undefined],
+      ["fetch", undefined],
+      ["echo a > a", "fetch"],
+      ["bee", "fetch"],
+    ]);
+
+    // The group is one recorded step: running the same setup again skips it.
+    const again = await box.runSetup({
+      setup: [
+        "echo first >> log",
+        Setup.parallel(["echo a > a", { run: "echo b > b", name: "bee" }], { name: "fetch" }),
+      ],
+    });
+
+    expect(again.setup.map((step) => step.status)).toEqual(["skipped", "skipped"]);
+
+    await expect(
+      box.runSetup({ setup: [Setup.parallel(["exit 3", "echo late > late"])] }),
+    ).rejects.toMatchObject({ code: "SETUP_FAILED", exitCode: 3 });
+    // The other step still finished.
+    expect(readFileSync(join(home, "late"), "utf8")).toBe("late\n");
+
+    await expect(
+      client.sandboxes.create({ setup: ["true"], startup: [Setup.parallel(["a", "b"])] }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+  } finally {
+    await client.close();
+  }
+});
