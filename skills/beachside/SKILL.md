@@ -111,6 +111,20 @@ const reopened = await freshClient.sandboxes.get(JSON.parse(await load()));
 
 Never build a reference by hand from a sandbox id. `get()` never creates or resumes anything.
 
+## Credentials
+
+Give a sandbox an API key with `secret()`, never as plain env: the sandbox gets a placeholder and the provider adds the real value to HTTPS requests for the named hosts.
+
+```ts
+import { secret } from "beachside";
+
+env: {
+  ANTHROPIC_API_KEY: secret(process.env.ANTHROPIC_API_KEY!, { for: "anthropic" });
+}
+```
+
+Presets: `anthropic`, `openai`, `github`, `github-api`, `npm`; otherwise `{ hosts: [...] }`. Brokering works on E2B, Vercel, Freestyle and Daytona (Vercel and Freestyle need `network: "internet"`); other adapters refuse with `UnsupportedFeatureError`. Use `secret.exposed(value)` only when a tool needs the value itself, and say so to the user. Guide: https://beachside.run/docs/guides/secrets/
+
 ## Provider differences to respect
 
 - **Daytona:** set the network policy at connection (`"daytona-default"`, or `"internet"` on higher tiers). Omitting it means strict `blocked`, which may be unavailable. Create from an active snapshot in the chosen region.
