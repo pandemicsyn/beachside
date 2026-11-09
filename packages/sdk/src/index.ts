@@ -118,6 +118,7 @@ export type {
   SandboxList,
   SandboxListEntry,
   SandboxListInput,
+  SnapshotListInput,
 } from "./resources";
 
 export {
@@ -176,7 +177,6 @@ export type {
   SetupStepOptions,
   SetupInput,
   SetupDefinitionInput,
-  SetupDefinitionCache,
   SetupOutput,
   SetupEvent,
   SetupPhase,

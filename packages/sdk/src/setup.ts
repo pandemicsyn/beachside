@@ -42,16 +42,12 @@ export type SetupStepOptions = {
   cache?: boolean;
 };
 
-/** Cache settings for a named setup; see `SetupCacheOptions` in the setup cache module. */
-export type SetupDefinitionCache = boolean | { maxAgeSeconds?: number; files?: readonly string[] };
-
 export type SetupDefinitionInput = {
   name: string;
   /** Other setups this one builds on; their steps run first. */
   extends?: readonly SetupDefinition[];
   setup?: readonly (SetupStep | SetupDefinition)[];
   startup?: readonly SetupStep[];
-  cache?: SetupDefinitionCache;
 };
 
 /** A named, reusable setup: the SDK's equivalent of a `setups` entry in `beachside.json`. */
@@ -60,7 +56,6 @@ export class SetupDefinition {
   readonly extends: readonly SetupDefinition[];
   readonly setup: readonly (SetupStep | SetupDefinition)[];
   readonly startup: readonly SetupStep[];
-  readonly cache: SetupDefinitionCache | undefined;
   constructor(input: SetupDefinitionInput) {
     const parsed = DefinitionInput.safeParse(input);
 
@@ -73,7 +68,6 @@ export class SetupDefinition {
     this.extends = Object.freeze([...(input.extends ?? [])]);
     this.setup = Object.freeze([...(input.setup ?? [])]);
     this.startup = Object.freeze([...(input.startup ?? [])]);
-    this.cache = parsed.data.cache;
     Object.freeze(this);
   }
 }
@@ -222,7 +216,6 @@ export type ResolvedSetup = {
   digest: string | null;
   /** Names of the named setups involved, outermost first. */
   names: string[];
-  cache: SetupDefinitionCache | undefined;
 };
 
 const PlainObject = z.record(z.string(), z.unknown());
@@ -250,22 +243,13 @@ const StepObject = z
 
 const Step = z.union([z.string().min(1), z.array(z.string()).min(1), StepObject]);
 
-const DefinitionInput = z.object({
+const DefinitionInput = z.strictObject({
   name: z
     .string()
     .regex(/^[a-z0-9][a-z0-9._-]{0,62}$/, "use lowercase letters, digits, '.', '_' and '-'"),
   extends: z.array(z.instanceof(SetupDefinition)).optional(),
   setup: z.array(z.union([Step, z.instanceof(SetupDefinition)])).optional(),
   startup: z.array(Step).optional(),
-  cache: z
-    .union([
-      z.boolean(),
-      z.strictObject({
-        maxAgeSeconds: z.number().int().positive().optional(),
-        files: z.array(z.string().min(1)).optional(),
-      }),
-    ])
-    .optional(),
 });
 
 const RunOptions = z.strictObject({
@@ -473,7 +457,6 @@ export async function resolveSetup(
   const setupSteps: SetupStep[] = [];
   const startupSteps: SetupStep[] = [];
   const names: string[] = [];
-  let cache: SetupDefinitionCache | undefined;
   const seen = new Set<SetupDefinition>();
 
   const visit = (definition: SetupDefinition, path: SetupDefinition[]) => {
@@ -487,8 +470,6 @@ export async function resolveSetup(
     if (seen.has(definition)) return;
     seen.add(definition);
     names.push(definition.name);
-
-    if (definition.cache !== undefined && cache === undefined) cache = definition.cache;
 
     for (const base of definition.extends) visit(base, [...path, definition]);
 
@@ -517,7 +498,6 @@ export async function resolveSetup(
     startup,
     digest: setup.length ? await sha256(JSON.stringify(setup.map((step) => step.digest))) : null,
     names,
-    cache,
   };
 }
 
@@ -576,6 +556,8 @@ export type SetupRunContext = SetupRunOptions & {
   streams: boolean;
   /** Environment for every step, under each step's own; like sandbox env, not in the digest. */
   env?: Record<string, string>;
+  /** `false` records the startup steps in the state file without running them. */
+  runStartup?: boolean;
 };
 
 const TAIL_LINES = 20;
@@ -991,6 +973,8 @@ export async function runSetupPlan(
       signal,
     );
   }
+
+  if (ctx.runStartup === false) return report;
 
   for (const [index, step] of plan.startup.entries())
     report.startup.push(

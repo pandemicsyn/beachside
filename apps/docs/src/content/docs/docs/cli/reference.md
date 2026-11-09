@@ -69,6 +69,9 @@ beachside create [--name <name>] [--image <oci-ref> | --prepared <id> | --snapsh
 | `--no-default-setup`         | Skip the setups the profile lists by default                                                                                            |
 | `--quiet-setup`              | Show setup step names and failures, not their output                                                                                    |
 | `--setup-timeout <duration>` | Overall limit for setup and startup, e.g. 45m (default 30m; each step 10m)                                                              |
+| `--cache`                    | Cache this setup as a snapshot and restore it next time, even if no named setup asks for it                                             |
+| `--no-cache`                 | Neither use nor build a setup cache for this sandbox                                                                                    |
+| `--refresh-cache`            | Build the setup cache again now, replacing the current one                                                                              |
 | `--if-not-exists`            | Return the named sandbox if it is still alive instead of failing                                                                        |
 | `--rm-on-failure`            | Remove the sandbox if its setup fails, instead of keeping it to look at                                                                 |
 | `--with <server>`            | Install and start a server reachable over your tailnet: rex or herdr (repeatable; needs TAILSCALE_AUTH_KEY, implies --network internet) |
@@ -84,6 +87,7 @@ beachside create --name job-42 --retry 5m --json
 beachside create --name web --with rex
 beachside create --name web --setup node --setup-cmd 'npm i -g pnpm'
 beachside create --name web --setup ./setup.sh --startup-cmd 'pnpm dev > /tmp/dev.log 2>&1 &'
+beachside create --name web --setup node --cache
 ```
 
 ## ls
@@ -162,7 +166,7 @@ beachside rm --all
 
 ## gc
 
-Destroy the provider's sandboxes that carry the given labels, such as a killed job's.
+Destroy the provider's sandboxes that carry the given labels, such as a killed job's, and prune stale setup caches.
 
 ```sh
 beachside gc --label k=v... [--older-than <duration>] [--dry-run]
@@ -265,6 +269,9 @@ beachside run [create flags] [exec flags] [--keep] [--push <path>] -- <command> 
 | `--no-default-setup`         | Skip the setups the profile lists by default                                                                         |
 | `--quiet-setup`              | Show setup step names and failures, not their output                                                                 |
 | `--setup-timeout <duration>` | Overall limit for setup and startup, e.g. 45m (default 30m; each step 10m)                                           |
+| `--cache`                    | Cache this setup as a snapshot and restore it next time, even if no named setup asks for it                          |
+| `--no-cache`                 | Neither use nor build a setup cache for this sandbox                                                                 |
+| `--refresh-cache`            | Build the setup cache again now, replacing the current one                                                           |
 | `--cwd <dir>`                | Working directory in the sandbox                                                                                     |
 | `--stdin`                    | Send this process's stdin to the command                                                                             |
 | `--stdin-file <path>`        | Send a local file as the command's stdin                                                                             |
@@ -344,7 +351,7 @@ beachside snapshot rm deps
 Run setup in an existing sandbox, or list the named setups.
 
 ```sh
-beachside setup <sandbox> [--setup <name|path>]... [--setup-cmd <shell>]... [--force] | setup ls
+beachside setup <sandbox> [--setup <name|path>]... [--setup-cmd <shell>]... [--force] | setup ls | setup cache ls|rm <setup>|prune [--dry-run]
 ```
 
 | Flag                         | Description                                                                                                    |
@@ -357,6 +364,7 @@ beachside setup <sandbox> [--setup <name|path>]... [--setup-cmd <shell>]... [--f
 | `--quiet-setup`              | Show setup step names and failures, not their output                                                           |
 | `--setup-timeout <duration>` | Overall limit for setup and startup, e.g. 45m (default 30m; each step 10m)                                     |
 | `--force`                    | Run every step, even ones the sandbox already has                                                              |
+| `--dry-run`                  | setup cache rm and prune: list what would be deleted and change nothing                                        |
 
 Examples:
 
@@ -365,6 +373,9 @@ beachside setup ls
 beachside setup web
 beachside setup web --setup playwright
 beachside setup web --setup node --force
+beachside setup cache ls
+beachside setup cache rm node
+beachside setup cache prune --dry-run
 ```
 
 ## cp

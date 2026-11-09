@@ -45,6 +45,21 @@ import {
   type SetupRecord,
   type SetupRequest,
 } from "./setups";
+import {
+  cacheRows,
+  cacheTable,
+  captureCache,
+  deleteCaches,
+  forgetCache,
+  pruneLines,
+  hitLine,
+  lookupCache,
+  planCache,
+  shortDuration,
+  type CacheFlags,
+  type CacheLookup,
+  type CachePlan,
+} from "./cache";
 import { resolveEnvReferences } from "./config";
 import {
   addonLines,
@@ -145,6 +160,8 @@ type CreateRequest = {
   setupTimeoutSeconds?: number;
   /** `--rm-on-failure`: remove the sandbox when its setup fails instead of keeping it. */
   rmOnFailure: boolean;
+  /** `--cache`, `--no-cache`, `--refresh-cache`. */
+  cache: CacheFlags;
 };
 
 /** Create flags a restore cannot honor: the snapshot fixes the image. */
@@ -210,6 +227,11 @@ function createRequest(flags: Flags, env: Record<string, string> = {}): CreateRe
     setupTimeoutSeconds:
       setupTimeout === undefined ? undefined : parseDuration(setupTimeout, "setup-timeout"),
     rmOnFailure: flags.bool("rm-on-failure"),
+    cache: {
+      force: flags.bool("cache"),
+      skip: flags.bool("no-cache"),
+      refresh: flags.bool("refresh-cache"),
+    },
   };
 }
 
@@ -713,11 +735,140 @@ export async function findTarget(session: Session, target: string): Promise<Targ
   );
 }
 
+/** A create's setup cache: the plan, what the lookup found, and the image it replaced on a hit. */
+type Caching = {
+  plan: CachePlan;
+  lookup: CacheLookup;
+  client: BeachsideClient<true>;
+  profile: ResolvedProfile;
+  /** The create's own image, restored when a hit turns out to be gone. */
+  original: { image?: string; prepared?: string };
+  startedAt: number;
+  /** What the sandbox record shows, once known. */
+  outcome?: NonNullable<SetupRecord["cache"]>;
+};
+
+/**
+ * Decide whether this create uses a setup cache, before anything exists. On a hit the create
+ * restores the cache snapshot instead of starting from its image.
+ */
+async function prepareCaching(
+  session: Session,
+  request: CreateRequest,
+  setup: CliSetup | null,
+): Promise<Caching | null> {
+  const wanted =
+    request.cache.force ||
+    request.cache.refresh ||
+    request.cache.skip ||
+    setup?.cache !== undefined;
+
+  if (!wanted) return null;
+
+  const profile = await session.profile();
+  const client = await session.connect(profile);
+  const image = request.image ?? request.prepared ?? profileImage(profile) ?? null;
+
+  const inputs: Parameters<typeof planCache>[5] = {
+    image,
+    env: request.env,
+    labels: request.labels,
+  };
+
+  if (request.lifetimeSeconds !== undefined) inputs.lifetimeSeconds = request.lifetimeSeconds;
+
+  if (request.snapshot !== undefined) inputs.snapshot = request.snapshot;
+
+  const plan = await planCache(session, client, profile, setup, request.cache, inputs);
+
+  if (!plan) return null;
+
+  const original: Caching["original"] = {};
+
+  if (request.image) original.image = request.image;
+
+  if (request.prepared) original.prepared = request.prepared;
+
+  const caching: Caching = {
+    plan,
+    client,
+    profile,
+    original,
+    startedAt: Date.now(),
+    lookup: await lookupCache(session, client, profile, plan, request.name ?? "sandbox"),
+  };
+
+  useLookup(session, request, caching);
+
+  return caching;
+}
+
+/** Point the create at a hit's snapshot, or say why it builds or skips. */
+function useLookup(session: Session, request: CreateRequest, caching: Caching): void {
+  const { lookup, plan } = caching;
+
+  if (lookup.kind === "hit") {
+    request.snapshot = lookup.entry.record.name;
+    delete request.image;
+    delete request.prepared;
+    request.build = false;
+    caching.outcome = { status: "hit", key: plan.key, snapshot: lookup.entry.record.name };
+
+    return;
+  }
+
+  if (lookup.kind === "uncached") {
+    session.ctx.out.note(`setup ${plan.setup}: running without the cache (${lookup.reason})`);
+    caching.outcome = { status: "skipped", key: plan.key };
+
+    return;
+  }
+
+  session.ctx.out.note(
+    `setup ${plan.setup}: ${lookup.previous ? "rebuilding" : "building"} the cache`,
+  );
+}
+
+/**
+ * Create, restoring the cache on a hit. A cache whose snapshot the provider no longer has is a
+ * miss: the record is forgotten and the cache rebuilt, never the restore retried blindly.
+ */
+async function createCached(
+  session: Session,
+  request: CreateRequest,
+  caching: Caching | null,
+): Promise<Created> {
+  try {
+    return await createSandbox(session, request);
+  } catch (cause) {
+    if (caching?.lookup.kind !== "hit" || describeError(cause).code !== "NOT_FOUND") throw cause;
+
+    session.ctx.out.note(
+      `setup ${caching.plan.setup}: the cache snapshot is gone from ${caching.profile.provider}; rebuilding it`,
+    );
+    await forgetCache(session, caching.plan.name);
+    delete request.snapshot;
+    Object.assign(request, caching.original);
+    delete caching.outcome;
+    caching.lookup = await lookupCache(
+      session,
+      caching.client,
+      caching.profile,
+      caching.plan,
+      request.name ?? "sandbox",
+    );
+    useLookup(session, request, caching);
+
+    return createSandbox(session, request);
+  }
+}
+
 export async function createCommand(session: Session, flags: Flags): Promise<number> {
   const request = createRequest(flags, await envFlags(session, flags));
   const setup = await prepareSetup(session, request, flags.string("network"));
   const key = request.addons.length ? tailnetKey(session.ctx.env) : undefined;
-  const created = await createSandbox(session, request);
+  const caching = await prepareCaching(session, request, setup);
+  const created = await createCached(session, request, caching);
 
   if (created.unrecorded) throw unrecordedError(created);
 
@@ -725,7 +876,7 @@ export async function createCommand(session: Session, flags: Flags): Promise<num
     requireSetup(created.record, setup);
     requireAddons(created.record, request.addons);
   } else {
-    const failure = await setUp(session, created, setup, request);
+    const failure = await setUp(session, created, setup, request, undefined, caching);
 
     if (failure) throw failure;
 
@@ -783,6 +934,11 @@ type SetupRun = {
   cwd?: string;
   /** Env for every step, for setups added to a sandbox that was created without it. */
   env?: Record<string, string>;
+  /**
+   * Runs between setup and startup, such as capturing a setup cache; it may hand back the box
+   * startup should run in instead.
+   */
+  beforeStartup?: (box: SandboxHandle<true>) => Promise<SandboxHandle<true> | void>;
 };
 
 /**
@@ -850,7 +1006,13 @@ async function runSetupSteps(
 
     if (run.env && Object.keys(run.env).length) options.env = run.env;
 
-    await box.runSetup(options, { signal });
+    if (!run.beforeStartup) await box.runSetup(options, { signal });
+    else {
+      await box.runSetup({ ...options, runStartup: false }, { signal });
+      box = (await run.beforeStartup(box)) ?? box;
+
+      if (startup.length) await box.runSetup({ ...options, setup: [], force: false }, { signal });
+    }
   } catch (cause) {
     entry.state = "failed";
 
@@ -909,6 +1071,7 @@ async function setUp(
   setup: CliSetup | null,
   request: CreateRequest,
   cwd?: string,
+  caching?: Caching | null,
 ): Promise<CliError | null> {
   const restored = request.snapshot !== undefined;
 
@@ -920,7 +1083,20 @@ async function setUp(
 
   if (cwd) run.cwd = cwd;
 
+  if (caching?.lookup.kind === "hit")
+    session.ctx.out.note(
+      hitLine(caching.plan, caching.lookup.entry.record, (Date.now() - caching.startedAt) / 1000),
+    );
+
+  if (caching?.lookup.kind === "build")
+    run.beforeStartup = cacheCapture(session, created, request, caching);
+
   const failure = await runSetupSteps(session, created.box, created.record, run);
+
+  if (caching?.outcome && created.record.setup) {
+    created.record.setup.cache = caching.outcome;
+    await saveRecord(session, created.record);
+  }
 
   if (!failure) return null;
 
@@ -942,6 +1118,80 @@ async function setUp(
   }
 
   return setupFailed(`${name}: ${failure.message}`, name, false);
+}
+
+/** `beachside setup cache ls|rm <setup>|prune`: the setup caches in the store. */
+async function setupCacheCommand(session: Session, flags: Flags): Promise<number> {
+  const [, action, ...args] = flags.positionals;
+  const store = await session.store();
+  const { out } = session.ctx;
+  const rows = await cacheRows(store, (message) => out.note(message));
+  const dryRun = flags.bool("dry-run");
+
+  if (action === "ls") {
+    if (args.length) throw usage("setup cache ls takes no arguments");
+
+    if (dryRun) throw usage("--dry-run only applies to `setup cache rm` and `setup cache prune`");
+    out.success({ caches: rows.map(({ row }) => row) }, cacheTable(rows.map(({ row }) => row)));
+
+    return 0;
+  }
+
+  let chosen: typeof rows;
+
+  if (action === "rm") {
+    if (args.length !== 1)
+      throw usage("Expected one setup or cache name", "e.g. beachside setup cache rm node");
+    const wanted = args[0]!;
+
+    chosen = rows.filter(
+      ({ row }) =>
+        row.name === wanted || row.key.startsWith(wanted) || row.setup.split(", ").includes(wanted),
+    );
+
+    if (!chosen.length)
+      throw new CliError(
+        "NOT_FOUND",
+        `No setup cache for ${wanted}`,
+        "list them with `beachside setup cache ls`",
+      );
+  } else if (action === "prune") {
+    if (args.length) throw usage("setup cache prune takes no arguments");
+    chosen = rows.filter(({ row }) => row.stale);
+  } else
+    throw usage(
+      action ? `Unknown setup cache command ${action}` : "Expected a setup cache command",
+      "use one of: ls, rm <setup>, prune",
+    );
+
+  const items = await deleteCaches(
+    session,
+    chosen.map(({ entry }) => entry),
+    dryRun,
+  );
+
+  const failed = items.filter((item) => item.result === "failed");
+
+  if (failed.length)
+    throw new CliError(
+      "PARTIAL",
+      `Removed ${items.length - failed.length} of ${items.length} caches; ${failed.length} failed`,
+      "see error.details; run it again once the cause is fixed",
+      undefined,
+      "partial",
+      {
+        removed: items.filter((item) => ["deleted", "gone"].includes(item.result)),
+        skipped: items.filter((item) => item.result === "skipped"),
+        failed: failed.map((item) => ({ ...item, code: "FAILED" })),
+      },
+    );
+
+  out.success(
+    { caches: items },
+    items.length ? pruneLines(items).join("\n") : "no setup caches to remove",
+  );
+
+  return 0;
 }
 
 /** `beachside setup ls`: the named setups the config defines. */
@@ -988,6 +1238,9 @@ async function setupLs(session: Session): Promise<number> {
  * A failure keeps the sandbox.
  */
 export async function setupCommand(session: Session, flags: Flags): Promise<number> {
+  if (flags.positionals[0] === "cache") return setupCacheCommand(session, flags);
+
+  if (flags.bool("dry-run")) throw usage("--dry-run only applies to `beachside setup cache prune`");
   const target = onePositional(flags, "sandbox");
 
   if (target === "ls") return setupLs(session);
@@ -1053,6 +1306,73 @@ export async function setupCommand(session: Session, flags: Flags): Promise<numb
   );
 
   return 0;
+}
+
+/**
+ * The capture step of a cache build, between setup and startup. A failed capture never fails
+ * the create: the sandbox is set up, only the cache is missing. When the capture stopped the
+ * source, startup continues in a restore of the new snapshot, which also proves it restores.
+ */
+function cacheCapture(
+  session: Session,
+  created: Created,
+  request: CreateRequest,
+  caching: Caching,
+): (box: SandboxHandle<true>) => Promise<SandboxHandle<true> | void> {
+  const setupStarted = Date.now();
+  const { out } = session.ctx;
+  const { plan } = caching;
+
+  return async (box) => {
+    if (caching.lookup.kind !== "build") return;
+    const buildSeconds = (Date.now() - setupStarted) / 1000;
+    let captured: Awaited<ReturnType<typeof captureCache>>;
+
+    try {
+      captured = await captureCache(
+        session,
+        created.client,
+        box,
+        plan,
+        caching.lookup,
+        created.record.name,
+        buildSeconds,
+      );
+    } catch (cause) {
+      caching.outcome = { status: "skipped", key: plan.key };
+      out.note(
+        `setup ${plan.setup}: the sandbox is set up but the cache was not saved (${describeError(cause).message})`,
+      );
+
+      return;
+    }
+
+    caching.outcome = { status: "built", key: plan.key, snapshot: captured.record.name };
+    out.note(
+      `setup ${plan.setup}: cache saved as ${captured.record.name} in ${shortDuration(captured.seconds)} (setup took ${shortDuration(buildSeconds)})`,
+    );
+
+    if (captured.result.source.state === "running") return;
+
+    out.note(`setup ${plan.setup}: the capture stopped the sandbox; continuing from the new cache`);
+
+    const fresh = await restoreSnapshot(
+      session,
+      created.client,
+      captured.record,
+      createInput(request),
+    );
+
+    await box.destroy().catch((cause: unknown) => {
+      out.note(`could not remove the stopped source sandbox (${describeError(cause).message})`);
+    });
+    created.box = fresh;
+    created.record.reference = fresh.reference;
+    created.record.image = `snapshot:${captured.record.name}`;
+    await saveRecord(session, created.record);
+
+    return fresh;
+  };
 }
 
 /** `--if-not-exists` found the sandbox: it must already have every requested add-on ready. */
@@ -2090,7 +2410,11 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
     throw usage("--exclude and --include-ignored need --push");
   // Local files are read before anything is created, so a bad path costs nothing.
   const tree = pushPath ? await pushTree(session, flags, pushPath) : undefined;
-  const created = await createSandbox(session, { ...request, ifNotExists: false });
+
+  request.ifNotExists = false;
+
+  const caching = await prepareCaching(session, request, setup);
+  const created = await createCached(session, request, caching);
   const store = await session.store();
   const { out, signal } = session.ctx;
   let result: Executed | undefined;
@@ -2135,6 +2459,7 @@ export async function runCommand(session: Session, flags: Flags): Promise<number
         // run always removes its sandbox below unless --keep, so setup never removes it here.
         { ...request, rmOnFailure: false },
         pushed?.path,
+        caching,
       );
 
       if (setupFailure)

@@ -52,6 +52,11 @@ export type RunSetupOptions = {
    * not part of the digest, so a rotated token does not rerun setup.
    */
   env?: Record<string, string>;
+  /**
+   * `false` records the startup steps without running them, for callers that capture a
+   * snapshot between setup and startup; a later `runSetup({ startup })` runs them.
+   */
+  runStartup?: boolean;
 };
 
 export function wantsSetup(options: SetupCreateOptions): boolean {
@@ -90,7 +95,7 @@ export async function applySetup(
   if (!resolved && !recorded?.startup.length) return box;
 
   const plan = planSetup(
-    resolved ?? { setup: [], startup: [], digest: null, names: [], cache: undefined },
+    resolved ?? { setup: [], startup: [], digest: null, names: [] },
     recorded,
     { startupFromRecord: runsRecorded },
   );
@@ -147,11 +152,9 @@ export async function startupAfterResume(
 
   if (!recorded?.startup.length) return;
 
-  const plan = planSetup(
-    { setup: [], startup: [], digest: null, names: [], cache: undefined },
-    recorded,
-    { startupFromRecord: true },
-  );
+  const plan = planSetup({ setup: [], startup: [], digest: null, names: [] }, recorded, {
+    startupFromRecord: true,
+  });
 
   try {
     recordSetupReport(
@@ -188,6 +191,8 @@ export async function runSetupOn(
     const ctx: SetupRunContext = { ...runOptions(options), signal, streams: host.streams, record };
 
     if (options.env) ctx.env = options.env;
+
+    if (options.runStartup === false) ctx.runStartup = false;
 
     const report = await runSetupPlan(target, plan, ctx);
 

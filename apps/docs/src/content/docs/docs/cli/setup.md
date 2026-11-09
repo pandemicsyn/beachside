@@ -114,6 +114,52 @@ The sandbox keeps its setup state in `~/.beachside/setup/` inside the sandbox, s
 beachside run --push . --setup-cmd 'npm ci' -- npm test
 ```
 
+## Cache a setup
+
+A slow setup can be cached. Beachside then snapshots the sandbox right after setup, and the next create with the same setup restores that snapshot instead of running it again:
+
+```json
+{
+  "setups": {
+    "deps": {
+      "setup": ["./install-system-deps.sh", { "run": "git pull", "cwd": "app", "cache": false }],
+      "startup": ["redis-server --daemonize yes"],
+      "cache": { "maxAge": "7d", "files": ["./package-lock.json"] }
+    }
+  }
+}
+```
+
+```text
+$ beachside create --name one --setup deps
+beachside: setup deps: building the cache
+...
+beachside: setup deps: cache saved as cache-3f9c… in 6s (setup took 3m12s)
+
+$ beachside create --name two --setup deps
+beachside: setup deps: cache hit (restored in 4s; built 2m ago in 3m12s)
+```
+
+`--cache` caches any create's setup, `--no-cache` skips the cache for one create, and `--refresh-cache` builds it again now.
+
+- **The key** covers the provider, account and profile, the image, every step (text, scripts, working folder, user and env names) and the content of each file in `files`. A change to any of them is a new cache. Env values are not part of it.
+- **When the snapshot is taken:** after setup, before startup, `--with` servers and anything else the command does, so the cache never holds running processes or tailnet logins. On a hit, steps marked `"cache": false` run again, then startup.
+- **Age:** after `maxAge` (7 days by default) a cache is stale. The next create rebuilds it and deletes the old snapshot once the new one exists. Nothing is deleted on a timer.
+- **Two creates at once:** the first to miss builds the cache. The other runs setup without it rather than wait.
+- **Where it is kept:** a cache is a snapshot record named `cache-<key>` in the state folder, so `snapshot ls` and `snapshot inspect` show it too. On providers that label snapshots, the snapshot also carries a `beachside.setup-cache` label, and a runner with an empty state folder finds it there.
+
+`beachside setup cache ls` lists the caches with their age and build time. `setup cache rm <setup>` deletes one setup's caches, and `setup cache prune` deletes the stale ones (`--dry-run` shows what would go). `gc` prunes stale caches too. `rm` never deletes a cache, because it belongs to the cache, not the sandbox.
+
+Caching needs snapshot capture and restore, plus restore-time support for any `--env`, `--label` or `--ttl` you pass. Where a provider lacks them, the create fails before anything is made; it never runs uncached without saying so.
+
+:::caution[Secrets end up in caches]
+A step can write a secret to disk, such as an `.npmrc` with `NPM_TOKEN`, and the snapshot keeps it. A setup whose `env` reads from your environment or a password manager is refused for caching unless the setup sets `"cache": { "secrets": "allow" }`. Pass secrets that steps only need at run time with `--env` on the create instead.
+:::
+
+Caching pays when setup takes more than about 30 seconds and the provider restores faster than it creates and sets up. The timing lines show both.
+
+In `run --push`, setup runs in the pushed folder, so the cache holds that folder as it was when the cache was built. A hit pushes the current files over it; files deleted since then can remain until the cache is rebuilt.
+
 ## What each step sees
 
 Steps run through the provider's exec, as the sandbox's default user, from its home folder unless `cwd` says otherwise. `user: "root"` runs a step with `sudo -n -E` where the default user is not root. Each step gets the sandbox's environment plus its own `env`; secrets belong in the sandbox env (`--env` or a setup's `env`), not in a step's text.

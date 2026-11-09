@@ -105,6 +105,20 @@ export const SnapshotRecord = z.strictObject({
       (value) => z.record(z.string(), z.unknown()).safeParse(value).success,
     )
     .optional(),
+  /** Set on setup caches: the snapshot belongs to the cache, never to a sandbox. */
+  cache: z
+    .strictObject({
+      key: z.string().regex(/^[0-9a-f]{32}$/),
+      /** The named setups or paths it caches, for `setup cache ls` and `setup cache rm`. */
+      setup: z.string().min(1),
+      builtAt: z.iso.datetime({ offset: true }),
+      buildSeconds: z.number().nonnegative().nullable(),
+      /** After this the next create rebuilds it; nothing is deleted on a timer. */
+      maxAgeSeconds: z.number().int().positive(),
+      /** Set while a create builds or rebuilds it: the claim other creates respect. */
+      claimedAt: z.iso.datetime({ offset: true }).optional(),
+    })
+    .optional(),
 });
 
 export type SnapshotRecord = z.infer<typeof SnapshotRecord>;

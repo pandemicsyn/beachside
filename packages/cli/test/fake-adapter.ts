@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { createReadStream, createWriteStream } from "node:fs";
+import { cpSync, createReadStream, createWriteStream, existsSync } from "node:fs";
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -525,8 +525,56 @@ export const localShell = bindAdapter(
       };
 
       const { processes: _processes, ...rest } = session;
+      const capture = session.snapshotCapture;
+      const restore = session.snapshotRestore;
 
-      return { ...rest, exec: Object.assign(exec, { finiteStdin: "bytes" as const }) };
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- A mutation is a function or a recoverable object.
+      if (!capture || !restore || typeof capture === "function" || typeof restore === "function")
+        throw new Error("The snapshotting fake has recoverable snapshot mutations");
+
+      // A snapshot keeps a copy of the home folder; a restore starts from that copy.
+      const snapshotCapture: typeof capture = {
+        ...capture,
+        async submit(input, ctx) {
+          const result = await capture.submit(input, ctx);
+
+          const id = z
+            .object({ snapshot: z.object({ reference: z.object({ nativeId: z.string() }) }) })
+            .safeParse(result);
+
+          if (id.success)
+            cpSync(
+              localHome(input.sandbox.id),
+              localHome(`snap-${id.data.snapshot.reference.nativeId}`),
+              {
+                recursive: true,
+              },
+            );
+
+          return result;
+        },
+      };
+
+      const snapshotRestore: typeof restore = {
+        ...restore,
+        async submit(input, ctx) {
+          const result = await restore.submit(input, ctx);
+          const id = z.object({ id: z.string() }).safeParse(result);
+          const saved = localHome(`snap-${input.snapshot.nativeId}`);
+
+          if (id.success && existsSync(saved))
+            cpSync(saved, localHome(id.data.id), { recursive: true });
+
+          return result;
+        },
+      };
+
+      return {
+        ...rest,
+        snapshotCapture,
+        snapshotRestore,
+        exec: Object.assign(exec, { finiteStdin: "bytes" as const }),
+      };
     },
   }),
   {},

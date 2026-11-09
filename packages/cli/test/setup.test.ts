@@ -68,7 +68,7 @@ async function writeConfig(extra: Record<string, Json>) {
 
 type Result = { code: number; stdout: string; stderr: string };
 
-async function cli(args: string[]): Promise<Result> {
+async function cli(args: string[], extraEnv: Record<string, string> = {}): Promise<Result> {
   // The fake has no default image, so new sandboxes start from its prepared starter.
   const [command, ...rest] = args;
   const image = command === "create" || command === "run" ? ["--prepared", "fake-starter"] : [];
@@ -83,6 +83,7 @@ async function cli(args: string[]): Promise<Result> {
       BEACHSIDE_FAKE_URL: server.url.origin,
       BEACHSIDE_FAKE_TOKEN: token,
       BEACHSIDE_FAKE_HOMES: join(dir, "homes"),
+      ...extraEnv,
     },
     stdin: "ignore",
     stdout: "pipe",
@@ -291,6 +292,162 @@ describe("setup on run", () => {
 
     expect(failed.code).toBe(125);
     expect(failed.stderr).toContain("the sandbox was removed");
+    expect(await storeNames()).toEqual([]);
+  });
+});
+
+describe("setup caches", () => {
+  const deps = {
+    setup: ["echo deps >> log", { run: "echo pull >> log", cache: false }],
+    startup: ["echo up >> started"],
+    cache: true,
+  };
+
+  async function useDeps(extra: Record<string, Json> = {}) {
+    await writeConfig({ setups: { ...setups, deps, ...extra } });
+  }
+
+  async function homeOf(name: string): Promise<string> {
+    return join(dir, "homes", (await record(name)).reference.nativeId);
+  }
+
+  async function caches() {
+    return envelope(await cli(["setup", "cache", "ls", "--json"])).data.caches;
+  }
+
+  test("a miss builds the cache after setup and before startup; a hit restores it", async () => {
+    await useDeps();
+
+    const built = await cli(["create", "--name", "one", "--setup", "deps", "--json"]);
+
+    expect(built.code).toBe(0);
+    expect(built.stderr).toContain("setup deps: building the cache");
+    expect(envelope(built).data.setup.cache).toMatchObject({ status: "built" });
+    expect(await readFile(join(await homeOf("one"), "started"), "utf8")).toBe("up\n");
+
+    const [cache] = await caches();
+
+    expect(cache).toMatchObject({ setup: "deps", status: "captured", stale: false });
+
+    const hit = await cli(["create", "--name", "two", "--setup", "deps", "--json"]);
+
+    expect(hit.code).toBe(0);
+    expect(hit.stderr).toMatch(/setup deps: cache hit \(restored in \d+s; built \d+s ago/);
+    expect(envelope(hit).data).toMatchObject({
+      image: `snapshot:${cache.name}`,
+      setup: { cache: { status: "hit", snapshot: cache.name } },
+    });
+
+    const two = await homeOf("two");
+
+    // The cached step is skipped, the cache:false step runs again, and so does startup.
+    expect(await readFile(join(two, "log"), "utf8")).toBe("deps\npull\npull\n");
+    expect(await readFile(join(two, "started"), "utf8")).toBe("up\n");
+  });
+
+  test("--no-cache builds nothing; --refresh-cache replaces the cache", async () => {
+    await useDeps();
+
+    expect((await cli(["create", "--name", "plain", "--setup", "deps", "--no-cache"])).code).toBe(
+      0,
+    );
+    expect(await caches()).toEqual([]);
+
+    expect((await cli(["create", "--name", "one", "--setup", "deps"])).code).toBe(0);
+    const [first] = await caches();
+
+    const refreshed = await cli(["create", "--name", "two", "--setup", "deps", "--refresh-cache"]);
+
+    expect(refreshed.code).toBe(0);
+    expect(refreshed.stderr).toContain("setup deps: rebuilding the cache");
+
+    const [second] = await caches();
+
+    expect(second.name).toBe(first.name);
+    expect(second.id).not.toBe(first.id);
+    // The replaced snapshot is gone from the provider.
+    expect((await cli(["snapshot", "ls", "--remote", "--json"])).stdout).not.toContain(first.id);
+  });
+
+  test("a stale cache is rebuilt by the next create; prune and rm delete caches", async () => {
+    await useDeps({ quick: { setup: ["echo q >> log"], cache: { maxAge: "1s" } } });
+
+    expect((await cli(["create", "--name", "one", "--setup", "quick"])).code).toBe(0);
+    await Bun.sleep(1100);
+    expect((await caches())[0]).toMatchObject({ stale: true });
+
+    const dry = await cli(["setup", "cache", "prune", "--dry-run", "--json"]);
+
+    expect(envelope(dry).data.caches).toMatchObject([{ setup: "quick", result: "would-delete" }]);
+
+    const rebuilt = await cli(["create", "--name", "two", "--setup", "quick"]);
+
+    expect(rebuilt.stderr).toContain("setup quick: rebuilding the cache");
+    expect((await caches())[0]).toMatchObject({ stale: false });
+
+    const removed = await cli(["setup", "cache", "rm", "quick", "--json"]);
+
+    expect(envelope(removed).data.caches).toMatchObject([{ setup: "quick", result: "deleted" }]);
+    expect(await caches()).toEqual([]);
+  });
+
+  test("a runner with an empty store finds the cache by its provider label", async () => {
+    // The fake dates its snapshots from a counter, so keep them fresh for this test.
+    await writeConfig({ setups: { deps: { ...deps, cache: { maxAge: "36500d" } } } });
+    expect((await cli(["create", "--name", "one", "--setup", "deps"])).code).toBe(0);
+    await rm(join(dir, "state", "snapshots"), { recursive: true });
+
+    const hit = await cli(["create", "--name", "two", "--setup", "deps", "--json"]);
+
+    expect(hit.code).toBe(0);
+    expect(hit.stderr).toContain("setup cache: found");
+    expect(envelope(hit).data.setup.cache).toMatchObject({ status: "hit" });
+  });
+
+  test("cache.files are part of the key", async () => {
+    await writeFile(join(dir, "lock"), "v1");
+    await useDeps({ locked: { setup: ["echo l >> log"], cache: { files: ["./lock"] } } });
+
+    expect((await cli(["create", "--name", "one", "--setup", "locked"])).code).toBe(0);
+    await writeFile(join(dir, "lock"), "v2");
+
+    const changed = await cli(["create", "--name", "two", "--setup", "locked"]);
+
+    expect(changed.stderr).toContain("setup locked: building the cache");
+    expect(await caches()).toHaveLength(2);
+  });
+
+  test("refusals come before anything is created", async () => {
+    await useDeps({
+      secretive: { setup: ["true"], env: { TOKEN: "env:TOKEN" }, cache: true },
+    });
+
+    const secret = await cli(["create", "--setup", "secretive", "--json"], { TOKEN: "t" });
+
+    expect(secret.code).toBe(2);
+    expect(envelope(secret).error.message).toContain("would be cached with TOKEN from env");
+    expect(await storeNames()).toEqual([]);
+
+    await useDeps({
+      secretive: { setup: ["true"], env: { TOKEN: "env:TOKEN" }, cache: { secrets: "allow" } },
+    });
+    expect((await cli(["create", "--setup", "secretive"], { TOKEN: "t" })).code).toBe(0);
+    await rm(join(dir, "state"), { recursive: true });
+
+    const empty = await cli(["create", "--cache", "--json"]);
+
+    expect(envelope(empty).error.message).toBe("A setup cache needs setup steps");
+
+    // The plain fake cannot snapshot.
+    await writeConfig({
+      profiles: { fake: { module: fixture, export: "fake" } },
+      setups: { deps },
+    });
+
+    const unsupported = await cli(["create", "--setup", "deps", "--json"]);
+
+    expect(unsupported.code).toBe(4);
+    expect(envelope(unsupported).error.hint).toContain("--no-cache");
     expect(await storeNames()).toEqual([]);
   });
 });

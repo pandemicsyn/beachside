@@ -10,6 +10,7 @@ import {
   assertResourceIdentity,
   MountSpec,
   SnapshotInfo,
+  SnapshotLabels,
   ImageInfo,
   VolumeInfo,
   RestoreRequest,
@@ -488,10 +489,14 @@ export function resourceManagers(client: AdapterDirectClient) {
 
       return new AdapterSnapshot(client, info.reference);
     },
-    async list(input: SandboxListInput = {}) {
+    async list(input: SnapshotListInput = {}) {
       client.ensureOpen();
 
-      const request = validateResourceInput(PageInput, input, "Invalid snapshot inventory request");
+      const { labels: wanted, ...request } = validateResourceInput(
+        SnapshotPageInput,
+        input,
+        "Invalid snapshot inventory request",
+      );
 
       if (!client.session.snapshotList)
         throw new BeachsideError("UNSUPPORTED", "Snapshot inventory is unsupported");
@@ -509,6 +514,11 @@ export function resourceManagers(client: AdapterDirectClient) {
         .parse(page);
 
       checked.items.forEach((info) => checkedResource(client, info.reference, "snapshot"));
+
+      if (wanted)
+        checked.items = checked.items.filter((info) =>
+          Object.entries(wanted).every(([key, value]) => info.labels?.[key] === value),
+        );
 
       return checked;
     },
@@ -625,8 +635,16 @@ const PageInput = InventoryInput.extend({
   limit: InventoryInput.shape.limit.default(DEFAULT_SANDBOX_LIST_LIMIT),
 });
 
+const SnapshotPageInput = PageInput.extend({ labels: SnapshotLabels.optional() });
+
 /** Optional page selection for `list()` calls; `limit` is 1-100 and defaults to 50. */
 export type SandboxListInput = { cursor?: string; limit?: number };
+
+/**
+ * `snapshots.list()` input. `labels` keeps only snapshots carrying every given label, on this
+ * page: a filtered page can be short, so follow `nextCursor` until it is absent.
+ */
+export type SnapshotListInput = SandboxListInput & { labels?: Record<string, string> };
 
 /**
  * One listed sandbox; `reference` is null when the adapter cannot verify a reopenable identity.

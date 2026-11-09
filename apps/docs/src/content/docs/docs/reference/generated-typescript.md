@@ -121,7 +121,6 @@ Import from `beachside`.
 | `Setup`                       | re-export |
 | `SetupCreateOptions`          | type      |
 | `SetupDefinition`             | re-export |
-| `SetupDefinitionCache`        | type      |
 | `SetupDefinitionInput`        | type      |
 | `SetupEvent`                  | type      |
 | `SetupFailedError`            | re-export |
@@ -136,6 +135,7 @@ Import from `beachside`.
 | `SetupStepReport`             | type      |
 | `SnapshotHandle`              | type      |
 | `SnapshotInfo`                | re-export |
+| `SnapshotListInput`           | type      |
 | `SnapshotPlan`                | type      |
 | `SnapshotProfile`             | type      |
 | `SnapshotRequest`             | re-export |

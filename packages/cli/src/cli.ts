@@ -128,6 +128,23 @@ const setupFlags = {
   },
 } satisfies Record<string, FlagSpec>;
 
+/** Setup cache controls; shared by create and run. */
+const cacheFlags = {
+  cache: {
+    type: "boolean",
+    description:
+      "Cache this setup as a snapshot and restore it next time, even if no named setup asks for it",
+  },
+  "no-cache": {
+    type: "boolean",
+    description: "Neither use nor build a setup cache for this sandbox",
+  },
+  "refresh-cache": {
+    type: "boolean",
+    description: "Build the setup cache again now, replacing the current one",
+  },
+} satisfies Record<string, FlagSpec>;
+
 const createFlags = {
   name: {
     type: "string",
@@ -185,6 +202,7 @@ const createFlags = {
       "Keep retrying for up to this long when the provider refuses before creating anything (rate limit, capacity), e.g. 5m",
   },
   ...setupFlags,
+  ...cacheFlags,
 } satisfies Record<string, FlagSpec>;
 
 const execFlags = {
@@ -273,6 +291,7 @@ export const commands: readonly CommandSpec[] = [
       "beachside create --name web --with rex",
       "beachside create --name web --setup node --setup-cmd 'npm i -g pnpm'",
       "beachside create --name web --setup ./setup.sh --startup-cmd 'pnpm dev > /tmp/dev.log 2>&1 &'",
+      "beachside create --name web --setup node --cache",
     ],
     run: createCommand,
   },
@@ -336,7 +355,8 @@ export const commands: readonly CommandSpec[] = [
   },
   {
     name: "gc",
-    summary: "Destroy the provider's sandboxes that carry the given labels, such as a killed job's",
+    summary:
+      "Destroy the provider's sandboxes that carry the given labels, such as a killed job's, and prune stale setup caches",
     usage: "beachside gc --label k=v... [--older-than <duration>] [--dry-run]",
     flags: {
       label: {
@@ -486,12 +506,16 @@ export const commands: readonly CommandSpec[] = [
     name: "setup",
     summary: "Run setup in an existing sandbox, or list the named setups",
     usage:
-      "beachside setup <sandbox> [--setup <name|path>]... [--setup-cmd <shell>]... [--force] | setup ls",
+      "beachside setup <sandbox> [--setup <name|path>]... [--setup-cmd <shell>]... [--force] | setup ls | setup cache ls|rm <setup>|prune [--dry-run]",
     flags: {
       ...setupFlags,
       force: {
         type: "boolean",
         description: "Run every step, even ones the sandbox already has",
+      },
+      "dry-run": {
+        type: "boolean",
+        description: "setup cache rm and prune: list what would be deleted and change nothing",
       },
     },
     passthrough: false,
@@ -501,6 +525,9 @@ export const commands: readonly CommandSpec[] = [
       "beachside setup web",
       "beachside setup web --setup playwright",
       "beachside setup web --setup node --force",
+      "beachside setup cache ls",
+      "beachside setup cache rm node",
+      "beachside setup cache prune --dry-run",
     ],
     run: setupCommand,
   },

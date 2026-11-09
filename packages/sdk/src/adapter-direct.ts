@@ -1100,7 +1100,7 @@ export class AdapterSandbox {
   ): Promise<SetupReport> {
     this.client.ensureOpen();
 
-    const { force, recordedStartup, record, env, ...rest } = input;
+    const { force, recordedStartup, record, env, runStartup, ...rest } = input;
 
     validateSetupOptions(rest);
 
@@ -1114,6 +1114,8 @@ export class AdapterSandbox {
     if (recordedStartup !== undefined) extra.recordedStartup = recordedStartup;
 
     if (record !== undefined) extra.record = record;
+
+    if (runStartup === false) extra.runStartup = false;
 
     return runSetupOn(this, this.setupHost(), { ...rest, ...extra }, options.signal);
   }
