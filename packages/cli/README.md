@@ -40,7 +40,7 @@ Install the adapter for each provider with `beachside adapter add e2b` (or `dayt
 | `adapter add <provider\|package>[@version]...`, `adapter ls`, `adapter rm <provider\|package>...` | Install, list or remove adapters in `~/.config/beachside/adapters` |
 | `providers` | Official providers, install state and missing credentials |
 | `schema` | Machine-readable description of every command, flag and exit code |
-| `skill [install [--project]]` | Print the agent skill for this CLI, or install it for your coding agents |
+| `skill [show \| setup \| status \| remove]` | Print the agent skill for this CLI, or set it up for your coding agents |
 | `completion <zsh\|bash\|fish>` | Print a shell completion script |
 
 A `<sandbox>` is a store name, a native id held in the store, or `@file.json` holding a saved sandbox reference.

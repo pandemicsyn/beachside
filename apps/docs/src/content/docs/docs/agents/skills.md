@@ -13,17 +13,9 @@ Beachside ships three agent skills from its repository: `beachside` and `beachsi
 
 ## Install
 
-Install with the [`skills`](https://github.com/vercel-labs/skills) installer, which supports Claude Code, Codex, Cursor and other agents:
+### The CLI skill
 
-```sh
-npx skills add pandemicsyn/beachside --skill beachside -g
-npx skills add pandemicsyn/beachside --skill beachside-cli -g
-npx skills add pandemicsyn/beachside --skill add-provider
-```
-
-`-g` installs the skill for your user. Leave it out to install into the current project instead, so everyone working in the repository gets it; that suits `add-provider`, which belongs in the adapter's repository.
-
-The CLI also carries its own copy of the `beachside-cli` guide, matching its version. `beachside skill setup` installs a short skill that tells the agent to read that guide with `beachside skill`, so upgrading the CLI updates what your agents are told without rerunning setup:
+If you use the `beachside` command, install `beachside-cli` with the CLI itself. It installs a short skill that tells the agent to read the guide with `beachside skill`, so the guide always matches your installed CLI and upgrading the CLI needs no rerun:
 
 ```sh
 beachside skill setup            # for you, in every project
@@ -32,7 +24,20 @@ beachside skill status           # where it is installed, and whether it is curr
 beachside skill remove           # remove what setup installed
 ```
 
-Setup writes `.agents/skills/beachside-cli/`, which Codex, OpenCode, Pi and most other agents read, and `.claude/skills/beachside-cli/` when Claude Code is set up (it honors `CLAUDE_CONFIG_DIR`). `--agent claude|codex|opencode|pi` picks agents yourself, and `--dry-run` reports what would change. Setup and remove never touch a `beachside-cli` skill installed another way, such as with `npx skills add`; `setup --force` replaces it.
+Setup writes `.agents/skills/beachside-cli/`, which Codex, OpenCode, Pi and most other agents read, and `.claude/skills/beachside-cli/` when Claude Code is set up (it honors `CLAUDE_CONFIG_DIR`). `--agent claude|codex|opencode|pi` picks agents yourself, and `--dry-run` reports what would change. A copy written by an older CLI shows as `outdated`, and setup updates it. Setup and remove never touch a `beachside-cli` skill installed another way, such as with `npx skills add`; `setup --force` replaces it.
+
+### The SDK and adapter skills
+
+Install `beachside` and `add-provider` with the [`skills`](https://github.com/vercel-labs/skills) installer, which supports Claude Code, Codex, Cursor and other agents:
+
+```sh
+npx skills add pandemicsyn/beachside --skill beachside -g
+npx skills add pandemicsyn/beachside --skill add-provider
+```
+
+`-g` installs the skill for your user. Leave it out to install into the current project instead, so everyone working in the repository gets it; that suits `add-provider`, which belongs in the adapter's repository.
+
+The installer can also add `beachside-cli` (`npx skills add pandemicsyn/beachside --skill beachside-cli -g`), for example before the CLI is installed. That copy holds the whole guide from the repository's main branch rather than your installed version, and the guide tells the agent to trust `beachside <command> --help` when they differ. Use `beachside skill setup` once the CLI is installed.
 
 For an agent without a skill system, copy the `SKILL.md` contents into its project or user instructions.
 

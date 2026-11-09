@@ -40,4 +40,4 @@ beachside skill setup --project  # for this repository only
 
 `beachside skill` prints the guide, for agents without a skill system: paste it into their instructions.
 
-The skill can also be installed with `npx skills add pandemicsyn/beachside --skill beachside-cli`. See [Agent skills](/docs/agents/skills/) for the SDK skill as well.
+Copies written by older CLIs show as `outdated` until you run `beachside skill setup` once. The skill can also be installed with `npx skills add pandemicsyn/beachside --skill beachside-cli`, which copies the whole guide from the repository instead of following your installed CLI. See [Agent skills](/docs/agents/skills/) for the SDK skill as well.
