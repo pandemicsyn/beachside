@@ -1,5 +1,25 @@
 # beachside
 
+## 0.11.0
+
+### Minor Changes
+
+- [#187](https://github.com/pandemicsyn/beachside/pull/187) [`ae8c05a`](https://github.com/pandemicsyn/beachside/commit/ae8c05aadf2841f734c9c66223043290d587b9ef) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Sandboxes can now be set up as they start. `sandboxes.create()`, `sandboxes.with()` and `snapshot.restore()` take `setup` (steps that run once per sandbox: shell lines, argv arrays, inline scripts or `Setup.file()` scripts) and `startup` (steps that run whenever the sandbox comes up without its processes, including after a fresh `resume()`). `Setup.define()` makes named setups that compose. Beachside runs the steps over `exec` on every provider, streams their output through `onSetupOutput`, records progress in the sandbox so a restored snapshot skips setup it already holds, and throws `SetupFailedError` naming the failed step. A sandbox whose setup fails is destroyed unless `onSetupFailure: "keep"`. `box.runSetup()` runs setup on an existing sandbox.
+
+- [#187](https://github.com/pandemicsyn/beachside/pull/187) [`ae8c05a`](https://github.com/pandemicsyn/beachside/commit/ae8c05aadf2841f734c9c66223043290d587b9ef) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Snapshots can carry labels. `snapshot({ labels })` sets them at capture where the adapter keeps them, and `snapshots.list({ labels })` keeps only matching snapshots.
+
+  - **Adapters:** an adapter opts in with `snapshotCapture.labels: true`, and listed `SnapshotInfo` reports `labels`. Elsewhere a labelled capture is rejected before anything is captured.
+  - **Capability:** `capabilities().snapshots.capture.value.labels` says whether labels are kept.
+  - **Runloop:** labels are stored as snapshot metadata, next to the adapter's own `beachside_` keys, which stay reserved.
+  - **Setup:** `box.runSetup()` takes `env` for every step, kept out of the digest, and `runStartup: false`, which records startup steps without running them so a snapshot can be taken in between.
+
+  `Setup.parallel([...steps])` runs setup steps at the same time as one step; its steps' events and output carry `step.group`.
+
+### Patch Changes
+
+- Updated dependencies [[`ae8c05a`](https://github.com/pandemicsyn/beachside/commit/ae8c05aadf2841f734c9c66223043290d587b9ef)]:
+  - @beachside/adapter@0.11.0
+
 ## 0.10.0
 
 ### Patch Changes

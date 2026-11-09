@@ -1,4 +1,25 @@
 import { withSandbox, type SandboxScopeOptions } from "./scoped-sandbox";
+import {
+  applySetup,
+  prepareSetup,
+  runOptions,
+  runSetupOn,
+  setupReportOf,
+  startupAfterResume,
+  wantsSetup,
+  type RunSetupOptions,
+  validateSetupEnv,
+  type SetupHost,
+} from "./setup-flow";
+import {
+  hasSetupKeys,
+  splitSetup,
+  validateSetupOptions,
+  type SetupCreateOptions,
+  type SetupReport,
+  type SetupRunOptions,
+  type SetupTarget,
+} from "./setup";
 import { connectionBudget, type ConnectionWaitOptions, type CloseOptions } from "./connection-wait";
 import {
   adapterFileLimit,
@@ -1046,8 +1067,73 @@ export class AdapterSandbox {
       { ...options, sandboxId: this.id, sandboxReference: this.reference },
     );
   }
-  async resume(options: WaitOptions = {}): Promise<ResumeResult> {
-    return (await this.submitResume(options)).wait(options);
+  /**
+   * Resume a suspended sandbox. When it comes back without its processes (`execution: "fresh"`),
+   * the startup steps recorded by setup run again; pass `recordedStartup: "skip"` to leave them.
+   */
+  async resume(
+    options: WaitOptions & SetupRunOptions & { recordedStartup?: "run" | "skip" } = {},
+  ): Promise<ResumeResult> {
+    const { onSetupOutput, onSetupStep, setupTimeoutSeconds, recordedStartup, ...wait } = options;
+
+    const setupOptions = runOptions({ onSetupOutput, onSetupStep, setupTimeoutSeconds });
+
+    validateSetupOptions(setupOptions);
+    const result = await (await this.submitResume(wait)).wait(wait);
+
+    if (result.execution === "fresh" && recordedStartup !== "skip" && this.client.session.exec)
+      await startupAfterResume(this, this.setupHost(), setupOptions, wait.signal);
+
+    return result;
+  }
+  /** What setup did on this handle during create, restore, resume or `runSetup`, or null. */
+  get setupReport(): SetupReport | null {
+    return setupReportOf(this);
+  }
+  /**
+   * Run setup steps on this sandbox. Steps the sandbox already recorded, in the same order, are
+   * skipped unless `force`. A failure throws `SetupFailedError` and keeps the sandbox.
+   */
+  async runSetup(
+    input: Pick<SetupCreateOptions, "setup" | "startup"> & SetupRunOptions & RunSetupOptions,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SetupReport> {
+    this.client.ensureOpen();
+
+    const { force, recordedStartup, record, env, runStartup, ...rest } = input;
+
+    validateSetupOptions(rest);
+
+    const extra: RunSetupOptions = { force: force ?? false };
+
+    if (env !== undefined) {
+      validateSetupEnv(env);
+      extra.env = { ...env };
+    }
+
+    if (recordedStartup !== undefined) extra.recordedStartup = recordedStartup;
+
+    if (record !== undefined) extra.record = record;
+
+    if (runStartup === false) extra.runStartup = false;
+
+    return runSetupOn(this, this.setupHost(), { ...rest, ...extra }, options.signal);
+  }
+  /** @internal How setup reaches this sandbox. */
+  setupHost(): SetupHost {
+    const session = this.client.session;
+
+    return {
+      streams: session.processes?.supports?.execCapture === "bytes" && !!session.processes.start,
+      target: (box) => {
+        const target: SetupTarget = { exec: (input, options) => box.exec(input, options) };
+
+        if (session.files?.write)
+          target.writeFile = (path, bytes, options) => box.writeFile(path, bytes, options);
+
+        return target;
+      },
+    };
   }
   async submitRenew(
     input?: RenewRequest,
@@ -2403,8 +2489,23 @@ export class AdapterDirectClient {
       get: (reference, options = {}) => this.reopenSandbox(reference, options),
       list: (input) => listSandboxes(this, input),
       checkCreate: (input) => this.checkCreate(input),
-      create: async (input, options = {}) =>
-        waitFor(this.telemetry, await internalMethod(this.submitCreate)(input, options), options),
+      create: async (input, options = {}) => {
+        const { setupOptions, rest } = splitSetup(input);
+
+        if (wantsSetup(setupOptions) && !this.session.exec)
+          throw new BeachsideError("UNSUPPORTED", "Setup needs exec, which this adapter lacks");
+        const resolved = await prepareSetup(setupOptions);
+
+        const box = await waitFor(
+          this.telemetry,
+          await internalMethod(this.submitCreate)(rest, options),
+          options,
+        );
+
+        if (!wantsSetup(setupOptions)) return box;
+
+        return applySetup(box, box.setupHost(), resolved, setupOptions, "created", options.signal);
+      },
       submitCreate: (input, options = {}) => this.submitCreate(input, options),
     };
     this.images = {
@@ -2490,7 +2591,8 @@ export class AdapterDirectClient {
     });
   }
   async checkCreate(input?: CreateInput): Promise<Support<CreatePlan>> {
-    return this.checkCreateWithSignal(input, this.signal);
+    // Setup does not change what the provider is asked for.
+    return this.checkCreateWithSignal(splitSetup(input).rest, this.signal);
   }
   private async checkCreateWithSignal(
     input: CreateInput | undefined,
@@ -2554,6 +2656,12 @@ export class AdapterDirectClient {
     input?: CreateInput,
     options: { signal?: AbortSignal } = {},
   ): Promise<OperationHandle<SandboxHandle<true>, OperationKind>> {
+    if (hasSetupKeys(input))
+      throw new BeachsideError(
+        "INVALID_ARGUMENT",
+        "Setup runs with sandboxes.create() or sandboxes.with(); after submitCreate(), call box.runSetup()",
+      );
+
     const request = validateCreate(
       input,
       this.session.defaultImage,

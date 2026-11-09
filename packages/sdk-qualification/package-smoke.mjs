@@ -648,8 +648,9 @@ try {
   const bytes = await box.readFile("/file", { signal: new AbortController().signal });
   if (bytes[0] !== 0 || bytes[1] !== 255) throw new Error("Binary file mismatch");
   await box.destroy();
-  if (mutations !== 10) throw new Error("Mutation replay in packed consumer: " + mutations);
-  if (receiptCleanups !== 2) throw new Error("Packed Daytona receipts not dropped: " + receiptCleanups);
+  // Ten mutations plus the exec (and its receipt) a fresh resume spends reading recorded setup state.
+  if (mutations !== 11) throw new Error("Mutation replay in packed consumer: " + mutations);
+  if (receiptCleanups !== 3) throw new Error("Packed Daytona receipts not dropped: " + receiptCleanups);
   if (process.env.PACKED_LIFECYCLE_EXAMPLE) {
     const { saveWorkspace, finishWorkspace, daytonaSetup } = await import("./lifecycle-example.mjs");
   globalThis.fetch = mock;

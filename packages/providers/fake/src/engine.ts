@@ -105,6 +105,8 @@ const ImageSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   /** A snapshot is an image captured from a sandbox: restores start with these files. */
   files: z.record(z.string(), FakeFileBytesBase64).optional(),
+  /** User labels set at snapshot capture. */
+  labels: z.record(z.string().min(1).max(64), z.string().max(256)).optional(),
 });
 
 /** Snapshot images record their source sandbox as `snapshot:<native id>`. */
@@ -665,7 +667,7 @@ export class FakeProviderEngine {
     );
   }
   private imageView(image: z.infer<typeof ImageSchema>): FakeImage {
-    return {
+    const view: FakeImage = {
       id: image.id,
       state: "ready",
       visibility: "private",
@@ -673,6 +675,10 @@ export class FakeProviderEngine {
       submissionId: image.submissionId,
       createdAt: image.createdAt,
     };
+
+    if (image.labels) view.labels = { ...image.labels };
+
+    return view;
   }
   /** Ready images this scope may start from, including the borrowed public starter image. */
   image(scope: NativeScope, query: { imageId?: string; submissionId?: string }): FakeImage | null {
@@ -728,6 +734,7 @@ export class FakeProviderEngine {
     scope: NativeScope;
     identity: InvocationIdentity;
     sandbox: SandboxRef;
+    labels?: Record<string, string>;
   }): Promise<{ image: FakeImage | null; created: boolean; loseResponse: boolean }> {
     const resource = this.find(input.sandbox);
 
@@ -739,6 +746,7 @@ export class FakeProviderEngine {
       identity: input.identity,
       source: `${SNAPSHOT_SOURCE}${input.sandbox.nativeId}`,
       files: resource.files,
+      labels: input.labels,
     });
   }
   /** One build per submission: a repeated submission returns the original image, never another. */
@@ -747,6 +755,7 @@ export class FakeProviderEngine {
     identity: InvocationIdentity;
     source: string;
     files?: Record<string, string>;
+    labels?: Record<string, string> | undefined;
   }): Promise<{ image: FakeImage | null; created: boolean; loseResponse: boolean }> {
     return this.mutate(
       () => {
@@ -780,6 +789,8 @@ export class FakeProviderEngine {
         };
 
         if (input.files) image.files = { ...input.files };
+
+        if (input.labels && Object.keys(input.labels).length) image.labels = { ...input.labels };
         this.state.images.push(image);
 
         return {

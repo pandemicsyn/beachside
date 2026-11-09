@@ -97,6 +97,11 @@ async function seedExec(command: string[] | string, exitCode: number, stdout: st
   });
 }
 
+/** A restore reads the sandbox's setup state first, to run any recorded startup. */
+async function seedSetupStateRead(state = "") {
+  await seedExec('cat "$HOME/.beachside/setup/state.json" 2>/dev/null || true', 0, state);
+}
+
 type Result = { code: number; stdout: string; stderr: string };
 
 async function cli(
@@ -2822,6 +2827,7 @@ describe("snapshots", () => {
     expect(envelope(restored).data).toMatchObject({ name: "web-2", image: "snapshot:deps" });
     expect((await cli(["cat", "web-2:/work/state.txt"])).stdout).toBe("warm cache\n");
 
+    await seedSetupStateRead();
     await seedExec(["true"], 0, "");
     expect((await cli(["run", "--snapshot", "deps", "--", "true"])).code).toBe(0);
 
@@ -2937,6 +2943,7 @@ describe("snapshots", () => {
     expect(envelope(other).error.message).toBe("Snapshot deps belongs to profile snaps, not fake");
 
     // For run, --env belongs to the command, so it stays allowed.
+    await seedSetupStateRead();
     await control("/_test/seed", {
       submissionId: "*",
       action: "exec",

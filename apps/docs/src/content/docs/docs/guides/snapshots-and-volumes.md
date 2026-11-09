@@ -60,6 +60,13 @@ const restored = await snapshot.restore({
 });
 ```
 
+`snapshot({ labels })` sets labels on the snapshot itself, where the adapter keeps them (`(await beachside.capabilities()).snapshots.capture.value.labels`; Runloop does today). Elsewhere a labelled capture is rejected before anything is captured. `snapshots.list({ labels })` keeps only snapshots with every given label. It filters one page at a time, so follow `nextCursor` until it is absent:
+
+```ts
+await source.snapshot({ labels: { base: "node-22" } });
+const page = await beachside.snapshots.list({ labels: { base: "node-22" } });
+```
+
 An adapter that can't apply one of them on restore rejects it before allocation with `UnsupportedFeatureError`, and `(await beachside.capabilities()).snapshots.restore` lists what it accepts under `options`. Environment values never enter references, messages or traces. See [current combinations](#current-combinations) for each adapter.
 
 Restore uses the connection's configured network policy when you omit `network`. An explicit override must be supported by that connection. By default, restore also requires the new sandbox to have a lifecycle independent of the source and snapshot. Unsupported restore requirements reject before allocation with `UnsupportedFeatureError`; `unmetRequirements` explains why.
@@ -208,6 +215,7 @@ The [compiled storage example](https://github.com/pandemicsyn/beachside/blob/mai
 | Capture a sandbox with external mounts | Unsupported by every adapter.                                                                                                                                                                                                                      |
 | Restore with selected volumes          | Daytona only: known mount-free filesystem snapshot, fresh execution and `internet` or `daytona-default` networking.                                                                                                                                |
 | Restore with `env`, `labels`, lifetime | All three on Daytona, E2B, Modal, Freestyle and Vercel (Vercel lifetime only in disposable mode; Daytona and E2B env only for filesystem snapshots); Runloop env and lifetime (lifetime unless `idleSeconds` is set); Boat and boxd lifetime only. |
+| Labels set at capture                  | Runloop (as snapshot metadata); other adapters reject `snapshot({ labels })` before capture.                                                                                                                                                       |
 | Override restore resource sizes        | Unsupported by Daytona, E2B, boxd, Modal, Boat, Freestyle and Archil; empty overrides are treated as omitted.                                                                                                                                      |
 | Create a sandbox with volumes          | Daytona writable mounts with optional subpaths; boxd whole-disk read-only or writable mounts; Archil disks, read-only or writable, with optional subpaths.                                                                                         |
 | Manage E2B volumes                     | Private-beta API mapping; live creation was blocked by account HTTP 403. Beachside create-time mounts are unsupported.                                                                                                                             |

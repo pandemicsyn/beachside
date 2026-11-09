@@ -69,32 +69,49 @@ When you want results back, such as JUnit reports or coverage, split the job int
 
 ## Warm bases
 
-Installing dependencies on every job is slow. Prepare a sandbox once, save it as a snapshot, and start each job from it. The record of that snapshot lives in the state folder, which starts empty on a hosted runner, so keep it in the GitHub Actions cache. The key follows your lockfile, so the base is rebuilt when dependencies change:
+Installing dependencies on every job is slow. A cached setup installs them once, saves the result as a snapshot, and later jobs start from it. Put the setup in the repository, keyed on the lockfile:
 
-```yaml
-- uses: pandemicsyn/beachside/actions/setup-beachside@main
-  id: beachside
-  with:
-    adapters: e2b
-    provider: e2b
-- uses: actions/cache@v4
-  id: base
-  with:
-    path: ${{ steps.beachside.outputs.state-dir }}/snapshots
-    key: beachside-base-${{ hashFiles('package-lock.json') }}
-    restore-keys: beachside-base-
-- if: steps.base.outputs.cache-hit != 'true'
-  run: |
-    beachside create --name base --network internet --ttl 30m
-    beachside exec base --cwd "$(beachside push base)" -- npm ci
-    beachside snapshot create base --name ci-base --replace
-    beachside rm base
-- run: >
-    beachside run --snapshot ci-base --push . --timeout 15m --ttl 30m --retry 5m
-    -- npm test
+```json
+{
+  "setups": {
+    "deps": {
+      "setup": ["npm ci"],
+      "cache": { "files": ["./package-lock.json"] }
+    }
+  },
+  "default": ["deps"]
+}
 ```
 
-On a lockfile change, `restore-keys` brings back the previous record and `--replace` captures the new base, then deletes the old snapshot once the new one exists, so old bases don't pile up. `--push` sends the checkout on top of the base, so tests always run against the commit being built. Snapshots stay on the provider until you delete them, and some providers charge for storage. See [Snapshots](/docs/cli/#snapshots) for what each provider keeps.
+Save it as `.beachside/setup.json`, and let the workflow read it:
+
+```yaml
+env:
+  BEACHSIDE_PROJECT_SETUPS: "1"
+steps:
+  - uses: actions/checkout@v4
+  - uses: pandemicsyn/beachside/actions/setup-beachside@main
+    id: beachside
+    with:
+      adapters: e2b
+      provider: e2b
+  - uses: actions/cache@v4
+    with:
+      path: ${{ steps.beachside.outputs.state-dir }}/snapshots
+      key: beachside-caches-${{ github.run_id }}
+      restore-keys: beachside-caches-
+  - run: >
+      beachside run --push . --network internet --timeout 15m --ttl 30m --retry 5m
+      -- npm test
+```
+
+The first job builds the cache: it pushes the checkout, runs `npm ci` in it, snapshots the sandbox, then runs the tests. Later jobs restore that snapshot, push the checkout on top, and go straight to the tests. A lockfile change is a new cache key, so the next job rebuilds it. A cache older than its `maxAge` (7 days by default) is rebuilt too, and the old snapshot is deleted once the new one exists.
+
+The cache records live in the state folder, which starts empty on a hosted runner, so `actions/cache` carries them between jobs. Its key changes every run so the newest records are always saved. On providers that label snapshots (Runloop), a runner with an empty state folder finds the cache by its label, and the `actions/cache` step can go.
+
+Snapshots stay on the provider until deleted, and some providers charge for storage. To prune stale caches, add `beachside setup cache prune` after the `actions/cache` step, so it sees the same records. `beachside setup cache ls` and `setup cache rm <setup>` manage caches by hand. See [Cache a setup](/docs/cli/setup/#cache-a-setup) for the details.
+
+You can still build a base by hand with `beachside snapshot create` and start jobs with `beachside run --snapshot <name>`; keep its record in `actions/cache` the same way.
 
 On E2B and Daytona you can instead build an image into a provider template once, from your machine, and give jobs its id:
 
