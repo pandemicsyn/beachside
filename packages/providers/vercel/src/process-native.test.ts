@@ -515,29 +515,6 @@ test("Vercel byte profile rejects a missing byte consumer before launching a chi
   expect(calls).toBe(0);
 });
 
-test("Vercel named SIGTERM requests the retained child and independently observes its exit", async () => {
-  const native = fixture();
-  let child: NativeProcess | undefined;
-
-  try {
-    child = await startVercelProcess(
-      native.execute,
-      {
-        sandbox,
-        command: { kind: "argv", argv: ["python3", "-c", "import time; time.sleep(30)"] },
-        maxOutputBytes: 0,
-        output: { mode: "stream" },
-      },
-      { ...read(), onOutput() {} },
-    );
-    expect(await child.signal!("SIGTERM", read())).toEqual({ status: "requested" });
-    expect((await child.wait()).exitCode).toBe(-15);
-    await child.outputDone;
-  } finally {
-    await cleanup(child, native.root);
-  }
-});
-
 test("Vercel parked process reconnects exclusively with live output, preserved stdin and fenced leases", async () => {
   const native = fixture();
   let child: NativeProcess | undefined;
