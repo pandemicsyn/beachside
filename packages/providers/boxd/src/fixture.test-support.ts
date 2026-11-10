@@ -83,6 +83,8 @@ type SnapshotRecord = {
   createdAt: number;
   updatedAt: number;
   useCount: number;
+  /** The source's labels at save time, which a restore inherits. */
+  labels: Record<string, string>;
 };
 
 type DiskRecord = {
@@ -414,8 +416,10 @@ export async function boxdFixture() {
               createdAt: Date.now(),
               updatedAt: 0,
               useCount: 0,
+              labels: {},
             };
 
+            record.labels = { ...machine.labels };
             record.capturing = record.version + 1;
             record.status = snapshotFailure === "fail" ? "failed" : "pending";
             record.pendingReads = snapshotPendingReads;
@@ -513,7 +517,7 @@ export async function boxdFixture() {
               proxies: req.config?.network?.proxies ?? [],
               // A restore starts with no allowlist; labels merge over the captured ones.
               egressAllow: [],
-              labels: req.labels,
+              labels: { ...record.labels, ...req.labels },
               sourceInfo: {
                 kind: "snapshot",
                 name: record.name,

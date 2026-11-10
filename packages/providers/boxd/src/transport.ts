@@ -22,7 +22,14 @@ const CHANNEL_OPTIONS = {
 
 /** A region's `https://host:port` API endpoint as a gRPC target; anything else is refused. */
 export function regionTarget(endpoint: string): string {
-  const url = URL.parse(endpoint);
+  // `new URL` rather than `URL.parse`, which Node 20 lacks before 20.18.
+  let url: URL | undefined;
+
+  try {
+    url = new URL(endpoint);
+  } catch {
+    url = undefined;
+  }
 
   if (!url || url.protocol !== "https:" || url.pathname.replace(/\/$/, "") !== "" || url.search)
     throw new AdapterError("UNAVAILABLE", "boxd region endpoint is not a usable https endpoint");

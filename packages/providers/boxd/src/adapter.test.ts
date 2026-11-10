@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { afterEach, expect, test } from "bun:test";
 import { status } from "@grpc/grpc-js";
+import { AdapterError } from "@beachside/adapter";
 import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
 import { Beachside, OutcomeUnknownError, Preserve } from "beachside";
 import { createBoxdAdapter } from "./adapter";
 import { boxdFixture } from "./fixture.test-support";
+import { regionTarget } from "./transport";
 
 const fixtures: Awaited<ReturnType<typeof boxdFixture>>[] = [];
 
@@ -1076,6 +1078,64 @@ test("a lost or refused egress response leaves the created machine unknown, neve
   } finally {
     await client.close();
   }
+});
+
+test("blocked egress is installed before expiry, so a failed expiry never leaves it open", async () => {
+  const { fixture, adapter } = await setup();
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    fixture.failExpiry();
+    const lost = await client.sandboxes.create().catch((error: Error) => error);
+    fixture.failExpiry(false);
+    expect(lost).toBeInstanceOf(OutcomeUnknownError);
+
+    const machine = [...fixture.machines.values()].at(-1)!;
+    expect(machine.egressAllow).toEqual(["none"]);
+
+    const order = fixture.calls.map((call) => call.method);
+    expect(order.indexOf("SetVmEgressAllow")).toBeLessThan(order.indexOf("SetDeleteAfter"));
+  } finally {
+    await client.close();
+  }
+});
+
+test("restore applies blocked egress and merges labels over the captured ones", async () => {
+  const { fixture, adapter } = await setup();
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    const source = await client.sandboxes.create({ labels: { team: "infra", env: "dev" } });
+    const { snapshot } = await source.snapshot();
+    const restored = await snapshot.restore({ labels: { env: "ci" } });
+
+    const machine = fixture.machines.get(restored.id)!;
+    expect(machine.egressAllow).toEqual(["none"]);
+    expect(machine.labels).toEqual({ team: "infra", env: "ci" });
+    expect(
+      fixture.calls.filter((call) => call.method === "SetVmEgressAllow").length,
+    ).toBeGreaterThanOrEqual(2);
+  } finally {
+    await client.close();
+  }
+});
+
+test("regionTarget accepts only bare https endpoints", () => {
+  expect(regionTarget("https://nyc.boxd.sh")).toBe("nyc.boxd.sh:443");
+  expect(regionTarget("https://nyc.boxd.sh:8443/")).toBe("nyc.boxd.sh:8443");
+
+  for (const bad of ["not a url", "http://nyc.boxd.sh", "https://nyc.boxd.sh/api", "https://x?y=1"])
+    expect(() => regionTarget(bad)).toThrow(AdapterError);
 });
 
 test("a configured region sends machine calls to its endpoint and binds references to it", async () => {
