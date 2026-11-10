@@ -1,5 +1,12 @@
 # @beachside/modal
 
+## 0.12.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @beachside/adapter@0.12.0
+
 ## 0.11.0
 
 ### Patch Changes
