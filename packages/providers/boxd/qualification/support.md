@@ -114,7 +114,7 @@ OCI images boot directly; no Beachside image-build hook or retained image artifa
 
 ### Measured network controls
 
-Only internet policy is supported, selected explicitly at setup. Peer/metadata isolation is enabled; this does not block internet egress. Strict blocked and paired network qualification unsupported.
+`blocked` (the default), `internet` and `{ allow }` allowlists are supported through boxd's native egress allowlist. Peer/metadata isolation is enabled; it does not block internet egress. Paired network qualification has not run.
 
 <a id="boxd-storageComposition"></a>
 
