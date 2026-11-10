@@ -7,26 +7,26 @@ description: Declared adapter support and dated live acceptance, with provider c
 
 Adapter support and live validation are separate facts. **Supported** means implemented; **conditional** requires the configuration in the linked note; **unsupported** means the adapter does not expose the workflow. Live results are **passed**, **failed**, **blocked**, or **not-run**. Each pass applies to its recorded source/configuration, not the current head or every provider account. Fixture and packed tests never produce live passes.
 
-| Feature                             | boxd                                                |
-| ----------------------------------- | --------------------------------------------------- |
-| Sandbox lifecycle                   | [Conditional · passed at fcb59d40](#boxd-lifecycle) |
-| Native sandbox suspend/resume       | [Conditional · not-run](#boxd-suspension)           |
-| Protected HTTP preview              | [Unsupported · not-run](#boxd-previewProtected)     |
-| Public HTTP preview                 | [Conditional · not-run](#boxd-previewPublic)        |
-| Local-handle process termination    | [Unsupported · not-run](#boxd-termination)          |
-| Configured lifetime renewal         | [Conditional · not-run](#boxd-renewal)              |
-| Scoped sandbox reopening            | [Conditional · passed at fcb59d40](#boxd-reopening) |
-| Execution and captured output       | [Conditional · passed at fcb59d40](#boxd-execution) |
-| Process streams and terminals       | [Unsupported · not-run](#boxd-streaming)            |
-| Finite execution input              | [Conditional · not-run](#boxd-finiteStdin)          |
-| Binary files and overwrite          | [Conditional · passed at fcb59d40](#boxd-files)     |
-| Directory primitives                | [Conditional · not-run](#boxd-directories)          |
-| OCI image builds                    | [Unsupported · not-run](#boxd-oci)                  |
-| Measured network controls           | [Unsupported · not-run](#boxd-network)              |
-| Cold snapshot with selected storage | [Unsupported · not-run](#boxd-storageComposition)   |
-| Snapshot roundtrip                  | [Conditional · not-run](#boxd-snapshots)            |
-| Volume CRUD                         | [Conditional · not-run](#boxd-volumes)              |
-| Mounted persistence                 | [Conditional · not-run](#boxd-persistence)          |
+| Feature                             | boxd                                                  |
+| ----------------------------------- | ----------------------------------------------------- |
+| Sandbox lifecycle                   | [Conditional · passed at 3eafa0b8](#boxd-lifecycle)   |
+| Native sandbox suspend/resume       | [Conditional · failed](#boxd-suspension)              |
+| Protected HTTP preview              | [Unsupported · not-run](#boxd-previewProtected)       |
+| Public HTTP preview                 | [Conditional · failed](#boxd-previewPublic)           |
+| Local-handle process termination    | [Unsupported · not-run](#boxd-termination)            |
+| Configured lifetime renewal         | [Conditional · failed](#boxd-renewal)                 |
+| Scoped sandbox reopening            | [Conditional · passed at 3eafa0b8](#boxd-reopening)   |
+| Execution and captured output       | [Conditional · passed at 3eafa0b8](#boxd-execution)   |
+| Process streams and terminals       | [Unsupported · not-run](#boxd-streaming)              |
+| Finite execution input              | [Conditional · passed at 3eafa0b8](#boxd-finiteStdin) |
+| Binary files and overwrite          | [Conditional · passed at 3eafa0b8](#boxd-files)       |
+| Directory primitives                | [Conditional · failed](#boxd-directories)             |
+| OCI image builds                    | [Unsupported · not-run](#boxd-oci)                    |
+| Measured network controls           | [Conditional · not-run](#boxd-network)                |
+| Cold snapshot with selected storage | [Unsupported · not-run](#boxd-storageComposition)     |
+| Snapshot roundtrip                  | [Conditional · failed](#boxd-snapshots)               |
+| Volume CRUD                         | [Conditional · passed at 3eafa0b8](#boxd-volumes)     |
+| Mounted persistence                 | [Conditional · failed](#boxd-persistence)             |
 
 The [live evidence detail](./live-qualification.md) contains only reviewed records supplied for this external profile. Missing records remain not-run; declarations do not establish live acceptance.
 
@@ -114,7 +114,7 @@ OCI images boot directly; no Beachside image-build hook or retained image artifa
 
 ### Measured network controls
 
-`blocked` (the default), `internet` and `{ allow }` allowlists are supported through boxd's native egress allowlist. Peer/metadata isolation is enabled; it does not block internet egress. Paired network qualification has not run.
+Blocked (the setup default) and internet policies. Blocked sets the native egress allowlist to `none` after create and before the machine is handed out; internet leaves it empty. Peer/metadata isolation is enabled either way. No live qualification yet.
 
 <a id="boxd-storageComposition"></a>
 
@@ -139,14 +139,6 @@ Independent block disks with configured size (10 GiB by default); create/inspect
 ### Mounted persistence
 
 Whole-disk create-time read-only/read-write mounts, one machine per disk even read-only. Unknown durability requires explicit allow-unconfirmed cleanup. Native host placement restrictions may reject multi-disk creates. No live qualification yet.
-
-## Other integrations
-
-This page covers only the supplied external profile. Other adapter results are recorded separately.
-
-## Runtimes
-
-The SDK targets server-side Node.js and Bun. Packed consumer checks exercise emitted JavaScript and strict TypeScript declarations; live records retain the tested runtime/platform. Package and fixture checks do not establish live provider behavior on other runtimes.
 
 ## Updating support
 

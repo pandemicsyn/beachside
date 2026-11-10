@@ -11,17 +11,17 @@ A live pass covers the image, region and network setting it ran with, not every 
 
 ## Providers
 
-| Provider                                  | Status       | Passed live                           | Notes                                                                                                                    |
-| ----------------------------------------- | ------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| [Daytona](/docs/providers/daytona/)       | Supported    | 14 features, last run October 9, 2026 | Live-tested across sandboxes, commands, files, previews, snapshots and volumes.                                          |
-| [E2B](/docs/providers/e2b/)               | Supported    | 11 features, last run October 9, 2026 | Live-tested across sandboxes, commands, files, previews, pause/resume and snapshots.                                     |
-| [boxd](/docs/providers/boxd/)             | Experimental | 4 features, last run October 11, 2026 | Only the basics have run live: sandboxes, commands, files and reconnecting. Previews, pause/resume and volumes have not. |
-| [Vercel Sandbox](/docs/providers/vercel/) | Experimental | None yet                              | Not yet tested against the live Vercel service.                                                                          |
-| [Boat](/docs/providers/boat/)             | Experimental | None yet                              | Not yet tested against the live Boat service.                                                                            |
-| [Runloop](/docs/providers/runloop/)       | Experimental | None yet                              | Not yet tested against the live Runloop service; sign-ups are invitation only.                                           |
-| [Freestyle](/docs/providers/freestyle/)   | Experimental | None yet                              | Not yet tested against the live Freestyle service.                                                                       |
-| [Archil](/docs/providers/archil/)         | Experimental | None yet                              | Checked by hand on the Free plan; not yet run through the live qualification suite.                                      |
-| Modal                                     | Experimental | None yet                              | Not yet tested against the live Modal service.                                                                           |
+| Provider                                  | Status       | Passed live                            | Notes                                                                                                                    |
+| ----------------------------------------- | ------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [Daytona](/docs/providers/daytona/)       | Supported    | 14 features, last run October 9, 2026  | Live-tested across sandboxes, commands, files, previews, snapshots and volumes.                                          |
+| [E2B](/docs/providers/e2b/)               | Supported    | 11 features, last run October 9, 2026  | Live-tested across sandboxes, commands, files, previews, pause/resume and snapshots.                                     |
+| [boxd](/docs/providers/boxd/)             | Experimental | 6 features, last run November 10, 2026 | Only the basics have run live: sandboxes, commands, files and reconnecting. Previews, pause/resume and volumes have not. |
+| [Vercel Sandbox](/docs/providers/vercel/) | Experimental | None yet                               | Not yet tested against the live Vercel service.                                                                          |
+| [Boat](/docs/providers/boat/)             | Experimental | None yet                               | Not yet tested against the live Boat service.                                                                            |
+| [Runloop](/docs/providers/runloop/)       | Experimental | None yet                               | Not yet tested against the live Runloop service; sign-ups are invitation only.                                           |
+| [Freestyle](/docs/providers/freestyle/)   | Experimental | None yet                               | Not yet tested against the live Freestyle service.                                                                       |
+| [Archil](/docs/providers/archil/)         | Experimental | None yet                               | Checked by hand on the Free plan; not yet run through the live qualification suite.                                      |
+| Modal                                     | Experimental | None yet                               | Not yet tested against the live Modal service.                                                                           |
 
 ## What has been tested live
 
