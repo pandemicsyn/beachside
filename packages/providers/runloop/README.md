@@ -42,7 +42,8 @@ Scope is the account id from `GET /v1/accounts/me` plus the fixed `https://api.r
 - **Snapshots** capture the disk asynchronously while the Devbox keeps running; restore creates a new Devbox. List, inspect and delete are supported. Setup accepts `snapshots: { preserve: Preserve.FILESYSTEM }` (the default); `Preserve.FILESYSTEM_AND_MEMORY` rejects `UNSUPPORTED` at connect.
 - **Preview** returns the tunnel URL for a port.
 - **Destroy** shuts the Devbox down and confirms the `shutdown` status. Snapshots survive.
-- Unsupported: OCI images and image builds, volumes, mounts, egress allowlists, renewal, interactive processes, directory operations, regions and labels.
+- Labels: create and restore `labels` are stored as Devbox metadata beside the adapter's `beachside_` markers and returned by `sandboxes.list()`.
+- Unsupported: OCI images and image builds, volumes, mounts, renewal, interactive processes, directory operations and regions.
 
 Every mutation is sent once. 4xx refusals become ordinary errors; lost responses and 5xx become `OUTCOME_UNKNOWN` and are never replayed.
 
