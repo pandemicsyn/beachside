@@ -3,7 +3,7 @@ title: boxd
 description: Use the boxd adapter for microVMs booted from OCI images, with suspend/resume, independent disks and public previews.
 ---
 
-The `@beachside/boxd` package implements the public Beachside adapter interface for [boxd](https://docs.boxd.sh) microVMs. Install it with `npm install beachside @beachside/boxd`; it is experimental, because only the basic workflows have run live. Use Node 20+ or Bun. Native SDK version: `@boxd-sh/sdk@0.2.15`.
+The `@beachside/boxd` package implements the public Beachside adapter interface for [boxd](https://docs.boxd.sh) microVMs. Install it with `npm install beachside @beachside/boxd`; it is experimental, because only the basic workflows have run live. Use Node 20+ or Bun. Native SDK version: `@boxd-sh/sdk@0.3.0`.
 
 ```ts
 import { Beachside } from "beachside";
@@ -35,7 +35,8 @@ The package also exports `boxd()`, which takes credentials and config in one obj
 | Setting                         | Default                          | Notes                                                                                                                                                                               |
 | ------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `org`                           | required                         | The authenticated default org's ID (`org-…`) or slug; `boxd auth` shows your org context. The CLI reads it from `BOXD_ORG`.                                                         |
-| `network`                       | required                         | Must be `"internet"`. boxd isolates machines from peers and metadata services, but has no egress controls. Deprecated alias: `networkPolicy`.                                       |
+| `network`                       | `blocked`                        | `blocked` lets machines reach nothing outside; `internet` leaves egress open. Machines are always isolated from peers and metadata services. Deprecated alias: `networkPolicy`.     |
+| `region`                        | the org's home region            | A boxd region such as `fra` (Frankfurt) or `nyc` (New York) that is enabled for your org. Machines, disks and snapshots stay in it. The CLI reads it from `BOXD_REGION`.            |
 | `image`                         | cluster default image            | An OCI image reference. boxd boots it directly.                                                                                                                                     |
 | `resources`                     | account default size             | Minimum `{ vcpus, memoryMiB }`. Picks the smallest of 1, 2, 4 or 8 vCPUs with 4, 8, 16 or 32 GiB RAM. Deprecated alias: `size` (a vCPU count). The private disk is fixed at 100 GB. |
 | `lifecycle.lifetimeSeconds`     | 900                              | No maximum; values under 60 become 60. Also the default `renew()` window. `create({ lifecycle })` can override it per sandbox. Deprecated alias: top-level `lifetimeSeconds`.       |
@@ -45,7 +46,9 @@ The package also exports `boxd()`, which takes credentials and config in one obj
 | `snapshots.preserve`            | `Preserve.FILESYSTEM_AND_MEMORY` | Snapshots always keep memory. `Preserve.FILESYSTEM` is rejected at connect.                                                                                                         |
 | `lifecycle.suspension.preserve` | `Preserve.FILESYSTEM_AND_MEMORY` | `suspend()` always keeps memory. `Preserve.FILESYSTEM` is rejected at connect.                                                                                                      |
 
-Create-time `env` is rejected with `UnsupportedFeatureError` before allocation, because boxd machine variables are not known to reach commands. Pass variables per call with `exec({ env })`; see [environment variables](/docs/guides/images-and-networking/#set-environment-variables). `region` and `labels` are rejected.
+`create({ labels })` and `restore({ labels })` set boxd machine labels, which `sandboxes.list()` returns. Keys are 1 to 63 characters of `a-z 0-9 . _ / -`, start and end with a letter or digit, and cannot use the `boxd/` prefix; values are up to 256 characters, and a machine holds at most 64. A restore merges its labels over the ones the snapshot captured. `create({ region })` must match the configured `region`; to use another region, connect with that `region`. A reference made in one region does not open from a connection to another.
+
+Create-time `env` is rejected with `UnsupportedFeatureError` before allocation, because boxd machine variables are not known to reach commands. Pass variables per call with `exec({ env })`; see [environment variables](/docs/guides/images-and-networking/#set-environment-variables).
 
 ## What works
 
@@ -62,7 +65,8 @@ Create-time `env` is rejected with `UnsupportedFeatureError` before allocation, 
 | Directories                  | List, stat, exists, mkdir, remove, copy and move. Most need Python 3.             | No          |
 | HTTP previews                | Public routes on configured ports. Protected previews are not supported.          | No          |
 | Images                       | Boots OCI images. Image builds and image get, list and delete are not supported.  | No          |
-| Network controls             | Not supported. Internet access is always on.                                      | —           |
+| Network controls             | `blocked` (the default) and `internet`. Allowlists are not supported yet.         | No          |
+| Labels and regions           | Labels on create and restore, returned by listing. One region per connection.     | No          |
 | Snapshots                    | Memory and disk capture, restore into a new machine, inspect, list and delete.    | No          |
 | Volumes and mounts           | Independent disks: create, inspect, list, delete and whole-disk mounts at create. | No          |
 | Listing sandboxes and images | Lists every machine in the org, with no ownership claim. Images: not supported.   | No          |
@@ -87,7 +91,7 @@ With `preview: { access: "protected" }`, preview lookup fails as unsupported. Th
 
 `box.snapshot()` always saves memory and disk together; boxd has no filesystem-only capture, so `snapshots: { preserve: Preserve.FILESYSTEM }` fails at connect. boxd pauses the machine briefly and it keeps running; a restored machine resumes the captured processes under a new ID, with its own name, URL and private IP. Processes that cached the old hostname or address keep the stale value.
 
-boxd keeps only the latest version under a snapshot name, so every capture gets its own name and the reference remembers the captured version. If someone saves that snapshot again outside Beachside, `inspect()`, `restore()` and `delete()` fail with `CONFLICT` before changing anything. A restore keeps the captured size and `internet` networking, applies your configured lifetime and preview settings, and cannot attach disks. Snapshots do not expire, so delete them when you are done. See [snapshots and volumes](/docs/guides/snapshots-and-volumes/).
+boxd keeps only the latest version under a snapshot name, so every capture gets its own name and the reference remembers the captured version. If someone saves that snapshot again outside Beachside, `inspect()`, `restore()` and `delete()` fail with `CONFLICT` before changing anything. A restore keeps the captured size, applies the requested network policy, your configured lifetime and preview settings, and cannot attach disks. Snapshots do not expire, so delete them when you are done. See [snapshots and volumes](/docs/guides/snapshots-and-volumes/).
 
 ## Storage and recovery
 
@@ -99,10 +103,10 @@ A refused create carries a matching code and boxd's reason, for example `CAPACIT
 
 ## Limits
 
-- Internet access is always on; blocked and allowlisted networks are rejected.
+- Egress is `blocked` or `internet`; allowlists are rejected. boxd sets egress on a machine once it exists, so Beachside applies `blocked` right after create, before the machine is handed to you. The image's own startup can run for that moment with open egress.
 - Public previews are reachable by anyone with the URL, and protected previews are unsupported.
 - Snapshots of machines with mounted disks are rejected, and restores cannot attach disks or change the captured size.
-- Create-time `env`, regions, labels, image builds and image management are unsupported.
+- Create-time `env`, image builds and image management are unsupported. Each connection works in one region.
 - Buffered command output, stdin and file transfers are limited to 1 MiB; most filesystem operations need Python 3.
 - Disks survive destroy and must be deleted explicitly. Closing the client destroys nothing.
 

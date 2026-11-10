@@ -25,6 +25,7 @@ const implemented = new Set([
   "volumes",
   "persistence",
   "snapshots",
+  "network",
 ]);
 
 const notes: Partial<Record<keyof typeof features, string>> = {
@@ -53,7 +54,7 @@ const notes: Partial<Record<keyof typeof features, string>> = {
   streaming:
     "Native execution stream cancellation kills the process group; it cannot satisfy Beachside detach/disconnect. Sustained process/terminal IO unsupported.",
   network:
-    "Only internet policy is supported, selected explicitly at setup. Peer/metadata isolation is enabled; this does not block internet egress. Strict blocked and paired network qualification unsupported.",
+    "Blocked (the setup default) and internet policies. Blocked sets the native egress allowlist to `none` after create and before the machine is handed out; internet leaves it empty. Peer/metadata isolation is enabled either way. No live qualification yet.",
   oci: "OCI images boot directly; no Beachside image-build hook or retained image artifact.",
   directories:
     "Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/exists, recursive-opt-in mkdir/remove, copy and staged 64 KiB streams. Private Linux filesystem with hardlinks; no-clobber move requires renameat2 and cross-filesystem move rejects without copy/delete. Failed transfers retain correlated staging paths; no replay. Walk/text lines compose these hooks. Local Python workflow and protobuf transport coverage are separate; expanded file-directories live not-run.",
@@ -64,7 +65,7 @@ const featureIds = Object.keys(features) as (keyof typeof features)[];
 
 export default defineProviderProfile({
   id: "boxd",
-  nativeVersion: "boxd SDK 0.2.15",
+  nativeVersion: "boxd SDK 0.3.0",
   configuredEnvironment: true,
   fileNoClobber: true,
   credentialVariables: ["BEACHSIDE_BOXD_API_KEY"],

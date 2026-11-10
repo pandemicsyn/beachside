@@ -13,7 +13,7 @@ Set `BEACHSIDE_PROVIDER` (or pass `--provider`) and the provider's own variables
 | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `daytona`   | `DAYTONA_API_KEY`, `DAYTONA_TARGET`                                                                                        |
 | `e2b`       | `E2B_API_KEY`                                                                                                              |
-| `boxd`      | `BOXD_API_KEY`, `BOXD_ORG`, `BOXD_NETWORK=internet`                                                                        |
+| `boxd`      | `BOXD_API_KEY`, `BOXD_ORG`; optional `BOXD_NETWORK=internet` and `BOXD_REGION`                                             |
 | `boat`      | `BOAT_API_KEY`, `BOAT_NETWORK=internet`                                                                                    |
 | `runloop`   | `RUNLOOP_API_KEY`; optional `RUNLOOP_NETWORK=internet` (experimental)                                                      |
 | `freestyle` | `FREESTYLE_API_KEY`; optional `FREESTYLE_NETWORK=internet` (experimental)                                                  |
@@ -21,7 +21,7 @@ Set `BEACHSIDE_PROVIDER` (or pass `--provider`) and the provider's own variables
 | `vercel`    | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                                                                      |
 | `modal`     | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `MODAL_APP_NAME`, `MODAL_ENVIRONMENT`                                              |
 
-`beachside providers` shows which of these are missing. `BOXD_ORG` is the ID (`org-…`) or slug of the boxd org your API key defaults to; `boxd auth` shows your current org context. Daytona has no default image, so each Daytona `create` or `run` needs `--prepared <snapshot>` (such as `daytona-small`) or `--image`. boxd and Boat always allow internet egress, so their adapters ask you to choose that explicitly with `BOXD_NETWORK=internet` or `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
+`beachside providers` shows which of these are missing. `BOXD_ORG` is the ID (`org-…`) or slug of the boxd org your API key defaults to; `boxd auth` shows your current org context. Daytona has no default image, so each Daytona `create` or `run` needs `--prepared <snapshot>` (such as `daytona-small`) or `--image`. boxd egress is blocked unless you set `BOXD_NETWORK=internet`, and `BOXD_REGION` (such as `nyc`) picks a boxd region other than your org's home one. Boat always allows internet egress, so its adapter asks you to choose that explicitly with `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
 
 ## Profiles
 

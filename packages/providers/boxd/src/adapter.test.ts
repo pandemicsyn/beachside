@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { afterEach, expect, test } from "bun:test";
 import { status } from "@grpc/grpc-js";
+import { AdapterError } from "@beachside/adapter";
 import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
 import { Beachside, OutcomeUnknownError, Preserve } from "beachside";
 import { createBoxdAdapter } from "./adapter";
 import { boxdFixture } from "./fixture.test-support";
+import { regionTarget } from "./transport";
 
 const fixtures: Awaited<ReturnType<typeof boxdFixture>>[] = [];
 
@@ -27,27 +29,38 @@ async function setup() {
   return { fixture, adapter, connect };
 }
 
-test("boxd setup takes network internet once, under either name", async () => {
+test("boxd setup offers blocked and internet egress and takes the network once, under either name", async () => {
   const { adapter } = await setup();
-
-  const client = await Beachside.connect({
-    adapter,
-    config: { org: "main", network: "internet" },
-    credentials: { apiKey: "fixture-main" },
-  });
-
-  try {
-    expect((await client.capabilities()).network).toEqual(["internet"]);
-  } finally {
-    await client.close();
-  }
 
   for (const config of [
     { org: "main" },
+    { org: "main", network: "internet" },
+    { org: "main", networkPolicy: "internet" },
+  ] as const) {
+    const client = await Beachside.connect({
+      adapter,
+      config,
+      credentials: { apiKey: "fixture-main" },
+    });
+
+    try {
+      expect((await client.capabilities()).network).toEqual(["blocked", "internet"]);
+    } finally {
+      await client.close();
+    }
+  }
+
+  for (const config of [
     { org: "main", network: "internet", networkPolicy: "internet" },
-  ] as const)
+    { org: "main", network: "allowlist" },
+  ])
     await expect(
-      Beachside.connect({ adapter, config, credentials: { apiKey: "fixture-main" } }),
+      // SAFETY: Invalid setups are the point; the adapter must refuse them at connect.
+      Beachside.connect({
+        adapter,
+        config: config as never,
+        credentials: { apiKey: "fixture-main" },
+      }),
     ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 });
 
@@ -183,7 +196,7 @@ test("boxd conformance exercises real protobuf RPCs, one-attempt faults and dist
   expect(fixture.calls.filter((call) => call.method === "CreateVm")).toHaveLength(3);
 });
 
-test("setup default policy and image produce an ordinary create; explicit blocked and unmet snapshot requirements reject before effects", async () => {
+test("setup default policy and image produce an ordinary create; unmet snapshot requirements reject before effects", async () => {
   const { fixture, connect } = await setup();
   const client = await connect();
 
@@ -195,9 +208,8 @@ test("setup default policy and image produce an ordinary create; explicit blocke
       org: "main",
       isolated: true,
     });
-    await expect(client.sandboxes.create({ networkPolicy: "blocked" })).rejects.toMatchObject({
-      code: "UNSUPPORTED",
-    });
+    // Internet egress leaves the native allowlist empty, so nothing is set after create.
+    expect(fixture.calls.some((call) => call.method === "SetVmEgressAllow")).toBe(false);
     await expect(box.snapshot({ requirements: { preserve: "filesystem" } })).rejects.toMatchObject({
       code: "UNSUPPORTED",
     });
@@ -406,7 +418,7 @@ test("fresh credentials reopen saved references; warm lifecycle and renewal repo
   }
 });
 
-test("expiry failure preserves an acknowledged UUID and observation never creates or renews again", async () => {
+test("expiry failure preserves an acknowledged UUID and observation never creates again or extends a lifetime", async () => {
   const { fixture } = await setup();
   const refs: unknown[] = [];
 
@@ -462,7 +474,11 @@ test("expiry failure preserves an acknowledged UUID and observation never create
     expect(fixture.calls.filter((call) => call.method === "GetVm")).toHaveLength(readsBefore + 2);
     expect(fixture.calls.filter((call) => call.method === "Exec")).toHaveLength(probesBefore);
     expect(fixture.effects.create).toBe(1);
-    expect(fixture.calls.filter((call) => call.method === "SetDeleteAfter")).toHaveLength(before);
+    // Observation only installs a lifetime on a machine that has none (the read that failed made
+    // no attempt); it never extends one.
+    expect(fixture.calls.filter((call) => call.method === "SetDeleteAfter")).toHaveLength(
+      before + 1,
+    );
     fixture.failExpiry(false);
 
     if (!saved) throw Error("Known sandbox reference missing");
@@ -470,7 +486,9 @@ test("expiry failure preserves an acknowledged UUID and observation never create
     expect((await known.inspect()).state).toBe("running");
     await known.destroy();
     expect(fixture.effects.create).toBe(1);
-    expect(fixture.calls.filter((call) => call.method === "SetDeleteAfter")).toHaveLength(before);
+    expect(fixture.calls.filter((call) => call.method === "SetDeleteAfter")).toHaveLength(
+      before + 1,
+    );
   } finally {
     await client.close();
   }
@@ -958,8 +976,8 @@ test("boxd lists org machines with unknown-ownership references that reopen", as
       id: "not-a-uuid",
       state: "stopped",
       reference: null,
-      // boxd machines carry no labels; the creation time is native.
-      labels: null,
+      // The machine has no labels; the creation time is native.
+      labels: {},
       createdAt: new Date(1_800_000_000_000).toISOString(),
     });
 
@@ -997,6 +1015,187 @@ test("boxd declares create env unsupported and rejects it before any native call
   } finally {
     await client.close();
   }
+});
+
+test("boxd labels and blocked egress reach the machine before it is handed out", async () => {
+  const { fixture, adapter } = await setup();
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    const box = await client.sandboxes.create({
+      labels: { team: "infra", "app.kubernetes.io/name": "web" },
+    });
+
+    const machine = fixture.machines.get(box.id)!;
+    expect(machine.labels).toEqual({ team: "infra", "app.kubernetes.io/name": "web" });
+    expect(machine.egressAllow).toEqual(["none"]);
+
+    const order = fixture.calls.map((call) => call.method);
+    expect(order.indexOf("SetVmEgressAllow")).toBeLessThan(order.lastIndexOf("SetBotProtection"));
+
+    const { items } = await client.sandboxes.list();
+    expect(items.find((item) => item.id === box.id)?.labels).toEqual(machine.labels);
+
+    // Opting into internet on one create clears an allowlist boxd gave the machine.
+    fixture.defaultEgress(["api.example.com"]);
+    const open = await client.sandboxes.create({ networkPolicy: "internet" });
+    expect(fixture.machines.get(open.id)!.egressAllow).toEqual([]);
+
+    const before = fixture.effects.create;
+
+    for (const [key, value] of [
+      ["boxd/owner", "me"],
+      ["Upper", "x"],
+      ["-edge", "x"],
+      ["ok", "bad\u0001value"],
+    ])
+      await expect(client.sandboxes.create({ labels: { [key!]: value! } })).rejects.toMatchObject({
+        code: "INVALID_ARGUMENT",
+      });
+    expect(fixture.effects.create).toBe(before);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a lost or refused egress response leaves the created machine unknown, never replayed", async () => {
+  const { fixture, adapter } = await setup();
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main", network: "blocked" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    for (const fail of [fixture.loseNextEgressResponse, fixture.rejectNextEgress]) {
+      fail();
+      const lost = await client.sandboxes.create().catch((error: Error) => error);
+      expect(lost).toBeInstanceOf(OutcomeUnknownError);
+    }
+
+    expect(fixture.effects.create).toBe(2);
+    expect(fixture.calls.filter((call) => call.method === "SetBotProtection")).toHaveLength(0);
+
+    // Expiry is still installed, so a machine whose egress failed does not outlive its lifetime.
+    for (const machine of fixture.machines.values())
+      expect(machine.deleteAtMs).toBeGreaterThan(Date.now());
+  } finally {
+    await client.close();
+  }
+});
+
+test("blocked egress is installed before expiry, so a failed expiry never leaves it open", async () => {
+  const { fixture, adapter } = await setup();
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    fixture.failExpiry();
+    const lost = await client.sandboxes.create().catch((error: Error) => error);
+    fixture.failExpiry(false);
+    expect(lost).toBeInstanceOf(OutcomeUnknownError);
+
+    const machine = [...fixture.machines.values()].at(-1)!;
+    expect(machine.egressAllow).toEqual(["none"]);
+
+    const order = fixture.calls.map((call) => call.method);
+    expect(order.indexOf("SetVmEgressAllow")).toBeLessThan(order.indexOf("SetDeleteAfter"));
+  } finally {
+    await client.close();
+  }
+});
+
+test("restore applies blocked egress and merges labels over the captured ones", async () => {
+  const { fixture, adapter } = await setup();
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    const source = await client.sandboxes.create({ labels: { team: "infra", env: "dev" } });
+    const { snapshot } = await source.snapshot();
+    const restored = await snapshot.restore({ labels: { env: "ci" } });
+
+    const machine = fixture.machines.get(restored.id)!;
+    expect(machine.egressAllow).toEqual(["none"]);
+    expect(machine.labels).toEqual({ team: "infra", env: "ci" });
+    expect(
+      fixture.calls.filter((call) => call.method === "SetVmEgressAllow").length,
+    ).toBeGreaterThanOrEqual(2);
+  } finally {
+    await client.close();
+  }
+});
+
+test("regionTarget accepts only bare https endpoints", () => {
+  expect(regionTarget("https://nyc.boxd.sh")).toBe("nyc.boxd.sh:443");
+  expect(regionTarget("https://nyc.boxd.sh:8443/")).toBe("nyc.boxd.sh:8443");
+
+  for (const bad of ["not a url", "http://nyc.boxd.sh", "https://nyc.boxd.sh/api", "https://x?y=1"])
+    expect(() => regionTarget(bad)).toThrow(AdapterError);
+});
+
+test("a configured region sends machine calls to its endpoint and binds references to it", async () => {
+  const { fixture, adapter } = await setup();
+
+  const connect = (region?: string) =>
+    Beachside.connect({
+      adapter,
+      config: region
+        ? { org: "main", network: "internet", region }
+        : { org: "main", network: "internet" },
+      credentials: { apiKey: "fixture-main" },
+    });
+
+  const nyc = await connect("nyc");
+  const home = await connect();
+
+  try {
+    expect(fixture.dialed).toEqual(["nyc.boxd.sh:9443"]);
+    const box = await nyc.sandboxes.create({ region: "nyc" });
+    const create = fixture.calls.find((call) => call.method === "CreateVm");
+    expect(create?.regional).toBe(true);
+    expect(fixture.calls.find((call) => call.method === "ListOrgs")?.regional).toBe(false);
+    expect(box.reference?.scope.partition).toMatchObject({
+      endpoint: "https://nyc.boxd.sh:9443",
+      zone: "nyc.boxd.sh",
+    });
+
+    // A reference made in one region does not open from another.
+    await expect(home.sandboxes.get(box.reference!)).rejects.toMatchObject({ code: "CONFLICT" });
+
+    for (const region of ["fra", "sgp"] as const)
+      await expect(nyc.sandboxes.create({ region })).rejects.toMatchObject({
+        code: "UNSUPPORTED",
+      });
+    await expect(home.sandboxes.create({ region: "nyc" })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+  } finally {
+    await nyc.close();
+    await home.close();
+  }
+
+  // The home region keeps the home endpoint; unknown and unenabled regions refuse at connect.
+  const fra = await connect("fra");
+  await fra.close();
+  expect(fixture.dialed).toEqual(["nyc.boxd.sh:9443"]);
+
+  await expect(connect("sgp")).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await expect(connect("syd")).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 });
 
 const snapshotCalls = (fixture: Awaited<ReturnType<typeof boxdFixture>>, method: string) =>
@@ -1060,7 +1259,7 @@ test("snapshots capture memory under a unique name and restore that exact versio
       restoreExecution: "resume",
       state: "ready",
       mountHandling: "none",
-      restore: { networkPolicies: ["internet"], resources: false, mounts: false },
+      restore: { networkPolicies: ["blocked", "internet"], resources: false, mounts: false },
     });
 
     const listed = await client.snapshots.list({ limit: 10 });
@@ -1199,8 +1398,11 @@ test("capture and restore reject what boxd cannot do before any native mutation"
     expect(snapshotCalls(fixture, "CreateSnapshot")).toHaveLength(0);
 
     const { snapshot } = await source.snapshot();
-    await expect(snapshot.restore({ network: "blocked" })).rejects.toMatchObject({
+    await expect(snapshot.restore({ env: { A: "b" } })).rejects.toMatchObject({
       code: "UNSUPPORTED",
+    });
+    await expect(snapshot.restore({ labels: { "boxd/owner": "x" } })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
     });
     await expect(snapshot.restore({ resources: { vcpu: 4 } })).rejects.toMatchObject({
       code: "UNSUPPORTED",
