@@ -279,11 +279,16 @@ const Port = z.looseObject({ hostname: z.string().regex(/^[A-Za-z0-9.-]{1,253}$/
 const PortToken = Port.extend({ token: z.string().regex(/^[^\r\n]{1,8192}$/) });
 
 /** The name and mounts are saved before dispatch, so a lost create is found by name. */
+/** Bound on source-resume cleanup, which outlives the caller's abort. */
+const CLEANUP_MS = 180_000;
+
 const CreateToken = z.strictObject({
   name: Name,
   id: Id.optional(),
   network: NetworkPolicy,
   mounts: z.array(MountSpecSchema).max(32).optional(),
+  /** Fork only: the fork paused its source and has not confirmed resuming it. */
+  sourcePaused: z.boolean().optional(),
 });
 
 type CreateToken = z.infer<typeof CreateToken>;
@@ -2540,7 +2545,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             if (source.mounts?.length)
               throw new AdapterError(
                 "UNSUPPORTED",
-                "Archil forks a sandbox with mounted disks only once it is stopped",
+                "Archil cannot fork a sandbox with mounted disks: its native fork needs them stopped, and box.fork() forks a running sandbox",
               );
 
             if (held.has(source.sandbox_id))
@@ -2563,24 +2568,39 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
               network: networkPolicy(policy),
             };
 
-            await ctx.checkpoint(token);
+            // Recorded before pausing, so recovery knows to resume a source this fork paused.
+            const forkToken: CreateToken = { ...token, sourcePaused: true };
+            await ctx.checkpoint(forkToken);
             held.add(source);
+
+            // Resuming the source is cleanup: it runs even after the caller aborts.
+            const resume = async () => {
+              const confirmed = await wake(source, "paused", AbortSignal.timeout(CLEANUP_MS));
+
+              // Recovery re-checks the source, so a resumed source is only noted here.
+              if (confirmed) forkToken.sourcePaused = false;
+
+              return confirmed;
+            };
 
             try {
               const paused = await park(source, "pause", ctx.signal);
 
               if ("reason" in paused) {
-                const now = await find(source, readContext(ctx.signal)).catch(() => null);
+                const now = await find(source, readContext(AbortSignal.timeout(CLEANUP_MS))).catch(
+                  () => null,
+                );
 
-                return now?.status === "running"
-                  ? ctx.reject("UNAVAILABLE", paused.reason)
-                  : ctx.unknown(`${paused.reason}; the source may be paused, inspect it`);
+                if (now?.status === "running" || (now?.status === "paused" && (await resume())))
+                  return ctx.reject("UNAVAILABLE", paused.reason);
+
+                return ctx.unknown(`${paused.reason}; the source may be paused, inspect it`);
               }
 
               const checkpoint = paused.wire.checkpoint;
 
               if (!checkpoint) {
-                return (await wake(source, "paused", ctx.signal))
+                return (await resume())
                   ? ctx.reject("UNAVAILABLE", "Archil reported no checkpoint for the source")
                   : ctx.unknown("Archil reported no checkpoint and the source did not resume");
               }
@@ -2594,19 +2614,19 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
                     path: sandboxPath(source, "/fork"),
                     body: { name: token.name, checkpoint },
                   },
-                  token,
+                  forkToken,
                   ctx,
                   partialFork,
                 );
               } finally {
                 // The source resumes whatever the fork's outcome; a lost fork stays unknown.
-                resumed = await wake(source, "paused", ctx.signal);
+                resumed = await resume();
               }
 
-              if (!resumed && "id" in result)
+              if (!resumed)
                 return ctx.unknown(
-                  "Archil fork is running but its source did not resume; inspect the source",
-                  partialFork(result.id, ctx),
+                  "Archil fork was sent but its source did not resume; inspect the source",
+                  "id" in result ? partialFork(result.id, ctx) : undefined,
                 );
 
               return result;
@@ -2624,6 +2644,19 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
               token.data.name !== restoreName(attempt.submissionId, attempt.resource.nativeId)
             )
               return ctx.unknown("Archil fork identity is unavailable; do not replay");
+
+            const source = attempt.resource.nativeId;
+
+            // The fork paused its source and never confirmed resuming it: resume it now.
+            if (token.data.sourcePaused && !held.has(source)) {
+              const now = await find(source, ctx).catch(() => null);
+
+              if (
+                now?.status === "paused" &&
+                !(await wake(source, "paused", AbortSignal.timeout(CLEANUP_MS)))
+              )
+                return ctx.unknown("Archil fork source is still paused; resume it, then observe");
+            }
 
             return observeLaunch(token.data, attempt, ctx, partialFork);
           },

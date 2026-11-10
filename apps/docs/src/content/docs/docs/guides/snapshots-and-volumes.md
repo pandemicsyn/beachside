@@ -145,6 +145,8 @@ try {
 }
 ```
 
+`checkFork()` makes no change. Beyond the options, it runs the adapter's own checks against this source, such as its state, mounted disks, egress and the labels it already carries, so `supported` means `fork()` would be sent. A source that is paused or busy reports `unavailable`.
+
 Fork is native only. An adapter without a native fork rejects with `UNSUPPORTED` before anything changes; Beachside never stands in a snapshot and restore. If you want a copy on such a provider, capture a snapshot and restore it yourself.
 
 `(await source.capabilities()).fork` says what a fork keeps:
