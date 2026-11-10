@@ -121,7 +121,7 @@ Never build a reference by hand from a sandbox id. `get()` never creates or resu
 
 ## Forking a sandbox
 
-`box.fork({ labels?, lifetimeSeconds? })` copies a running sandbox with the provider's native fork; use it to branch an agent or try several approaches from one state. It is native only: other adapters reject with `UNSUPPORTED`, and Beachside never substitutes a snapshot and restore. Check first with `box.checkFork()`; `(await box.capabilities()).fork.value` says whether memory and processes carry over (`preserve`, `execution`) and whether the source can be deleted while forks exist (`independentLifecycle`). Today boxd and Archil fork natively, both with memory and running processes; Archil keeps the source until its forks are destroyed. Destroy forks you no longer need.
+`box.fork({ labels?, lifetimeSeconds? })` copies a running sandbox with the provider's native fork; use it to branch an agent or try several approaches from one state. It is native only: other adapters reject with `UNSUPPORTED`, and Beachside never substitutes a snapshot and restore. Check first with `box.checkFork()`; `(await box.capabilities()).fork.value` says whether memory and processes carry over (`preserve`, `execution`) and whether the source can be deleted while forks exist (`independentLifecycle`). Today boxd, E2B and Archil fork natively, all with memory and running processes; Archil keeps the source until its forks are destroyed, and an E2B fork carries its source's metadata (labels can't be set on it). Destroy forks you no longer need.
 
 ## Provider differences to respect
 
