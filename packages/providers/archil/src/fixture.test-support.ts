@@ -142,6 +142,8 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
   const effects = { create: 0, destroy: 0, fork: 0 };
   let plan = options.plan ?? "developer";
   let loseNextCreate = false;
+  /** Network the next created sandbox reports instead of the one its create asked for. */
+  let nextNetwork: Json | undefined;
   let failNextFork = false;
   let held: { release: () => void; promise: Promise<void> } | undefined;
   let holdNext = false;
@@ -214,7 +216,7 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
       idleTtl: from?.idleTtl ?? body.idle_ttl_seconds ?? 1800,
       image: from?.image ?? body.base_image ?? body.image_id ?? "node:24-bookworm",
       env: from?.env ?? body.env ?? {},
-      network: from ? from.network : body.network,
+      network: from ? from.network : (nextNetwork ?? body.network),
       managed: from ? from.managed : plan === "free",
       mounts: from ? [] : (body.mounts ?? []),
       createdAt: new Date().toISOString(),
@@ -266,7 +268,10 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
 
         effects.create++;
 
-        return json(202, view(launch(account, name, body)));
+        const launched = launch(account, name, body);
+        nextNetwork = undefined;
+
+        return json(202, view(launched));
       }
 
       const box = owned(account, parts[1] ?? "");
@@ -716,6 +721,9 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
     },
     loseNextCreateResponse() {
       loseNextCreate = true;
+    },
+    reportNextNetwork(value: Json) {
+      nextNetwork = value;
     },
     failNextFork() {
       failNextFork = true;

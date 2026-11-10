@@ -101,6 +101,12 @@ export interface ModalSandboxRecord {
 }
 
 /** The injected boundary is deliberately smaller than Modal's SDK. */
+/** Outbound access for one sandbox, sent in its create request. */
+export type ModalNetwork =
+  | { kind: "blocked" }
+  | { kind: "open" }
+  | { kind: "allowlist"; domains: string[]; cidrs: string[] };
+
 export interface ModalTransport {
   lookupApp(appName: string, environment: string): Promise<string>;
   imageExists(imageId: string): Promise<boolean>;
@@ -118,6 +124,8 @@ export interface ModalTransport {
     regions?: string[];
     /** Native sandbox environment, sent in the single create request; values may be secrets. */
     env?: Record<string, string>;
+    /** Outbound access: all blocked, open, or an allowlist of TLS host names and IPv4 ranges. */
+    network: ModalNetwork;
   }): Promise<string>;
   findByName(
     appName: string,
@@ -334,6 +342,7 @@ export function createSdkTransport(input: {
       memoryMiB,
       regions,
       env,
+      network,
     }) {
       // Environment values may be secrets; native error details never echo them.
       const secrets = [input.tokenId, input.tokenSecret, ...Object.values(env ?? {})].sort(
@@ -363,7 +372,15 @@ export function createSdkTransport(input: {
       }
 
       let sandbox: Sandbox;
-      const params: SandboxCreateParams = { name, tags, timeoutMs, regions, blockNetwork: true };
+      const params: SandboxCreateParams = { name, tags, timeoutMs, regions };
+
+      if (network.kind === "blocked") params.blockNetwork = true;
+
+      if (network.kind === "allowlist") {
+        // Modal sends an allowlist with both lists; an empty IP list allows no ranges.
+        params.outboundDomainAllowlist = network.domains;
+        params.outboundCidrAllowlist = network.cidrs;
+      }
 
       if (env) params.env = env;
 

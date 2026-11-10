@@ -31,6 +31,8 @@ Every adapter uses this same `{ adapter, credentials, config }` shape, including
 
 `connect` verifies credentials with read-only calls and allocates nothing. Put provider choices (region, network policy, defaults) in this setup, not in every call.
 
+To let sandboxes reach only some destinations, set `network: { allow: ["registry.npmjs.org", "*.github.com", "10.0.0.0/8"] }` in that setup: host names (`*.` wildcards cover subdomains; Daytona and Modal also let them match the bare name) and IPv4 ranges, everything else blocked. E2B, Vercel, Modal, Runloop and Archil (paid plans) take both; Daytona (Tier 3+) takes hosts or ranges, not both in one list; Freestyle takes IPv4 ranges only; boxd and Boat reject allowlists. A connection with an allowlist creates every sandbox with it.
+
 ## The default shape
 
 Use `sandboxes.with()` when a sandbox is needed only for one task. It creates, runs the callback, and destroys, even on errors:

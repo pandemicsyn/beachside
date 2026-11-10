@@ -1,7 +1,15 @@
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import {
   AdapterCheckpointError,
   AdapterError,
+  ALLOW_NETWORK_POLICY,
+  AllowNetworkSetting,
+  allowlistConfig,
+  networkPolicyName,
+  allowlistFromCanonical,
+  parseEgressAllowlist,
+  throwAllowlistError,
   assertResourceIdentity,
   assertResourceScope,
   defaultLifetime,
@@ -70,20 +78,39 @@ const MAX_LIFETIME_SECONDS = 172_800;
 const MARK = {
   operation: "beachside_operation",
   submission: "beachside_submission",
-  /** Requested egress (`blocked` or `internet`), so recovery can check the policy without the token. */
+  /** Requested egress (`blocked`, `internet` or `allow`), so recovery can check the policy without the token. */
   network: "beachside_network",
 } as const;
 
 /** Name of the account network policy the adapter uses for `network: "blocked"`. */
 export const BLOCKED_POLICY_NAME = "beachside-blocked";
 
+/** Prefix of the account network policies the adapter creates for egress allowlists. */
+export const ALLOW_POLICY_PREFIX = "beachside-allow-";
+
+/** One adapter-owned network policy: its name and the only egress it may allow. */
+type PolicySpec = { name: string; hosts: readonly string[]; cidrs: readonly string[] };
+
+const BLOCKED_SPEC: PolicySpec = { name: BLOCKED_POLICY_NAME, hosts: [], cidrs: [] };
+
+/** The policy for an allowlist, named by a digest of its canonical form so equal lists share one. */
+export function allowPolicySpec(allowlist: string): PolicySpec {
+  const list = allowlistFromCanonical(allowlist);
+  const digest = createHash("sha256").update(allowlist).digest("hex").slice(0, 24);
+
+  return { name: `${ALLOW_POLICY_PREFIX}${digest}`, hosts: list.hosts, cidrs: list.cidrs };
+}
+
 /** Runloop tunnel URLs are `https://{port}-{tunnel_key}.tunnel.runloop.ai`. */
 const TUNNEL_DOMAIN = "tunnel.runloop.ai";
 
 const Configuration = z
   .strictObject({
-    /** Default egress: `blocked` attaches a deny-all network policy; `internet` attaches none. */
-    network: z.enum(["blocked", "internet"]).default("blocked"),
+    /**
+     * Default egress: `blocked` attaches a deny-all network policy; `internet` attaches none;
+     * `{ allow: [...] }` attaches a policy allowing only those host names and IPv4 ranges.
+     */
+    network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).default("blocked"),
     /** Default prepared image: a blueprint name or id, or the default Devbox image. */
     image: z.string().min(1).max(256).default(BASE_IMAGE),
     /** Minimum size; the smallest Runloop resource size that meets it is used. */
@@ -109,8 +136,10 @@ const Configuration = z
       })
       .default({ access: "protected" }),
   })
-  .transform(({ lifecycle: { idleSeconds, lifetimeSeconds }, ...value }) => ({
+  .transform(({ lifecycle: { idleSeconds, lifetimeSeconds }, network, ...value }) => ({
     ...value,
+    ...allowlistConfig("Runloop", network),
+    network: networkPolicyName(network),
     lifecycle:
       idleSeconds === undefined
         ? { lifetimeSeconds: lifetimeSeconds ?? defaultLifetime(MAX_LIFETIME_SECONDS) }
@@ -200,13 +229,27 @@ function state(status: string): SandboxState {
   }
 }
 
-function isDenyAll(policy: NetworkPolicy): boolean {
+/** Whether a policy allows exactly the spec's hosts and ranges, and no gateways or other traffic. */
+function matchesSpec(policy: NetworkPolicy, spec: PolicySpec): boolean {
   const egress = policy.egress;
 
+  // A port-limited range allows less than the spec asks for, so it never matches.
+  if (egress.allowed_cidrs.some((entry) => entry.ports?.length)) return false;
+  const allowed = [...egress.allowed_hostnames, ...egress.allowed_cidrs.map((entry) => entry.cidr)];
+  const wanted = [...spec.hosts, ...spec.cidrs];
+  let same = allowed.length === 0 && wanted.length === 0;
+
+  if (allowed.length && wanted.length)
+    try {
+      same = parseEgressAllowlist(allowed).canonical === parseEgressAllowlist(wanted).canonical;
+    } catch {
+      same = false;
+    }
+
   return (
+    policy.name === spec.name &&
+    same &&
     !egress.allow_all &&
-    egress.allowed_hostnames.length === 0 &&
-    egress.allowed_cidrs.length === 0 &&
     !egress.allow_devbox_to_devbox &&
     !egress.allow_agent_gateway &&
     !egress.allow_mcp_gateway &&
@@ -263,6 +306,14 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 
 /** The devbox id and the network policy id the create requested (null for internet). */
 const CreateToken = z.strictObject({ id: Id, policy: Id.nullable() });
+
+/** The adapter policy a portable network policy needs, or null for internet. */
+const specFor = (networkPolicy: string, allowlist: string | undefined): PolicySpec | null =>
+  networkPolicy === "internet"
+    ? null
+    : networkPolicy === ALLOW_NETWORK_POLICY && allowlist
+      ? allowPolicySpec(allowlist)
+      : BLOCKED_SPEC;
 
 const DestroyToken = z.strictObject({ id: Id });
 
@@ -322,6 +373,8 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {
+      throwAllowlistError(config);
+
       if (config.snapshots?.preserve === Preserve.FILESYSTEM_AND_MEMORY)
         throw new AdapterError(
           "UNSUPPORTED",
@@ -370,7 +423,21 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
       partition: { endpoint: RUNLOOP_API },
     };
 
-    let blockedPolicy: string | undefined;
+    /** Adapter policy ids already found, by policy name. */
+    const knownPolicies = new Map<string, string>();
+    const networkPolicies = config.allowlist ? [ALLOW_NETWORK_POLICY] : ["blocked", "internet"];
+
+    const requirePolicy = (networkPolicy: string) => {
+      if (!networkPolicies.includes(networkPolicy))
+        throw new AdapterError(
+          "UNSUPPORTED",
+          networkPolicy === ALLOW_NETWORK_POLICY
+            ? "Runloop allowlists are set in adapter setup: network: { allow: [...] }"
+            : config.allowlist
+              ? 'This Runloop connection creates with its allowlist; use network "allow"'
+              : 'Runloop network policy must be "blocked" or "internet"',
+        );
+    };
 
     const checkedRef = (ref: SandboxReference) => {
       assertResourceScope(ref, { provider: "runloop", scope });
@@ -500,33 +567,31 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         : ctx.unknown(`${reason}; do not replay`);
     };
 
-    /** A deny-all policy named for Beachside, found read-only; null when none exists yet. */
-    const findBlockedPolicy = async (ctx: ReadContext): Promise<string | null> => {
-      if (blockedPolicy) {
+    /** An adapter policy matching the spec, found read-only; null when none exists yet. */
+    const findPolicy = async (spec: PolicySpec, ctx: ReadContext): Promise<string | null> => {
+      const known = knownPolicies.get(spec.name);
+
+      if (known) {
         let current: NetworkPolicy | null = null;
 
         try {
-          current = await read(ctx, (signal) =>
-            native.getNetworkPolicy(blockedPolicy ?? "", signal),
-          );
+          current = await read(ctx, (signal) => native.getNetworkPolicy(known, signal));
         } catch (error) {
           // A deleted policy is looked up again by name; other failures stop the create.
           if (!(error instanceof AdapterError && error.code === "NOT_FOUND")) throw error;
         }
 
-        if (current?.id === blockedPolicy && isDenyAll(current)) return blockedPolicy;
-        blockedPolicy = undefined;
+        if (current?.id === known && matchesSpec(current, spec)) return known;
+        knownPolicies.delete(spec.name);
       }
 
       const page = await read(ctx, (signal) =>
-        native.listNetworkPolicies({ name: BLOCKED_POLICY_NAME, limit: 100 }, signal),
+        native.listNetworkPolicies({ name: spec.name, limit: 100 }, signal),
       );
 
-      const match = page.items.find(
-        (policy) => policy.name === BLOCKED_POLICY_NAME && isDenyAll(policy),
-      );
+      const match = page.items.find((policy) => matchesSpec(policy, spec));
 
-      blockedPolicy = match?.id;
+      if (match) knownPolicies.set(spec.name, match.id);
 
       return match?.id ?? null;
     };
@@ -560,11 +625,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
           "Runloop starts from a blueprint or the default Devbox image; OCI images are unavailable",
         );
 
-      if (input.networkPolicy !== "blocked" && input.networkPolicy !== "internet")
-        throw new AdapterError(
-          "UNSUPPORTED",
-          'Runloop network policy must be "blocked" or "internet"',
-        );
+      requirePolicy(input.networkPolicy);
 
       if (
         input.region !== undefined ||
@@ -586,13 +647,18 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         ...input,
         plan: {
           image: image ?? (await resolveImage(input.image.value, ctx)),
-          policy: input.networkPolicy === "blocked" ? await findBlockedPolicy(ctx) : null,
+          policy: await (async () => {
+            const spec = specFor(input.networkPolicy, config.allowlist);
+
+            return spec ? findPolicy(spec, ctx) : null;
+          })(),
         },
       };
     };
 
-    /** Find or create the deny-all policy. The policy is a shared account resource. */
-    const ensureBlockedPolicy = async (
+    /** Find or create an adapter policy. Policies are shared account resources. */
+    const ensurePolicy = async (
+      spec: PolicySpec,
       known: string | null,
       ctx: AttemptContext,
     ): Promise<{ policy: string } | { refused: ReturnType<AttemptContext["reject"]> }> => {
@@ -601,11 +667,14 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
       try {
         const created = await native.createNetworkPolicy(
           {
-            name: BLOCKED_POLICY_NAME,
-            description: "Deny-all egress for Beachside sandboxes created with network: blocked",
+            name: spec.name,
+            description:
+              spec === BLOCKED_SPEC
+                ? "Deny-all egress for Beachside sandboxes created with network: blocked"
+                : "Egress allowlist for Beachside sandboxes created with network: { allow }",
             allow_all: false,
-            allowed_hostnames: [],
-            allowed_cidrs: [],
+            allowed_hostnames: [...spec.hosts],
+            allowed_cidrs: spec.cidrs.map((cidr) => ({ cidr })),
             allow_devbox_to_devbox: false,
             allow_agent_gateway: false,
             allow_mcp_gateway: false,
@@ -614,8 +683,8 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
           signalFor(readContext(ctx.signal)),
         );
 
-        if (isDenyAll(created)) {
-          blockedPolicy = created.id;
+        if (matchesSpec(created, spec)) {
+          knownPolicies.set(spec.name, created.id);
 
           return { policy: created.id };
         }
@@ -627,14 +696,14 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
       }
 
       // A lost or unexpected policy response is resolved by reading, never by resending.
-      const found = await findBlockedPolicy(readContext(ctx.signal)).catch(() => null);
+      const found = await findPolicy(spec, readContext(ctx.signal)).catch(() => null);
 
       return found
         ? { policy: found }
         : {
             refused: ctx.reject(
               "UNAVAILABLE",
-              "Runloop did not confirm the deny-all network policy; no devbox was created",
+              `Runloop did not confirm the ${spec === BLOCKED_SPEC ? "deny-all" : "allowlist"} network policy; no devbox was created`,
             ),
           };
     };
@@ -707,7 +776,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
 
     /**
      * The policy a create requested, read back from its egress marker when the token was lost:
-     * null for internet, the attached policy id when it is deny-all, or undefined when neither holds.
+     * null for internet, the attached policy id when it matches the marker's policy, or undefined.
      */
     const requestedPolicy = async (devbox: Devbox, ctx: ReadContext) => {
       const marker = devbox.metadata?.[MARK.network];
@@ -715,10 +784,17 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
 
       if (marker === "internet") return null;
 
-      if (marker !== "blocked" || attached === null) return undefined;
+      const spec =
+        marker === "blocked"
+          ? BLOCKED_SPEC
+          : marker === ALLOW_NETWORK_POLICY && config.allowlist
+            ? allowPolicySpec(config.allowlist)
+            : undefined;
+
+      if (!spec || attached === null) return undefined;
       const policy = await read(ctx, (signal) => native.getNetworkPolicy(attached, signal));
 
-      return isDenyAll(policy) ? attached : undefined;
+      return matchesSpec(policy, spec) ? attached : undefined;
     };
 
     /** Read-only search for a devbox whose metadata names this create attempt. */
@@ -748,8 +824,10 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
       async submit(input: PreparedCreate, ctx: AttemptContext<z.infer<typeof CreateToken>>) {
         let policy: string | null = null;
 
-        if (input.networkPolicy === "blocked") {
-          const ensured = await ensureBlockedPolicy(input.plan.policy, ctx);
+        const spec = specFor(input.networkPolicy, config.allowlist);
+
+        if (spec) {
+          const ensured = await ensurePolicy(spec, input.plan.policy, ctx);
 
           if ("refused" in ensured) return ensured.refused;
           policy = ensured.policy;
@@ -871,7 +949,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
     };
 
     const restore = {
-      networkPolicies: ["blocked", "internet"],
+      networkPolicies,
       resources: false,
       mounts: false,
       independentLifecycle: true,
@@ -1115,7 +1193,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
       defaultNetworkPolicy: config.network,
       supports: {
         images: ["prepared"],
-        network: ["blocked", "internet"],
+        network: networkPolicies,
         exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
         fileWrite: { overwrite: true, noClobber: false },
         createEnv: true,
@@ -1596,11 +1674,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
               "Runloop restores keep the configured size and take no mounts",
             );
 
-          if (!restore.networkPolicies.includes(input.request.networkPolicy))
-            throw new AdapterError(
-              "UNSUPPORTED",
-              'Runloop network policy must be "blocked" or "internet"',
-            );
+          requirePolicy(input.request.networkPolicy);
           const status = await snapshotStatus(input.snapshot.nativeId, ctx);
 
           if (!status) throw new AdapterError("NOT_FOUND", "Runloop snapshot is unavailable");

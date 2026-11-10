@@ -13,6 +13,28 @@ import { Image, Preserve, Beachside, type ExecInput } from "beachside";
 import { createVercelAdapter } from "./adapter";
 import type { VercelTransport } from "./transport";
 
+type NativePolicy = {
+  mode: string;
+  allowedDomains?: string[];
+  allowedCIDRs?: string[];
+  deniedCIDRs?: string[];
+};
+
+/** Vercel answers an allowlist request with a `custom` policy listing what it enforces. */
+function reported(request: {
+  mode?: string;
+  allow?: string[];
+  subnets?: { allow?: string[] };
+}): NativePolicy {
+  return request.mode
+    ? { mode: request.mode }
+    : {
+        mode: "custom",
+        allowedDomains: request.allow ?? [],
+        allowedCIDRs: request.subnets?.allow ?? [],
+      };
+}
+
 export function fixture() {
   const effects = { create: 0, destroy: 0, release: 0 };
 
@@ -22,7 +44,7 @@ export function fixture() {
       id: string;
       region: string;
       status: string;
-      networkPolicy: { mode: string };
+      networkPolicy: NativePolicy;
       startedAt?: number;
       timeout?: number;
       sourceSnapshotId?: string;
@@ -41,7 +63,7 @@ export function fixture() {
       mounts: Record<string, never>;
       region: string;
       status: string;
-      networkPolicy: { mode: string };
+      networkPolicy: NativePolicy;
       currentSnapshotId?: string;
     }
   >();
@@ -136,7 +158,7 @@ export function fixture() {
           vcpus: input.resources.vcpus,
           sourceSnapshotId: input.source?.snapshotId,
           status: createPending ? "pending" : "running",
-          networkPolicy: input.networkPolicy,
+          networkPolicy: reported(input.networkPolicy),
         };
 
         records.set(session.id, { ...session, status: "running" });
@@ -148,7 +170,7 @@ export function fixture() {
           tags: input.tags,
           region: input.region,
           status: "running",
-          networkPolicy: input.networkPolicy,
+          networkPolicy: reported(input.networkPolicy),
           mounts: {},
           image: `${(input.image ?? "vercel/sandbox/node:24").split(":")[0]}@sha256:${"a".repeat(64)}`,
         });
@@ -180,7 +202,7 @@ export function fixture() {
             tags: input.tags,
             region: input.region,
             status: "running",
-            networkPolicy: input.networkPolicy,
+            networkPolicy: reported(input.networkPolicy),
           },
         });
       }
@@ -1912,4 +1934,55 @@ test("Vercel redacts multi-line and long create env values before shortening nat
   } finally {
     await client.close();
   }
+});
+
+test("an allowlist configures Vercel's custom network policy", async () => {
+  const native = fixture();
+
+  const client = await Beachside.connect({
+    adapter: native.adapter,
+    config: {
+      teamId: config.teamId,
+      projectId: config.projectId,
+      network: { allow: ["github.com", "*.npmjs.org", "10.1.2.3/8"] },
+    },
+    credentials,
+  });
+
+  try {
+    expect((await client.capabilities()).network).toEqual(["allow"]);
+    await client.sandboxes.create({ network: "allow" });
+    await expect(client.sandboxes.create({ network: "internet" })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+
+    const bodies = native.requests
+      .filter((request) => request.url.pathname === "/api/v3/sandboxes")
+      .map((request) => JSON.parse(String(request.init.body)));
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].networkPolicy).toEqual({
+      allow: ["*.npmjs.org", "github.com"],
+      subnets: { allow: ["10.0.0.0/8"] },
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+test("invalid allowlists fail at connect with their reason", async () => {
+  await expect(
+    Beachside.connect({
+      adapter: fixture().adapter,
+      config: {
+        teamId: config.teamId,
+        projectId: config.projectId,
+        network: { allow: ["https://github.com/path"] },
+      },
+      credentials,
+    }),
+  ).rejects.toMatchObject({
+    code: "INVALID_ARGUMENT",
+    message: expect.stringContaining("schemes"),
+  });
 });

@@ -14,6 +14,12 @@ import { z } from "zod";
 import {
   AdapterCheckpointError,
   AdapterError,
+  ALLOW_NETWORK_POLICY,
+  AllowNetworkSetting,
+  allowlistConfig,
+  networkPolicyName,
+  allowlistFromCanonical,
+  throwAllowlistError,
   AdapterFilesystemError,
   assertResourceScope,
   DEFAULT_LIFETIME_SECONDS,
@@ -131,8 +137,11 @@ const Lifetime = z.number().int().min(60).max(MAX_TTL_SECONDS);
 
 const Configuration = z
   .strictObject({
-    /** `blocked` sends an empty firewall; `internet` allows every public destination. */
-    network: z.enum(["blocked", "internet"]).default("blocked"),
+    /**
+     * `blocked` sends an empty firewall; `internet` allows every public destination;
+     * `{ allow: [...] }` allows only those IPv4 ranges (Freestyle firewalls do not match host names).
+     */
+    network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).default("blocked"),
     /** Default snapshot to boot; omitted, the base Ubuntu that fits `resources`. */
     image: Image.optional(),
     /** Minimum size; the smallest Freestyle Ubuntu base snapshot that meets it is used. */
@@ -174,7 +183,12 @@ const Configuration = z
         message:
           "Supply image or resources, not both; Freestyle snapshots keep the size they were built with",
       });
-  });
+  })
+  .transform(({ network, ...value }) => ({
+    ...value,
+    ...allowlistConfig("Freestyle", network, { hosts: false }),
+    network: networkPolicyName(network),
+  }));
 
 const Credentials = z.strictObject({ apiKey: z.string().min(1) });
 
@@ -395,6 +409,22 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
     credentials: Credentials,
     async connect({ config, credentials, host }) {
       // Choices Freestyle cannot honor reject before any provider IO.
+      throwAllowlistError(config);
+      const networkPolicies = config.allowlist ? [ALLOW_NETWORK_POLICY] : ["blocked", "internet"];
+      const restore = { ...restoreSupport, networkPolicies };
+
+      const requirePolicy = (networkPolicy: string) => {
+        if (!networkPolicies.includes(networkPolicy))
+          throw new AdapterError(
+            "UNSUPPORTED",
+            networkPolicy === ALLOW_NETWORK_POLICY
+              ? "Freestyle allowlists are set in adapter setup: network: { allow: [...] }"
+              : config.allowlist
+                ? 'This Freestyle connection creates with its allowlist; use network "allow"'
+                : "Freestyle network policies are blocked and internet",
+          );
+      };
+
       if (config.preview.access !== "public")
         throw new AdapterError(
           "UNSUPPORTED",
@@ -793,10 +823,20 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         return launched(vm, token, attempt, ctx, partial);
       };
 
-      const firewall = (policy: string): FirewallSpec =>
-        policy === "internet"
-          ? { rules: [{ action: "allow", source: {}, destination: { public: true } }] }
-          : { rules: [] };
+      const firewall = (policy: string): FirewallSpec => {
+        if (policy === "internet")
+          return { rules: [{ action: "allow", source: {}, destination: { public: true } }] };
+
+        if (policy !== ALLOW_NETWORK_POLICY || !config.allowlist) return { rules: [] };
+
+        return {
+          rules: allowlistFromCanonical(config.allowlist).cidrs.map((cidr) => ({
+            action: "allow" as const,
+            source: {},
+            destination: { cidr },
+          })),
+        };
+      };
 
       /** Create-time TLS rules publish each configured port and are deleted with the VM. */
       const previews = (slug: string): TlsSpec | undefined =>
@@ -1275,7 +1315,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         excludedPaths: null,
         mounts: [],
         mountHandling: "none",
-        restore: restoreSupport,
+        restore,
         dependencies: [],
         nativeDependencies: null,
       });
@@ -1360,7 +1400,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         defaultNetworkPolicy: config.network,
         supports: {
           images: ["prepared"],
-          network: ["blocked", "internet"],
+          network: networkPolicies,
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
@@ -1381,11 +1421,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
                 "Freestyle images are a snapshot id, your snapshot slug or a public owner/slug",
               );
 
-            if (input.networkPolicy !== "blocked" && input.networkPolicy !== "internet")
-              throw new AdapterError(
-                "UNSUPPORTED",
-                "Freestyle network policies are blocked and internet; allowlists are unavailable",
-              );
+            requirePolicy(input.networkPolicy);
 
             if (config.resources && input.image.value !== image) {
               const size = UBUNTU_SIZES.find((candidate) => candidate.image === input.image.value);
@@ -2283,11 +2319,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
                 "Freestyle restores keep the snapshot's VM size and take no mounts",
               );
 
-            if (!restoreSupport.networkPolicies.includes(input.request.networkPolicy))
-              throw new AdapterError(
-                "UNSUPPORTED",
-                "Freestyle network policies are blocked and internet",
-              );
+            requirePolicy(input.request.networkPolicy);
 
             checkEnv(input.request.env);
 
@@ -2406,7 +2438,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
         },
         async resourceCapabilities() {
           return {
-            restore: { status: "supported", value: restoreSupport },
+            restore: { status: "supported", value: restore },
             volumes: { status: "unsupported", reason: "Freestyle has no volumes" },
             mounts: { status: "unsupported", reason: "Freestyle has no volume mounts" },
           };

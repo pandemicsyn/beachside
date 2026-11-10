@@ -1,3 +1,5 @@
+import { e2bEgress, e2bEgressMatches, e2bNetworkPolicies } from "./network";
+import { ALLOW_NETWORK_POLICY } from "@beachside/adapter";
 import {
   Preserve,
   sandboxReference,
@@ -76,6 +78,8 @@ const restoreToken = z.strictObject({
   state: z.enum(["uncertain", "accepted", "rejected"]),
   sandboxId: z.string().min(1).max(512).optional(),
   allowPublicTraffic: z.boolean().optional(),
+  /** Canonical egress allowlist sent with the restore create. */
+  allowlist: z.string().min(1).max(32_768).optional(),
 });
 
 export function e2bState(input: {
@@ -86,6 +90,8 @@ export function e2bState(input: {
   /** The longest per-sandbox lifetime E2B accepts. */
   maxLifetimeSeconds: number;
   allowPublicTraffic?: boolean;
+  /** Canonical egress allowlist from adapter setup; restores create with it. */
+  allowlist?: string;
   /** What a capture keeps; filesystem-only sends `memory: false`. */
   snapshotPreserve: Preserve;
   apiKey: string;
@@ -156,7 +162,7 @@ export function e2bState(input: {
       mounts: [],
       mountHandling: knownSnapshots.has(id) ? "none" : "unknown",
       restore: {
-        networkPolicies: ["internet", "blocked"],
+        networkPolicies: e2bNetworkPolicies(input.allowlist),
         resources: false,
         mounts: false,
         independentLifecycle: true,
@@ -437,7 +443,7 @@ export function e2bState(input: {
       );
 
     if (
-      !["internet", "blocked"].includes(value.request.networkPolicy) ||
+      !e2bNetworkPolicies(input.allowlist).includes(value.request.networkPolicy) ||
       (value.request.resources && Object.keys(value.request.resources).length > 0) ||
       (value.request.mounts && Object.keys(value.request.mounts).length > 0)
     )
@@ -1004,6 +1010,9 @@ export function e2bState(input: {
           allowPublicTraffic: input.allowPublicTraffic ?? false,
         };
 
+        if (value.request.networkPolicy === ALLOW_NETWORK_POLICY && input.allowlist)
+          token.allowlist = input.allowlist;
+
         await ctx.checkpoint(token);
 
         if (ctx.signal.aborted) {
@@ -1027,6 +1036,7 @@ export function e2bState(input: {
           timeoutMs: Math.max(60, value.request.lifetimeSeconds ?? input.timeoutSeconds) * 1000,
           allowInternetAccess: value.request.networkPolicy === "internet",
           allowPublicTraffic: token.allowPublicTraffic,
+          ...e2bEgress(token.allowlist),
           signal: ctx.signal,
         };
 
@@ -1099,6 +1109,9 @@ export function e2bState(input: {
 
         if (current.allowPublicTraffic !== allowPublicTraffic)
           return ctx.unknown("Restored sandbox inbound visibility is unverified; no replay");
+
+        if (!e2bEgressMatches(current, token.data.allowlist))
+          return ctx.unknown("Restored sandbox egress allowlist is unverified; no replay");
 
         return {
           id: current.id,
@@ -1326,7 +1339,7 @@ export function e2bState(input: {
         ? {
             status: "supported" as const,
             value: {
-              networkPolicies: ["internet", "blocked"],
+              networkPolicies: e2bNetworkPolicies(input.allowlist),
               resources: false,
               mounts: false,
               independentLifecycle: true,

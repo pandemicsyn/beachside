@@ -15,6 +15,8 @@ import { ExecRequest, MAX_EXEC_STDIN_BYTES, type ExecCommand } from "@beachside/
 import {
   AdapterError,
   AdapterFilesystemError,
+  checkAllowlistLimits,
+  parseEgressAllowlist,
   type FileTransferContext,
   type ImageBuildValue,
 } from "@beachside/adapter";
@@ -79,6 +81,8 @@ const NativeSandbox = z.object({
   target: z.string().min(1),
   state: z.string(),
   networkBlockAll: z.boolean(),
+  networkAllowList: z.string().nullish(),
+  domainAllowList: z.string().nullish(),
   public: z.boolean(),
   toolboxProxyUrl: z.url().optional(),
   snapshot: z.string().optional(),
@@ -96,7 +100,12 @@ const NativeSandbox = z.object({
 });
 
 // List items may omit state; every caller re-reads the sandbox detail before relying on it.
-const ListedSandbox = NativeSandbox.omit({ networkBlockAll: true, public: true }).extend({
+const ListedSandbox = NativeSandbox.omit({
+  networkBlockAll: true,
+  networkAllowList: true,
+  domainAllowList: true,
+  public: true,
+}).extend({
   state: z.string().optional(),
 });
 
@@ -123,7 +132,11 @@ const Input = z.strictObject({
     apiUrl: z.url().default("https://app.daytona.io/api"),
     toolboxOrigin: z.url().default("https://proxy.app.daytona.io"),
     target: z.string().min(1),
-    networkPolicy: z.enum(["blocked", "internet", "daytona-default"]).default("daytona-default"),
+    networkPolicy: z
+      .enum(["blocked", "internet", "daytona-default", "allow"])
+      .default("daytona-default"),
+    /** Canonical egress allowlist (comma-separated) when networkPolicy is "allow". */
+    allowlist: z.string().min(1).max(32_768).optional(),
     ttlMinutes: z.coerce.number().int().min(1).safe().default(15),
     autoStopMinutes: z.coerce.number().int().min(0).max(1440).default(0),
     /** Minimum size for built snapshots and prepared ones. */
@@ -145,7 +158,9 @@ export type DaytonaInput = {
   ttlMinutes?: number;
   /** Native idle auto-stop interval in minutes; 0 disables it. */
   autoStopMinutes?: number;
-  networkPolicy?: "blocked" | "internet" | "daytona-default";
+  networkPolicy?: DaytonaNetworkPolicy;
+  /** Canonical egress allowlist from `parseEgressAllowlist`, required with networkPolicy "allow". */
+  allowlist?: string;
   /** Minimum size; Daytona fixes a size when a snapshot is built. */
   resources?: { vcpus?: number; memoryMiB?: number };
   fetch?: typeof fetch;
@@ -153,6 +168,67 @@ export type DaytonaInput = {
 };
 
 type Config = z.infer<typeof Input>;
+
+export type DaytonaNetworkPolicy = "blocked" | "internet" | "daytona-default" | "allow";
+
+/** Daytona's native create fields for egress. */
+export type DaytonaNetworkFields = {
+  networkBlockAll?: true;
+  domainAllowList?: string;
+  networkAllowList?: string;
+};
+
+/** Native create fields for a network policy; only "allow" sends Daytona's allowlists. */
+/** Daytona's allowlist limits: one native list per sandbox, hosts or ranges. */
+export const DAYTONA_ALLOWLIST_LIMITS = { maxHosts: 100, maxCidrs: 10, mixed: false } as const;
+
+export function daytonaNetworkFields(
+  networkPolicy: string,
+  allowlist: string | undefined,
+): DaytonaNetworkFields {
+  const fields: DaytonaNetworkFields = {};
+
+  if (networkPolicy === "blocked") fields.networkBlockAll = true;
+
+  if (networkPolicy !== "allow") return fields;
+  const list = parseEgressAllowlist((allowlist ?? "").split(","));
+  // Daytona's domain and network allow lists are mutually exclusive; never send both.
+  checkAllowlistLimits("Daytona", list, DAYTONA_ALLOWLIST_LIMITS);
+
+  if (list.hosts.length) fields.domainAllowList = list.hosts.join(",");
+
+  if (list.cidrs.length) fields.networkAllowList = list.cidrs.join(",");
+
+  return fields;
+}
+
+/**
+ * Whether a sandbox's native egress settings are exactly the connection's policy: block-all only
+ * for "blocked", and for "allow" the same hosts and ranges, compared in canonical form.
+ */
+export function daytonaNetworkMatches(
+  native: {
+    networkBlockAll?: boolean;
+    networkAllowList?: string | null;
+    domainAllowList?: string | null;
+  },
+  networkPolicy: string,
+  allowlist: string | undefined,
+): boolean {
+  if (native.networkBlockAll !== (networkPolicy === "blocked")) return false;
+
+  const entries = [native.domainAllowList, native.networkAllowList].flatMap((value) =>
+    (value ?? "").split(",").flatMap((entry) => (entry.trim() ? [entry.trim()] : [])),
+  );
+
+  if (networkPolicy !== "allow") return entries.length === 0;
+
+  try {
+    return parseEgressAllowlist(entries).canonical === allowlist;
+  } catch {
+    return false;
+  }
+}
 
 type Sandbox = z.infer<typeof NativeSandbox>;
 
@@ -252,6 +328,20 @@ function validate(input: {
 }): Config {
   const parsed = Input.parse(input);
 
+  if (
+    (parsed.configuration.networkPolicy === "allow") !==
+    (parsed.configuration.allowlist !== undefined)
+  )
+    throw new Error("Daytona network policy allow needs an allowlist, and only allow takes one");
+
+  // Check the list where it is configured, not at the first create.
+  if (parsed.configuration.allowlist !== undefined)
+    checkAllowlistLimits(
+      "Daytona",
+      parseEgressAllowlist(parsed.configuration.allowlist.split(",")),
+      DAYTONA_ALLOWLIST_LIMITS,
+    );
+
   return {
     credentials: parsed.credentials,
     configuration: {
@@ -298,12 +388,12 @@ function ref(scope: NativeScope, id: string): SandboxRef {
 function observed(
   scope: NativeScope,
   sandbox: Sandbox,
-  networkPolicy: "blocked" | "internet" | "daytona-default",
+  configuration: { networkPolicy: string; allowlist?: string },
 ): SandboxObservation {
   if (
     sandbox.organizationId !== scope.accountId ||
     sandbox.target !== scope.region ||
-    sandbox.networkBlockAll !== (networkPolicy === "blocked") ||
+    !daytonaNetworkMatches(sandbox, configuration.networkPolicy, configuration.allowlist) ||
     sandbox.public
   )
     throw new Error(
@@ -638,7 +728,7 @@ export class DaytonaDriver implements ProviderDriver {
   private async sandbox(id: string): Promise<Sandbox | null> {
     const sandbox = await this.sandboxDetail(id);
 
-    if (sandbox) observed(this.scope, sandbox, this.config.configuration.networkPolicy);
+    if (sandbox) observed(this.scope, sandbox, this.config.configuration);
 
     return sandbox;
   }
@@ -732,6 +822,13 @@ export class DaytonaDriver implements ProviderDriver {
       return {
         supported: false,
         reason: "Verified Daytona organization does not support strict blocked egress",
+      };
+
+    if (input.networkPolicy === "allow" && !(await this.supportsBlockedEgress()))
+      return {
+        supported: false,
+        reason:
+          "Verified Daytona organization has limited sandbox egress (Tier 1 or 2), which Daytona does not let a sandbox allowlist override",
       };
 
     if (input.networkPolicy === "internet" && !(await this.supportsBlockedEgress()))
@@ -1113,7 +1210,7 @@ export class DaytonaDriver implements ProviderDriver {
       const body = {
         name,
         snapshot: snapshotId,
-        networkBlockAll: input.networkPolicy === "blocked" ? true : undefined,
+        ...daytonaNetworkFields(input.networkPolicy, this.config.configuration.allowlist),
         target: this.scope.region,
         public: false,
         labels,
@@ -1184,7 +1281,11 @@ export class DaytonaDriver implements ProviderDriver {
           mountDetail.labels?.["beachside.submission"] !== input.identity.submissionId ||
           mountDetail.labels?.["beachside.operation"] !== input.identity.operationId ||
           mountDetail.volumes?.length !== expectedMounts.length ||
-          mountDetail.networkBlockAll !== (input.networkPolicy === "blocked") ||
+          !daytonaNetworkMatches(
+            mountDetail,
+            input.networkPolicy,
+            this.config.configuration.allowlist,
+          ) ||
           mountDetail.public !== false ||
           (input.requireSnapshotIdentity &&
             !(await this.matchesSnapshot(mountDetail.snapshot, snapshotId))) ||
@@ -1203,11 +1304,7 @@ export class DaytonaDriver implements ProviderDriver {
 
       const nativeSandbox = mountDetail ?? value;
 
-      const observation = observed(
-        this.scope,
-        nativeSandbox,
-        this.config.configuration.networkPolicy,
-      );
+      const observation = observed(this.scope, nativeSandbox, this.config.configuration);
 
       if (["destroyed", "error", "build_failed"].includes(nativeSandbox.state))
         return uncertain("Daytona sandbox did not reach running state");
@@ -1271,7 +1368,7 @@ export class DaytonaDriver implements ProviderDriver {
 
     return sandbox
       ? {
-          ...observed(this.scope, sandbox, this.config.configuration.networkPolicy),
+          ...observed(this.scope, sandbox, this.config.configuration),
           nativeState: sandbox.state,
         }
       : null;
@@ -1313,7 +1410,7 @@ export class DaytonaDriver implements ProviderDriver {
         const submission = detail.labels["beachside.submission"];
 
         const item: DaytonaListedSandbox = {
-          observation: observed(this.scope, detail, this.config.configuration.networkPolicy),
+          observation: observed(this.scope, detail, this.config.configuration),
           nativeState: detail.state,
           labels: detail.labels,
         };
@@ -1411,7 +1508,7 @@ export class DaytonaDriver implements ProviderDriver {
         nativeSandbox: detail,
       };
 
-    const observation = observed(this.scope, detail, this.config.configuration.networkPolicy);
+    const observation = observed(this.scope, detail, this.config.configuration);
 
     if (["destroyed", "error", "build_failed"].includes(detail.state))
       return {
@@ -2778,6 +2875,8 @@ export async function daytonaProvider(input: DaytonaInput) {
     autoStopMinutes: String(input.autoStopMinutes ?? 0),
   };
 
+  if (input.allowlist !== undefined) Object.assign(requested, { allowlist: input.allowlist });
+
   if (input.resources?.vcpus !== undefined)
     Object.assign(requested, { minVcpus: String(input.resources.vcpus) });
 
@@ -2792,7 +2891,7 @@ export async function daytonaProvider(input: DaytonaInput) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
-      `${config.configuration.apiUrl}|${config.configuration.target}|${config.configuration.toolboxOrigin}${config.configuration.networkPolicy === "blocked" ? "" : "|daytona-default"}`,
+      `${config.configuration.apiUrl}|${config.configuration.target}|${config.configuration.toolboxOrigin}${config.configuration.networkPolicy === "blocked" ? "" : config.configuration.networkPolicy === "allow" ? `|allow:${config.configuration.allowlist}` : "|daytona-default"}`,
     ),
   );
 

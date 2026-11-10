@@ -63,6 +63,8 @@ export * from "./resources";
 
 export * from "./sizing";
 
+export * from "./network";
+
 export * from "./lifecycle";
 
 export * from "./lifetime";

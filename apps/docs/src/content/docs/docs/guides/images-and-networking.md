@@ -86,6 +86,9 @@ Configure `network` once in adapter setup. Every adapter uses the same names, so
 | boxd           | `internet`                  | Unrestricted egress, with native peer/metadata isolation.                                                   |
 | Vercel Sandbox | `blocked` (default)         | Requests native `deny-all`; network isolation has no recorded live acceptance.                              |
 | Vercel Sandbox | `internet`                  | Requests native `allow-all`.                                                                                |
+| Modal          | `blocked` (default)         | Requests Modal's `blockNetwork`.                                                                            |
+| Modal          | `internet`                  | Open egress.                                                                                                |
+| Most providers | `{ allow: [...] }`          | Only the listed hosts and IPv4 ranges; see [allow only some destinations](#allow-only-some-destinations).   |
 
 ```ts
 // Only the adapter setup differs between providers.
@@ -101,11 +104,42 @@ A requested policy is not proof of isolation. E2B's maintained test still connec
 
 Daytona's `internet` never falls back to `daytona-default`: on a Tier 1 or Tier 2 organization it rejects before allocation, because Daytona's default firewall there only reaches essential services. Choose `daytona-default` in setup when that restricted egress is acceptable. boxd's peer/metadata isolation does not block outbound internet.
 
-Omitted create and restore policies use the connection default, so most applications never pass `network` per call. An explicit `create({ network })` or `restore({ network })` must be supported by that connection: E2B accepts `blocked` or `internet`, while Daytona and Vercel require a match with the configured policy. boxd accepts `blocked` or `internet`. Empty or null policies reject rather than selecting a fallback. `client.capabilities().network` lists what the connection accepts.
+Omitted create and restore policies use the connection default, so most applications never pass `network` per call. An explicit `create({ network })` or `restore({ network })` must be supported by that connection: E2B, Modal, Runloop, Freestyle and boxd accept `blocked` or `internet`, while Daytona and Vercel require a match with the configured policy. A connection configured with an allowlist accepts only `allow`; see [allow only some destinations](#allow-only-some-destinations). Empty or null policies reject rather than selecting a fallback. `client.capabilities().network` lists what the connection accepts.
 
 The option was previously named `networkPolicy`, and Vercel used `vercel-deny-all` and `vercel-allow-all`. Those spellings still work and are deprecated; passing both `network` and `networkPolicy` with different values rejects.
 
 `snapshot.restore()` uses the current connection's policy, not the captured sandbox's networking. Saved operations keep the policy resolved at submission when you recover them. Outbound policies do not open a public preview URL; see [Preview access](/docs/guides/preview-access/).
+
+## Allow only some destinations
+
+To let a sandbox reach a few services and nothing else, give `network` an allowlist in adapter setup:
+
+```ts
+const client = await Beachside.connect({
+  adapter: e2bAdapter,
+  credentials: { apiKey },
+  config: { network: { allow: ["registry.npmjs.org", "*.github.com", "10.20.0.0/16"] } },
+});
+const box = await client.sandboxes.create(); // Uses the allowlist.
+```
+
+Each entry is a host name, a `*.` wildcard host or an IPv4 address or range. Host entries allow HTTPS to that name, usually matched by TLS SNI; plain HTTP, other protocols and the bare name behind a `*.` wildcard vary by provider, as the Notes column says. `*.github.com` covers subdomains; list `github.com` as well if you need the bare name, and expect it to be reachable anyway on Daytona and Modal. An IPv4 range allows any traffic to those addresses. Everything else is blocked. Entries are lowercased, ranges are written in network form, and duplicates are dropped, so equal lists are the same setting.
+
+Leave out schemes, ports and paths. `0.0.0.0/0` and an empty list reject with `INVALID_ARGUMENT`: use `internet` or `blocked` instead. A connection with an allowlist reports `client.capabilities().network` as `["allow"]` and creates every sandbox and restore with it; a per-call `create({ network: "internet" })` rejects, so open a second connection for other policies. After each create, the adapter checks that the provider recorded exactly this list where the provider reports it back (Freestyle does not, so its list is sent but not read back), and reports `OUTCOME_UNKNOWN` instead of a ready sandbox if not.
+
+| Provider  | Hosts | IPv4 ranges | Notes                                                                                                                                                                                                                                                                             |
+| --------- | ----- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Daytona   | ≤ 100 | ≤ 10        | Hosts or ranges, not both in one list. HTTPS only, through Daytona's TLS proxy: clients with their own CA bundle or pinned certificates must trust `/etc/daytona/netleash/ca.crt`. `*.` also matches the bare name. Needs Tier 3 and above; lower tiers reject before allocation. |
+| E2B       | Yes   | Yes         | Host rules match HTTP on port 80 (by `Host`) and TLS on port 443 (by SNI); other ports and UDP (QUIC/HTTP3) need an IPv4 range. Sent as E2B's `allowOut` over a deny-all `denyOut`.                                                                                               |
+| Vercel    | Yes   | Yes         | Host rules match TLS SNI only; plain HTTP needs an IPv4 range. Vercel reports the policy back as `allowedDomains` and `allowedCIDRs`.                                                                                                                                             |
+| Modal     | Yes   | Yes         | Host rules cover TLS only (port 443, by SNI) and `*.` also matches the bare name. Modal's domain allowlist is beta.                                                                                                                                                               |
+| Runloop   | Yes   | Yes         | Host names are DNS hostnames; Runloop does not document which ports or protocols they cover. Attaches an account network policy named `beachside-allow-<digest>`, shared by equal lists.                                                                                          |
+| Freestyle | No    | Yes         | Firewall rules match addresses only, so host names reject with `UNSUPPORTED`. The firewall is not read back.                                                                                                                                                                      |
+| Archil    | Yes   | Yes         | A deny-by-default policy; needs a paid plan.                                                                                                                                                                                                                                      |
+| boxd      | No    | No          | Rejects allowlists.                                                                                                                                                                                                                                                               |
+| Boat      | No    | No          | Rejects allowlists.                                                                                                                                                                                                                                                               |
+
+Over-limit or unsupported lists reject at connect with `UNSUPPORTED`, naming the limit. Provider DNS is usually left open, and host rules do not stop a client that sends an allowed name to a shared server for another site (domain fronting), so treat an allowlist as egress control, not a full sandbox for hostile code. No allowlist has a recorded live pass yet.
 
 ## Set environment variables
 

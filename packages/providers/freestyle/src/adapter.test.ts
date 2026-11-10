@@ -177,6 +177,38 @@ test("Freestyle conformance: one native attempt, distinct keys, lost and late re
   expect(creates(fixture)).toHaveLength(3);
 });
 
+test("an IP allowlist becomes one outbound firewall rule per range", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect({ network: { allow: ["10.1.2.3/16", "192.0.2.7"] } });
+
+  try {
+    expect((await client.capabilities()).network).toEqual(["allow"]);
+    await client.sandboxes.create();
+    expect(creates(fixture)[0]?.body).toMatchObject({
+      firewall: {
+        rules: [
+          { action: "allow", source: {}, destination: { cidr: "10.1.0.0/16" } },
+          { action: "allow", source: {}, destination: { cidr: "192.0.2.7/32" } },
+        ],
+      },
+    });
+    await expect(client.sandboxes.create({ network: "blocked" })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+test("Freestyle allowlists refuse host names at connect", async () => {
+  const { connect } = setup();
+
+  await expect(connect({ network: { allow: ["github.com"] } })).rejects.toMatchObject({
+    code: "UNSUPPORTED",
+    message: expect.stringContaining("IPv4 ranges only"),
+  });
+});
+
 test("create boots the default base with a blocked firewall, a slug, the lifetime and labels", async () => {
   const { fixture, connect } = setup();
   const client = await connect();

@@ -30,7 +30,7 @@ Archil does not reveal which account an API key belongs to, so the scope is a on
 | Setting                         | Behavior                                                                                                                       |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `region`                        | Required: `aws-us-east-1`, `aws-us-west-2` or `aws-eu-west-1`.                                                                 |
-| `network` | `blocked` (default) sends `egress.default: "deny"`; `internet` sends no policy and checks that egress is open (both need a paid plan); `archil-managed` sends no policy and checks for Archil's managed allowlist (the Free plan). |
+| `network` | `blocked` (default) sends `egress.default: "deny"`; `internet` sends no policy and checks that egress is open; `{ allow: [...] }` sends `default: "deny"` with those hosts and IPv4 ranges and checks them back (all three need a paid plan); `archil-managed` sends no policy and checks for Archil's managed allowlist (the Free plan). |
 | `image`                         | `node:24-bookworm`, always sent explicitly. Any amd64 OCI image, or a 64-hex image id from an image build.                      |
 | `resources`                     | Exact `{ vcpus, memoryMiB }`; vCPUs rounded up to whole numbers, 1–32 vCPU and 256–65536 MiB. Default 1 vCPU, 2 GiB.            |
 | `lifecycle.lifetimeSeconds`     | 900; 60 s to 24 h. Per powered-on session (`max_ttl_seconds`); expiry pauses the sandbox.                                       |

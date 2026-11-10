@@ -1,3 +1,10 @@
+import { e2bEgress, e2bEgressMatches, e2bNetworkPolicies } from "./network";
+import {
+  ALLOW_NETWORK_POLICY,
+  AllowNetworkSetting,
+  allowlistConfig,
+  throwAllowlistError,
+} from "@beachside/adapter";
 import { z } from "zod";
 import { e2bState } from "./state-native";
 import { e2bImages } from "./images-native";
@@ -63,6 +70,8 @@ import {
 
 const CreateToken = z.strictObject({
   allowPublicTraffic: z.boolean(),
+  /** Canonical egress allowlist sent at create, checked again on recovery. */
+  allowlist: z.string().min(1).max(32_768).optional(),
   sandboxId: z.string().min(1).max(512).optional(),
 });
 
@@ -85,7 +94,11 @@ const Configuration = z
       .max(128)
       .regex(/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)?(?::default)?$/)
       .default("base"),
-    network: z.enum(["blocked", "internet"]).optional(),
+    /**
+     * `blocked`, `internet`, or `{ allow: [...] }`: outbound HTTP(S) only to those hosts (Host
+     * header or TLS SNI, `*.` wildcards) plus any listed IPv4 ranges.
+     */
+    network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).optional(),
     networkPolicy: z.enum(["blocked", "internet"]).optional(),
     /**
      * Minimum size. E2B fixes a size when it builds a template, so OCI images are built with it
@@ -125,7 +138,12 @@ const Configuration = z
   })
   .transform(({ network, timeoutSeconds, ...value }) => ({
     ...value,
-    networkPolicy: network ?? value.networkPolicy ?? "blocked",
+    ...allowlistConfig("E2B", network),
+    networkPolicy: AllowNetworkSetting.safeParse(network).success
+      ? ALLOW_NETWORK_POLICY
+      : (z.enum(["blocked", "internet"]).optional().parse(network) ??
+        value.networkPolicy ??
+        "blocked"),
     lifetimeSeconds: nativeLifetime(
       value.lifecycle?.lifetimeSeconds ?? timeoutSeconds ?? defaultLifetime(MAX_LIFETIME_SECONDS),
     ),
@@ -339,6 +357,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {
+      throwAllowlistError(config);
       const transport = transportFactory?.(credentials) ?? createSdkTransport(credentials.apiKey);
 
       if (config.lifecycle?.suspension && (!transport.suspend || !transport.resume))
@@ -630,6 +649,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
         snapshotPreserve: config.snapshots?.preserve ?? Preserve.FILESYSTEM_AND_MEMORY,
         apiKey: credentials.apiKey,
         allowPublicTraffic: config.preview.access === "public",
+        allowlist: config.allowlist,
         find,
       });
 
@@ -907,7 +927,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
         },
         supports: {
           images: ["prepared", "oci"],
-          network: ["internet", "blocked"],
+          network: config.allowlist ? [ALLOW_NETWORK_POLICY] : ["internet", "blocked"],
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
@@ -1007,8 +1027,13 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             if (input.region)
               throw new AdapterError("UNSUPPORTED", "E2B region selection is unavailable");
 
-            if (input.networkPolicy !== "internet" && input.networkPolicy !== "blocked")
-              throw new AdapterError("UNSUPPORTED", "E2B network policy is unsupported");
+            if (!e2bNetworkPolicies(config.allowlist).includes(input.networkPolicy))
+              throw new AdapterError(
+                "UNSUPPORTED",
+                input.networkPolicy === ALLOW_NETWORK_POLICY
+                  ? "E2B allowlists are set in adapter setup: network: { allow: [...] }"
+                  : "E2B network policy is unsupported",
+              );
 
             if (input.labels && Object.keys(input.labels).some((key) => ownerKeys.includes(key)))
               throw new AdapterError("INVALID_ARGUMENT", "Reserved E2B metadata key");
@@ -1041,6 +1066,9 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             const token: z.infer<typeof CreateToken> = {
               allowPublicTraffic: config.preview.access === "public",
             };
+
+            if (input.networkPolicy === ALLOW_NETWORK_POLICY && config.allowlist)
+              token.allowlist = config.allowlist;
 
             await ctx.checkpoint(token);
 
@@ -1110,6 +1138,7 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
                 timeoutMs: nativeLifetime(input.lifetimeSeconds ?? config.lifetimeSeconds) * 1000,
                 allowInternetAccess: input.networkPolicy === "internet",
                 allowPublicTraffic: token.allowPublicTraffic,
+                ...e2bEgress(token.allowlist),
                 metadata,
                 signal: ctx.signal,
               };
@@ -1135,6 +1164,9 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
                 return ctx.unknown(
                   "E2B create inbound visibility could not be verified; no replay",
                 );
+
+              if (!e2bEgressMatches(record, token.allowlist))
+                return ctx.unknown("E2B create egress allowlist could not be verified; no replay");
 
               return {
                 id,
@@ -1221,6 +1253,9 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
               return ctx.unknown(
                 "Recovered E2B create inbound visibility is unverified; no replay",
               );
+
+            if (!e2bEgressMatches(record, token.data.allowlist))
+              return ctx.unknown("Recovered E2B create egress allowlist is unverified; no replay");
 
             if (attempt.mounts?.length)
               return ctx.unknown("Recovered native volume IDs cannot be confirmed; no replay");

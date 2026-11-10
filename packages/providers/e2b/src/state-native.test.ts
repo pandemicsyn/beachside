@@ -119,6 +119,12 @@ function fixture() {
           : Object.entries(input.volumeMounts ?? {}).map(([path, name]) => ({ path, name })),
       });
 
+      // E2B records an allowlist as allowOut over a deny-all denyOut.
+      if (input.allowOut) {
+        boxes.get(id)!.allowOut = [...input.allowOut];
+        boxes.get(id)!.denyOut = ["0.0.0.0/0"];
+      }
+
       if (modes.loseRestore && input.metadata.beachside_snapshot)
         throw new Error("Restore acknowledgement lost");
 
@@ -331,8 +337,16 @@ function fixture() {
     });
   };
 
+  const connectAllow = (allow: string[]) =>
+    Beachside.connect({
+      adapter: createE2BAdapter(() => transport),
+      config: { preview: { access: "protected" }, network: { allow } },
+      credentials: { apiKey: "fixture-key" },
+    });
+
   return {
     connect,
+    connectAllow,
     transport,
     boxes,
     snapshots,
@@ -2270,6 +2284,28 @@ test("successful volume inventory does not prove account create eligibility or a
     });
     expect(f.calls.volumeCreate).toBe(1);
     await volume.delete();
+  } finally {
+    await client.close();
+  }
+});
+
+test("an E2B allowlist connection restores with its list and refuses other networks", async () => {
+  const f = fixture();
+  const client = await f.connectAllow(["github.com", "10.1.0.0/16"]);
+
+  try {
+    const source = await client.sandboxes.create({ environment: Image.prepared("base") });
+    const { snapshot } = await source.snapshot();
+
+    await expect(snapshot.restore({ network: "internet" })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+
+    const restored = await snapshot.restore();
+    expect(f.boxes.get(restored.id)).toMatchObject({
+      allowOut: ["github.com", "10.1.0.0/16"],
+      denyOut: ["0.0.0.0/0"],
+    });
   } finally {
     await client.close();
   }

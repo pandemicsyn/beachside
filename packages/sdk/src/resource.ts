@@ -61,7 +61,7 @@ export const Image = {
 };
 
 /** Portable outbound network policy; adapters map it to native settings. */
-export type NetworkPolicy = "blocked" | "internet" | (string & {});
+export type NetworkPolicy = "blocked" | "internet" | "allow" | (string & {});
 
 export type CreateInput = {
   environment?: ImageInput;

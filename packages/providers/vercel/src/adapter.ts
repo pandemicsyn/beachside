@@ -35,6 +35,12 @@ import {
   PreserveSchema,
   listedLabels,
   listedTime,
+  ALLOW_NETWORK_POLICY,
+  AllowNetworkSetting,
+  allowlistConfig,
+  allowlistFromCanonical,
+  parseEgressAllowlist,
+  throwAllowlistError,
 } from "@beachside/adapter";
 import {
   boundedBody,
@@ -53,6 +59,59 @@ const id = z
   .regex(/^[A-Za-z0-9_-]+$/);
 
 const policy = z.enum(["blocked", "internet", "vercel-deny-all", "vercel-allow-all"]);
+
+/** A session's network policy as Vercel reports it; allowlists come back as `custom`. */
+const nativeNetworkPolicy = z.object({
+  mode: z.string(),
+  allowedDomains: z.array(z.string()).nullish(),
+  allowedCIDRs: z.array(z.string()).nullish(),
+  deniedCIDRs: z.array(z.string()).nullish(),
+});
+
+type NativeNetworkPolicy = z.infer<typeof nativeNetworkPolicy>;
+
+/** Vercel's create-time network policy: a mode, or an allowlist of domains and subnets. */
+type NativePolicyRequest =
+  | { mode: "deny-all" | "allow-all" }
+  | { allow: string[]; subnets?: { allow: string[] } };
+
+/** Native request body for a policy: a mode, or an allowlist of domains and subnets. */
+function nativePolicyRequest(
+  networkPolicy: string,
+  allowlist: string | undefined,
+): NativePolicyRequest {
+  if (networkPolicy !== ALLOW_NETWORK_POLICY || !allowlist)
+    return { mode: networkPolicy === "blocked" ? "deny-all" : "allow-all" };
+  const list = allowlistFromCanonical(allowlist);
+  const request: NativePolicyRequest = { allow: [...list.hosts] };
+
+  if (list.cidrs.length) request.subnets = { allow: [...list.cidrs] };
+
+  return request;
+}
+
+/** Whether Vercel reports exactly the requested policy, including every allowlist entry. */
+function nativePolicyMatches(
+  observed: NativeNetworkPolicy | undefined,
+  networkPolicy: string,
+  allowlist: string | undefined,
+): boolean {
+  if (!observed) return false;
+
+  if (networkPolicy !== ALLOW_NETWORK_POLICY || !allowlist)
+    return observed.mode === (networkPolicy === "blocked" ? "deny-all" : "allow-all");
+
+  if (observed.mode !== "custom" || observed.deniedCIDRs?.length) return false;
+
+  try {
+    return (
+      parseEgressAllowlist([...(observed.allowedDomains ?? []), ...(observed.allowedCIDRs ?? [])])
+        .canonical === allowlist
+    );
+  } catch {
+    return false;
+  }
+}
 
 /** Deprecated native spellings, resolved to portable names for config and SDK inputs. */
 const networkPolicyAliases = {
@@ -143,7 +202,11 @@ export const vercelConfig = z.strictObject({
       retentionSeconds: z.number().int().nonnegative().safe().optional(),
     })
     .optional(),
-  network: policy.optional(),
+  /**
+   * `blocked`, `internet`, or `{ allow: [...] }`: outbound HTTP(S) only to those hosts (`*.`
+   * wildcards) plus any listed IPv4 ranges. Allowlists need a plan with network policies.
+   */
+  network: z.union([policy, AllowNetworkSetting]).optional(),
   /** @deprecated Use `network`. */
   networkPolicy: policy.optional(),
 });
@@ -160,7 +223,7 @@ const sessionSchema = z.object({
     "aborted",
     "snapshotting",
   ]),
-  networkPolicy: z.object({ mode: z.string() }).optional(),
+  networkPolicy: nativeNetworkPolicy.optional(),
   startedAt: z.number().optional(),
   timeout: z.number().optional(),
   sourceSnapshotId: id.optional(),
@@ -185,7 +248,7 @@ const nativeBox = z.object({
   mounts: z.record(z.string(), z.json()).optional(),
   region: z.string().optional(),
   status: sessionSchema.shape.status,
-  networkPolicy: z.object({ mode: z.string() }).optional(),
+  networkPolicy: nativeNetworkPolicy.optional(),
 });
 
 const page = z.object({
@@ -333,7 +396,18 @@ export function createVercelAdapter(
         ? undefined
         : { minSeconds: 1, maxSeconds: MAX_SESSION_SECONDS };
 
-      const networkPolicy = portablePolicy(config.network ?? config.networkPolicy ?? "blocked");
+      const allowSetting = allowlistConfig("Vercel", config.network);
+      throwAllowlistError(allowSetting);
+      const allowlist = allowSetting.allowlist;
+      const namedPolicy = policy.safeParse(config.network);
+
+      const networkPolicy: string = allowlist
+        ? ALLOW_NETWORK_POLICY
+        : portablePolicy(
+            (namedPolicy.success ? namedPolicy.data : undefined) ??
+              config.networkPolicy ??
+              "blocked",
+          );
 
       // Unmet minimums reject before any provider IO; the native default is 2 vCPUs.
       const vcpus = config.resources
@@ -360,7 +434,11 @@ export function createVercelAdapter(
         throw new AdapterError("UNAUTHENTICATED", "Vercel project/team identity mismatch");
       await client.json(`/v2/sandboxes?project=${project.id}&limit=1`, signal, page);
       const image = config.image;
-      const mode = networkPolicy === "blocked" ? "deny-all" : "allow-all";
+      const policyRequest = nativePolicyRequest(networkPolicy, allowlist);
+
+      const policyMatches = (observed: NativeNetworkPolicy | undefined) =>
+        nativePolicyMatches(observed, networkPolicy, allowlist);
+
       const route = (sandboxId: string) => `/v2/sandboxes/sessions/${id.parse(sandboxId)}`;
 
       const scope = {
@@ -481,8 +559,8 @@ export function createVercelAdapter(
           ) ||
           JSON.stringify(value.routes.map((v) => v.port).sort((a, b) => a - b)) !==
             JSON.stringify([...config.ports].sort((a, b) => a - b)) ||
-          value.sandbox.networkPolicy?.mode !== mode ||
-          value.session.networkPolicy?.mode !== mode
+          !policyMatches(value.sandbox.networkPolicy) ||
+          !policyMatches(value.session.networkPolicy)
         )
           throw new AdapterError("CONFLICT", "Persistent sandbox identity or routing changed");
       };
@@ -987,7 +1065,7 @@ export function createVercelAdapter(
               resources: { vcpus },
               ports: config.ports,
               failoverRegions: [],
-              networkPolicy: { mode },
+              networkPolicy: policyRequest,
               tags: { ...input.labels, beachsideSubmission: ctx.submissionId },
               // Native session defaults; every command inherits them unless its own env overrides.
               env: input.env && Object.keys(input.env).length ? input.env : undefined,
@@ -1062,8 +1140,8 @@ export function createVercelAdapter(
                   .sort((a, b) => a - b),
               ) === JSON.stringify([...config.ports].sort((a, b) => a - b)) &&
               (!sourceSnapshotId || result.session.sourceSnapshotId === sourceSnapshotId) &&
-              result.session.networkPolicy?.mode === mode &&
-              result.sandbox.networkPolicy?.mode === mode;
+              policyMatches(result.session.networkPolicy) &&
+              policyMatches(result.sandbox.networkPolicy);
 
             const token: z.infer<typeof createToken> = {
               version: 1,
@@ -1120,8 +1198,8 @@ export function createVercelAdapter(
                 value.session.region !== config.region ||
                 value.session.vcpus !== vcpus ||
                 value.session.timeout !== lifetimeSeconds * 1000 ||
-                value.session.networkPolicy?.mode !== mode ||
-                value.sandbox.networkPolicy?.mode !== mode ||
+                !policyMatches(value.session.networkPolicy) ||
+                !policyMatches(value.sandbox.networkPolicy) ||
                 !new RegExp(`^${image.split(":")[0]}@sha256:[a-f0-9]{64}$`).test(
                   value.sandbox.image ?? "",
                 ) ||
@@ -1174,7 +1252,7 @@ export function createVercelAdapter(
             const value = await get(token.sessionId, readSignal(ctx));
 
             if (
-              value.networkPolicy?.mode !== mode ||
+              !policyMatches(value.networkPolicy) ||
               (token.sourceSnapshotId && value.sourceSnapshotId !== token.sourceSnapshotId)
             )
               return ctx.unknown("Acknowledged session network policy mismatch");
