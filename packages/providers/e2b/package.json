@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@beachside/adapter": "workspace:*",
-    "e2b": "2.51.0",
+    "e2b": "2.63.0",
     "zod": "4.6.6"
   },
   "devDependencies": {
@@ -39,5 +39,8 @@
     "access": "public"
   },
   "description": "Official E2B adapter for Beachside.",
-  "types": "./dist/index.d.ts"
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=22.19"
+  }
 }

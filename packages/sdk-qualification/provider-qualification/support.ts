@@ -165,15 +165,15 @@ export const officialSupport: SupportMetadata[] = [
       },
       previewPublic: {
         support: "conditional",
-        note: "E2B public access, the default, with observed native visibility and auto-resume off. Protected setup disables public traffic on create and restore; fresh protected token lookup unsupported. Bun preview-public passed at 3188e33 with observed public visibility, HTTP content and confirmed owned cleanup. Protected-mode ingress denial remains unqualified.",
+        note: "E2B public access, the default, with observed native visibility and auto-resume off. Protected setup disables public traffic on create and restore. Bun preview-public passed at 3188e33 with observed public visibility, HTTP content and confirmed owned cleanup. Protected-mode ingress denial remains unqualified.",
       },
       termination: {
         support: "conditional",
         note: "Active handles now use random scoped tag selectors for SIGTERM/SIGKILL; tags are not immutable native generations and other native clients can reuse them. Lost observation disables controls; no descendant cleanup guarantee. Historical PID-selected evidence follows. Calls share/cache acknowledgement or uncertainty without replay. Exit remains independently observed, including native -1. Bounded Bun live case passed at 131a8c6 with borrowed base on darwin-arm64/Bun 1.3.14 after the fixed-default routing correction: ready output, request acknowledgement/reuse, independently observed nonzero terminal result, owned cleanup and client close. The prior 4cc6a20 attachment failure remains recorded. Other images/platforms and signal delivery races are unqualified.",
       },
       previewProtected: {
-        support: "unsupported",
-        note: "Fresh traffic-token retrieval is absent from the pinned read-only detail API. Native connect may resume compute; protected preview rejects without calling it. Protected setup creates and restores private compute.",
+        support: "conditional",
+        note: "Protected setup creates and restores private compute (native allowPublicTraffic false). preview() checks running state, private visibility and auto-resume off, then reads the traffic token from native connect with a 1-second timeout, which never shortens the lifetime, and returns it as the e2b-traffic-access-token header. A sandbox paused between the check and the read is resumed by E2B. Fixture coverage only; protected ingress denial is not yet tested live.",
       },
       directories: {
         support: "conditional",
@@ -452,7 +452,7 @@ export const providerStatus: ProviderStatus[] = [
     limits: [
       'Do not rely on `network: "blocked"` for isolation. In our live test a blocked sandbox could still open direct IPv4 connections.',
       "Volumes and volume mounts are not supported.",
-      "Previews are public only.",
+      "Protected previews return an `e2b-traffic-access-token` header; they have not been tested live yet.",
       "File workflows were live-tested in `/home/user`; other paths and custom templates need their own checks.",
     ],
   },

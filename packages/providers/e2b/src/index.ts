@@ -830,11 +830,6 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
               "Preview port must be an integer from 1 through 65535",
             );
 
-          if (config.preview.access !== "public")
-            throw new AdapterError(
-              "UNSUPPORTED",
-              "E2B preview.access protected keeps sandboxes closed to inbound traffic and cannot return preview access; use preview.access public, the default",
-            );
           ctx.signal.throwIfAborted();
           const record = await find(input.sandbox.id, input.sandbox.reference);
 
@@ -851,17 +846,64 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             );
           ctx.signal.throwIfAborted();
 
+          const access = config.preview.access;
+
           if (
-            record.allowPublicTraffic !== true ||
+            record.allowPublicTraffic !== (access === "public") ||
             record.domain !== "e2b.app" ||
             record.lifecycle?.autoResume !== false
           )
             throw new AdapterError(
               "UNAVAILABLE",
-              "E2B public preview requires confirmed public traffic, e2b.app domain, and auto-resume off",
+              `E2B ${access} preview requires ${access === "public" ? "public" : "private"} traffic, the e2b.app domain and auto-resume off, confirmed on the sandbox`,
+            );
+          const url = `https://${input.port}-${record.id}.e2b.app`;
+
+          if (access === "public") return { access: "public" as const, url };
+
+          if (!transport.trafficAccessToken)
+            throw new AdapterError("UNSUPPORTED", "E2B private traffic tokens are unavailable");
+
+          // Connect takes a timeout from now: on running compute it only ever extends, so the
+          // observed remaining lifetime changes nothing; if the sandbox paused since the check
+          // and E2B resumes it, it keeps that remaining lifetime instead of a shorter one.
+          const remaining = record.endAt
+            ? Math.ceil((Date.parse(record.endAt) - Date.now()) / 1000)
+            : Number.NaN;
+
+          if (!Number.isFinite(remaining) || remaining < 1)
+            throw new AdapterError(
+              "UNAVAILABLE",
+              "E2B preview requires running compute with a known remaining lifetime",
             );
 
-          return { access: "public" as const, url: `https://${input.port}-${record.id}.e2b.app` };
+          const native = await transport.trafficAccessToken(
+            record.id,
+            ctx.signal,
+            Math.min(remaining, MAX_LIFETIME_SECONDS),
+          );
+
+          if (native.sandboxId !== record.id)
+            throw new AdapterError("CONFLICT", "E2B preview response identity differs");
+
+          // Preview never resumes compute; a resume here means the sandbox paused after the check.
+          if (native.resumed)
+            throw new AdapterError(
+              "CONFLICT",
+              `E2B sandbox paused during preview and E2B resumed it with its remaining lifetime (about ${remaining}s); inspect it, then request the preview again`,
+            );
+
+          if (!native.token)
+            throw new AdapterError(
+              "UNAVAILABLE",
+              "E2B returned no traffic access token for this private sandbox",
+            );
+
+          return {
+            access: "protected" as const,
+            url,
+            headers: { "e2b-traffic-access-token": native.token },
+          };
         },
         supports: {
           images: ["prepared", "oci"],

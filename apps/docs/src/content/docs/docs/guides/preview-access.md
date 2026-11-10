@@ -60,7 +60,7 @@ Daytona's standard tokens cannot be revoked individually. Native stop/start rota
 
 Daytona public access reports `UNSUPPORTED`: the native setting would publish ports across the sandbox. The adapter currently supports protected access only.
 
-## Public access with E2B
+## Public and protected access with E2B
 
 E2B defaults to public preview access, matching E2B's native default. Setting it explicitly is equivalent:
 
@@ -78,7 +78,7 @@ This setting exposes the sandbox's HTTP services to anyone who can reach their U
 
 Select `preview: { access: "protected" }` to keep new sandboxes closed to inbound traffic: creation and restore disable public traffic and verify visibility before reporting success. If visibility cannot be confirmed, the operation remains uncertain and retains its confirmed resource identity for recovery and cleanup. Live tests have not yet qualified denial of incoming traffic in protected mode.
 
-Protected `preview()` reports `UNSUPPORTED` because the native read-only detail API used by the adapter cannot return the required token. Beachside does not call E2B's native connect method to retrieve one, because that method can resume compute. It does not fall back to public access.
+With protected access, `preview()` returns E2B's traffic token as an `e2b-traffic-access-token` header; requests without it get `403`. E2B hands that token out only from its connect call, so `preview()` first checks that the sandbox is running, private and has auto-resume off, then connects with the sandbox's observed remaining lifetime as the timeout, so the lifetime stays as it was. If the sandbox paused between the check and the call, E2B resumes it with that remaining lifetime and `preview()` fails with `CONFLICT` instead of returning access; inspect it and ask again. Like Daytona's preview token, the header is a credential: send it with `redirect: "error"` and don't log it. Protected access has not been tested live yet.
 
 Recovery preserves an operation's original visibility setting. Older create references without preview metadata, and version-1 restore references without a visibility field, used public access. Recovering those operations requires confirmed native public visibility, even if the current connection selects protected access.
 
