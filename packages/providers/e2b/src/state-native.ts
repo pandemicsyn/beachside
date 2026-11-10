@@ -385,6 +385,12 @@ export function e2bState(input: {
       if (error instanceof AdapterError && ["INVALID_ARGUMENT", "CONFLICT"].includes(error.code))
         return ctx.unknown("E2B fork record does not match the acknowledged fork; inspect it");
 
+      // Credentials that stopped working will not recover on this connection.
+      if (error instanceof AdapterError && ["UNAUTHENTICATED", "FORBIDDEN"].includes(error.code))
+        return ctx.unknown(
+          "E2B refused reading the acknowledged fork; recover it from a connection with valid credentials",
+        );
+
       return ctx.pending(token);
     }
 
@@ -1151,8 +1157,11 @@ export function e2bState(input: {
           state: "uncertain",
         };
 
-        if (source.allowPublicTraffic !== undefined)
-          token.allowPublicTraffic = source.allowPublicTraffic;
+        // The source's observed visibility, else the connection's configured one, so a fork is
+        // always checked against a known setting.
+        const visibility = source.allowPublicTraffic ?? input.allowPublicTraffic;
+
+        if (visibility !== undefined) token.allowPublicTraffic = visibility;
 
         await ctx.checkpoint(token);
 

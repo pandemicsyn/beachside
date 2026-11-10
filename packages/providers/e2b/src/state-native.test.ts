@@ -82,6 +82,7 @@ function fixture() {
     forkReturnsSource: false,
     forkFlipsVisibility: false,
     forkChangesMarkers: false,
+    forkMakesPublic: false,
     forkReadFailures: 0,
     // SAFETY: The fixture injects only Error instances or no failure.
     volumeCreateFailure: undefined as Error | undefined,
@@ -202,6 +203,8 @@ function fixture() {
         if (modes.forkFlipsVisibility) fork.allowPublicTraffic = !source.allowPublicTraffic;
 
         if (modes.forkChangesMarkers) fork.metadata.beachside_submission = "other";
+
+        if (modes.forkMakesPublic) fork.allowPublicTraffic = true;
         boxes.set(forkId, fork);
 
         if (modes.loseFork) throw new Error("Fork response lost");
@@ -2365,6 +2368,14 @@ test("E2B fork checks the returned record is a new sandbox with the source's mar
     f.modes.forkFlipsVisibility = true;
     await expect(source.fork()).rejects.toBeInstanceOf(OutcomeUnknownError);
     f.modes.forkFlipsVisibility = false;
+
+    // A source whose detail omits visibility is checked against the configured (protected) one.
+    const sourceRecord = f.boxes.get(source.id)!;
+    sourceRecord.allowPublicTraffic = undefined;
+    f.modes.forkMakesPublic = true;
+    await expect(source.fork()).rejects.toBeInstanceOf(OutcomeUnknownError);
+    f.modes.forkMakesPublic = false;
+    sourceRecord.allowPublicTraffic = false;
 
     // A fork whose markers differ from the source's is not handed out.
     f.modes.forkChangesMarkers = true;
