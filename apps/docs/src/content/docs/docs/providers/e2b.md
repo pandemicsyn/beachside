@@ -3,7 +3,7 @@ title: E2B
 description: Use the E2B adapter for template-based sandboxes with commands, files, streaming, pause/resume, snapshots and public or protected previews.
 ---
 
-The `@beachside/e2b` package runs Beachside sandboxes on [E2B](https://e2b.dev) through the pinned `e2b@2.63.0` client. Install it with `npm install beachside @beachside/e2b`; it is a supported provider. Use Node 20+ or Bun.
+The `@beachside/e2b` package runs Beachside sandboxes on [E2B](https://e2b.dev) through the pinned `e2b@2.63.0` client. Install it with `npm install beachside @beachside/e2b`; it is a supported provider. Use Node 22.19+ or Bun; `e2b@2.63.0` requires Node 22.19 or newer.
 
 ```ts
 import { Beachside } from "beachside";
@@ -78,7 +78,7 @@ Live results cover the tested image, region and network setting; see [Provider s
 
 Previews are public by default. A public sandbox accepts inbound traffic from the moment it is created or restored, before you call `preview()`, and anyone with the URL `https://<port>-<sandbox-id>.e2b.app` can reach that port. `preview()` requires running compute with auto-resume off.
 
-With `preview.access: "protected"`, sandboxes are created closed to inbound traffic and `preview()` returns `{ access: "protected", url, headers }`, where the header is `e2b-traffic-access-token`. Requests without it get `403`. E2B returns that token only from its connect call, so `preview()` checks that the sandbox is running, private and has auto-resume off, then connects with a one-second timeout, which never shortens the lifetime; a sandbox that pauses between the check and the call is resumed by E2B. The token is a credential. Protected mode has not been live-tested. See [preview access](/docs/guides/preview-access/#public-and-protected-access-with-e2b).
+With `preview.access: "protected"`, sandboxes are created closed to inbound traffic and `preview()` returns `{ access: "protected", url, headers }`, where the header is `e2b-traffic-access-token`. Requests without it get `403`. E2B returns that token only from its connect call, so `preview()` checks that the sandbox is running, private and has auto-resume off, then connects with the sandbox's observed remaining lifetime as the timeout, so the lifetime stays as it was. If the sandbox paused between the check and the call, E2B resumes it with that remaining lifetime and `preview()` fails with `CONFLICT` instead of returning access; inspect it and ask again. The token is a credential. Protected mode has not been live-tested. See [preview access](/docs/guides/preview-access/#public-and-protected-access-with-e2b).
 
 ## Commands and files
 
