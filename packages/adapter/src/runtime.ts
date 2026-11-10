@@ -14,6 +14,8 @@ import {
   SnapshotCaptureInput,
   SnapshotCaptureValue,
   SnapshotRestoreInput,
+  SandboxForkInput,
+  forkOptionProblem,
   ArtifactDeletionResult,
   VolumeCreateInput,
   VolumeInfo,
@@ -65,6 +67,7 @@ export type RuntimeSession = Omit<
   | "renew"
   | "snapshotCapture"
   | "snapshotRestore"
+  | "sandboxFork"
   | "snapshotDelete"
   | "imageDelete"
   | "volumeCreate"
@@ -76,6 +79,7 @@ export type RuntimeSession = Omit<
   renew?: unknown;
   snapshotCapture?: object & { labels?: boolean };
   snapshotRestore?: { mountInput?: "specs"; options?: import("./state").RestoreOptions };
+  sandboxFork?: { capabilities: import("./state").ForkCapabilities };
   snapshotDelete?: unknown;
   imageDelete?: unknown;
   volumeCreate?: unknown;
@@ -114,6 +118,7 @@ export type OperationKind =
   | "sandbox_renew"
   | "snapshot_capture"
   | "snapshot_restore"
+  | "sandbox_fork"
   | "snapshot_delete"
   | "volume_create"
   | "volume_delete";
@@ -130,6 +135,7 @@ export type OperationInput =
   | Sandbox
   | import("./resources").SnapshotCaptureInput
   | import("./resources").SnapshotRestoreInput
+  | import("./resources").SandboxForkInput
   | import("./resources").VolumeCreateInput
   | import("./state").ResourceReference;
 
@@ -388,7 +394,8 @@ async function validateValue(
 ): Promise<OperationResult> {
   if (signal.aborted) throw abortReason(signal);
 
-  if (kind === "create" || kind === "snapshot_restore") return CreateValueSchema.parse(value);
+  if (kind === "create" || kind === "snapshot_restore" || kind === "sandbox_fork")
+    return CreateValueSchema.parse(value);
 
   if (kind === "sandbox_suspend") return SuspendResult.parse(value);
 
@@ -512,6 +519,9 @@ function select(session: RuntimeSession, kind: OperationKind): Mutation<unknown,
     case "snapshot_restore":
       op = session.snapshotRestore;
       break;
+    case "sandbox_fork":
+      op = session.sandboxFork;
+      break;
     case "snapshot_delete":
       op = session.snapshotDelete;
       break;
@@ -600,6 +610,25 @@ function checkCapability(
     if (value.request.env && !CreateEnv.safeParse(value.request.env).success)
       throw new AdapterError("INVALID_ARGUMENT", "Invalid restore env");
     const problem = restoreOptionProblem(session.snapshotRestore?.options, value.request);
+
+    if (problem) throw new AdapterError("UNSUPPORTED", problem);
+
+    return value;
+  }
+
+  if (kind === "sandbox_fork") {
+    const value = SandboxForkInput.parse(input);
+    assertResourceScope(value.sandbox.reference, {
+      provider: value.sandbox.reference.provider,
+      scope: session.scope,
+    });
+
+    if (value.sandbox.id !== value.sandbox.reference.nativeId)
+      throw new AdapterError("CONFLICT", "Fork source identity differs");
+
+    if (value.request.labels && !Object.keys(value.request.labels).length)
+      delete value.request.labels;
+    const problem = forkOptionProblem(session.sandboxFork?.capabilities.options, value.request);
 
     if (problem) throw new AdapterError("UNSUPPORTED", problem);
 

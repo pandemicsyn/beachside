@@ -503,7 +503,9 @@ export class FakeProviderEngine {
         ref.kind === "sandbox",
     );
   }
-  private rejection(code: "capacity" | "unsupported" | "conflict"): z.infer<typeof DriverResult> {
+  private rejection(
+    code: "capacity" | "unsupported" | "conflict" | "not_found",
+  ): z.infer<typeof DriverResult> {
     return {
       status: "rejected",
       effect: "none",
@@ -563,6 +565,7 @@ export class FakeProviderEngine {
     labels?: Record<string, string>;
     env?: Record<string, string>;
     lifetimeSeconds?: number;
+    forkOf?: SandboxRef;
   }): Promise<{ result: z.infer<typeof DriverResult>; loseResponse: boolean }> {
     const requestHash = await intentSha256(input);
 
@@ -607,6 +610,13 @@ export class FakeProviderEngine {
 
         if (this.state.resources.length >= MAX_RESOURCES)
           return { result: this.rejection("capacity"), loseResponse: false };
+        const source = input.forkOf && this.find(input.forkOf);
+
+        if (
+          input.forkOf &&
+          (source?.state !== "running" || !sameScope(input.forkOf.scope, input.scope))
+        )
+          return { result: this.rejection("not_found"), loseResponse: false };
         const ref = this.ref(input.scope, "sandbox");
 
         const resource: z.infer<typeof ResourceSchema> = {
@@ -629,6 +639,15 @@ export class FakeProviderEngine {
         )?.files;
 
         if (captured) resource.files = { ...captured };
+
+        // A fork copies its source's image, files and env; its own labels replace the source's.
+        if (source) {
+          resource.image = source.image;
+          resource.files = { ...source.files };
+
+          if (source.env) resource.env = { ...source.env, ...resource.env };
+        }
+
         this.state.resources.push(resource);
 
         const result: z.infer<typeof DriverResult> = {

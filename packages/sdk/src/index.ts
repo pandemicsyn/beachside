@@ -85,6 +85,7 @@ export {
   assertResourceIdentity,
   SnapshotRequest,
   SnapshotRequirements,
+  ForkRequest,
   Preserve,
 } from "@beachside/adapter";
 
@@ -95,6 +96,7 @@ export type {
   OperationOutcome,
   SnapshotPlan,
   SnapshotProfile,
+  ForkCapabilities,
   SandboxState,
   SandboxReference,
   SuspendResult,

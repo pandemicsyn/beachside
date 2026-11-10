@@ -1440,3 +1440,91 @@ test("boxd setup accepts memory-keeping depth and rejects filesystem-only before
     ).rejects.toMatchObject({ code: "UNSUPPORTED" });
   expect(fixture.calls).toHaveLength(before);
 });
+
+test("boxd forks a running machine natively, keeping its egress and merging labels", async () => {
+  const { fixture, adapter } = await setup();
+  const forks = () => fixture.calls.filter((call) => call.method === "ForkVm").length;
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    const box = await client.sandboxes.create({
+      networkPolicy: "internet",
+      labels: { team: "infra" },
+    });
+
+    expect((await box.capabilities()).fork).toMatchObject({
+      status: "supported",
+      value: { preserve: "filesystem+memory", interruption: "pause", execution: "resume" },
+    });
+
+    const forked = await box.fork({ labels: { branch: "a" }, lifetimeSeconds: 600 });
+    const machine = fixture.machines.get(forked.id)!;
+    expect(forked.id).not.toBe(box.id);
+    expect(forks()).toBe(1);
+    expect(machine.sourceInfo).toMatchObject({ kind: "fork", id: box.id });
+    expect(machine.egressAllow).toEqual([]);
+    expect(machine.labels).toEqual({ team: "infra", branch: "a" });
+    expect(machine.deleteAtMs).toBeGreaterThan(0);
+    expect((await box.inspect()).state).toBe("running");
+
+    await expect(box.fork({ labels: { "boxd/owner": "me" } })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+
+    // The merged labels have the 64-label limit: checkFork() and fork() both refuse before any fork.
+    const many = Object.fromEntries(Array.from({ length: 63 }, (_, i) => [`k${i}`, "v"]));
+    fixture.machines.get(box.id)!.labels = { team: "infra", ...many };
+    expect(await box.checkFork({ labels: { branch: "b" } })).toMatchObject({
+      status: "unsupported",
+    });
+    await expect(box.fork({ labels: { branch: "b" } })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    expect((await box.checkFork({ labels: { team: "ops" } })).status).toBe("supported");
+    fixture.machines.get(box.id)!.labels = { team: "infra" };
+
+    // A custom allowlist set outside Beachside would carry into the fork, so it is refused,
+    // and checkFork() reports that from the source before anything is sent.
+    fixture.machines.get(box.id)!.egressAllow = ["api.example.com"];
+    expect(await box.checkFork()).toMatchObject({ status: "unsupported" });
+    await expect(box.fork()).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(forks()).toBe(1);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a lost boxd fork response is unknown and never forks again", async () => {
+  const { fixture, adapter } = await setup();
+  const forks = () => fixture.calls.filter((call) => call.method === "ForkVm").length;
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    const box = await client.sandboxes.create();
+    fixture.loseNextCreateResponse();
+
+    const lost = await box.fork().catch((error: Error) => error);
+    expect(lost).toBeInstanceOf(OutcomeUnknownError);
+
+    if (!(lost instanceof OutcomeUnknownError)) throw lost;
+    expect(lost.reference.kind).toBe("sandbox_fork");
+
+    // The fork UUID never reached the adapter, so recovery reports it unknown and never forks again.
+    await expect((await client.recover(lost.reference)).observe()).rejects.toBeInstanceOf(
+      OutcomeUnknownError,
+    );
+    expect(forks()).toBe(1);
+  } finally {
+    await client.close();
+  }
+});

@@ -779,7 +779,11 @@ export function decodeResourceResult(
     return decodeCapture(client, value, ref);
   }
 
-  if (ref.kind === "snapshot_restore" && "id" in value && value.state === "running")
+  if (
+    (ref.kind === "snapshot_restore" || ref.kind === "sandbox_fork") &&
+    "id" in value &&
+    value.state === "running"
+  )
     return new AdapterSandbox(client, value.id, value.reference ?? null);
 
   if (ref.kind === "volume_create" && "filesystem" in value)

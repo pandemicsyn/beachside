@@ -325,7 +325,9 @@ export function createNativeClient(
 
             try {
               if (
-                (method.name === "CreateVm" || method.name === "CreateVmFromSnapshot") &&
+                (method.name === "CreateVm" ||
+                  method.name === "CreateVmFromSnapshot" ||
+                  method.name === "ForkVm") &&
                 ctx.onCreate
               ) {
                 const acknowledgement = z.object({ vmId: z.uuid() }).parse(response);

@@ -412,6 +412,10 @@ export type AdapterSession<
     /** Create options this restore applies (env, labels, lifetime); others reject before prepare. */
     options?: import("./state").RestoreOptions;
   };
+  /** Native fork of a running sandbox into a new one; never a snapshot-and-restore fallback. */
+  sandboxFork?: Mutation<import("./resources").SandboxForkInput, CreateValue> & {
+    capabilities: import("./resources").ForkCapabilities;
+  };
   snapshotDelete?: Mutation<ResourceReference, import("./resources").ArtifactDeletionResult>;
   snapshotInspect?: (
     ref: ResourceReference,

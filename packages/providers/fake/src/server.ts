@@ -142,7 +142,7 @@ export async function startFakeProviderServer(options: FakeServerOptions) {
             });
           case "create": {
             if (
-              !engine.image(action.scope, { imageId: action.image }) ||
+              (!action.forkOf && !engine.image(action.scope, { imageId: action.image })) ||
               action.networkPolicy !== "blocked"
             )
               return json({
