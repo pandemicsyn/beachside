@@ -1125,9 +1125,9 @@ try {
 import { Beachside } from "beachside";
 import { boxdAdapter } from "@beachside/boxd";
 if (boxdAdapter.name !== "boxd") throw Error("External adapter identity mismatch");
-if (boxdAdapter.config.safeParse({ org: "team" }).success) throw Error("Internet setup must be explicit");
+if (boxdAdapter.config.parse({ org: "team" }).networkPolicy !== "blocked") throw Error("Egress must default to blocked");
 try {
-  await Beachside.connect({ adapter: boxdAdapter, config: { org: "team" }, credentials: { apiKey: "fixture" } });
+  await Beachside.connect({ adapter: boxdAdapter, config: { org: "team", network: "allowlist" }, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
 } catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
 console.log("Packed boxd imports and local validation passed without provider IO");
