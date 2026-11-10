@@ -694,9 +694,12 @@ test("snapshots capture, list, inspect, restore and delete with exact identities
       (await client.snapshots.list({ labels: { "beachside.setup-cache": "k1" } })).items,
     ).toHaveLength(1);
 
-    const restored = await snapshot.restore();
+    const restored = await snapshot.restore({ labels: { branch: "b1" } });
     expect(restored.id).not.toBe(source.id);
-    expect(createBodies(fixture).at(-1)?.body).toMatchObject({ snapshot_id: snapshot.id });
+    expect(createBodies(fixture).at(-1)?.body).toMatchObject({
+      snapshot_id: snapshot.id,
+      metadata: { branch: "b1" },
+    });
     expect((await restored.inspect()).state).toBe("running");
 
     await snapshot.delete();
@@ -784,17 +787,23 @@ test("inventory and listing are account-scoped; another account cannot reopen a 
   });
 
   try {
-    const mine = await main.sandboxes.create();
+    const mine = await main.sandboxes.create({ labels: { job: "ci-7" } });
     await alt.sandboxes.create();
+    expect(createBodies(fixture)[0]?.body).toMatchObject({
+      metadata: { job: "ci-7", beachside_network: "internet" },
+    });
+    await expect(
+      main.sandboxes.create({ labels: { beachside_submission: "x" } }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
     const listed = await main.operations.inventory({ limit: 10 });
     expect(listed.items.map((item) => item.id)).toEqual([mine.id]);
 
     const page = await main.sandboxes.list();
     expect(page.items.map((item) => item.id)).toEqual([mine.id]);
     expect(page.items[0]?.reference?.ownership).toBe("unknown");
-    // Runloop keeps no Beachside labels; the creation time is native.
+    // Labels are devbox metadata without the adapter's markers; the creation time is native.
     expect(page.items[0]).toMatchObject({
-      labels: null,
+      labels: { job: "ci-7" },
       createdAt: new Date(1_800_000_000_000).toISOString(),
     });
 

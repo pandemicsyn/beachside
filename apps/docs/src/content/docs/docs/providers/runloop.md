@@ -42,22 +42,22 @@ The package also exports `runloop()`, which takes credentials and config in one 
 | `preview.access`            | `protected`       | `protected` previews need the returned `X-Runloop-Tunnel-Authorization` header. `public` URLs are open to anyone who has them.                                                                                                                                                                                                                                                                                                                                                         |
 | `snapshots.preserve`        | `filesystem`      | Runloop snapshots keep the disk only; `Preserve.FILESYSTEM_AND_MEMORY` rejects `UNSUPPORTED` at connect.                                                                                                                                                                                                                                                                                                                                                                               |
 
-Create-time `env` is sent as Runloop environment variables. `region`, `labels` and mounts are rejected.
+Create-time `env` is sent as Runloop environment variables. `labels` become Devbox metadata, show in `sandboxes.list()`, and also apply to `restore({ labels })`; keys starting with `beachside_` are reserved and reject. `region` and mounts are rejected.
 
 ## What works
 
 Everything below is tested against a simulated Runloop API on every change. **No live Runloop run has been made yet.**
 
-| Feature           | Support                                                                                                                                  | Live tested |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Compute lifecycle | Create, inspect, inventory, `sandboxes.list()`, reference reopening, and destroy by confirmed shutdown.                                  | No          |
-| Commands          | argv and shell, with `cwd` and `env`; exact stdout/stderr bytes up to 1 MiB per stream; finite byte stdin; deadlines up to an hour.      | No          |
-| Streaming output  | Live stdout/stderr as UTF-8 text from Runloop's log streams; stop with `terminate()`. No byte output.                                    | No          |
-| Files             | Binary read and overwrite write up to 64 MiB. No-clobber writes are unsupported.                                                         | No          |
-| Suspend/resume    | `suspend()` keeps the disk; `resume()` starts fresh processes. Memory and connections are not kept.                                      | No          |
-| Snapshots         | `snapshot()` captures the disk while the Devbox keeps running; `restore()` creates a new Devbox from it; list, inspect and delete.       | No          |
-| Previews          | `preview(port)` returns the Devbox tunnel URL for that port, created with the Devbox.                                                    | No          |
-| Unsupported       | OCI images and image builds, volumes, mounts, renewal, piped input, byte streaming, terminals, directory operations, regions and labels. | —           |
+| Feature           | Support                                                                                                                             | Live tested |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Compute lifecycle | Create with labels, inspect, inventory, `sandboxes.list()`, reference reopening, and destroy by confirmed shutdown.                 | No          |
+| Commands          | argv and shell, with `cwd` and `env`; exact stdout/stderr bytes up to 1 MiB per stream; finite byte stdin; deadlines up to an hour. | No          |
+| Streaming output  | Live stdout/stderr as UTF-8 text from Runloop's log streams; stop with `terminate()`. No byte output.                               | No          |
+| Files             | Binary read and overwrite write up to 64 MiB. No-clobber writes are unsupported.                                                    | No          |
+| Suspend/resume    | `suspend()` keeps the disk; `resume()` starts fresh processes. Memory and connections are not kept.                                 | No          |
+| Snapshots         | `snapshot()` captures the disk while the Devbox keeps running; `restore()` creates a new Devbox from it; list, inspect and delete.  | No          |
+| Previews          | `preview(port)` returns the Devbox tunnel URL for that port, created with the Devbox.                                               | No          |
+| Unsupported       | OCI images and image builds, volumes, mounts, renewal, piped input, byte streaming, terminals, directory operations and regions.    | —           |
 
 ## How streamed commands work
 

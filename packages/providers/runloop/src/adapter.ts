@@ -627,14 +627,14 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
 
       requirePolicy(input.networkPolicy);
 
-      if (
-        input.region !== undefined ||
-        (input.labels && Object.keys(input.labels).length) ||
-        input.mounts?.length
-      )
+      if (input.region !== undefined || input.mounts?.length)
+        throw new AdapterError("UNSUPPORTED", "Runloop has no region selection or volume mounts");
+
+      // Labels become devbox metadata beside the adapter's own `beachside_` markers.
+      if (Object.keys(input.labels ?? {}).some((key) => key.startsWith("beachside_")))
         throw new AdapterError(
-          "UNSUPPORTED",
-          "Runloop has no region selection, labels or volume mounts",
+          "INVALID_ARGUMENT",
+          "Label keys starting with beachside_ are reserved",
         );
 
       if (input.requirements) {
@@ -836,6 +836,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
         const body: CreateDevboxBody = {
           ...(snapshotId === undefined ? input.plan.image : { snapshot_id: snapshotId }),
           metadata: {
+            ...input.labels,
             [MARK.operation]: ctx.operationId,
             [MARK.submission]: ctx.submissionId,
             [MARK.network]: input.networkPolicy,
@@ -1178,7 +1179,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
     };
 
     // A restore boots fresh from the disk snapshot, so env applies as on create.
-    const restoreOptions: RestoreOptions = { env: true };
+    const restoreOptions: RestoreOptions = { env: true, labels: true };
 
     const result: AdapterSession<
       PreparedCreate,
@@ -1254,8 +1255,10 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
               nativeId: devbox.id,
               ownership: "unknown" as const,
             },
-            // This adapter sets no Runloop metadata from labels, so it reports none.
-            labels: null,
+            // Create labels are devbox metadata beside the adapter's `beachside_` markers.
+            labels: listedLabels(devbox.metadata ?? undefined, (key) =>
+              key.startsWith("beachside_"),
+            ),
             createdAt: listedTime(devbox.create_time_ms),
           })),
           nextCursor: page.hasMore ? page.items.at(-1)?.id : undefined,
@@ -1675,6 +1678,12 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
             );
 
           requirePolicy(input.request.networkPolicy);
+
+          if (Object.keys(input.request.labels ?? {}).some((key) => key.startsWith("beachside_")))
+            throw new AdapterError(
+              "INVALID_ARGUMENT",
+              "Label keys starting with beachside_ are reserved",
+            );
           const status = await snapshotStatus(input.snapshot.nativeId, ctx);
 
           if (!status) throw new AdapterError("NOT_FOUND", "Runloop snapshot is unavailable");
@@ -1690,6 +1699,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
               image: { kind: "prepared", value: config.image },
               networkPolicy: input.request.networkPolicy,
               env: input.request.env,
+              labels: input.request.labels,
               lifetimeSeconds: input.request.lifetimeSeconds,
             },
             { snapshot_id: input.snapshot.nativeId },
