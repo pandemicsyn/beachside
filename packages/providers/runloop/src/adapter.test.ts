@@ -178,6 +178,31 @@ test("an allowlist attaches one adapter policy holding exactly its hosts and ran
   }
 });
 
+test("an allowlist connection restores with its policy and refuses other networks", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect({ network: { allow: ["github.com", "10.1.0.0/16"] } });
+
+  try {
+    const source = await client.sandboxes.create();
+    const { snapshot } = await source.snapshot();
+    const [policy] = [...fixture.policies.values()];
+
+    await expect(snapshot.restore({ network: "internet" })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+
+    const restored = await snapshot.restore();
+    expect(createBodies(fixture).at(-1)?.body).toMatchObject({
+      snapshot_id: snapshot.id,
+      metadata: { beachside_network: "allow" },
+      launch_parameters: { network_policy_id: policy?.id },
+    });
+    await Promise.all([source.destroy(), restored.destroy()]);
+  } finally {
+    await client.close();
+  }
+});
+
 test("a port-limited range never counts as the allowlist's range", async () => {
   const { fixture, connect } = setup();
   const client = await connect({ network: { allow: ["10.1.0.0/16"] } });

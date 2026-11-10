@@ -2,6 +2,7 @@ import { expect, spyOn, test } from "bun:test";
 import { Sandbox } from "e2b";
 import { Beachside, Image } from "beachside";
 import { createE2BAdapter } from "./index";
+import { e2b } from "./factory";
 import { createSdkTransport, type E2BRecord, type E2BTransport } from "./transport";
 
 function fixture(echo?: (allowOut: readonly string[] | undefined) => Partial<E2BRecord>) {
@@ -118,4 +119,11 @@ test("E2B SDK create receives allowOut and a deny-all denyOut", async () => {
   } finally {
     mock.mockRestore();
   }
+});
+
+test("the e2b() factory takes an allowlist as its network", () => {
+  // Type-checked by the package check: the factory accepts the same network setting as the adapter.
+  expect(e2b({ apiKey: "key", network: { allow: ["github.com", "10.1.0.0/16"] } }).bound).toBe(
+    true,
+  );
 });
