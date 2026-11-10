@@ -37,7 +37,7 @@ setup unless strict blocked networking is explicitly required and supported. Do 
 Vercel defaults to disposable Node 24 in iad1 with blocked networking. It supports
 bounded byte output and overwrite-only files, without stdin, process streams,
 snapshots or volumes; cleanup stops compute and retains named metadata.
-boxd requires an explicit internet policy and also requires overwrite:true.
+boxd defaults to blocked egress (set network "internet" to open it) and requires overwrite:true.
 Neither provider inherits Daytona/E2B streaming or storage guarantees.
 
 Use argument arrays for commands. Use the explicit shell form only when

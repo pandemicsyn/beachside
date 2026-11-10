@@ -15,7 +15,7 @@ import {
   type ServerUnaryCall,
   type sendUnaryData,
 } from "@grpc/grpc-js";
-import { AccountNamespace, Disks, Machines, Orgs, Snapshots } from "@boxd-sh/sdk";
+import { AccountNamespace, Disks, Machines, Orgs, Regions, Snapshots } from "@boxd-sh/sdk";
 import { createNativeClient, type CallContext } from "./transport";
 
 type Transport = ConstructorParameters<typeof Machines>[0];
@@ -33,6 +33,8 @@ const Request = z.object({
   deleteAfterSecs: z.number().default(0),
   sizeBytes: z.number().default(0),
   data: z.instanceof(Uint8Array).default(() => new Uint8Array()),
+  labels: z.record(z.string(), z.string()).default({}),
+  entries: z.array(z.string()).default([]),
   config: z
     .object({
       vcpu: z.number().default(0),
@@ -59,6 +61,8 @@ type MachineRecord = {
   deleteAtMs: number;
   botProtection: boolean;
   proxies: { name: string; port: number }[];
+  egressAllow: string[];
+  labels: Record<string, string>;
   sourceInfo?: { kind: string; name: string; version: number; id: string };
   /** Epoch seconds; boxd reports 0 for machines without a recorded creation time. */
   createdAt?: number;
@@ -157,12 +161,15 @@ async function methods() {
     disks = new Disks(capture),
     account = new AccountNamespace(capture),
     orgs = new Orgs(capture),
+    regions = new Regions(capture),
     snapshots = new Snapshots(capture);
 
   await Promise.allSettled([
     account.get(),
     account.config(),
     orgs.list(),
+    regions.list(),
+    machines.setEgressAllow("id", []),
     machines.create({ image: "ubuntu:24.04" }),
     machines.create({ fromSnapshot: "snapshot" }),
     snapshots.create("id", "snapshot"),
@@ -193,7 +200,7 @@ async function methods() {
 
 export async function boxdFixture() {
   const effects = { create: 0, destroy: 0, release: 0 };
-  const calls: Array<{ method: string; request: unknown }> = [];
+  const calls: Array<{ method: string; request: unknown; regional?: boolean }> = [];
   const machines = new Map<string, MachineRecord>();
   const disks = new Map<string, DiskRecord>();
   const snapshots = new Map<string, SnapshotRecord>();
@@ -231,6 +238,9 @@ export async function boxdFixture() {
   let wrongGetId = false;
   let failLifecycleRead = false;
   let downloadChunks: Uint8Array[] | undefined;
+  let egressFailure: "lose" | "reject" | undefined;
+  let defaultEgress: string[] = [];
+  const dialed: string[] = [];
   const definition: Record<string, MethodDefinition<unknown, unknown>> = {};
   const implementation: UntypedServiceImplementation = {};
 
@@ -298,7 +308,11 @@ export async function boxdFixture() {
         call: ServerUnaryCall<unknown, object>,
         callback: sendUnaryData<object>,
       ) => {
-        calls.push({ method: name, request: call.request });
+        calls.push({
+          method: name,
+          request: call.request,
+          regional: String(call.metadata.get("user-agent")[0] ?? "").includes("beachside-regional"),
+        });
         const req = Request.parse(call.request);
         const key = String(call.metadata.get("authorization")[0] ?? "");
         const alternate = key.includes("alternate");
@@ -342,6 +356,8 @@ export async function boxdFixture() {
               deleteAtMs: 0,
               botProtection: true,
               proxies: req.config?.network?.proxies ?? [],
+              egressAllow: [...defaultEgress],
+              labels: req.labels,
               createdAt: 1_800_000_000,
             });
 
@@ -495,6 +511,9 @@ export async function boxdFixture() {
               deleteAtMs: 0,
               botProtection: true,
               proxies: req.config?.network?.proxies ?? [],
+              // A restore starts with no allowlist; labels merge over the captured ones.
+              egressAllow: [],
+              labels: req.labels,
               sourceInfo: {
                 kind: "snapshot",
                 name: record.name,
@@ -505,6 +524,61 @@ export async function boxdFixture() {
             });
             restoreLaterVersion = false;
             ok({ vmId: id, name: req.name, status: "running" });
+            break;
+          }
+
+          case "ListRegions":
+            ok({
+              regions: [
+                {
+                  id: "fra",
+                  name: "Frankfurt",
+                  zone: "boxd.sh",
+                  apiEndpoint: "https://boxd.sh:9443",
+                  home: true,
+                  orgState: "enabled",
+                },
+                {
+                  id: "nyc",
+                  name: "New York",
+                  zone: "nyc.boxd.sh",
+                  apiEndpoint: "https://nyc.boxd.sh:9443",
+                  home: false,
+                  orgState: "enabled",
+                },
+                {
+                  id: "sgp",
+                  name: "Singapore",
+                  zone: "sgp.boxd.sh",
+                  apiEndpoint: "https://sgp.boxd.sh:9443",
+                  home: false,
+                  orgState: "available",
+                },
+              ],
+              orgId: org,
+              thisRegion: "fra",
+            });
+            break;
+          case "SetVmEgressAllow": {
+            const machine = machines.get(req.vm);
+
+            if (!machine) {
+              missing();
+              break;
+            }
+
+            if (egressFailure === "reject") {
+              egressFailure = undefined;
+              callback({ code: status.INVALID_ARGUMENT, message: "bad entry" });
+              break;
+            }
+
+            machine.egressAllow = [...req.entries];
+
+            if (egressFailure === "lose") {
+              egressFailure = undefined;
+              callback({ code: status.UNAVAILABLE, message: "lost after effect" });
+            } else ok({ entries: req.entries });
             break;
           }
 
@@ -673,6 +747,15 @@ export async function boxdFixture() {
       channel: new Client(`127.0.0.1:${port}`, credentials.createInsecure(), {
         "grpc.enable_retries": 0,
       }),
+      // Regional calls reach the same server, marked so tests can tell where they went.
+      connect: (target) => {
+        dialed.push(target);
+
+        return new Client(`127.0.0.1:${port}`, credentials.createInsecure(), {
+          "grpc.enable_retries": 0,
+          "grpc.primary_user_agent": "beachside-regional",
+        });
+      },
       exchange: async (_url, options) =>
         new Response(
           JSON.stringify(
@@ -775,7 +858,18 @@ export async function boxdFixture() {
       record.updatedAt = Date.now();
     },
     files,
+    dialed,
     observedStates,
+    /** The allowlist boxd gives a new machine, as an org default could. */
+    defaultEgress(value: string[]) {
+      defaultEgress = [...value];
+    },
+    loseNextEgressResponse() {
+      egressFailure = "lose";
+    },
+    rejectNextEgress() {
+      egressFailure = "reject";
+    },
     tokenResponse(value: Record<string, string | number | boolean | null>) {
       tokenResponse = { ...value };
     },

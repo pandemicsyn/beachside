@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { EventEmitter } from "node:events";
 import { Client, Metadata, credentials as grpcCredentials, status } from "@grpc/grpc-js";
-import { AccountNamespace, Disks, Machines, Orgs, Snapshots } from "@boxd-sh/sdk";
+import { AccountNamespace, Disks, Machines, Orgs, Regions, Snapshots } from "@boxd-sh/sdk";
 import { AdapterError, type ReadContext } from "@beachside/adapter";
 import { z } from "zod";
 
@@ -10,6 +10,25 @@ export const BOXD_ENDPOINT = "https://boxd.sh:9443";
 const TOKEN_ENDPOINT = "https://app.boxd.sh/api/v1/auth/token";
 
 export const MAX_BYTES = 1_048_576;
+
+/** Account and org calls always go to the home endpoint; machines, disks and snapshots go to the region's. */
+const HOME_METHODS = new Set(["Whoami", "GetConfig", "ListOrgs", "ListRegions"]);
+
+const CHANNEL_OPTIONS = {
+  "grpc.enable_retries": 0,
+  "grpc.max_receive_message_length": 4 * MAX_BYTES,
+  "grpc.max_send_message_length": 4 * MAX_BYTES,
+};
+
+/** A region's `https://host:port` API endpoint as a gRPC target; anything else is refused. */
+export function regionTarget(endpoint: string): string {
+  const url = URL.parse(endpoint);
+
+  if (!url || url.protocol !== "https:" || url.pathname.replace(/\/$/, "") !== "" || url.search)
+    throw new AdapterError("UNAVAILABLE", "boxd region endpoint is not a usable https endpoint");
+
+  return `${url.hostname}:${url.port || "443"}`;
+}
 
 type Transport = ConstructorParameters<typeof Machines>[0];
 
@@ -163,16 +182,23 @@ export function createNativeClient(
   apiKey: string,
   options: {
     channel?: Client;
+    /** Dials a region's gRPC target; defaults to TLS with the home channel's options. */
+    connect?: (target: string) => Client;
     exchange?: (url: string, options: RequestInit) => Promise<Response>;
   } = {},
 ) {
   const channel =
-    options.channel ??
-    new Client("boxd.sh:9443", grpcCredentials.createSsl(), {
-      "grpc.enable_retries": 0,
-      "grpc.max_receive_message_length": 4 * MAX_BYTES,
-      "grpc.max_send_message_length": 4 * MAX_BYTES,
-    });
+    options.channel ?? new Client("boxd.sh:9443", grpcCredentials.createSsl(), CHANNEL_OPTIONS);
+
+  const connect =
+    options.connect ??
+    ((target: string) => new Client(target, grpcCredentials.createSsl(), CHANNEL_OPTIONS));
+
+  // Set once at connect when the adapter setup names a region other than home's.
+  let regional: Client | undefined;
+
+  const route = (method: { name: string }) =>
+    HOME_METHODS.has(method.name) ? channel : (regional ?? channel);
 
   const exchange = options.exchange ?? fetch;
   let token: z.infer<typeof Token> | undefined;
@@ -234,6 +260,11 @@ export function createNativeClient(
     (value: Buffer) =>
       method.responseType.decode(value);
 
+  const closeChannels = () => {
+    channel.close();
+    regional?.close();
+  };
+
   const transport: Transport = {
     supportsInteractiveExec: false,
     async consoleOrigin() {
@@ -244,14 +275,14 @@ export function createNativeClient(
 
       // Cancelling Exec kills its guest process group. Drain already dispatched
       // finite commands until their explicit execution deadline, then release.
-      if (executions === 0) channel.close();
+      if (executions === 0) closeChannels();
     },
     async unary(method, request) {
       const ctx = localContext();
       const md = await metadata(ctx);
 
       return new Promise((resolve, reject) => {
-        const call = channel.makeUnaryRequest(
+        const call = route(method).makeUnaryRequest(
           path(method),
           encode(method),
           decode(method),
@@ -313,7 +344,7 @@ export function createNativeClient(
       void (async () => {
         const md = await metadata(ctx);
 
-        const call = channel.makeServerStreamRequest(
+        const call = route(method).makeServerStreamRequest(
           path(method),
           encode(method),
           decode(method),
@@ -381,7 +412,7 @@ export function createNativeClient(
         if (cancelled || (ctx.cancelOnAbort && ctx.signal.aborted))
           throw new AdapterError("TIMEOUT", "boxd helper was cancelled before dispatch");
 
-        const call = channel.makeBidiStreamRequest(
+        const call = route(method).makeBidiStreamRequest(
           path(method),
           encode(method),
           decode(method),
@@ -409,7 +440,7 @@ export function createNativeClient(
           ctx.signal.removeEventListener("abort", abort);
           executions--;
 
-          if (closing && executions === 0) channel.close();
+          if (closing && executions === 0) closeChannels();
         };
 
         call.on("data", (message) => {
@@ -516,6 +547,12 @@ export function createNativeClient(
     snapshots: new Snapshots(transport),
     account: new AccountNamespace(transport),
     orgs: new Orgs(transport),
+    regions: new Regions(transport),
+    /** Send machine, disk and snapshot calls to this region's API endpoint from now on. */
+    useRegion(endpoint: string) {
+      if (regional) throw new AdapterError("CONFLICT", "boxd region is already selected");
+      regional = connect(regionTarget(endpoint));
+    },
     run<T>(ctx: CallContext, action: () => Promise<T>) {
       return context.run(ctx, action);
     },
