@@ -152,6 +152,8 @@ const CreateToken = z.strictObject({
   stage: z.enum(["created", "expiry-installed", "ready"]),
   /** The egress the machine must end up with; absent on attempts recorded before blocked existed. */
   network: NetworkPolicy.optional(),
+  /** The lifetime to install; recovery re-installs it on a machine left without one. */
+  lifetimeSeconds: z.number().int().positive().safe().optional(),
 });
 
 /** The native egress allowlist for a policy: `["none"]` reaches nothing, `[]` is unrestricted. */
@@ -733,6 +735,7 @@ export function createBoxdAdapter(
                   id: Id.parse(id),
                   stage: "created",
                   network,
+                  lifetimeSeconds,
                 };
                 await checkpointCreate(acknowledged, ctx, partial);
               },
@@ -804,6 +807,7 @@ export function createBoxdAdapter(
           id: machine.id,
           stage: "created",
           network,
+          lifetimeSeconds,
         };
 
         if (!acknowledged) await checkpointCreate(token, ctx, partial);
@@ -819,7 +823,10 @@ export function createBoxdAdapter(
           );
 
         // boxd sets egress on an existing machine only. It goes first, before expiry, so no failure
-        // after this point leaves the machine with wider egress than requested.
+        // after this point leaves the machine with wider egress than requested; expiry is still
+        // attempted when egress fails, so a machine left open never outlives its lifetime.
+        let egressProblem: string | undefined;
+
         try {
           if (!sameEgress(machine, network)) {
             const applied = await native.run(readContext(ctx.signal), () =>
@@ -827,34 +834,30 @@ export function createBoxdAdapter(
             );
 
             if (!sameEgress({ egressAllow: applied }, network))
-              return ctx.unknown(
-                "boxd machine exists; its egress differs from the requested network",
-                partial(token, ctx),
-              );
+              egressProblem = "boxd machine exists; its egress differs from the requested network";
           }
         } catch {
-          return ctx.unknown(
-            "boxd machine exists; the egress response is unconfirmed",
-            partial(token, ctx),
-          );
+          egressProblem = "boxd machine exists; the egress response is unconfirmed";
         }
+
+        let expiryProblem: string | undefined;
 
         try {
           const expiry = await native.run(readContext(ctx.signal), () =>
             native.machines.setDeleteAfter(token.id, lifetimeSeconds),
           );
 
-          if (!expiry)
-            return ctx.unknown(
-              "boxd machine exists; expiry was not acknowledged",
-              partial(token, ctx),
-            );
-          token.stage = "expiry-installed";
+          if (expiry) token.stage = "expiry-installed";
+          else expiryProblem = "boxd machine exists; expiry was not acknowledged";
         } catch {
-          return ctx.unknown(
-            "boxd machine exists; expiry response is unconfirmed",
-            partial(token, ctx),
-          );
+          expiryProblem = "boxd machine exists; expiry response is unconfirmed";
+        }
+
+        if (egressProblem || expiryProblem) {
+          if (token.stage === "expiry-installed")
+            await checkpointCreate(token, ctx, partial).catch(() => undefined);
+
+          return ctx.unknown(egressProblem ?? expiryProblem!, partial(token, ctx));
         }
 
         await checkpointCreate(token, ctx, partial);
@@ -921,12 +924,20 @@ export function createBoxdAdapter(
                 partial(token.data, attempt),
               );
 
-            // Setup stopped early: apply the requested egress again (idempotent) before reporting.
+            // Setup stopped early: apply the requested egress again (idempotent) before reporting,
+            // and install the lifetime on a machine that has none.
             const network = token.data.network;
 
             if (network && !sameEgress(machine, network))
               await native
                 .run(ctx, () => native.machines.setEgressAllow(machine.id, egressFor(network)))
+                .catch(() => undefined);
+
+            const lifetime = token.data.lifetimeSeconds;
+
+            if (lifetime && !machine.deleteAt)
+              await native
+                .run(ctx, () => native.machines.setDeleteAfter(machine.id, lifetime))
                 .catch(() => undefined);
           } catch {
             return ctx.unknown(
