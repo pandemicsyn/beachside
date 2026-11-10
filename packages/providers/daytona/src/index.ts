@@ -15,6 +15,7 @@ import { ExecRequest, MAX_EXEC_STDIN_BYTES, type ExecCommand } from "@beachside/
 import {
   AdapterError,
   AdapterFilesystemError,
+  checkAllowlistLimits,
   parseEgressAllowlist,
   type FileTransferContext,
   type ImageBuildValue,
@@ -178,6 +179,9 @@ export type DaytonaNetworkFields = {
 };
 
 /** Native create fields for a network policy; only "allow" sends Daytona's allowlists. */
+/** Daytona's allowlist limits: one native list per sandbox, hosts or ranges. */
+export const DAYTONA_ALLOWLIST_LIMITS = { maxHosts: 100, maxCidrs: 10, mixed: false } as const;
+
 export function daytonaNetworkFields(
   networkPolicy: string,
   allowlist: string | undefined,
@@ -188,6 +192,8 @@ export function daytonaNetworkFields(
 
   if (networkPolicy !== "allow") return fields;
   const list = parseEgressAllowlist((allowlist ?? "").split(","));
+  // Daytona's domain and network allow lists are mutually exclusive; never send both.
+  checkAllowlistLimits("Daytona", list, DAYTONA_ALLOWLIST_LIMITS);
 
   if (list.hosts.length) fields.domainAllowList = list.hosts.join(",");
 
@@ -327,6 +333,14 @@ function validate(input: {
     (parsed.configuration.allowlist !== undefined)
   )
     throw new Error("Daytona network policy allow needs an allowlist, and only allow takes one");
+
+  // Check the list where it is configured, not at the first create.
+  if (parsed.configuration.allowlist !== undefined)
+    checkAllowlistLimits(
+      "Daytona",
+      parseEgressAllowlist(parsed.configuration.allowlist.split(",")),
+      DAYTONA_ALLOWLIST_LIMITS,
+    );
 
   return {
     credentials: parsed.credentials,
