@@ -3,7 +3,7 @@ title: Preview access
 description: Access an HTTP service running inside a sandbox.
 ---
 
-Use `await box.preview(3000)` to get access to an HTTP service on port 3000 inside a running sandbox. Choose public or protected access when configuring the adapter. The available modes depend on the provider, and each adapter defaults to the mode it can serve: Daytona and Modal default to protected (Daytona's public mode signs expiring per-port links); E2B, boxd, Vercel and Boat default to public, and Boat offers public only. boxd publishes port 3000 by default; Vercel publishes only the `ports` you configure.
+Use `await box.preview(3000)` to get access to an HTTP service on port 3000 inside a running sandbox. Choose public or protected access when configuring the adapter. The available modes depend on the provider, and each adapter defaults to the mode it can serve: Daytona, Modal, Runloop and Archil default to protected (Daytona's public mode signs expiring per-port links); E2B, boxd, Vercel, Boat and Freestyle default to public, and Boat and Freestyle offer public only. boxd publishes port 3000 by default; Vercel publishes only the `ports` you configure.
 
 This example uses Daytona's default protected access. Replace `existing-server-snapshot` with a prepared image whose startup configuration launches an HTTP server on port 3000:
 
@@ -76,7 +76,7 @@ Each call signs a new URL; earlier ones keep working until they expire, and they
 
 ## Modal connect tokens and tunnels
 
-Modal defaults to protected access: each `preview(port)` mints a Modal connect token for that port and returns it as an `Authorization: Bearer` header. For public links, set `preview: { access: "public", ports: [3000] }` together with `network: "internet"` or an allowlist; Modal publishes those ports as HTTPS tunnels when the sandbox is created, and cannot add more later. Modal refuses tunnels on a blocked network, so public setup with the default `blocked` network rejects at connect. Neither mode has been live-tested. See the [Modal adapter README](https://github.com/pandemicsyn/beachside/tree/main/packages/providers/modal#previews).
+Modal defaults to protected access: each `preview(port)` mints a Modal connect token for that port and returns it as an `Authorization: Bearer` header. For public links, set `preview: { access: "public", ports: [3000] }` together with `network: "internet"` or an allowlist; Modal publishes those ports as HTTPS tunnels when the sandbox is created or restored, and cannot add more later. Modal refuses tunnels on a blocked network, so public setup with the default `blocked` network rejects at connect. Neither mode has been live-tested. See the [Modal adapter README](https://github.com/pandemicsyn/beachside/tree/main/packages/providers/modal#previews).
 
 Some providers' previews carry an `expiresAt` timestamp. When it is present, ask for a new preview before it passes.
 

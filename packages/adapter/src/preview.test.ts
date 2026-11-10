@@ -14,4 +14,17 @@ test("preview expiresAt accepts ISO timestamps with a Z or a numeric offset", ()
   expect(PreviewResult.safeParse({ access: "public", url, expiresAt: "tomorrow" }).success).toBe(
     false,
   );
+
+  const headers = { Authorization: "Bearer token" };
+  expect(
+    PreviewResult.safeParse({
+      access: "protected",
+      url,
+      headers,
+      expiresAt: "2026-11-10T13:00:00+00:00",
+    }).success,
+  ).toBe(true);
+  expect(
+    PreviewResult.safeParse({ access: "protected", url, headers, expiresAt: "tomorrow" }).success,
+  ).toBe(false);
 });

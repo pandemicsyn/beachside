@@ -156,10 +156,10 @@ const snapshotProfile = (retentionSeconds = SNAPSHOT_RETENTION_SECONDS): Snapsho
   minimumRetentionSeconds: retentionSeconds === 0 ? Number.MAX_SAFE_INTEGER : retentionSeconds,
 });
 
-/** Network policies one connection creates with: its allowlist, or blocked and internet. */
 const BLOCKED_TUNNELS =
   'Modal public previews need outbound network for their tunnels, and Modal refuses open ports with a blocked network; use network "internet" or { allow: [...] }';
 
+/** Network policies one connection creates with: its allowlist, or blocked and internet. */
 export function modalNetworkPolicies(allowlist: string | undefined): string[] {
   return allowlist ? [ALLOW_NETWORK_POLICY] : ["blocked", "internet"];
 }

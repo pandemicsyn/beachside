@@ -246,6 +246,10 @@ test("public Modal previews refuse a blocked network, which Modal forbids with o
     await expect(
       client.sandboxes.create({ environment, network: "blocked" }),
     ).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(await client.sandboxes.checkCreate({ environment, network: "blocked" })).toMatchObject({
+      status: "unsupported",
+    });
+    expect((await client.sandboxes.checkCreate({ environment })).status).toBe("supported");
     expect(native.creates).toHaveLength(0);
   } finally {
     await client.close();
