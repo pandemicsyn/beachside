@@ -235,3 +235,77 @@ test("a fork whose response was lost is recovered by its name, never forked twic
     await client.close();
   }
 });
+
+test("checkFork() reports the source's own refusals before fork() is sent", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const forks = () => fixture.calls.filter((call) => call.path.endsWith("/fork")).length;
+    const source = await client.sandboxes.create();
+    expect((await source.checkFork()).status).toBe("supported");
+
+    await source.suspend();
+    expect(await source.checkFork()).toMatchObject({ status: "unavailable" });
+    await expect(source.fork()).rejects.toMatchObject({ code: "CONFLICT" });
+    await source.resume();
+
+    // Archil's native fork needs mounted disks stopped, and box.fork() forks running sandboxes.
+    const volume = await client.volumes.create({ name: "fork-disk" });
+    const mounted = await client.sandboxes.create({ mounts: [volume.at("/workspace")] });
+    expect(await mounted.checkFork()).toMatchObject({ status: "unsupported" });
+    await expect(mounted.fork()).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(forks()).toBe(0);
+  } finally {
+    await client.close();
+  }
+});
+
+test("an aborted fork still resumes its source, and recovery returns the fork", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const source = await client.sandboxes.create();
+    const controller = new AbortController();
+    fixture.holdNextCreateResponse();
+
+    const pending = source.fork({}, { signal: controller.signal }).catch((error: Error) => error);
+
+    // Abort once the fork request is on its way, then let Archil answer.
+    for (let i = 0; i < 200 && !fixture.calls.some((call) => call.path.endsWith("/fork")); i++)
+      await Bun.sleep(5);
+    controller.abort();
+    fixture.releaseHeldCreateResponse();
+    const error = await pending;
+    expect(error).toBeInstanceOf(Error);
+
+    // Resuming the source is cleanup, so it finishes after the caller's abort.
+    for (let i = 0; i < 400 && fixture.sandboxes.get(source.id)?.status !== "running"; i++)
+      await Bun.sleep(5);
+    expect(fixture.sandboxes.get(source.id)?.status).toBe("running");
+    expect(fixture.sandboxes.size).toBe(2);
+  } finally {
+    await client.close();
+  }
+});
+
+test("recovering a fork resumes a source the fork left paused", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const source = await client.sandboxes.create();
+    fixture.loseNextCreateResponse();
+    const lost = await source.submitFork();
+    const saved = JSON.parse(JSON.stringify(lost.reference));
+
+    // As if the process stopped between the fork and the source's resume.
+    fixture.sandboxes.get(source.id)!.status = "paused";
+    const recovered = await (await client.recover(saved)).wait();
+    expect(recovered && "reference" in recovered).toBe(true);
+    expect(fixture.sandboxes.get(source.id)?.status).toBe("running");
+  } finally {
+    await client.close();
+  }
+});

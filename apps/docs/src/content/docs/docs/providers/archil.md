@@ -92,7 +92,7 @@ Archil can only fork a sandbox with mounted disks once it is stopped, so capturi
 
 ## Fork
 
-`box.fork()` uses the same native fork without a holder: it pauses the running source, forks its checkpoint into a new running sandbox that resumes the source's processes, then resumes the source. The fork keeps the source's network policy, size and env; Archil applies no labels or lifetime to a fork, so those options are refused before anything changes. A sandbox with mounted disks can't be forked while it runs.
+`box.fork()` uses the same native fork without a holder: it pauses the running source, forks its checkpoint into a new running sandbox that resumes the source's processes, then resumes the source. The fork keeps the source's network policy, size and env; Archil applies no labels or lifetime to a fork, so those options are refused before anything changes. Archil forks a sandbox with mounted disks only once it is stopped, and `box.fork()` forks running sandboxes, so a sandbox with volumes can't be forked.
 
 The fork is a child of its source, so the source can't be deleted while the fork exists: `destroy()` on the source stops it and reports it as retained. Destroy forks first. See [Fork a running sandbox](/docs/guides/snapshots-and-volumes/#fork-a-running-sandbox).
 

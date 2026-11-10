@@ -1267,9 +1267,40 @@ export class AdapterSandbox {
   async fork(request: ForkRequest = {}, options: WaitOptions = {}): Promise<SandboxHandle<true>> {
     return (await this.submitFork(request, options)).wait(options);
   }
-  /** Whether this sandbox can fork natively with these options, without any effect. */
+  /**
+   * Whether this sandbox can fork natively with these options, without any effect. Beyond the
+   * declared options it runs the adapter's read-only fork checks against this source (its state,
+   * mounts, egress, merged labels), so `supported` means `fork()` would be sent.
+   */
   async checkFork(request: ForkRequest = {}): Promise<Support<ForkCapabilities>> {
-    return this.checkForkWithSignal(request, this.client.signal);
+    const signal = this.client.signal;
+    const plan = await this.checkForkWithSignal(request, signal);
+
+    if (plan.status !== "supported") return plan;
+
+    try {
+      await raceAbort(
+        prepareOperation(
+          this.client.session,
+          "sandbox_fork",
+          { sandbox: { id: this.id, reference: this.reference! }, request },
+          signal,
+        ),
+        signal,
+      );
+    } catch (error) {
+      if (!(error instanceof AdapterError)) throw error;
+
+      if (error.code === "UNSUPPORTED" || error.code === "INVALID_ARGUMENT")
+        return { status: "unsupported", reason: error.message };
+
+      if (["CONFLICT", "UNAVAILABLE", "CAPACITY"].includes(error.code))
+        return { status: "unavailable", reason: error.message };
+
+      throw new BeachsideError(error.code, error.message);
+    }
+
+    return plan;
   }
   private async checkForkWithSignal(
     request: ForkRequest,

@@ -1406,8 +1406,22 @@ test("boxd forks a running machine natively, keeping its egress and merging labe
       code: "INVALID_ARGUMENT",
     });
 
-    // A custom allowlist set outside Beachside would carry into the fork, so it is refused.
+    // The merged labels have the 64-label limit: checkFork() and fork() both refuse before any fork.
+    const many = Object.fromEntries(Array.from({ length: 63 }, (_, i) => [`k${i}`, "v"]));
+    fixture.machines.get(box.id)!.labels = { team: "infra", ...many };
+    expect(await box.checkFork({ labels: { branch: "b" } })).toMatchObject({
+      status: "unsupported",
+    });
+    await expect(box.fork({ labels: { branch: "b" } })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+    });
+    expect((await box.checkFork({ labels: { team: "ops" } })).status).toBe("supported");
+    fixture.machines.get(box.id)!.labels = { team: "infra" };
+
+    // A custom allowlist set outside Beachside would carry into the fork, so it is refused,
+    // and checkFork() reports that from the source before anything is sent.
     fixture.machines.get(box.id)!.egressAllow = ["api.example.com"];
+    expect(await box.checkFork()).toMatchObject({ status: "unsupported" });
     await expect(box.fork()).rejects.toMatchObject({ code: "UNSUPPORTED" });
     expect(forks()).toBe(1);
   } finally {

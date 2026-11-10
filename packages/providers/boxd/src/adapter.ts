@@ -1698,6 +1698,13 @@ export function createBoxdAdapter(
                 "boxd source has a custom egress allowlist; a fork would inherit it",
               );
 
+            // boxd merges the fork's labels over the source's, and the merged set has the limit.
+            if (Object.keys({ ...source.labels, ...input.request.labels }).length > 64)
+              throw new AdapterError(
+                "INVALID_ARGUMENT",
+                "boxd machines hold at most 64 labels, and a fork keeps its source's labels",
+              );
+
             return input;
           },
           async submit(input, ctx) {
