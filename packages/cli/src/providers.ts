@@ -61,8 +61,10 @@ export const providers: readonly ProviderDescriptor[] = [
     credentials: { apiKey: "BOXD_API_KEY" },
     config: {
       org: { env: "BOXD_ORG", required: true },
-      // boxd always allows internet egress, so its adapter requires choosing that explicitly.
-      network: { env: "BOXD_NETWORK", required: true },
+      // Egress defaults to blocked; BOXD_NETWORK=internet opts out.
+      network: { env: "BOXD_NETWORK", required: false },
+      // Optional; machines go to the org's home region without it.
+      region: { env: "BOXD_REGION", required: false },
     },
   },
   {

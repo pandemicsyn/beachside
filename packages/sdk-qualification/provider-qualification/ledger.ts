@@ -136,7 +136,14 @@ const custodyIdentity = z.object({
 const admissionIdentity = custodyIdentity.extend({
   version: z.literal(2),
   provider: ledgerSchema.shape.provider,
-  kind: z.enum(["create", "image_build", "snapshot_capture", "snapshot_restore", "volume_create"]),
+  kind: z.enum([
+    "create",
+    "image_build",
+    "snapshot_capture",
+    "snapshot_restore",
+    "sandbox_fork",
+    "volume_create",
+  ]),
   operationId: z.string().min(1).max(128),
   submissionId: z.string().min(1).max(128),
   invocationKey: z.string().min(1).max(128),

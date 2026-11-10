@@ -107,6 +107,9 @@ Creation input accepts `environment`, `network` (deprecated alias `networkPolicy
 | `box.resume({ signal?, pollMs? })`                      | Reactivate the same resource; execution continuity can remain unknown.  |
 | `box.checkSnapshot(request?)`                           | Read-only evaluation of configured capture guarantees.                  |
 | `box.snapshot(request?, { signal?, pollMs? })`          | Return `{ snapshot, capture, source }`.                                 |
+| `box.checkFork(request?)`                               | Read-only check of native fork options against this source.             |
+| `box.fork({ labels?, lifetimeSeconds? }?, { signal? })` | Copy the running sandbox with the provider's native fork.               |
+| `box.submitFork(request?, { signal? })`                 | Start a fork and return a recoverable operation handle.                 |
 | `beachside.snapshots.get(reference)`                    | Reopen a verified snapshot with a native inspection.                    |
 | `beachside.snapshots.list({ limit, cursor? })`          | Read scoped snapshot inventory and coverage.                            |
 | `snapshot.inspect({ signal?, pollMs? })`                | Observe preservation, identity and restore facts.                       |
