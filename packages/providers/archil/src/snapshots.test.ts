@@ -309,3 +309,56 @@ test("recovering a fork resumes a source the fork left paused", async () => {
     await client.close();
   }
 });
+
+test("checkFork() refuses a source with a custom egress policy before any fork", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const source = await client.sandboxes.create();
+    fixture.sandboxes.get(source.id)!.network = { egress: { default: "allowlist" } };
+
+    expect(await source.checkFork()).toMatchObject({ status: "unsupported" });
+    await expect(source.fork()).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(fixture.calls.filter((call) => call.path.endsWith("/fork"))).toHaveLength(0);
+  } finally {
+    await client.close();
+  }
+});
+
+test("recovering a finished fork leaves a source paused again later alone", async () => {
+  const { fixture, connect } = setup();
+  const first = await connect();
+  let saved: unknown;
+  let sourceId = "";
+
+  try {
+    const source = await first.sandboxes.create();
+    sourceId = source.id;
+    const operation = await source.submitFork();
+    saved = JSON.parse(JSON.stringify(operation.reference));
+    await operation.wait();
+    expect(fixture.sandboxes.get(source.id)?.status).toBe("running");
+
+    // An unrelated pause after the fork makes a new checkpoint.
+    await source.suspend();
+    expect(fixture.sandboxes.get(source.id)?.status).toBe("paused");
+  } finally {
+    await first.close();
+  }
+
+  const second = await connect();
+
+  try {
+    const resumes = () =>
+      fixture.calls.filter((call) => call.path === `/api/sandboxes/${sourceId}/resume`).length;
+
+    const before = resumes();
+    // SAFETY: The saved value is the recovery reference this test serialized above.
+    await (await second.recover(saved as Parameters<typeof second.recover>[0])).observe();
+    expect(resumes()).toBe(before);
+    expect(fixture.sandboxes.get(sourceId)?.status).toBe("paused");
+  } finally {
+    await second.close();
+  }
+});

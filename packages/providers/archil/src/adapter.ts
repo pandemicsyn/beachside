@@ -289,6 +289,11 @@ const CreateToken = z.strictObject({
   mounts: z.array(MountSpecSchema).max(32).optional(),
   /** Fork only: the fork paused its source and has not confirmed resuming it. */
   sourcePaused: z.boolean().optional(),
+  /**
+   * Fork only: the checkpoint the fork's pause produced. Archil makes a new one on every pause, so
+   * recovery resumes the source only while it is still paused at this one.
+   */
+  sourceCheckpoint: z.string().max(256).optional(),
 });
 
 type CreateToken = z.infer<typeof CreateToken>;
@@ -2554,6 +2559,10 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
                 "Archil sandbox is already being snapshotted or forked",
               );
 
+            // The fork inherits the source's egress, so a custom policy is refused before any effect.
+            if (!policyOf(await network(source.sandbox_id, readContext(ctx.signal))))
+              throw new AdapterError("UNSUPPORTED", "Archil source has a custom egress policy");
+
             return input;
           },
           async submit(input, ctx) {
@@ -2598,6 +2607,9 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
               }
 
               const checkpoint = paused.wire.checkpoint;
+
+              // Saved with the fork's own checkpoints, so recovery can tell this pause from a later one.
+              if (checkpoint) forkToken.sourceCheckpoint = checkpoint;
 
               if (!checkpoint) {
                 return (await resume())
@@ -2651,8 +2663,17 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             if (token.data.sourcePaused && !held.has(source)) {
               const now = await find(source, ctx).catch(() => null);
 
+              // Still settling into the fork's pause: look again shortly.
+              if (now?.status === "pausing")
+                return ctx.pending(token.data, { pollAfterMs: pollMs });
+
+              // Only this fork's pause is undone; a source paused again since has a new checkpoint.
+              const ours =
+                !token.data.sourceCheckpoint || now?.checkpoint === token.data.sourceCheckpoint;
+
               if (
                 now?.status === "paused" &&
+                ours &&
                 !(await wake(source, "paused", AbortSignal.timeout(CLEANUP_MS)))
               )
                 return ctx.unknown("Archil fork source is still paused; resume it, then observe");
