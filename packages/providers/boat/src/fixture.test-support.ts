@@ -371,6 +371,22 @@ export function boatFixture() {
 
     if (!box || box.createdById !== account) return error(404, "sandbox_not_found");
 
+    if (method === "POST" && rest === "host") {
+      // SAFETY: the fixture reads only the fields the adapter sends in its JSON body.
+      const body = raw as { port: number; public?: boolean };
+
+      return json(200, {
+        ok: true,
+        type: "sandbox.port",
+        port: body.port,
+        url: body.public
+          ? `https://${id}-${body.port}.boat.host`
+          : `https://${id}-${body.port}.boat.host/?_token=t`,
+        isProtected: !body.public,
+        access: body.public ? "public" : "private",
+      });
+    }
+
     if (method === "GET" && rest === undefined) {
       box.polls++;
 

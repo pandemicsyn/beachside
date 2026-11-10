@@ -293,7 +293,7 @@ test("overview cells report live results only, never fixture or packed passes", 
   expect(compact(overview([{ ...record("passed"), runCleanup: "incomplete" }]))).toContain(
     ociCell("Live test blocked"),
   );
-  expect(compact(overview([]))).toContain("| Public HTTP previews | Not supported |");
+  expect(compact(overview([]))).toContain("| Mount volumes | Not tested live | Not supported |");
 });
 
 test("overview provider rows count live-passed features and mark experimental providers", () => {

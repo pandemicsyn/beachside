@@ -32,7 +32,7 @@ This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, 
 | Create, inspect and destroy sandboxes | Tested live     | Tested live          |
 | Pause and resume                      | Tested live     | Tested live          |
 | Protected HTTP previews               | Tested live     | Not tested live      |
-| Public HTTP previews                  | Not supported   | Tested live          |
+| Public HTTP previews                  | Not tested live | Tested live          |
 | Stop a running command                | Tested live     | Tested live          |
 | Extend a sandbox's lifetime           | Tested live     | Tested live          |
 | Reconnect to a sandbox later          | Tested live     | Tested live          |
@@ -52,7 +52,7 @@ This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, 
 
 **Daytona**
 
-- Previews are protected only. The preview token also grants command and file access to the whole sandbox, so treat it as a credential.
+- Protected previews return a token that also grants command and file access to the whole sandbox, so treat it as a credential. Public previews are expiring signed links and have not been tested live.
 - The `daytona-default` network setting still allows some essential services, so it is not strict outbound blocking.
 - Snapshots capture the filesystem, not memory; running processes stop and restart.
 

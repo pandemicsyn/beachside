@@ -42,7 +42,8 @@ Scope is the account id from `GET /me` plus the fixed `https://boat.dev/api/v1` 
 - **Renew** sets a new auto-stop window.
 - **Snapshots** save the disk of a running or archived sandbox as a Boat named snapshot. Each capture gets its own `beachside-snapshot-*` name, and the reference pins the frozen artifact (`snapshotId`) as its generation, so a name saved again outside Beachside no longer restores or deletes. Restore creates a sandbox `from` the name on a fresh machine of the captured type; memory and processes are not kept. `snapshots.list()` covers every named snapshot in the account. Named snapshots are kept until deleted.
 - **Destroy** permanently deletes with `X-Ascii-Confirm-Delete` and waits for the deletion operation to finish removing the machine. Named snapshots survive.
-- Unsupported: fork, snapshot sharing, restore size overrides, volumes, previews, interactive processes, directory operations, blocked egress, regions and labels.
+- Previews: `preview(port)` calls Boat's host-port API with `public: true` and returns the ungated HTTPS URL (`access: "public"`). Hosting a port is idempotent; it stays hosted until the sandbox goes.
+- Unsupported: fork, snapshot sharing, restore size overrides, volumes, protected previews, interactive processes, directory operations, blocked egress, regions and labels.
 
 Every mutation is sent once. Refusals Boat documents as effect-free become ordinary errors; lost responses and ambiguous 5xx become `OUTCOME_UNKNOWN` and are never replayed.
 

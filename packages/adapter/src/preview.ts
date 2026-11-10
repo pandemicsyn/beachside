@@ -2,8 +2,8 @@ import { z } from "zod";
 
 /** Ephemeral HTTP access, never a sandbox reference or a readiness observation. */
 export type Preview =
-  | { access: "public"; url: string }
-  | { access: "protected"; url: string; headers: Record<string, string> };
+  | { access: "public"; url: string; expiresAt?: string }
+  | { access: "protected"; url: string; headers: Record<string, string>; expiresAt?: string };
 
 const PreviewUrl = z
   .url()
@@ -15,7 +15,12 @@ const PreviewUrl = z
   });
 
 export const PreviewResult = z.discriminatedUnion("access", [
-  z.strictObject({ access: z.literal("public"), url: PreviewUrl }),
+  z.strictObject({
+    access: z.literal("public"),
+    url: PreviewUrl,
+    /** When the URL stops working, for providers that sign expiring links. */
+    expiresAt: z.iso.datetime({ offset: true }).optional(),
+  }),
   z.strictObject({
     access: z.literal("protected"),
     url: PreviewUrl,
@@ -29,6 +34,7 @@ export const PreviewResult = z.discriminatedUnion("access", [
           .regex(/^[^\r\n]+$/),
       )
       .refine((headers) => Object.keys(headers).length > 0 && Object.keys(headers).length <= 16),
+    expiresAt: z.iso.datetime({ offset: true }).optional(),
   }),
 ]);
 

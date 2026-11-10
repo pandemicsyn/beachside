@@ -21,6 +21,8 @@ import {
   type SnapshotInfo,
   type SnapshotProfile,
   listedLabels,
+  PreviewPort,
+  PreviewResult,
   throwAllowlistError,
 } from "@beachside/adapter";
 import {
@@ -75,6 +77,18 @@ const Configuration = z
       .optional(),
     /** @deprecated Use `lifecycle: { lifetimeSeconds }`. */
     timeoutSeconds: z.coerce.number().int().min(60).max(MAX_LIFETIME_SECONDS).optional(),
+    preview: z
+      .strictObject({
+        /**
+         * `protected` (default) mints a Modal connect token per `preview()`, sent as a bearer
+         * header; `public` returns the HTTPS tunnel of a port listed in `ports`, which anyone with
+         * the URL can open.
+         */
+        access: z.enum(["protected", "public"]).default("protected"),
+        /** Ports published as public tunnels at create; Modal cannot add tunnels later. */
+        ports: z.array(PreviewPort).max(16).default([]),
+      })
+      .default({ access: "protected", ports: [] }),
     snapshots: z
       .strictObject({
         /** Modal filesystem snapshots keep files only; `filesystem+memory` rejects at connect. */
@@ -142,6 +156,9 @@ const snapshotProfile = (retentionSeconds = SNAPSHOT_RETENTION_SECONDS): Snapsho
   minimumRetentionSeconds: retentionSeconds === 0 ? Number.MAX_SAFE_INTEGER : retentionSeconds,
 });
 
+const BLOCKED_TUNNELS =
+  'Modal public previews need outbound network for their tunnels, and Modal refuses open ports with a blocked network; use network "internet" or { allow: [...] }';
+
 /** Network policies one connection creates with: its allowlist, or blocked and internet. */
 export function modalNetworkPolicies(allowlist: string | undefined): string[] {
   return allowlist ? [ALLOW_NETWORK_POLICY] : ["blocked", "internet"];
@@ -170,8 +187,8 @@ export function modalNetworkTag(networkPolicy: string, allowlist: string | undef
 }
 
 /** A restored sandbox is an ordinary Modal create from the snapshot image. */
-const restoreSupport = (allowlist: string | undefined) => ({
-  networkPolicies: modalNetworkPolicies(allowlist),
+const restoreSupport = (networkPolicies: string[]) => ({
+  networkPolicies,
   resources: false,
   mounts: false,
   independentLifecycle: true,
@@ -250,6 +267,17 @@ export function createModalAdapter(
     async connect({ config, credentials, host }) {
       throwAllowlistError(config);
 
+      if (config.preview.access === "public" && !config.preview.ports.length)
+        throw new AdapterError(
+          "INVALID_ARGUMENT",
+          "Modal public previews need preview.ports: Modal publishes tunnels only at create",
+        );
+
+      const publicPorts = config.preview.access === "public";
+
+      if (publicPorts && config.networkPolicy === "blocked")
+        throw new AdapterError("INVALID_ARGUMENT", BLOCKED_TUNNELS);
+
       if (config.snapshots?.preserve === Preserve.FILESYSTEM_AND_MEMORY)
         throw new AdapterError(
           "UNSUPPORTED",
@@ -272,8 +300,12 @@ export function createModalAdapter(
             ? retentionSeconds * 1000
             : null;
 
-      const restore = restoreSupport(config.allowlist);
-      const networkPolicies = modalNetworkPolicies(config.allowlist);
+      // Public tunnels cannot exist on a blocked network, so this setup does not offer it.
+      const networkPolicies = modalNetworkPolicies(config.allowlist).filter(
+        (policy) => !publicPorts || policy !== "blocked",
+      );
+
+      const restore = restoreSupport(networkPolicies);
 
       const requirePolicy = (networkPolicy: string) => {
         if (!networkPolicies.includes(networkPolicy))
@@ -283,7 +315,9 @@ export function createModalAdapter(
               ? "Modal allowlists are set in adapter setup: network: { allow: [...] }"
               : config.allowlist
                 ? 'This Modal connection creates with its allowlist; use network "allow"'
-                : 'Modal network policy must be "blocked" or "internet"',
+                : publicPorts && networkPolicy === "blocked"
+                  ? BLOCKED_TUNNELS
+                  : 'Modal network policy must be "blocked" or "internet"',
           );
       };
 
@@ -421,6 +455,9 @@ export function createModalAdapter(
             network: modalNetwork(input.networkPolicy, config.allowlist),
           };
 
+          if (config.preview.access === "public" && config.preview.ports.length)
+            request.encryptedPorts = [...config.preview.ports];
+
           if (config.resources?.vcpus !== undefined) request.cpu = config.resources.vcpus;
 
           if (config.resources?.memoryMiB !== undefined)
@@ -494,6 +531,50 @@ export function createModalAdapter(
         scope,
         defaultImage: config.image,
         defaultNetworkPolicy: config.networkPolicy,
+        async preview(input) {
+          if (!PreviewPort.safeParse(input.port).success)
+            throw new AdapterError("INVALID_ARGUMENT", "Preview port must be 1 through 65535");
+          const record = await find(input.sandbox.id);
+
+          if (!record?.running)
+            throw new AdapterError(
+              record ? "UNAVAILABLE" : "NOT_FOUND",
+              record
+                ? "Modal preview requires a running sandbox"
+                : "Modal sandbox is not in this App",
+            );
+
+          if (config.preview.access === "public") {
+            if (!config.preview.ports.includes(input.port) || !transport.tunnelUrl)
+              throw new AdapterError(
+                "UNSUPPORTED",
+                `Modal publishes only the preview.ports set at create (${config.preview.ports.join(", ")})`,
+              );
+            const url = await transport.tunnelUrl(input.sandbox.id, input.port);
+
+            if (!url)
+              throw new AdapterError(
+                "UNAVAILABLE",
+                "Modal reports no tunnel for this port; the sandbox may predate preview.ports",
+              );
+
+            return PreviewResult.parse({ access: "public", url });
+          }
+
+          if (!transport.connectToken)
+            throw new AdapterError(
+              "UNSUPPORTED",
+              "This Modal transport cannot mint connect tokens",
+            );
+          const credentials = await transport.connectToken(input.sandbox.id, input.port);
+
+          // Modal reads the token from a bearer Authorization header (or a query parameter).
+          return PreviewResult.parse({
+            access: "protected",
+            url: credentials.url,
+            headers: { Authorization: `Bearer ${credentials.token}` },
+          });
+        },
         supports: {
           images: ["prepared", "oci"],
           network: networkPolicies,

@@ -91,11 +91,11 @@ export const officialSupport: SupportMetadata[] = [
       },
       previewProtected: {
         support: "conditional",
-        note: "Daytona protected header access only; standard token grants sandbox-wide command/file authority. Public setup unsupported. Native lookup can activate a route; no server start/resume or readiness claim. Bun preview-protected passed at 3188e33 in us with authenticated HTTP and denied missing/invalid headers; owned cleanup confirmed.",
+        note: "Daytona protected header access; the standard token grants sandbox-wide command/file authority. Native lookup can activate a route; no server start/resume or readiness claim. Bun preview-protected passed at 3188e33 in us with authenticated HTTP and denied missing/invalid headers; owned cleanup confirmed.",
       },
       previewPublic: {
-        support: "unsupported",
-        note: "Daytona's native public setting would publish every port on the sandbox, so the adapter supports protected previews only.",
+        support: "conditional",
+        note: "Public setup returns Daytona signed preview URLs: scoped to one port, expiring after preview.expiresInSeconds (1 s to 24 h, default 1 hour, reported as expiresAt), with the sandbox itself kept private. Fixture coverage only; no live signed-URL pass yet.",
       },
       directories: {
         support: "conditional",
@@ -438,7 +438,7 @@ export const providerStatus: ProviderStatus[] = [
     experimental: false,
     note: "Live-tested across sandboxes, commands, files, previews, snapshots and volumes.",
     limits: [
-      "Previews are protected only. The preview token also grants command and file access to the whole sandbox, so treat it as a credential.",
+      "Protected previews return a token that also grants command and file access to the whole sandbox, so treat it as a credential. Public previews are expiring signed links and have not been tested live.",
       "The `daytona-default` network setting still allows some essential services, so it is not strict outbound blocking.",
       "Snapshots capture the filesystem, not memory; running processes stop and restart.",
     ],
