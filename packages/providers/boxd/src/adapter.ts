@@ -296,7 +296,7 @@ const snapshotSupport = {
   value: { profiles: [profile], defaultProfileId: profile.id },
 };
 
-/** Restores replay the captured size and network and cannot attach disks. */
+/** Restores replay the captured size, apply the requested network and cannot attach disks. */
 const restoreSupport = {
   networkPolicies: ["blocked", "internet"],
   resources: false,
@@ -818,6 +818,27 @@ export function createBoxdAdapter(
             partial(token, ctx),
           );
 
+        // boxd sets egress on an existing machine only. It goes first, before expiry, so no failure
+        // after this point leaves the machine with wider egress than requested.
+        try {
+          if (!sameEgress(machine, network)) {
+            const applied = await native.run(readContext(ctx.signal), () =>
+              native.machines.setEgressAllow(token.id, egressFor(network)),
+            );
+
+            if (!sameEgress({ egressAllow: applied }, network))
+              return ctx.unknown(
+                "boxd machine exists; its egress differs from the requested network",
+                partial(token, ctx),
+              );
+          }
+        } catch {
+          return ctx.unknown(
+            "boxd machine exists; the egress response is unconfirmed",
+            partial(token, ctx),
+          );
+        }
+
         try {
           const expiry = await native.run(readContext(ctx.signal), () =>
             native.machines.setDeleteAfter(token.id, lifetimeSeconds),
@@ -837,26 +858,6 @@ export function createBoxdAdapter(
         }
 
         await checkpointCreate(token, ctx, partial);
-
-        // boxd sets egress on an existing machine only; it is installed before the guest is handed out.
-        try {
-          if (!sameEgress(machine, network)) {
-            const applied = await native.run(readContext(ctx.signal), () =>
-              native.machines.setEgressAllow(token.id, egressFor(network)),
-            );
-
-            if (!sameEgress({ egressAllow: applied }, network))
-              return ctx.unknown(
-                "boxd machine exists; its egress differs from the requested network",
-                partial(token, ctx),
-              );
-          }
-        } catch {
-          return ctx.unknown(
-            "boxd machine exists; the egress response is unconfirmed",
-            partial(token, ctx),
-          );
-        }
 
         try {
           await requireMachine({ id: token.id }, readContext(ctx.signal));
@@ -919,6 +920,14 @@ export function createBoxdAdapter(
                 "boxd acknowledged machine is unavailable or no longer matches the attempt",
                 partial(token.data, attempt),
               );
+
+            // Setup stopped early: apply the requested egress again (idempotent) before reporting.
+            const network = token.data.network;
+
+            if (network && !sameEgress(machine, network))
+              await native
+                .run(ctx, () => native.machines.setEgressAllow(machine.id, egressFor(network)))
+                .catch(() => undefined);
           } catch {
             return ctx.unknown(
               "boxd acknowledged machine metadata could not be verified",
