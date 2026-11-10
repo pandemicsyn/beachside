@@ -438,7 +438,7 @@ export const providerStatus: ProviderStatus[] = [
     experimental: false,
     note: "Live-tested across sandboxes, commands, files, previews, snapshots and volumes.",
     limits: [
-      "Previews are protected only. The preview token also grants command and file access to the whole sandbox, so treat it as a credential.",
+      "Protected previews return a token that also grants command and file access to the whole sandbox, so treat it as a credential. Public previews are expiring signed links and have not been tested live.",
       "The `daytona-default` network setting still allows some essential services, so it is not strict outbound blocking.",
       "Snapshots capture the filesystem, not memory; running processes stop and restart.",
     ],
