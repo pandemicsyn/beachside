@@ -1,6 +1,6 @@
 # @beachside/boxd
 
-Experimental external boxd adapter for Beachside. Implementation, offline fixtures and a live baseline are available; Install with `npm install beachside @beachside/boxd`. Requires Node 20+ or Bun and a boxd **member API key** fenced to your default organization. Native SDK pinned to `@boxd-sh/sdk@0.3.0`.
+boxd adapter for Beachside, tested live and against a deterministic copy of the boxd API. Install with `npm install beachside @beachside/boxd`. Requires Node 20+ or Bun and a boxd **member API key** fenced to your default organization. Native SDK pinned to `@boxd-sh/sdk@0.3.0`.
 
 ```ts
 import { Beachside } from "beachside";

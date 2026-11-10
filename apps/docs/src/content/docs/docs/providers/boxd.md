@@ -3,7 +3,7 @@ title: boxd
 description: Use the boxd adapter for microVMs booted from OCI images, with suspend/resume, independent disks and public previews.
 ---
 
-The `@beachside/boxd` package implements the public Beachside adapter interface for [boxd](https://docs.boxd.sh) microVMs. Install it with `npm install beachside @beachside/boxd`; it is experimental, because only the basic workflows have run live. Use Node 20+ or Bun. Native SDK version: `@boxd-sh/sdk@0.3.0`.
+The `@beachside/boxd` package implements the public Beachside adapter interface for [boxd](https://docs.boxd.sh) microVMs. Install it with `npm install beachside @beachside/boxd`. Use Node 20+ or Bun. Native SDK version: `@boxd-sh/sdk@0.3.0`.
 
 ```ts
 import { Beachside } from "beachside";
