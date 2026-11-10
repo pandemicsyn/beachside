@@ -1618,3 +1618,47 @@ test("a boxd allowlist the provider refuses leaves the machine reaching nothing"
     await client.close();
   }
 });
+
+test("file operations without python3 fail cleanly instead of reporting an unknown outcome", async () => {
+  const { fixture } = await setup();
+
+  const adapter = createBoxdAdapter((key) => {
+    const native = fixture.factory(key);
+
+    return {
+      ...native,
+      run(ctx, action) {
+        if (ctx.cancelOnAbort && ctx.maxBytes === 524288) {
+          ctx.confirmedExit = 127;
+
+          // SAFETY: helper calls resolve to the exec result the adapter reads, here a shell's 127.
+          return Promise.resolve({
+            stdout: new Uint8Array(),
+            stderr: new TextEncoder().encode("sh: 1: python3: not found"),
+            exitCode: 127,
+            success: false,
+          } as never);
+        }
+
+        return native.run(ctx, action);
+      },
+    };
+  });
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main", networkPolicy: "internet" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    const box = await client.sandboxes.create();
+
+    await expect(box.makeDirectory("/work/a")).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+      effect: "none",
+    });
+  } finally {
+    await client.close();
+  }
+});

@@ -134,6 +134,15 @@ const Receipt = z.discriminatedUnion("ok", [
   }),
 ]);
 
+/** The image has no `python3`, which boxd file operations beyond plain reads and writes need. */
+function missingPython(path: string, destination: string) {
+  return new AdapterFilesystemError(
+    "UNSUPPORTED",
+    "boxd file operations need Python 3 in the image (python3 was not found); use an image that has it",
+    { effect: "none", source: path, destination: destination || path, temporaryPaths: [] },
+  );
+}
+
 export function filesystem(native: BoxdNativeClient, id: string) {
   const run = async (
     op: string,
@@ -180,6 +189,9 @@ export function filesystem(native: BoxdNativeClient, id: string) {
         }),
       );
 
+      // The shell's "command not found": the helper never ran, so nothing changed.
+      if (call.confirmedExit === 127) throw missingPython(path, destination);
+
       if (call.confirmedExit !== 0 || call.truncated)
         throw new AdapterError(
           "UNAVAILABLE",
@@ -188,6 +200,8 @@ export function filesystem(native: BoxdNativeClient, id: string) {
       receipt = Receipt.parse(JSON.parse(new TextDecoder().decode(result.stdout)));
     } catch (error) {
       if (ctx.signal.aborted) throw ctx.signal.reason;
+
+      if (error instanceof AdapterFilesystemError && error.details.effect === "none") throw error;
 
       if (mutation) throw uncertain();
       throw error;
