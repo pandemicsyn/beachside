@@ -2537,6 +2537,12 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
                 `Archil forks a running sandbox, not ${source.status}`,
               );
 
+            if (source.mounts?.length)
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "Archil forks a sandbox with mounted disks only once it is stopped",
+              );
+
             if (held.has(source.sandbox_id))
               throw new AdapterError(
                 "CONFLICT",

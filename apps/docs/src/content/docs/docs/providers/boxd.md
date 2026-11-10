@@ -68,6 +68,7 @@ Create-time `env` is rejected with `UnsupportedFeatureError` before allocation, 
 | Network controls             | `blocked` (the default) and `internet`. Allowlists are not supported yet.         | No          |
 | Labels and regions           | Labels on create and restore, returned by listing. One region per connection.     | No          |
 | Snapshots                    | Memory and disk capture, restore into a new machine, inspect, list and delete.    | No          |
+| Fork                         | `box.fork()` copies a running machine's memory, disk and processes.               | No          |
 | Volumes and mounts           | Independent disks: create, inspect, list, delete and whole-disk mounts at create. | No          |
 | Listing sandboxes and images | Lists every machine in the org, with no ownership claim. Images: not supported.   | No          |
 
@@ -92,6 +93,12 @@ With `preview: { access: "protected" }`, preview lookup fails as unsupported. Th
 `box.snapshot()` always saves memory and disk together; boxd has no filesystem-only capture, so `snapshots: { preserve: Preserve.FILESYSTEM }` fails at connect. boxd pauses the machine briefly and it keeps running; a restored machine resumes the captured processes under a new ID, with its own name, URL and private IP. Processes that cached the old hostname or address keep the stale value.
 
 boxd keeps only the latest version under a snapshot name, so every capture gets its own name and the reference remembers the captured version. If someone saves that snapshot again outside Beachside, `inspect()`, `restore()` and `delete()` fail with `CONFLICT` before changing anything. A restore keeps the captured size, applies the requested network policy, your configured lifetime and preview settings, and cannot attach disks. Snapshots do not expire, so delete them when you are done. See [snapshots and volumes](/docs/guides/snapshots-and-volumes/).
+
+## Fork
+
+`box.fork()` uses boxd's native fork. The source pauses for a fraction of a second to hand over its memory and keeps running; the fork is a new machine that continues the source's processes, with its own name, URL and private IP. It keeps the source's size, network policy and copy-on-write disk, so later writes on either machine don't reach the other. `labels` merge over the source's labels, and `lifetimeSeconds` replaces the configured lifetime. boxd pauses the automations a fork inherits, so nothing runs twice. Destroying either machine leaves the other running.
+
+A source whose egress allowlist was changed outside Beachside is refused, because the fork would inherit it. See [Fork a running sandbox](/docs/guides/snapshots-and-volumes/#fork-a-running-sandbox).
 
 ## Storage and recovery
 

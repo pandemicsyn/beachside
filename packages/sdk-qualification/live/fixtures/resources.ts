@@ -17,9 +17,15 @@ import { LedgerStore } from "../../provider-qualification/ledger";
 import { boundedRead } from "../../provider-qualification/bounds";
 import { cleanupOwned, cleanupCompute, partialResource } from "./cleanup";
 
-const creators = new Set(["create", "snapshot_capture", "snapshot_restore", "volume_create"]);
+const creators = new Set([
+  "create",
+  "snapshot_capture",
+  "snapshot_restore",
+  "sandbox_fork",
+  "volume_create",
+]);
 
-const computeKinds = new Set(["create", "snapshot_restore"]);
+const computeKinds = new Set(["create", "snapshot_restore", "sandbox_fork"]);
 
 /** Test-owned resources only. Bun owns test execution, assertion failures and reporting. */
 export class TestResources {
@@ -238,7 +244,12 @@ export class TestResources {
 
         if (value instanceof AdapterSandbox) return { ...entry, reference, sandboxId: value.id };
 
-        if ((outcome?.kind === "snapshot_restore" || outcome?.kind === "create") && outcome.sandbox)
+        if (
+          (outcome?.kind === "snapshot_restore" ||
+            outcome?.kind === "sandbox_fork" ||
+            outcome?.kind === "create") &&
+          outcome.sandbox
+        )
           return { ...entry, reference, sandboxId: outcome.sandbox.nativeId };
 
         if (resource) return { ...entry, reference, resource };

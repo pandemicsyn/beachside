@@ -129,6 +129,44 @@ Pause application writers before capture if you need consistent data. Passing `c
 
 A restored snapshot does not strengthen the provider's network guarantees. In the maintained E2B test, requested `blocked` networking still allowed direct outbound IPv4 TCP; restored processes may retain outbound access. See [E2B networking](/docs/providers/e2b/#network-and-previews) and the [test evidence](/docs/providers/support/).
 
+## Fork a running sandbox
+
+`box.fork()` copies a running sandbox into a new one with the provider's own fork. Use it to branch an agent's work or try several approaches from the same state. There is no snapshot to manage, and the source keeps running.
+
+```ts
+const check = await source.checkFork();
+if (check.status !== "supported") throw new Error(check.reason);
+
+const branch = await source.fork({ labels: { branch: "a" }, lifetimeSeconds: 1800 });
+try {
+  await branch.exec({ command: ["npm", "test"] });
+} finally {
+  await branch.destroy();
+}
+```
+
+Fork is native only. An adapter without a native fork rejects with `UNSUPPORTED` before anything changes; Beachside never stands in a snapshot and restore. If you want a copy on such a provider, capture a snapshot and restore it yourself.
+
+`(await source.capabilities()).fork` says what a fork keeps:
+
+- `preserve`: `filesystem` or `filesystem+memory`.
+- `interruption`: what the source goes through while the fork is taken.
+- `execution`: `resume` means the fork continues the source's running processes; `fresh` means it boots from the copied disk.
+- `independentLifecycle`: `false` means the provider keeps the source while forks exist, so destroying it only stops it.
+- `options`: whether `labels` and `lifetimeSeconds` apply. Options the adapter can't apply reject before any fork.
+
+The fork keeps the source's network policy, size and environment. It is a new sandbox with its own reference; save that reference like any other sandbox.
+
+| Provider       | Copies                          | Source                            | Fork options     | Independent lifecycle                         |
+| -------------- | ------------------------------- | --------------------------------- | ---------------- | --------------------------------------------- |
+| boxd           | Disk, RAM and running processes | Pauses for a fraction of a second | Labels, lifetime | Yes                                           |
+| Archil         | Disk, RAM and running processes | Pause, fork, then resume          | None             | No: source stays stopped until forks are gone |
+| Other adapters | `UNSUPPORTED`                   |                                   |                  |                                               |
+
+A boxd source with a custom egress allowlist set outside Beachside is refused, because the fork would inherit an allowlist that matches neither `blocked` nor `internet`.
+
+If a fork's outcome is uncertain, the error's operation reference has kind `sandbox_fork`. Recover it as in [Results, errors and saved resources](/docs/guides/recovery/); recovery never forks again.
+
 ## Create and mount a volume
 
 A volume stores data separately from compute. `volume.at(path)` describes where to mount it; calling `at()` does not attach storage or change the provider. Pass the descriptor in `mounts` when creating a sandbox.

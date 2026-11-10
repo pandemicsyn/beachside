@@ -62,6 +62,7 @@ Everything below is tested against a simulated Archil API and process connection
 | Processes         | Streamed text or byte output, piped stdin with EOF, `SIGTERM`/`SIGKILL`, status, reopening from a saved reference, and callback `exec`.                                                                                                                                                        |
 | Terminals         | Archil's native PTY (`TERM=xterm-256color`) with input, resize, `SIGKILL` and reopening.                                                                                                                                                                                                       |
 | Files             | Buffered binary read and write up to 32 MiB; streamed reads and writes of any size; no-clobber writes, copy, move, stat, directory listing, exists, make directory and remove.                                                                                                                 |
+| Fork              | `box.fork()` copies a running sandbox's memory, disk and processes into a dependent child; see [Fork](#fork).                                                                                                                                                                                  |
 | Snapshots         | Capture memory and disk (default) or disk only; restore into a new sandbox with the snapshot's own network policy; inspect, list and delete. Restores depend on their snapshot; see below.                                                                                                     |
 | Images            | `images.build()` from an OCI reference (with registry credentials for private images), polled until ready, and `images.inspect()`.                                                                                                                                                             |
 | Volumes           | Archil disks: create, inspect, list and delete, mounted at create read-write or read-only, with a subpath.                                                                                                                                                                                     |
@@ -88,6 +89,12 @@ const restored = await snapshot.restore({ requireIndependentLifecycle: false });
 ```
 
 Archil can only fork a sandbox with mounted disks once it is stopped, so capturing a sandbox with volumes is refused. Restores keep the source's resources, env and lifetime; asking to change them is refused.
+
+## Fork
+
+`box.fork()` uses the same native fork without a holder: it pauses the running source, forks its checkpoint into a new running sandbox that resumes the source's processes, then resumes the source. The fork keeps the source's network policy, size and env; Archil applies no labels or lifetime to a fork, so those options are refused before anything changes. A sandbox with mounted disks can't be forked while it runs.
+
+The fork is a child of its source, so the source can't be deleted while the fork exists: `destroy()` on the source stops it and reports it as retained. Destroy forks first. See [Fork a running sandbox](/docs/guides/snapshots-and-volumes/#fork-a-running-sandbox).
 
 ## Commands, processes and files
 
