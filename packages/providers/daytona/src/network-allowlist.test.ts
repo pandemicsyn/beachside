@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Image, Beachside } from "beachside";
 import type { Json } from "@beachside/adapter";
 import { createDaytonaAdapter } from "./adapter";
+import { daytona } from "./factory";
 
 type Body = Record<string, Json> & { name: string; labels: Record<string, string> };
 
@@ -70,22 +71,42 @@ function fixture(options: { limited?: boolean; echo?: (body: Body) => Record<str
   return { connect, bodies };
 }
 
-test("Daytona sends an allowlist as native domain and CIDR lists and confirms them", async () => {
+test("Daytona sends host allowlists as its native domain list and confirms them", async () => {
   const f = fixture({});
-  const client = await f.connect(["GitHub.com", "*.npmjs.org", "10.1.0.0/16"]);
+  const client = await f.connect(["GitHub.com", "*.npmjs.org"]);
 
   try {
     expect((await client.capabilities()).network).toEqual(["allow"]);
     const box = await client.sandboxes.create();
     expect(box.id).toBe("native-1");
-    expect(f.bodies[0]).toMatchObject({
-      domainAllowList: "*.npmjs.org,github.com",
-      networkAllowList: "10.1.0.0/16",
-    });
+    expect(f.bodies[0]).toMatchObject({ domainAllowList: "*.npmjs.org,github.com" });
+    expect(f.bodies[0]).not.toHaveProperty("networkAllowList");
     expect(f.bodies[0]).not.toHaveProperty("networkBlockAll");
   } finally {
     await client.close();
   }
+});
+
+test("Daytona sends range allowlists as its native network list and confirms them", async () => {
+  const f = fixture({});
+  const client = await f.connect(["10.1.0.0/16"]);
+
+  try {
+    await client.sandboxes.create();
+    expect(f.bodies[0]).toMatchObject({ networkAllowList: "10.1.0.0/16" });
+    expect(f.bodies[0]).not.toHaveProperty("domainAllowList");
+  } finally {
+    await client.close();
+  }
+});
+
+test("Daytona refuses an allowlist mixing hosts and ranges, which its API does not accept", async () => {
+  const f = fixture({});
+  await expect(f.connect(["github.com", "10.1.0.0/16"])).rejects.toMatchObject({
+    code: "UNSUPPORTED",
+    message: expect.stringContaining("not both"),
+  });
+  expect(f.bodies).toHaveLength(0);
 });
 
 test("Daytona refuses allowlists its native limits or tier cannot hold", async () => {
@@ -115,4 +136,11 @@ test("Daytona does not report a sandbox ready when the native allowlist differs"
   } finally {
     await client.close();
   }
+});
+
+test("the daytona() factory takes an allowlist as its network", () => {
+  // Type-checked by the package check: the factory accepts the same network setting as the adapter.
+  expect(daytona({ apiKey: "key", target: "us", network: { allow: ["github.com"] } }).bound).toBe(
+    true,
+  );
 });

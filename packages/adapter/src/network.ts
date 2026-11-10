@@ -8,9 +8,11 @@ export const ALLOW_NETWORK_POLICY = "allow" as const;
 export const MAX_ALLOWLIST_ENTRIES = 256;
 
 /**
- * A parsed egress allowlist: outbound HTTP(S) to `hosts` (exact names or `*.` wildcards, matched by
- * Host header or TLS SNI) plus any traffic to `cidrs` (IPv4). Entries are lowercased, deduplicated
- * and sorted, so equal lists compare equal through `canonical`.
+ * A parsed egress allowlist: outbound traffic to `hosts` (exact names or `*.` wildcards) plus any
+ * traffic to `cidrs` (IPv4). How a provider matches a host differs: most match HTTPS by TLS SNI,
+ * some also plain HTTP by `Host`, some only HTTPS, some by DNS, and some let `*.` cover the bare
+ * name; the provider guide lists each. Entries are lowercased, deduplicated and sorted, so equal
+ * lists compare equal through `canonical`.
  */
 export type EgressAllowlist = {
   readonly hosts: readonly string[];
@@ -129,8 +131,16 @@ export function checkAllowlistLimits(
     wildcards?: boolean;
     cidrs?: boolean;
     hosts?: boolean;
+    /** False when one list cannot hold both host names and IPv4 ranges. */
+    mixed?: boolean;
   },
 ): void {
+  if (limits.mixed === false && allowlist.hosts.length && allowlist.cidrs.length)
+    throw new AdapterError(
+      "UNSUPPORTED",
+      `${provider} allowlists take host names or IPv4 ranges, not both in one list`,
+    );
+
   if (limits.hosts === false && allowlist.hosts.length)
     throw new AdapterError(
       "UNSUPPORTED",
