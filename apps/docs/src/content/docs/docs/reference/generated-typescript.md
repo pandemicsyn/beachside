@@ -164,17 +164,21 @@ Import from `beachside`.
 
 Import from `@beachside/daytona`.
 
-| Export                 | Kind      |
-| ---------------------- | --------- |
-| `boundedBytes`         | function  |
-| `createDaytonaAdapter` | re-export |
-| `daytona`              | re-export |
-| `daytonaAdapter`       | re-export |
-| `DaytonaDriver`        | class     |
-| `DaytonaEndpointPair`  | type      |
-| `DaytonaInput`         | type      |
-| `daytonaProvider`      | function  |
-| `daytonaRegistration`  | function  |
+| Export                  | Kind      |
+| ----------------------- | --------- |
+| `boundedBytes`          | function  |
+| `createDaytonaAdapter`  | re-export |
+| `daytona`               | re-export |
+| `daytonaAdapter`        | re-export |
+| `DaytonaDriver`         | class     |
+| `DaytonaEndpointPair`   | type      |
+| `DaytonaInput`          | type      |
+| `daytonaNetworkFields`  | function  |
+| `DaytonaNetworkFields`  | type      |
+| `daytonaNetworkMatches` | function  |
+| `DaytonaNetworkPolicy`  | type      |
+| `daytonaProvider`       | function  |
+| `daytonaRegistration`   | function  |
 
 ## E2B adapter
 
