@@ -19,7 +19,7 @@ export const PreviewResult = z.discriminatedUnion("access", [
     access: z.literal("public"),
     url: PreviewUrl,
     /** When the URL stops working, for providers that sign expiring links. */
-    expiresAt: z.iso.datetime().optional(),
+    expiresAt: z.iso.datetime({ offset: true }).optional(),
   }),
   z.strictObject({
     access: z.literal("protected"),
@@ -34,7 +34,7 @@ export const PreviewResult = z.discriminatedUnion("access", [
           .regex(/^[^\r\n]+$/),
       )
       .refine((headers) => Object.keys(headers).length > 0 && Object.keys(headers).length <= 16),
-    expiresAt: z.iso.datetime().optional(),
+    expiresAt: z.iso.datetime({ offset: true }).optional(),
   }),
 ]);
 

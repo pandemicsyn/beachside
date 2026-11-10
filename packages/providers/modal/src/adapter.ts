@@ -157,6 +157,9 @@ const snapshotProfile = (retentionSeconds = SNAPSHOT_RETENTION_SECONDS): Snapsho
 });
 
 /** Network policies one connection creates with: its allowlist, or blocked and internet. */
+const BLOCKED_TUNNELS =
+  'Modal public previews need outbound network for their tunnels, and Modal refuses open ports with a blocked network; use network "internet" or { allow: [...] }';
+
 export function modalNetworkPolicies(allowlist: string | undefined): string[] {
   return allowlist ? [ALLOW_NETWORK_POLICY] : ["blocked", "internet"];
 }
@@ -184,8 +187,8 @@ export function modalNetworkTag(networkPolicy: string, allowlist: string | undef
 }
 
 /** A restored sandbox is an ordinary Modal create from the snapshot image. */
-const restoreSupport = (allowlist: string | undefined) => ({
-  networkPolicies: modalNetworkPolicies(allowlist),
+const restoreSupport = (networkPolicies: string[]) => ({
+  networkPolicies,
   resources: false,
   mounts: false,
   independentLifecycle: true,
@@ -270,6 +273,11 @@ export function createModalAdapter(
           "Modal public previews need preview.ports: Modal publishes tunnels only at create",
         );
 
+      const publicPorts = config.preview.access === "public";
+
+      if (publicPorts && config.networkPolicy === "blocked")
+        throw new AdapterError("INVALID_ARGUMENT", BLOCKED_TUNNELS);
+
       if (config.snapshots?.preserve === Preserve.FILESYSTEM_AND_MEMORY)
         throw new AdapterError(
           "UNSUPPORTED",
@@ -292,8 +300,12 @@ export function createModalAdapter(
             ? retentionSeconds * 1000
             : null;
 
-      const restore = restoreSupport(config.allowlist);
-      const networkPolicies = modalNetworkPolicies(config.allowlist);
+      // Public tunnels cannot exist on a blocked network, so this setup does not offer it.
+      const networkPolicies = modalNetworkPolicies(config.allowlist).filter(
+        (policy) => !publicPorts || policy !== "blocked",
+      );
+
+      const restore = restoreSupport(networkPolicies);
 
       const requirePolicy = (networkPolicy: string) => {
         if (!networkPolicies.includes(networkPolicy))
@@ -303,7 +315,9 @@ export function createModalAdapter(
               ? "Modal allowlists are set in adapter setup: network: { allow: [...] }"
               : config.allowlist
                 ? 'This Modal connection creates with its allowlist; use network "allow"'
-                : 'Modal network policy must be "blocked" or "internet"',
+                : publicPorts && networkPolicy === "blocked"
+                  ? BLOCKED_TUNNELS
+                  : 'Modal network policy must be "blocked" or "internet"',
           );
       };
 

@@ -194,13 +194,15 @@ test("public Modal previews publish the configured ports as tunnels at create", 
 
   const client = await Beachside.connect({
     adapter: native.adapter,
-    config: { ...base, preview: { access: "public", ports: [3000] } },
+    config: { ...base, network: "internet", preview: { access: "public", ports: [3000] } },
     credentials,
   });
 
   try {
+    expect((await client.capabilities()).network).toEqual(["internet"]);
     const box = await client.sandboxes.create({ environment });
     expect(native.creates[0]!.encryptedPorts).toEqual([3000]);
+    expect(native.creates[0]!.network).toEqual({ kind: "open" });
     expect(await box.preview(3000)).toEqual({
       access: "public",
       url: "https://t3000.r5.modal.host",
@@ -217,4 +219,35 @@ test("public Modal previews publish the configured ports as tunnels at create", 
       credentials,
     }),
   ).rejects.toMatchObject({ code: "INVALID_ARGUMENT", message: expect.stringContaining("ports") });
+});
+
+test("public Modal previews refuse a blocked network, which Modal forbids with open ports", async () => {
+  const native = fixture();
+
+  // The default network is blocked, so public tunnels need an explicit network in setup.
+  await expect(
+    Beachside.connect({
+      adapter: native.adapter,
+      config: { ...base, preview: { access: "public", ports: [3000] } },
+      credentials,
+    }),
+  ).rejects.toMatchObject({
+    code: "INVALID_ARGUMENT",
+    message: expect.stringContaining("tunnels"),
+  });
+
+  const client = await Beachside.connect({
+    adapter: native.adapter,
+    config: { ...base, network: "internet", preview: { access: "public", ports: [3000] } },
+    credentials,
+  });
+
+  try {
+    await expect(
+      client.sandboxes.create({ environment, network: "blocked" }),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    expect(native.creates).toHaveLength(0);
+  } finally {
+    await client.close();
+  }
 });

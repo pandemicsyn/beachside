@@ -38,7 +38,7 @@ Prepared `im-` image IDs and `Image.oci("python:3.12-slim")` are supported. OCI 
 
 `box.preview(port)` defaults to `preview: { access: "protected" }`: each call mints a Modal [connect token](https://modal.com/docs/guide/sandbox-networking) routed to that container port and returns `{ access: "protected", url, headers: { Authorization: "Bearer <token>" } }`. The token is a credential; send it only from your own HTTP client, with `redirect: "error"`. Any port works, and nothing is published at create.
 
-`preview: { access: "public", ports: [3000] }` publishes those ports as Modal encrypted tunnels when the sandbox is created or restored; `preview(3000)` returns the tunnel's `https://…modal.host` URL, which anyone holding it can open. Modal cannot add tunnels after create, so other ports reject with `UNSUPPORTED`, and public setup without `ports` rejects at connect. Neither mode starts a server or waits for it, and neither has been live-tested.
+`preview: { access: "public", ports: [3000] }` publishes those ports as Modal encrypted tunnels when the sandbox is created or restored; `preview(3000)` returns the tunnel's `https://…modal.host` URL, which anyone holding it can open. Modal cannot add tunnels after create, so other ports reject with `UNSUPPORTED`, and public setup without `ports` rejects at connect. Modal refuses open ports on a blocked network and the tunnels need outbound access, so public setup also needs `network: "internet"` or `{ allow: [...] }`: with the default `blocked` it rejects at connect (`INVALID_ARGUMENT`), and the connection then does not offer `blocked` for creates or restores. Neither mode starts a server or waits for it, and neither has been live-tested.
 
 ## Snapshots
 

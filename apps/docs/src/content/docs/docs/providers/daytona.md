@@ -68,7 +68,7 @@ Create-time `env` is sent as native sandbox environment variables, so it applies
 | Command input                | Finite byte stdin.                                                                                               | No          |
 | Files                        | Binary read and write of any size (byte streams underneath), overwrite and no-clobber.                           | Yes         |
 | Directories                  | List, stat, create, remove, copy and move.                                                                       | Yes         |
-| HTTP previews                | Protected with an `x-daytona-preview-token` header (live-tested), or public as an expiring signed URL per port.  | Protected   |
+| HTTP previews                | Protected with an `x-daytona-preview-token` header (live-tested), or public as an expiring signed URL per port.  | Partial     |
 | Images                       | Prepared snapshots and OCI builds; `images.get`, `list` and `delete` over native snapshots.                      | No          |
 | Network controls             | `daytona-default`, `internet`, strict `blocked` or an allowlist, set once per connection.                        | No          |
 | Snapshots                    | Filesystem capture and restore into a new sandbox.                                                               | Yes         |
