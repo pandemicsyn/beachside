@@ -79,7 +79,7 @@ Behavior:
 
 Use `client.snapshots.get(reference)`, bounded/paginated `list`, and `delete` for supported inventory/cleanup operations. `get` inspects a scoped resource; it does not import ownership or change scope. List results state whether they cover the provider scope or only Beachside-managed artifacts. Recovering an operation remains separate from opening an existing resource.
 
-Initially use snapshot followed by restore for a fork workflow. A later `box.fork(request)` can use a native clone path only when it honors the same explicit preservation, interruption, mount, independence, and recovery contracts. Native fork availability is independent of reusable-snapshot availability; a provider might support one without the other. Avoid a generic multi-step fallback engine in the first release.
+`box.fork(request)` (#198, #199) uses a native clone path only, honoring the same explicit preservation, interruption, mount, independence and recovery contracts; boxd, E2B and Archil implement it, and other adapters reject with `UNSUPPORTED`. There is no snapshot-and-restore fallback; callers who want that workflow call `snapshot()` and `restore()` themselves. Native fork availability is independent of reusable-snapshot availability; a provider might support one without the other. A fork whose outcome is uncertain recovers as a `sandbox_fork` operation and is never submitted again.
 
 ### Source restoration and partial failure
 

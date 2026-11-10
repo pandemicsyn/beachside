@@ -57,6 +57,8 @@ The CLI picks a profile from `--profile`, then `BEACHSIDE_PROFILE`, then `--prov
 
 Each sandbox remembers the profile that created it, so later commands on it use the same profile whatever is selected now.
 
+To let a profile's sandboxes reach only some destinations, give its `config` an [egress allowlist](/docs/guides/images-and-networking/#allow-only-some-destinations), for example `"config": { "network": { "allow": ["registry.npmjs.org", "*.github.com"] } }`. Every sandbox from that profile uses the list, and `--network internet` or `--network blocked` rejects, so use another profile for those.
+
 ## Setups
 
 `setups` names setup steps that `--setup <name>` runs after a sandbox starts, and a profile's `setup` lists the ones its sandboxes get by default:
