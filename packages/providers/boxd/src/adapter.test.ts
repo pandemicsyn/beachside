@@ -418,7 +418,7 @@ test("fresh credentials reopen saved references; warm lifecycle and renewal repo
   }
 });
 
-test("expiry failure preserves an acknowledged UUID and observation never creates or renews again", async () => {
+test("expiry failure preserves an acknowledged UUID and observation never creates again or extends a lifetime", async () => {
   const { fixture } = await setup();
   const refs: unknown[] = [];
 
@@ -474,7 +474,11 @@ test("expiry failure preserves an acknowledged UUID and observation never create
     expect(fixture.calls.filter((call) => call.method === "GetVm")).toHaveLength(readsBefore + 2);
     expect(fixture.calls.filter((call) => call.method === "Exec")).toHaveLength(probesBefore);
     expect(fixture.effects.create).toBe(1);
-    expect(fixture.calls.filter((call) => call.method === "SetDeleteAfter")).toHaveLength(before);
+    // Observation only installs a lifetime on a machine that has none (the read that failed made
+    // no attempt); it never extends one.
+    expect(fixture.calls.filter((call) => call.method === "SetDeleteAfter")).toHaveLength(
+      before + 1,
+    );
     fixture.failExpiry(false);
 
     if (!saved) throw Error("Known sandbox reference missing");
@@ -482,7 +486,9 @@ test("expiry failure preserves an acknowledged UUID and observation never create
     expect((await known.inspect()).state).toBe("running");
     await known.destroy();
     expect(fixture.effects.create).toBe(1);
-    expect(fixture.calls.filter((call) => call.method === "SetDeleteAfter")).toHaveLength(before);
+    expect(fixture.calls.filter((call) => call.method === "SetDeleteAfter")).toHaveLength(
+      before + 1,
+    );
   } finally {
     await client.close();
   }
@@ -1075,6 +1081,10 @@ test("a lost or refused egress response leaves the created machine unknown, neve
 
     expect(fixture.effects.create).toBe(2);
     expect(fixture.calls.filter((call) => call.method === "SetBotProtection")).toHaveLength(0);
+
+    // Expiry is still installed, so a machine whose egress failed does not outlive its lifetime.
+    for (const machine of fixture.machines.values())
+      expect(machine.deleteAtMs).toBeGreaterThan(Date.now());
   } finally {
     await client.close();
   }
