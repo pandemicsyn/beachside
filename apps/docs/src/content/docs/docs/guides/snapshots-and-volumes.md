@@ -137,6 +137,7 @@ A restored snapshot does not strengthen the provider's network guarantees. In th
 const check = await source.checkFork();
 if (check.status !== "supported") throw new Error(check.reason);
 
+// labels and lifetimeSeconds apply where `capabilities().fork.value.options` lists them (boxd).
 const branch = await source.fork({ labels: { branch: "a" }, lifetimeSeconds: 1800 });
 try {
   await branch.exec({ command: ["npm", "test"] });
@@ -165,7 +166,7 @@ The fork keeps the source's network policy, size and environment. It is a new sa
 | Archil         | Disk, RAM and running processes | Pause, fork, then resume          | None             | No: source stays stopped until forks are gone |
 | Other adapters | `UNSUPPORTED`                   |                                   |                  |                                               |
 
-A boxd source with a custom egress allowlist set outside Beachside is refused, because the fork would inherit an allowlist that matches neither `blocked` nor `internet`.
+A boxd or Archil source with a custom egress policy set outside Beachside is refused, because the fork would inherit a policy that matches neither `blocked` nor `internet`; `checkFork()` reports it first.
 
 If a fork's outcome is uncertain, the error's operation reference has kind `sandbox_fork`. Recover it as in [Results, errors and saved resources](/docs/guides/recovery/); recovery never forks again.
 
