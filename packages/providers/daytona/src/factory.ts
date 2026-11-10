@@ -1,5 +1,10 @@
 import { createDaytonaAdapter } from "./index";
-import type { ImageInput, Preserve, ResourceMinimums } from "@beachside/adapter";
+import type {
+  AllowNetworkSetting,
+  ImageInput,
+  Preserve,
+  ResourceMinimums,
+} from "@beachside/adapter";
 import { bindAdapter, type BoundAdapter } from "@beachside/adapter";
 
 /** First-party Daytona adapter. Configure `network` once here; omitted create calls use it. Defaults to provider-managed daytona-default egress. */
@@ -24,8 +29,11 @@ export function daytona(options: {
   };
   /** Minimum `{ vcpus, memoryMiB }`; OCI builds use it and prepared snapshots must meet it. */
   resources?: ResourceMinimums;
-  /** Outbound network: `blocked`, `internet`, or Daytona's tier-dependent `daytona-default` (default). */
-  network?: "blocked" | "internet" | "daytona-default";
+  /**
+   * Outbound network: `blocked`, `internet`, Daytona's tier-dependent `daytona-default` (default),
+   * or an allowlist `{ allow: [...] }` of host names or IPv4 ranges (not both).
+   */
+  network?: "blocked" | "internet" | "daytona-default" | AllowNetworkSetting;
   /** @deprecated Use `network`. */
   networkPolicy?: "blocked" | "internet" | "daytona-default";
 }): BoundAdapter {

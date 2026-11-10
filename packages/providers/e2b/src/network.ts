@@ -28,7 +28,9 @@ export function e2bEgressMatches(
   record: { allowOut?: string[]; denyOut?: string[] },
   allowlist: string | undefined,
 ): boolean {
-  if (!allowlist) return !record.allowOut?.length;
+  // Without an allowlist only a deny-all-plus-allowOut restriction is foreign; an allowOut that E2B
+  // reports without denying everything else restricts nothing.
+  if (!allowlist) return !(record.allowOut?.length && record.denyOut?.includes("0.0.0.0/0"));
 
   if (!record.denyOut?.includes("0.0.0.0/0") || !record.allowOut?.length) return false;
 

@@ -1,5 +1,6 @@
 import { createE2BAdapter } from "./index";
 import {
+  type AllowNetworkSetting,
   bindAdapter,
   type BoundAdapter,
   type Preserve,
@@ -11,8 +12,8 @@ export function e2b(options: {
   apiKey: string;
   teamId?: string;
   templateId?: string;
-  /** Outbound network: `blocked` (default) or `internet`. */
-  network?: "blocked" | "internet";
+  /** Outbound network: `blocked` (default), `internet`, or an allowlist `{ allow: [...] }`. */
+  network?: "blocked" | "internet" | AllowNetworkSetting;
   /** @deprecated Use `network`. */
   networkPolicy?: "blocked" | "internet";
   /** @deprecated Use `lifecycle: { lifetimeSeconds }`. */

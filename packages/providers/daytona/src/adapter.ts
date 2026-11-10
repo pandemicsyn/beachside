@@ -132,7 +132,13 @@ const Configuration = z
       });
   })
   .transform(({ network, ...value }) => {
-    const allow = allowlistConfig("Daytona", network, { maxHosts: 100, maxCidrs: 10 });
+    const allow = allowlistConfig("Daytona", network, {
+      maxHosts: 100,
+      maxCidrs: 10,
+      // Daytona's domain and network allow lists are mutually exclusive on one sandbox.
+      mixed: false,
+    });
+
     const named = NamedNetwork.safeParse(network);
 
     const networkPolicy: DaytonaNetworkPolicy = AllowNetworkSetting.safeParse(network).success
