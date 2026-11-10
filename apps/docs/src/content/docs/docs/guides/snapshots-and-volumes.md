@@ -160,8 +160,11 @@ The fork keeps the source's network policy, size and environment. It is a new sa
 | Provider       | Copies                          | Source                            | Fork options     | Independent lifecycle                         |
 | -------------- | ------------------------------- | --------------------------------- | ---------------- | --------------------------------------------- |
 | boxd           | Disk, RAM and running processes | Pauses for a fraction of a second | Labels, lifetime | Yes                                           |
+| E2B            | Disk, RAM and running processes | Pauses; its open connections drop | Lifetime         | Yes                                           |
 | Archil         | Disk, RAM and running processes | Pause, fork, then resume          | None             | No: source stays stopped until forks are gone |
 | Other adapters | `UNSUPPORTED`                   |                                   |                  |                                               |
+
+An E2B fork carries its source's metadata, including the markers Beachside uses to recognise its sandboxes, so the fork's reference names the source's creation and differs only by sandbox ID. Listing by labels returns forks next to their source, and an E2B fork whose response was lost can't be told apart from its source afterwards: its outcome stays unknown, so list the sandboxes and compare IDs.
 
 A boxd source with a custom egress allowlist set outside Beachside is refused, because the fork would inherit an allowlist that matches neither `blocked` nor `internet`.
 

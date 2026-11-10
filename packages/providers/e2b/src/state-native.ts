@@ -60,6 +60,13 @@ function canObserveDelete(token: z.infer<typeof DeleteToken>) {
   return token.accepted || token.stage === "uncertain";
 }
 
+/** A fork's acknowledged identity; E2B forks carry no attempt marker, so a lost one stays unknown. */
+const ForkToken = z.strictObject({
+  source: z.string().min(1).max(512),
+  state: z.enum(["uncertain", "accepted"]),
+  sandboxId: z.string().min(1).max(512).optional(),
+});
+
 const restoreToken = z.strictObject({
   selector: z.string().min(1).max(256),
   state: z.enum(["uncertain", "accepted", "rejected"]),
@@ -82,6 +89,7 @@ export function e2bState(input: {
 }) {
   const { scope, transport } = input;
   const state = transport.state;
+  const nativeFork = state?.fork;
   let volumeCreateEligibility: "unknown" | "supported" | "unavailable" = "unknown";
   const history = resourceHistory();
   const memory = input.snapshotPreserve === Preserve.FILESYSTEM_AND_MEMORY;
@@ -352,6 +360,32 @@ export function e2bState(input: {
       );
   }
 
+  /**
+   * The fork as a created sandbox. E2B copies the source's metadata, Beachside creation markers
+   * included, so the fork's reference names the source's creation and differs by sandbox ID.
+   */
+  async function forkResult(
+    source: string,
+    id: string,
+    ctx: { unknown: AttemptContext["unknown"]; pending: AttemptContext["pending"] },
+  ) {
+    const fork = await input.find(id).catch(() => null);
+
+    if (!fork)
+      return ctx.unknown("E2B fork is acknowledged but its record is unavailable; inspect it");
+
+    if (fork.state !== "running") return ctx.pending({ source, state: "accepted", sandboxId: id });
+
+    return {
+      id: fork.id,
+      reference: sandboxReference("e2b", input.scope, fork.id, {
+        operation: fork.metadata.beachside_operation!,
+        submission: fork.metadata.beachside_submission!,
+      }),
+      state: "running" as const,
+    };
+  }
+
   async function restorePreflight(value: {
     snapshot: ResourceReference;
     request: { networkPolicy: string; resources?: unknown; mounts?: unknown };
@@ -484,6 +518,7 @@ export function e2bState(input: {
     | "snapshotList"
     | "snapshotDelete"
     | "snapshotRestore"
+    | "sandboxFork"
     | "volumeCreate"
     | "volumeInspect"
     | "volumeList"
@@ -1048,6 +1083,68 @@ export function e2bState(input: {
           return ctx.reject("UNAVAILABLE", "Restore cancelled before dispatch");
 
         return ctx.unknown("Snapshot restore cannot be replayed");
+      },
+    },
+    sandboxFork: nativeFork && {
+      recovery: { version: 1, token: ForkToken },
+      // E2B pauses the source to checkpoint its memory, which drops its open connections.
+      capabilities: {
+        preserve: "filesystem+memory",
+        interruption: "pause",
+        execution: "resume",
+        independentLifecycle: true,
+        options: { lifetime: { minSeconds: 1, maxSeconds: input.maxLifetimeSeconds } },
+      },
+      async prepare(value) {
+        const box = await input.find(value.sandbox.id, value.sandbox.reference);
+
+        if (!box)
+          throw new AdapterError("NOT_FOUND", "E2B sandbox is missing, expired, or deleted");
+
+        if (box.state !== "running")
+          throw new AdapterError("CONFLICT", `E2B forks a running sandbox, not ${box.state}`);
+
+        return value;
+      },
+      async submit(value, ctx) {
+        const token: z.infer<typeof ForkToken> = { source: value.sandbox.id, state: "uncertain" };
+
+        await ctx.checkpoint(token);
+
+        if (ctx.signal.aborted) return ctx.reject("UNAVAILABLE", "Fork cancelled before dispatch");
+
+        let forked;
+
+        try {
+          // E2B's shortest timeout is one minute; shorter lifetimes round up to it.
+          forked = await nativeFork(
+            value.sandbox.id,
+            Math.max(60, value.request.lifetimeSeconds ?? input.timeoutSeconds),
+            ctx.signal,
+          );
+        } catch {
+          return ctx.unknown(
+            "E2B fork response was not confirmed; forks carry their source's metadata, so list sandboxes and compare IDs without replay",
+          );
+        }
+
+        if (forked.status === "refused") return ctx.reject(forked.code, forked.message);
+
+        token.sandboxId = forked.id;
+        token.state = "accepted";
+        await ctx.checkpoint(token);
+
+        return forkResult(value.sandbox.id, forked.id, ctx);
+      },
+      async observe(attempt, ctx) {
+        const token = ForkToken.safeParse(attempt.token);
+
+        if (!token.success || !token.data.sandboxId)
+          return ctx.unknown(
+            "E2B fork identity was not acknowledged; forks carry their source's metadata, so it cannot be found again without replay",
+          );
+
+        return forkResult(token.data.source, token.data.sandboxId, ctx);
       },
     },
     volumeCreate: {

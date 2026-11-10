@@ -57,7 +57,10 @@ function fixture() {
     volumeCreate: 0,
     volumeDelete: 0,
     kill: 0,
+    fork: 0,
   };
+
+  const forkTimeouts: number[] = [];
 
   const modes = {
     loseCapture: false,
@@ -73,6 +76,8 @@ function fixture() {
     tagsDenied: false,
     aliasShadowed: false,
     loseRestore: false,
+    loseFork: false,
+    refuseFork: false,
     // SAFETY: The fixture injects only Error instances or no failure.
     volumeCreateFailure: undefined as Error | undefined,
   };
@@ -168,6 +173,23 @@ function fixture() {
     async remove() {},
     close() {},
     state: {
+      async fork(id, timeoutSeconds) {
+        calls.fork++;
+        forkTimeouts.push(timeoutSeconds);
+        const source = boxes.get(id);
+
+        if (!source) return { status: "refused", code: "NOT_FOUND", message: "missing" };
+
+        if (modes.refuseFork)
+          return { status: "refused", code: "CONFLICT", message: "E2B refused the fork (409)" };
+        const forkId = `fork_${calls.fork}`;
+        // E2B copies the source's metadata, Beachside creation markers included.
+        boxes.set(forkId, { ...structuredClone(source), id: forkId, state: "running" });
+
+        if (modes.loseFork) throw new Error("Fork response lost");
+
+        return { status: "forked", id: forkId };
+      },
       async template(id) {
         if (deleteReadStage === "template") await deleteReadBarrier?.();
 
@@ -298,6 +320,7 @@ function fixture() {
     captureMemory,
     modes,
     createRequests,
+    forkTimeouts,
     moveDefault() {
       retainedGeneration = generation;
       generation = "22222222-2222-4222-8222-222222222222";
@@ -2229,4 +2252,111 @@ test("successful volume inventory does not prove account create eligibility or a
   } finally {
     await client.close();
   }
+});
+
+test("E2B forks a running sandbox natively; the fork carries its source's markers", async () => {
+  const f = fixture();
+  const client = await f.connect();
+
+  try {
+    const source = await client.sandboxes.create({
+      environment: Image.prepared("base"),
+      networkPolicy: "blocked",
+    });
+
+    expect((await source.capabilities()).fork).toMatchObject({
+      status: "supported",
+      value: { preserve: "filesystem+memory", execution: "resume", independentLifecycle: true },
+    });
+
+    await expect(source.fork({ labels: { a: "b" } })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+    expect(f.calls.fork).toBe(0);
+
+    const forked = await source.fork({ lifetimeSeconds: 30 });
+    expect(forked.id).toBe("fork_1");
+    expect(f.forkTimeouts).toEqual([60]);
+    expect(forked.reference).toMatchObject({ kind: "sandbox", nativeId: "fork_1" });
+
+    // A saved fork reference reopens in a fresh connection.
+    const saved = JSON.parse(JSON.stringify(forked.reference));
+    await client.close();
+    const reopened = await f.connect();
+
+    try {
+      expect((await (await reopened.sandboxes.get(saved)).inspect()).state).toBe("running");
+    } finally {
+      await reopened.close();
+    }
+  } catch (error) {
+    await client.close();
+    throw error;
+  }
+});
+
+test("E2B fork refusals reject and a lost fork stays unknown without replay", async () => {
+  const f = fixture();
+  const client = await f.connect();
+
+  try {
+    const source = await client.sandboxes.create({
+      environment: Image.prepared("base"),
+      networkPolicy: "blocked",
+    });
+
+    f.modes.refuseFork = true;
+    await expect(source.fork()).rejects.toMatchObject({ code: "CONFLICT" });
+    f.modes.refuseFork = false;
+
+    f.modes.loseFork = true;
+    const lost = await source.fork().catch((error: Error) => error);
+    expect(lost).toBeInstanceOf(OutcomeUnknownError);
+
+    if (!(lost instanceof OutcomeUnknownError)) throw lost;
+    expect(lost.reference.kind).toBe("sandbox_fork");
+    await expect((await client.recover(lost.reference)).observe()).rejects.toBeInstanceOf(
+      OutcomeUnknownError,
+    );
+    expect(f.calls.fork).toBe(2);
+  } finally {
+    await client.close();
+  }
+});
+
+test("E2B native fork reads the first result's sandbox and maps refusals before effect", async () => {
+  const bodies: unknown[] = [];
+
+  const reply = (status: number, body: Json) => {
+    // SAFETY: the transport calls only fetch itself, never its other members.
+    const fetcher = Object.assign(
+      async (_url: string | URL | Request, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+
+        return new Response(JSON.stringify(body), { status });
+      },
+      { preconnect() {} },
+    ) as typeof fetch;
+
+    return createSdkTransport("fixture-key", fetcher).state!.fork!(
+      "box_1",
+      600,
+      new AbortController().signal,
+    );
+  };
+
+  expect(await reply(201, [{ sandbox: { sandboxID: "fork_1", templateID: "t" } }])).toEqual({
+    status: "forked",
+    id: "fork_1",
+  });
+  expect(bodies[0]).toEqual({ count: 1, timeout: 600 });
+  expect(await reply(409, { code: 409, message: "pausing" })).toMatchObject({
+    status: "refused",
+    code: "CONFLICT",
+  });
+  expect(await reply(201, [{ error: { code: 503, message: "no capacity" } }])).toMatchObject({
+    status: "refused",
+    code: "UNAVAILABLE",
+  });
+  await expect(reply(201, [])).rejects.toThrow();
 });

@@ -65,6 +65,7 @@ The package also exports `e2b()`, which takes credentials and config in one obje
 | Images                       | Owned templates and OCI builds; get, list and delete templates.                                 | No          |
 | Network controls             | `blocked` or `internet`; blocking is not reliable.                                              | Failed      |
 | Snapshots                    | Filesystem, memory and process capture; restore into new compute; inspect and delete.           | Yes         |
+| Fork                         | `box.fork()` copies a running sandbox's memory, files and processes into new compute.           | No          |
 | Volumes and mounts           | Volume create, inspect, list and delete (E2B private beta). Mounts not supported.               | No          |
 | Listing sandboxes and images | Sandboxes created by this Beachside scope; all team templates.                                  | No          |
 
@@ -98,6 +99,12 @@ Renewal, pause and resume need running compute that Beachside created with kill-
 `snapshot()` uses E2B's native capture and needs envd 0.5.0 or newer. By default it captures memory: it briefly pauses the source, which drops active connections, then resumes it. Configure `snapshots: { preserve: Preserve.FILESYSTEM }` for a filesystem-only capture; restored sandboxes then boot fresh. A call requirement that differs from the configured depth rejects before anything changes. Restore uses the exact captured build, never a newer `default` build. Each snapshot lives in its own E2B template; deleting it removes that template after checking that nothing else shares it. See [snapshots and volumes](/docs/guides/snapshots-and-volumes/).
 
 Destroy each sandbox, then close the client; the native timeout is only a fallback. Snapshot templates and templates built from OCI images survive sandbox destruction and need `snapshots.delete()` or `images.delete()`. `images.delete()` only removes a private template with one build, no other alias, no snapshot and no listed sandbox using it; anything else rejects `CONFLICT` before E2B is called.
+
+## Fork
+
+`box.fork()` uses E2B's native fork. E2B pauses the source to checkpoint its memory, which drops its open connections, then resumes it with the same ID and expiry. The fork continues the source's processes with its files. `lifetimeSeconds` sets the fork's timeout (at least one minute) and defaults to the configured lifetime; E2B applies no labels to a fork, so `labels` are refused before anything changes.
+
+The fork carries its source's metadata, including the markers Beachside uses to recognise its own sandboxes. Its reference names the source's creation and differs by sandbox ID, and `sandboxes.list()` returns it next to its source. If a fork's response is lost, its outcome stays unknown: list sandboxes and compare IDs. See [Fork a running sandbox](/docs/guides/snapshots-and-volumes/#fork-a-running-sandbox).
 
 ## Limits
 
