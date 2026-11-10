@@ -18,19 +18,74 @@ Only explicit network scenario evidence measures egress: the paired probe covers
 ### internet-requested · hosted-default · /tmp
 
 - Image / authority: oci; unspecified / verified-organization.
-- Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.2.15.
-- SDK: 0.0.0, commit `fcb59d4056b71529b7e8d0c8c3f5a2b17f76b72e`.
+- Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
+- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
 - Fresh-process reopen: not recorded.
-- Harness commit: `fcb59d4056b71529b7e8d0c8c3f5a2b17f76b72e`.
-- Evidence: [reviewed record](boxd-baseline-bun-junit-20261011-fcb59d4).
+- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-preview-python312slim).
+
+| Scenario       | Latest live result | Date       |
+| -------------- | ------------------ | ---------- |
+| preview-public | failed             | 2026-11-10 |
+
+### internet-requested · hosted-default · /tmp
+
+- Image / authority: oci; unspecified / verified-organization.
+- Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
+- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Fresh-process reopen: required.
+- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-snapshots-python312slim).
+
+| Scenario           | Latest live result | Date       |
+| ------------------ | ------------------ | ---------- |
+| snapshot-roundtrip | failed             | 2026-11-10 |
+
+### internet-requested · hosted-default · /tmp
+
+- Image / authority: oci; unspecified / verified-organization.
+- Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
+- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Fresh-process reopen: not recorded.
+- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-volumes-python312slim).
+
+| Scenario    | Latest live result | Date       |
+| ----------- | ------------------ | ---------- |
+| volume-crud | passed             | 2026-11-10 |
+
+### internet-requested · hosted-default · /tmp
+
+- Image / authority: oci; unspecified / verified-organization.
+- Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
+- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Fresh-process reopen: not recorded.
+- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-volumes-python312slim).
+
+| Scenario           | Latest live result | Date       |
+| ------------------ | ------------------ | ---------- |
+| volume-persistence | failed             | 2026-11-10 |
+
+### internet-requested · hosted-default · /tmp
+
+- Image / authority: oci; unspecified / verified-organization.
+- Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
+- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Fresh-process reopen: not recorded.
+- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-sandbox-python312slim).
 
 | Scenario                 | Latest live result | Date       |
 | ------------------------ | ------------------ | ---------- |
-| execution                | passed             | 2026-10-11 |
-| files (/tmp)             | passed             | 2026-10-11 |
-| lifecycle-renew          | not-run            | 2026-10-11 |
-| lifecycle-suspend-resume | not-run            | 2026-10-11 |
-| sandbox-lifecycle        | passed             | 2026-10-11 |
+| execution-stdin          | passed             | 2026-11-10 |
+| execution                | passed             | 2026-11-10 |
+| file-directories (/tmp)  | failed             | 2026-11-10 |
+| files (/tmp)             | passed             | 2026-11-10 |
+| lifecycle-renew          | failed             | 2026-11-10 |
+| lifecycle-reopen         | passed             | 2026-11-10 |
+| lifecycle-suspend-resume | failed             | 2026-11-10 |
+| sandbox-lifecycle        | passed             | 2026-11-10 |
 
 ### internet-requested · hosted-default · /tmp
 
