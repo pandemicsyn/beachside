@@ -31,7 +31,7 @@ This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, 
 | ------------------------------------- | --------------- | -------------------- |
 | Create, inspect and destroy sandboxes | Tested live     | Tested live          |
 | Pause and resume                      | Tested live     | Tested live          |
-| Protected HTTP previews               | Tested live     | Not supported        |
+| Protected HTTP previews               | Tested live     | Not tested live      |
 | Public HTTP previews                  | Not supported   | Tested live          |
 | Stop a running command                | Tested live     | Tested live          |
 | Extend a sandbox's lifetime           | Tested live     | Tested live          |
@@ -60,7 +60,7 @@ This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, 
 
 - Do not rely on `network: "blocked"` for isolation. In our live test a blocked sandbox could still open direct IPv4 connections.
 - Volumes and volume mounts are not supported.
-- Previews are public only.
+- Protected previews return an `e2b-traffic-access-token` header; they have not been tested live yet.
 - File workflows were live-tested in `/home/user`; other paths and custom templates need their own checks.
 
 ## Runtimes

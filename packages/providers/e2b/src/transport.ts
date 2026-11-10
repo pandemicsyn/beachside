@@ -279,6 +279,15 @@ export type E2BTransport = {
   /** `memory: false` resumes from disk only, so the sandbox always boots fresh. */
   resume?: (id: string, seconds: number, signal: AbortSignal, memory?: boolean) => Promise<void>;
   renew?: (id: string, seconds: number, signal: AbortSignal) => Promise<void>;
+  /**
+   * Reads the private-traffic token of a running sandbox. E2B returns it only from
+   * connect, which never shortens the lifetime; `resumed` is true when E2B had to
+   * resume a sandbox that paused after the caller's running check.
+   */
+  trafficAccessToken?: (
+    id: string,
+    signal: AbortSignal,
+  ) => Promise<{ token: string | undefined; resumed: boolean; sandboxId: string }>;
   kill(id: string, signal?: AbortSignal): Promise<boolean>;
   run(
     id: string,
@@ -409,7 +418,7 @@ function readChunk(reader: ReadableStreamDefaultReader<Uint8Array>, signal?: Abo
   });
 }
 
-/** Pinned e2b@2.51.0. Every control-plane call explicitly disables its 429 retry loop. */
+/** Pinned e2b@2.63.0. Every control-plane call explicitly disables its 429 retry loop. */
 export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch): E2BTransport {
   const opts = {
     apiKey,
@@ -1012,6 +1021,40 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         throw new E2BRenewRejected(response.status);
 
       if (!response.ok) throw new AdapterError("UNAVAILABLE", "E2B renewal response is uncertain");
+    },
+    async trafficAccessToken(id, signal) {
+      const response = await fetcher(
+        `${E2B_ENDPOINT}/v2/sandboxes/${encodeURIComponent(id)}/connect`,
+        {
+          method: "POST",
+          headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+          // The smallest timeout: connect only ever extends a running sandbox's lifetime.
+          body: JSON.stringify({ timeout: 1 }),
+          redirect: "error",
+          signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+        },
+      );
+
+      if (response.status === 404) {
+        void response.body?.cancel().catch(() => undefined);
+
+        throw new AdapterError("NOT_FOUND", "E2B sandbox is outside the verified scope");
+      }
+
+      const value = await readNative(
+        response,
+        z.object({
+          sandboxID: z.string(),
+          trafficAccessToken: z.string().min(1).max(8192).nullish(),
+        }),
+        signal,
+      );
+
+      return {
+        sandboxId: value.sandboxID,
+        token: value.trafficAccessToken ?? undefined,
+        resumed: response.status === 201,
+      };
     },
     async kill(id, signal) {
       return Sandbox.kill(id, { ...opts, signal });

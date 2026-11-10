@@ -830,11 +830,6 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
               "Preview port must be an integer from 1 through 65535",
             );
 
-          if (config.preview.access !== "public")
-            throw new AdapterError(
-              "UNSUPPORTED",
-              "E2B preview.access protected keeps sandboxes closed to inbound traffic and cannot return preview access; use preview.access public, the default",
-            );
           ctx.signal.throwIfAborted();
           const record = await find(input.sandbox.id, input.sandbox.reference);
 
@@ -851,17 +846,39 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
             );
           ctx.signal.throwIfAborted();
 
+          const access = config.preview.access;
+
           if (
-            record.allowPublicTraffic !== true ||
+            record.allowPublicTraffic !== (access === "public") ||
             record.domain !== "e2b.app" ||
             record.lifecycle?.autoResume !== false
           )
             throw new AdapterError(
               "UNAVAILABLE",
-              "E2B public preview requires confirmed public traffic, e2b.app domain, and auto-resume off",
+              `E2B ${access} preview requires ${access === "public" ? "public" : "private"} traffic, the e2b.app domain and auto-resume off, confirmed on the sandbox`,
+            );
+          const url = `https://${input.port}-${record.id}.e2b.app`;
+
+          if (access === "public") return { access: "public" as const, url };
+
+          if (!transport.trafficAccessToken)
+            throw new AdapterError("UNSUPPORTED", "E2B private traffic tokens are unavailable");
+          const native = await transport.trafficAccessToken(record.id, ctx.signal);
+
+          if (native.sandboxId !== record.id)
+            throw new AdapterError("CONFLICT", "E2B preview response identity differs");
+
+          if (!native.token)
+            throw new AdapterError(
+              "UNAVAILABLE",
+              "E2B returned no traffic access token for this private sandbox",
             );
 
-          return { access: "public" as const, url: `https://${input.port}-${record.id}.e2b.app` };
+          return {
+            access: "protected" as const,
+            url,
+            headers: { "e2b-traffic-access-token": native.token },
+          };
         },
         supports: {
           images: ["prepared", "oci"],

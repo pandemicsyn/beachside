@@ -6,6 +6,8 @@ import { createSdkTransport, type E2BTransport, type E2BRecord } from "./transpo
 
 async function fixture(access?: "protected" | "public") {
   let lookups = 0;
+  const tokenReads: string[] = [];
+  let token: string | undefined = "private-token";
   const creates: boolean[] = [];
 
   const record: E2BRecord = {
@@ -39,6 +41,11 @@ async function fixture(access?: "protected" | "public") {
       return record;
     },
     list: async () => ({ items: [] }),
+    trafficAccessToken: async (id) => {
+      tokenReads.push(id);
+
+      return { sandboxId: id, token, resumed: false };
+    },
     kill: async () => {
       throw Error("unexpected kill");
     },
@@ -61,7 +68,17 @@ async function fixture(access?: "protected" | "public") {
 
   const box = await client.sandboxes.create({ environment: Image.prepared("base") });
 
-  return { client, box, record, creates, lookups: () => lookups };
+  return {
+    client,
+    box,
+    record,
+    creates,
+    tokenReads,
+    lookups: () => lookups,
+    setToken: (value: string | undefined) => {
+      token = value;
+    },
+  };
 }
 
 test("E2B defaults to public previews that work without setup", async () => {
@@ -78,14 +95,41 @@ test("E2B defaults to public previews that work without setup", async () => {
   }
 });
 
-test("E2B protected setup creates private compute and refuses credential retrieval without connecting", async () => {
+test("E2B protected setup creates private compute and returns the traffic token header", async () => {
   const f = await fixture("protected");
 
   try {
     expect(f.creates).toEqual([false]);
-    const lookups = f.lookups();
-    await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    expect(f.lookups()).toBe(lookups);
+    const ref = JSON.stringify(f.box.reference);
+    expect(await f.box.preview(3000)).toEqual({
+      access: "protected",
+      url: "https://3000-box.e2b.app",
+      headers: { "e2b-traffic-access-token": "private-token" },
+    });
+    expect(f.tokenReads).toEqual(["box"]);
+    expect(ref).not.toContain("private-token");
+    expect(JSON.stringify(f.box.reference)).toBe(ref);
+  } finally {
+    await f.client.close();
+  }
+});
+
+test("E2B protected preview checks visibility and state before reading a token", async () => {
+  const f = await fixture("protected");
+
+  try {
+    f.record.allowPublicTraffic = true;
+    await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    f.record.allowPublicTraffic = false;
+    f.record.state = "paused";
+    await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    f.record.state = "running";
+    f.record.lifecycle = { autoResume: true };
+    await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    expect(f.tokenReads).toEqual([]);
+    f.record.lifecycle = { autoResume: false };
+    f.setToken(undefined);
+    await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "UNAVAILABLE" });
   } finally {
     await f.client.close();
   }
@@ -182,4 +226,45 @@ test("E2B detail reads expose observed visibility without traffic credentials or
   });
   expect(JSON.stringify(record)).not.toContain("private-token");
   expect(calls).toEqual(["GET /sandboxes/box"]);
+});
+
+test("E2B traffic token read connects without extending the lifetime and keeps the token out of errors", async () => {
+  const calls: { path: string; method: string; body: unknown }[] = [];
+  let status = 200;
+
+  const fetcher: typeof fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        path: new URL(String(input)).pathname,
+        method: init?.method ?? "GET",
+        body: JSON.parse(String(init?.body)),
+      });
+
+      return Response.json(
+        { sandboxID: "box", trafficAccessToken: "private-token", envdVersion: "0.5.7" },
+        { status },
+      );
+    },
+    { preconnect() {} },
+  );
+
+  const transport = createSdkTransport("key", fetcher);
+  expect(await transport.trafficAccessToken!("box", AbortSignal.timeout(1000))).toEqual({
+    sandboxId: "box",
+    token: "private-token",
+    resumed: false,
+  });
+  status = 201;
+  expect(await transport.trafficAccessToken!("box", AbortSignal.timeout(1000))).toMatchObject({
+    resumed: true,
+  });
+  status = 404;
+  await expect(
+    transport.trafficAccessToken!("box", AbortSignal.timeout(1000)),
+  ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  expect(calls[0]).toEqual({
+    path: "/v2/sandboxes/box/connect",
+    method: "POST",
+    body: { timeout: 1 },
+  });
 });
