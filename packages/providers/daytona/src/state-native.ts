@@ -69,6 +69,8 @@ const NativeBox = z
     sandboxClass: z.string().optional(),
     labels: z.record(z.string(), z.string()).optional(),
     networkBlockAll: z.boolean().optional(),
+    networkAllowList: z.string().nullish(),
+    domainAllowList: z.string().nullish(),
     public: z.boolean().optional(),
     autoDestroyAt: z.string().nullable().optional(),
     autoStopInterval: z.number().nullable().optional(),

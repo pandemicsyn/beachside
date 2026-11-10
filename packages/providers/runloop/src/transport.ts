@@ -90,7 +90,11 @@ export const NetworkPolicy = z.object({
   egress: z.object({
     allow_all: z.boolean(),
     allowed_hostnames: z.array(z.string()),
-    allowed_cidrs: z.array(z.unknown()).default([]),
+    /** IPv4 ranges, each optionally limited to ports; an entry without ports allows all traffic. */
+    allowed_cidrs: z
+      .array(z.object({ cidr: z.string(), ports: z.array(z.unknown()).nullish() }))
+      .nullish()
+      .transform((value) => value ?? []),
     allow_devbox_to_devbox: z.boolean(),
     allow_agent_gateway: z.boolean(),
     allow_mcp_gateway: z.boolean(),
@@ -281,7 +285,7 @@ export type NetworkPolicyBody = {
   description: string;
   allow_all: boolean;
   allowed_hostnames: string[];
-  allowed_cidrs: string[];
+  allowed_cidrs: { cidr: string }[];
   allow_devbox_to_devbox: boolean;
   allow_agent_gateway: boolean;
   allow_mcp_gateway: boolean;

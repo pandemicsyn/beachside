@@ -25,7 +25,7 @@ Scope is the account id from `GET /v1/accounts/me` plus the fixed `https://api.r
 
 | Setting | Behavior |
 | --- | --- |
-| `network` | `blocked` (default) attaches a managed deny-all network policy named `beachside-blocked`; `internet` attaches none. |
+| `network` | `blocked` (default) attaches a managed deny-all network policy named `beachside-blocked`; `internet` attaches none; `{ allow: [...] }` attaches a `beachside-allow-<digest>` policy holding only those hosts and IPv4 ranges. |
 | `image` | `runloop-default` (no blueprint), or a blueprint id or name. No OCI images. |
 | `resources` | Optional minimum `{ vcpus, memoryMiB }`; picks the smallest Runloop size from `X_SMALL` (0.5 vCPU, 1 GiB) to `XX_LARGE` (8, 32 GiB), then a custom 16 vCPU size with 32 or 64 GiB. `inspect().resources` reports the size. |
 | `lifecycle.lifetimeSeconds` | 900; 60 s to 48 h. Expiry shuts the Devbox down. |

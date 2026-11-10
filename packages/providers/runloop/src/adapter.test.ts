@@ -133,6 +133,75 @@ test("blocked egress finds or creates one deny-all policy and attaches it", asyn
   }
 });
 
+test("an allowlist attaches one adapter policy holding exactly its hosts and ranges", async () => {
+  const { fixture, connect } = setup();
+
+  const client = await connect({
+    network: { allow: ["GitHub.com", "*.npmjs.org", "10.1.0.0/16"] },
+  });
+
+  try {
+    expect((await client.capabilities()).network).toEqual(["allow"]);
+    const first = await client.sandboxes.create();
+    const second = await client.sandboxes.create();
+    const policies = [...fixture.policies.values()];
+
+    expect(policies).toHaveLength(1);
+    expect(policies[0]?.name).toStartWith("beachside-allow-");
+    expect(policies[0]?.egress).toMatchObject({
+      allow_all: false,
+      allowed_hostnames: ["*.npmjs.org", "github.com"],
+      allowed_cidrs: [{ cidr: "10.1.0.0/16" }],
+    });
+
+    for (const body of createBodies(fixture))
+      expect(body.body).toMatchObject({
+        metadata: { beachside_network: "allow" },
+        launch_parameters: { network_policy_id: policies[0]?.id },
+      });
+
+    await expect(client.sandboxes.create({ network: "internet" })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+
+    // A policy edited after creation no longer matches, so a fresh one is made.
+    policies[0]!.egress.allowed_hostnames.push("evil.example");
+    const third = await client.sandboxes.create();
+    expect(fixture.policies.size).toBe(2);
+    expect(createBodies(fixture).at(-1)?.body).not.toMatchObject({
+      launch_parameters: { network_policy_id: policies[0]?.id },
+    });
+
+    await Promise.all([first.destroy(), second.destroy(), third.destroy()]);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a port-limited range never counts as the allowlist's range", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect({ network: { allow: ["10.1.0.0/16"] } });
+
+  try {
+    await client.sandboxes.create();
+    const [policy] = [...fixture.policies.values()];
+    policy!.egress.allowed_cidrs = [{ cidr: "10.1.0.0/16", ports: [443] }];
+    await client.sandboxes.create();
+    expect(fixture.policies.size).toBe(2);
+  } finally {
+    await client.close();
+  }
+});
+
+test("invalid Runloop allowlists fail at connect with their reason", async () => {
+  const { connect } = setup();
+
+  await expect(connect({ network: { allow: ["github.com:443"] } })).rejects.toMatchObject({
+    code: "INVALID_ARGUMENT",
+    message: expect.stringContaining("ports"),
+  });
+});
+
 test("a refused policy create rejects the sandbox create without creating a devbox", async () => {
   const { fixture, connect } = setup();
   const client = await connect({});

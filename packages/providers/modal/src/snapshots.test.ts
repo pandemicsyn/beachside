@@ -153,7 +153,7 @@ test("Modal filesystem snapshots capture, inspect, restore and delete with exact
       preserve: "filesystem",
       restoreExecution: "fresh",
       state: "ready",
-      restore: { networkPolicies: ["blocked"], resources: false, mounts: false },
+      restore: { networkPolicies: ["blocked", "internet"], resources: false, mounts: false },
     });
 
     // A saved reference reopens in a fresh connection to the same App.
@@ -164,12 +164,21 @@ test("Modal filesystem snapshots capture, inspect, restore and delete with exact
       code: "UNSUPPORTED",
     });
 
-    await expect(snapshot.restore({ networkPolicy: "internet" })).rejects.toMatchObject({
+    await expect(snapshot.restore({ networkPolicy: "allow" })).rejects.toMatchObject({
       code: "UNSUPPORTED",
     });
+    const online = await snapshot.restore({ networkPolicy: "internet" });
+    expect(native.creates.at(-1)).toMatchObject({
+      imageId: snapshot.id,
+      network: { kind: "open" },
+    });
+    await online.destroy();
     const restored = await snapshot.restore();
     expect(restored.id).not.toBe(source.id);
-    expect(native.creates.at(-1)).toMatchObject({ imageId: snapshot.id });
+    expect(native.creates.at(-1)).toMatchObject({
+      imageId: snapshot.id,
+      network: { kind: "blocked" },
+    });
     expect(native.creates.at(-1)?.ociReference).toBeUndefined();
     expect((await restored.inspect()).state).toBe("running");
 

@@ -45,7 +45,7 @@ The package also exports `vercel()`, which takes credentials and config in one o
 | `image`                      | `vercel/sandbox/universal:latest` | Also `vercel/sandbox/node:22`, `node:24` or `node:26`. Only the universal image supports processes and terminals. Use `node:24` to keep working with sandboxes from the earlier default.                                                                          |
 | `resources`                  | 2 vCPUs                           | Minimum `{ vcpus, memoryMiB }`. Picks the smallest of 1 or an even count up to 32 vCPUs, with 2 GiB per vCPU. Your plan limit still applies. Deprecated alias: `vcpus` (2, 4 or 8).                                                                               |
 | `lifecycle.lifetimeSeconds`  | `900`                             | Initial session lifetime, up to 86,400 seconds; values under 60 become 60. `create({ lifecycle })` can override it per sandbox, except with `persistent: true`. Vercel enforces lower plan limits itself (Hobby: 45 minutes). Deprecated alias: `timeoutSeconds`. |
-| `network`                    | `blocked`                         | `blocked` (Vercel deny-all) or `internet` (allow-all). Deprecated: `networkPolicy`, `vercel-deny-all`, `vercel-allow-all`.                                                                                                                                        |
+| `network`                    | `blocked`                         | `blocked` (Vercel deny-all), `internet` (allow-all) or `{ allow: [...] }` (a custom policy of those hosts and IPv4 ranges). Deprecated: `networkPolicy`, `vercel-deny-all`, `vercel-allow-all`.                                                                   |
 | `ports`                      | `[]`                              | Up to 15 distinct ports to expose as public HTTPS previews.                                                                                                                                                                                                       |
 | `persistent`                 | `false`                           | Keep files across suspend and resume. See [Persistent sandboxes](#persistent-sandboxes).                                                                                                                                                                          |
 | `snapshots.preserve`         | `filesystem`                      | Vercel snapshots keep files only; `Preserve.FILESYSTEM_AND_MEMORY` rejects `UNSUPPORTED` at connect.                                                                                                                                                              |
@@ -68,7 +68,7 @@ Create-time image, region and network must match this setup. `create({ env })` s
 | Directories                  | List, stat, exists, mkdir, remove, copy and move. Recursive changes need explicit opt-in.            | No          |
 | HTTP previews                | Public HTTPS URL for each configured port.                                                           | No          |
 | Images                       | Vercel's four managed images only. Image get, list and delete reject with `UNSUPPORTED`.             | —           |
-| Network controls             | `blocked` or `internet`. No allowlists.                                                              | No          |
+| Network controls             | `blocked`, `internet` or an allowlist.                                                               | No          |
 | Snapshots                    | Filesystem capture (stops the source), restore, inspect and delete.                                  | No          |
 | Volumes and mounts           | Not supported                                                                                        | —           |
 | Listing sandboxes and images | Sandboxes in the configured project and region. Images not supported.                                | No          |
@@ -107,6 +107,6 @@ Snapshots expire 30 days after their last use. Set `snapshots: { retentionSecond
 - Processes and terminals need the universal image. Moves with `overwrite: false` do too.
 - Paths must be absolute. Directory listings fail above 1,024 entries or 65,536 bytes of names rather than truncating.
 - Interrupted file transfers can leave temporary files until the sandbox is destroyed.
-- No custom or OCI images, volumes, mounts, egress allowlists, custom firewall rules or OIDC credential discovery.
+- No custom or OCI images, volumes, mounts, custom firewall rules beyond allowlists, or OIDC credential discovery.
 
 See the [Vercel Sandbox docs](https://vercel.com/docs/sandbox), [pricing and limits](https://vercel.com/docs/sandbox/pricing), the [adapter README](https://github.com/pandemicsyn/beachside/blob/main/packages/providers/vercel/README.md) and the [native audit](https://github.com/pandemicsyn/beachside/blob/main/packages/providers/vercel/NATIVE.md).

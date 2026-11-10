@@ -43,7 +43,7 @@ The package also exports `daytona()`, which takes credentials and config in one 
 | `apiKey`                        | required          | Daytona API key.                                                                                                                                                                                               |
 | `target`                        | required          | Daytona region id, such as `us`.                                                                                                                                                                               |
 | `environment`                   | none              | Default image for `create()`: a prepared Daytona snapshot (`Image.prepared(...)`) or an OCI image. A per-call `environment` wins. With neither, `create()` rejects `INVALID_ARGUMENT`.                         |
-| `network`                       | `daytona-default` | `daytona-default`, `internet` or `blocked`. See [Network policy](#network-policy). Deprecated alias: `networkPolicy`; setting both rejects.                                                                    |
+| `network`                       | `daytona-default` | `daytona-default`, `internet`, `blocked` or `{ allow: [...] }`. See [Network policy](#network-policy). Deprecated alias: `networkPolicy`; setting both rejects.                                                |
 | `lifecycle.lifetimeSeconds`     | 900               | Lifetime at create and the default `renew()` window. Rounded up to whole minutes. No adapter maximum. `create({ lifecycle })` can override it per sandbox. Deprecated alias: `ttlMinutes` (set one, not both). |
 | `lifecycle.idleSeconds`         | off               | Stop the sandbox after this many idle seconds, rounded up to minutes, up to 86,400. Off means Daytona's native 15-minute idle stop is disabled.                                                                |
 | `lifecycle.suspension.preserve` | class default     | `filesystem` stops a Linux VM instead of pausing it. `filesystem+memory` makes containers reject `UNSUPPORTED` before any change.                                                                              |
@@ -69,7 +69,7 @@ Create-time `env` is sent as native sandbox environment variables, so it applies
 | Directories                  | List, stat, create, remove, copy and move.                                                                       | Yes         |
 | HTTP previews                | Protected only, with an `x-daytona-preview-token` header. Public previews are not supported.                     | Yes         |
 | Images                       | Prepared snapshots and OCI builds; `images.get`, `list` and `delete` over native snapshots.                      | No          |
-| Network controls             | `daytona-default`, `internet` or strict `blocked`, set once per connection.                                      | No          |
+| Network controls             | `daytona-default`, `internet`, strict `blocked` or an allowlist, set once per connection.                        | No          |
 | Snapshots                    | Filesystem capture and restore into a new sandbox.                                                               | Yes         |
 | Volumes and mounts           | Create, delete and mount object-backed volumes, including at restore.                                            | Yes         |
 | Listing sandboxes and images | `sandboxes.list()` returns Beachside-created sandboxes only; `images.list()` returns all organization snapshots. | No          |
@@ -83,6 +83,7 @@ The policy is set once on the connection and is part of its scope. A per-call po
 - `daytona-default` keeps Daytona's organization-managed egress rules. On lower tiers this still allows some essential services, so it is neither unrestricted nor strictly blocked.
 - `internet` asks for unrestricted egress. It needs an organization without limited sandbox egress (Tier 3 and above); otherwise create rejects before anything is allocated.
 - `blocked` asks for strict no egress. Connect must verify the organization supports native block-all; if the check is restricted or unreadable, creation is unavailable.
+- `{ allow: [...] }` sends Daytona's `domainAllowList` (up to 100 hosts) and `networkAllowList` (up to 10 IPv4 ranges). Like `internet`, it needs an organization without limited sandbox egress (Tier 3 and above). The adapter checks both lists on the created sandbox. Not yet live-tested; see [allow only some destinations](/docs/guides/images-and-networking/#allow-only-some-destinations).
 
 Earlier releases defaulted to `blocked`. To reopen sandboxes created under that default, connect with `network: "blocked"`. See [Images and networking](/docs/guides/images-and-networking/#select-a-network-policy).
 

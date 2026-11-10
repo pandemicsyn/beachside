@@ -47,7 +47,7 @@ type FixturePolicy = {
   egress: {
     allow_all: boolean;
     allowed_hostnames: string[];
-    allowed_cidrs: string[];
+    allowed_cidrs: { cidr: string; ports?: number[] }[];
     allow_devbox_to_devbox: boolean;
     allow_agent_gateway: boolean;
     allow_mcp_gateway: boolean;
@@ -90,7 +90,9 @@ const Policy = z.object({
   name: z.string(),
   allow_all: z.boolean().default(false),
   allowed_hostnames: z.array(z.string()).default([]),
-  allowed_cidrs: z.array(z.string()).default([]),
+  allowed_cidrs: z
+    .array(z.object({ cidr: z.string(), ports: z.array(z.number()).optional() }))
+    .default([]),
   allow_devbox_to_devbox: z.boolean().default(false),
   allow_agent_gateway: z.boolean().default(false),
   allow_mcp_gateway: z.boolean().default(false),

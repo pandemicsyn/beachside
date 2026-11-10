@@ -29,7 +29,7 @@ Freestyle does not reveal which account an API key belongs to, so the scope is a
 
 | Setting                     | Behavior                                                                                                                                                                                         |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `network`                   | `blocked` (default) sends an empty Freestyle firewall; `internet` allows every public destination.                                                                                                |
+| `network`                   | `blocked` (default) sends an empty Freestyle firewall; `internet` allows every public destination; `{ allow: [...] }` allows only those IPv4 ranges (Freestyle firewalls cannot match host names).                                                                                                |
 | `image`                     | `freestyle/ubuntu` (4 vCPU, 8 GiB). Any Freestyle snapshot: a `sh-…` id, your slug, or a public `owner/slug`. No OCI images.                                                                     |
 | `resources`                 | Optional minimum `{ vcpus, memoryMiB }`; picks the smallest Ubuntu base from `freestyle/ubuntu-sm` (2, 4 GiB) to `freestyle/ubuntu-2xl` (32, 64 GiB). Set `image` or `resources`, not both.      |
 | `lifecycle.lifetimeSeconds` | 900; 60 s to 30 days. Freestyle deletes the VM that long after creation (`ttlSeconds`).                                                                                                           |

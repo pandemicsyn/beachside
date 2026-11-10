@@ -19,6 +19,10 @@ import {
   PreserveSchema,
   ResourceMinimums,
   DEFAULT_LIFETIME_SECONDS,
+  AllowNetworkSetting,
+  ALLOW_NETWORK_POLICY,
+  allowlistConfig,
+  throwAllowlistError,
   type SandboxInfo,
   type SandboxReference,
 } from "@beachside/adapter";
@@ -43,9 +47,13 @@ import type { DriverResult } from "@beachside-internal/provider-spi";
 import {
   boundedBytes,
   daytonaProvider,
+  daytonaNetworkMatches,
   daytonaRegistration,
   type DaytonaEndpointPair,
+  type DaytonaNetworkPolicy,
 } from "./index";
+
+const NamedNetwork = z.enum(["blocked", "internet", "daytona-default"]);
 
 const Configuration = z
   .strictObject({
@@ -62,7 +70,12 @@ const Configuration = z
         z.strictObject({ kind: z.literal("oci"), value: z.string().min(1) }),
       ])
       .optional(),
-    network: z.enum(["blocked", "internet", "daytona-default"]).optional(),
+    /**
+     * `daytona-default`, `internet`, `blocked`, or `{ allow: [...] }`: outbound HTTP(S) only to
+     * those hosts (up to 100, `*.` wildcards) plus up to 10 IPv4 ranges. Allowlists, like
+     * `internet` and `blocked`, need an organization without limited egress (Tier 3 and above).
+     */
+    network: z.union([NamedNetwork, AllowNetworkSetting]).optional(),
     networkPolicy: z.enum(["blocked", "internet", "daytona-default"]).optional(),
     snapshots: z
       .strictObject({
@@ -109,16 +122,28 @@ const Configuration = z
         message: "Supply network or the deprecated networkPolicy, not both",
       });
   })
-  .transform(({ network, ...value }) => ({
-    ...value,
-    networkPolicy: network ?? value.networkPolicy ?? "daytona-default",
-    ttlMinutes:
-      value.lifecycle?.lifetimeSeconds === undefined
-        ? (value.ttlMinutes ?? DEFAULT_LIFETIME_SECONDS / 60)
-        : nativeMinutes(value.lifecycle.lifetimeSeconds),
-    autoStopMinutes:
-      value.lifecycle?.idleSeconds === undefined ? 0 : Math.ceil(value.lifecycle.idleSeconds / 60),
-  }));
+  .transform(({ network, ...value }) => {
+    const allow = allowlistConfig("Daytona", network, { maxHosts: 100, maxCidrs: 10 });
+    const named = NamedNetwork.safeParse(network);
+
+    const networkPolicy: DaytonaNetworkPolicy = AllowNetworkSetting.safeParse(network).success
+      ? ALLOW_NETWORK_POLICY
+      : ((named.success ? named.data : undefined) ?? value.networkPolicy ?? "daytona-default");
+
+    return {
+      ...value,
+      networkPolicy,
+      ...allow,
+      ttlMinutes:
+        value.lifecycle?.lifetimeSeconds === undefined
+          ? (value.ttlMinutes ?? DEFAULT_LIFETIME_SECONDS / 60)
+          : nativeMinutes(value.lifecycle.lifetimeSeconds),
+      autoStopMinutes:
+        value.lifecycle?.idleSeconds === undefined
+          ? 0
+          : Math.ceil(value.lifecycle.idleSeconds / 60),
+    };
+  });
 
 /** Daytona keeps lifetimes in whole minutes, so seconds round up. */
 function nativeMinutes(seconds: number): number {
@@ -440,16 +465,22 @@ export function createDaytonaAdapter(
 ) {
   const configSchema = Configuration.superRefine((value, ctx) => {
     try {
+      const configuration = {
+        apiUrl: value.apiUrl,
+        toolboxOrigin: value.toolboxOrigin,
+        target: value.target,
+        networkPolicy: value.networkPolicy,
+        ttlMinutes: String(value.ttlMinutes),
+        autoStopMinutes: String(value.autoStopMinutes),
+      };
+
+      // An allowlist that failed to parse is reported by connect; validate the rest here.
+      if (value.networkPolicy === ALLOW_NETWORK_POLICY)
+        Object.assign(configuration, { allowlist: value.allowlist ?? "invalid.invalid" });
+
       daytonaRegistration(fetchImpl, trustedEndpoints).validate({
         credentials: { apiKey: "validation-only" },
-        configuration: {
-          apiUrl: value.apiUrl,
-          toolboxOrigin: value.toolboxOrigin,
-          target: value.target,
-          networkPolicy: value.networkPolicy,
-          ttlMinutes: String(value.ttlMinutes),
-          autoStopMinutes: String(value.autoStopMinutes),
-        },
+        configuration,
       });
     } catch {
       ctx.addIssue({
@@ -466,6 +497,8 @@ export function createDaytonaAdapter(
     config: configSchema,
     credentials: Credentials,
     async connect({ config, credentials }) {
+      throwAllowlistError(config);
+
       if (config.preview.access === "public")
         throw new AdapterError(
           "UNSUPPORTED",
@@ -478,6 +511,7 @@ export function createDaytonaAdapter(
         toolboxOrigin: config.toolboxOrigin,
         target: config.target,
         networkPolicy: config.networkPolicy,
+        allowlist: config.allowlist,
         ttlMinutes: config.ttlMinutes,
         autoStopMinutes: config.autoStopMinutes,
         resources: config.resources,
@@ -504,7 +538,12 @@ export function createDaytonaAdapter(
 
       // Both non-blocked policies send the same native settings, so they share the
       // partition that existing provider-managed egress references already carry.
-      if (config.networkPolicy !== "blocked")
+      if (config.networkPolicy === ALLOW_NETWORK_POLICY)
+        Object.assign(partition, {
+          networkPolicy: ALLOW_NETWORK_POLICY,
+          allowlist: config.allowlist,
+        });
+      else if (config.networkPolicy !== "blocked")
         Object.assign(partition, { networkPolicy: "daytona-default" });
 
       const resourceBinding = {
@@ -575,7 +614,7 @@ export function createDaytonaAdapter(
             "Daytona native network/visibility policy is unavailable",
           );
 
-        if (value.networkBlockAll !== (config.networkPolicy === "blocked") || value.public)
+        if (!daytonaNetworkMatches(value, config.networkPolicy, config.allowlist) || value.public)
           throw new AdapterError("CONFLICT", "Daytona native network/visibility policy differs");
         const operation = value.labels?.["beachside.operation"];
         const submission = value.labels?.["beachside.submission"];
@@ -817,10 +856,13 @@ export function createDaytonaAdapter(
               "Mounted restore of a Linux VM snapshot is not mapped",
             );
 
-          if (input.request.networkPolicy === "blocked")
+          if (
+            input.request.networkPolicy === "blocked" ||
+            input.request.networkPolicy === ALLOW_NETWORK_POLICY
+          )
             throw new AdapterError(
               "UNSUPPORTED",
-              "Mounted restore requires internet or daytona-default network; blocked startup enforcement is unqualified",
+              "Mounted restore requires internet or daytona-default network; blocked or allowlisted startup enforcement is unqualified",
             );
 
           const checked = await resourceState.fields.checkMounts!(
@@ -985,7 +1027,7 @@ export function createDaytonaAdapter(
           if (
             !detail ||
             detail.volumes?.length !== mounts.length ||
-            detail.networkBlockAll !== (config.networkPolicy === "blocked") ||
+            !daytonaNetworkMatches(detail, config.networkPolicy, config.allowlist) ||
             detail.public !== false ||
             mounts.some(
               (mount) =>

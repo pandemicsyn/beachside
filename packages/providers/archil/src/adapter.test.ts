@@ -145,6 +145,41 @@ test("archil-managed takes the Free plan's managed allowlist and is refused as o
   }
 });
 
+test("an allowlist is a deny-by-default policy whose allow rules are checked after create", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect({ network: { allow: ["*.GitHub.com", "192.168.14.9/24"] } });
+
+  try {
+    expect((await client.capabilities()).network).toEqual(["allow"]);
+    const box = await client.sandboxes.create();
+    expect(creates(fixture).at(-1)?.body).toMatchObject({
+      network: { egress: { default: "deny", allow: ["*.github.com", "192.168.14.0/24"] } },
+    });
+
+    const { snapshot } = await box.snapshot();
+    const restored = await snapshot.restore({ requireIndependentLifecycle: false });
+    expect(restored.id).not.toBe(box.id);
+
+    await expect(client.sandboxes.create({ network: "internet" })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+test("a sandbox whose allowlist differs from the request is unknown, not ready", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect({ network: { allow: ["github.com"] } });
+  fixture.reportNextNetwork({ egress: { default: "deny", allow: ["github.com", "evil.example"] } });
+
+  try {
+    await expect(client.sandboxes.create()).rejects.toBeInstanceOf(OutcomeUnknownError);
+  } finally {
+    await client.close();
+  }
+});
+
 test("a lost create response is found again by its name, never sent twice", async () => {
   const { fixture, connect } = setup();
   const client = await connect();

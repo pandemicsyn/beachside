@@ -5,6 +5,7 @@ import {
   AuthenticationError,
   InvalidArgumentError,
   RateLimitError,
+  ALL_TRAFFIC,
   Template,
   TemplateError,
   Volume,
@@ -171,6 +172,9 @@ export type E2BRecord = {
   endAt?: string | null;
   domain?: string;
   allowPublicTraffic?: boolean;
+  /** Native egress rules; an allowlist sandbox denies 0.0.0.0/0 and allows its entries. */
+  allowOut?: string[];
+  denyOut?: string[];
   lifecycle?: { onTimeout?: string; autoResume?: boolean };
   envdVersion?: string;
   /** Native detail proves guest IO can attach without resuming or changing lifetime. */
@@ -263,6 +267,8 @@ export type E2BTransport = {
     timeoutMs: number;
     allowInternetAccess: boolean;
     allowPublicTraffic?: boolean;
+    /** Egress allowlist: native `allowOut` over a `denyOut` of all traffic. */
+    allowOut?: readonly string[];
     volumeMounts?: Record<string, string>;
     /** Native sandbox-wide `envs`; values may be secrets and never enter messages. */
     env?: Record<string, string>;
@@ -441,7 +447,13 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
     envdVersion: z.string().optional(),
     envdAccessToken: z.string().min(1).max(8192).optional(),
     domain: z.string().nullish(),
-    network: z.object({ allowPublicTraffic: z.boolean().optional() }).optional(),
+    network: z
+      .object({
+        allowPublicTraffic: z.boolean().optional(),
+        allowOut: z.array(z.string()).nullish(),
+        denyOut: z.array(z.string()).nullish(),
+      })
+      .optional(),
     lifecycle: z
       .object({ onTimeout: z.string().optional(), autoResume: z.boolean().optional() })
       .optional(),
@@ -526,7 +538,7 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
       if (response.status === 404) return null;
       const info = await readNative(response, Detail);
 
-      return {
+      const record: E2BRecord = {
         id: info.sandboxID,
         templateId: info.templateID,
         metadata: info.metadata,
@@ -546,6 +558,12 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         cpuCount: info.cpuCount,
         memoryMB: info.memoryMB,
       };
+
+      if (info.network?.allowOut) record.allowOut = info.network.allowOut;
+
+      if (info.network?.denyOut) record.denyOut = info.network.denyOut;
+
+      return record;
     } catch (error) {
       if (error instanceof SandboxNotFoundError) return null;
       throw error;
@@ -959,8 +977,14 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
           metadata: input.metadata,
           timeoutMs: input.timeoutMs,
           lifecycle: { onTimeout: "kill", autoResume: false },
-          allowInternetAccess: input.allowInternetAccess,
-          network: { allowPublicTraffic: input.allowPublicTraffic ?? false },
+          allowInternetAccess: input.allowOut ? false : input.allowInternetAccess,
+          network: input.allowOut
+            ? {
+                allowPublicTraffic: input.allowPublicTraffic ?? false,
+                allowOut: [...input.allowOut],
+                denyOut: [ALL_TRAFFIC],
+              }
+            : { allowPublicTraffic: input.allowPublicTraffic ?? false },
           volumeMounts: input.volumeMounts,
           envs: input.env,
           signal: input.signal,

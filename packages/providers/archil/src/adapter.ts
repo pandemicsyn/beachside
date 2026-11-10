@@ -2,6 +2,13 @@ import { createHash } from "node:crypto";
 import { Sandbox as NativeSandbox, type SandboxProcess, type SandboxProcessOutput } from "disk";
 import { z } from "zod";
 import {
+  ALLOW_NETWORK_POLICY,
+  AllowNetworkSetting,
+  allowlistConfig,
+  networkPolicyName,
+  allowlistFromCanonical,
+  parseEgressAllowlist,
+  throwAllowlistError,
   AdapterCheckpointError,
   AdapterError,
   AdapterFilesystemError,
@@ -116,7 +123,10 @@ const PreparedImageId = /^[0-9a-f]{64}$/;
  * policies that need a paid plan. `archil-managed` sends no policy and requires Archil's
  * managed allowlist, which is what every Free-plan sandbox gets.
  */
-const NETWORK_POLICIES = ["blocked", "internet", "archil-managed"] as const;
+const NAMED_POLICIES = ["blocked", "internet", "archil-managed"] as const;
+
+/** `allow` is a deny-by-default policy holding the connection's allowlist (paid plans). */
+const NETWORK_POLICIES = [...NAMED_POLICIES, ALLOW_NETWORK_POLICY] as const;
 
 const NetworkPolicy = z.enum(NETWORK_POLICIES);
 
@@ -129,7 +139,7 @@ function networkPolicy(value: string | undefined): NetworkPolicy {
   if (!parsed.success)
     throw new AdapterError(
       "UNSUPPORTED",
-      "Archil network policies are blocked, internet and archil-managed",
+      "Archil network policies are blocked, internet, archil-managed and allow",
     );
 
   return parsed.data;
@@ -143,44 +153,53 @@ const OciImage = z
 
 const Lifetime = z.number().int().min(60).max(MAX_SESSION_SECONDS);
 
-const Configuration = z.strictObject({
-  /** Archil region that runs the sandboxes; each has its own control plane. */
-  region: z.enum(REGION_NAMES),
-  /** Control-plane URL override, for tests and private deployments. */
-  baseUrl: z.url().optional(),
-  /** `blocked` or `internet` (paid plans), or `archil-managed` (Free plan's allowlist). */
-  network: NetworkPolicy.default("blocked"),
-  /** Default image: an OCI reference, or a 64-hex image id from `beachside image build`. */
-  image: OciImage.optional(),
-  /** Exact minimums mapped onto `vcpu_count` and `mem_size_mib`. */
-  resources: ResourceMinimums.optional(),
-  lifecycle: z
-    .strictObject({
-      /** Each powered-on session's budget (`max_ttl_seconds`); expiry pauses the sandbox. */
-      lifetimeSeconds: Lifetime.default(DEFAULT_LIFETIME_SECONDS),
-      /** Pause after this long without a process connection; omitted, idle expiry is off. */
-      idleSeconds: Lifetime.optional(),
-      suspension: z
-        .strictObject({
-          /** `filesystem+memory` pauses; `filesystem` stops and later cold-boots. */
-          preserve: PreserveSchema.default(Preserve.FILESYSTEM_AND_MEMORY),
-        })
-        .optional(),
-    })
-    .default({ lifetimeSeconds: DEFAULT_LIFETIME_SECONDS }),
-  preview: z
-    .strictObject({
-      /** `protected` mints a port token sent as a header; `public` exposes the port. */
-      access: z.enum(["protected", "public"]).default("protected"),
-    })
-    .default({ access: "protected" }),
-  snapshots: z
-    .strictObject({
-      /** `filesystem+memory` (default) restores running processes; `filesystem` cold-boots. */
-      preserve: PreserveSchema.optional(),
-    })
-    .optional(),
-});
+const Configuration = z
+  .strictObject({
+    /** Archil region that runs the sandboxes; each has its own control plane. */
+    region: z.enum(REGION_NAMES),
+    /** Control-plane URL override, for tests and private deployments. */
+    baseUrl: z.url().optional(),
+    /**
+     * `blocked`, `internet` or `{ allow: [...] }` host names and IPv4 ranges (paid plans), or
+     * `archil-managed` (Free plan's allowlist).
+     */
+    network: z.union([z.enum(NAMED_POLICIES), AllowNetworkSetting]).default("blocked"),
+    /** Default image: an OCI reference, or a 64-hex image id from `beachside image build`. */
+    image: OciImage.optional(),
+    /** Exact minimums mapped onto `vcpu_count` and `mem_size_mib`. */
+    resources: ResourceMinimums.optional(),
+    lifecycle: z
+      .strictObject({
+        /** Each powered-on session's budget (`max_ttl_seconds`); expiry pauses the sandbox. */
+        lifetimeSeconds: Lifetime.default(DEFAULT_LIFETIME_SECONDS),
+        /** Pause after this long without a process connection; omitted, idle expiry is off. */
+        idleSeconds: Lifetime.optional(),
+        suspension: z
+          .strictObject({
+            /** `filesystem+memory` pauses; `filesystem` stops and later cold-boots. */
+            preserve: PreserveSchema.default(Preserve.FILESYSTEM_AND_MEMORY),
+          })
+          .optional(),
+      })
+      .default({ lifetimeSeconds: DEFAULT_LIFETIME_SECONDS }),
+    preview: z
+      .strictObject({
+        /** `protected` mints a port token sent as a header; `public` exposes the port. */
+        access: z.enum(["protected", "public"]).default("protected"),
+      })
+      .default({ access: "protected" }),
+    snapshots: z
+      .strictObject({
+        /** `filesystem+memory` (default) restores running processes; `filesystem` cold-boots. */
+        preserve: PreserveSchema.optional(),
+      })
+      .optional(),
+  })
+  .transform(({ network, ...value }) => ({
+    ...value,
+    ...allowlistConfig("Archil", network),
+    network: networkPolicyName(network),
+  }));
 
 const Credentials = z.strictObject({
   apiKey: z.string().min(1),
@@ -235,7 +254,7 @@ type CreateBody = {
   image_id?: string;
   base_image?: string;
   env?: Record<string, string>;
-  network?: { egress: { default: "deny" } };
+  network?: { egress: { default: "deny"; allow?: string[] } };
   mounts?: NativeMount[];
 };
 
@@ -250,7 +269,14 @@ type RequestBody = CreateBody | ForkBody | ImageRequest | { timeout: number } | 
 type DestroyPrepared = DestroyInput & { mounts: { id: string; path: string }[] };
 
 const Network = z.looseObject({
-  egress: z.looseObject({ default: z.string().max(16).optional() }).optional(),
+  egress: z
+    .looseObject({
+      default: z.string().max(16).optional(),
+      // Strings are hosts or ranges; objects are brokered or forwarded hosts.
+      allow: z.array(z.union([z.string().max(256), z.looseObject({})])).optional(),
+      deny: z.array(z.unknown()).optional(),
+    })
+    .optional(),
   managed: z.boolean().optional(),
 });
 
@@ -476,6 +502,24 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
     credentials: Credentials,
     async connect({ config, credentials, host }) {
       // Choices Archil cannot honor reject before any provider IO.
+      throwAllowlistError(config);
+
+      const networkPolicies: string[] = config.allowlist
+        ? [ALLOW_NETWORK_POLICY]
+        : [...NAMED_POLICIES];
+
+      const requirePolicy = (value: string) => {
+        if (!networkPolicies.includes(value))
+          throw new AdapterError(
+            "UNSUPPORTED",
+            value === ALLOW_NETWORK_POLICY
+              ? "Archil allowlists are set in adapter setup: network: { allow: [...] }"
+              : config.allowlist
+                ? 'This Archil connection creates with its allowlist; use network "allow"'
+                : "Archil network policies are blocked, internet and archil-managed",
+          );
+      };
+
       const vcpus = Math.ceil(config.resources?.vcpus ?? VCPUS.fallback);
       const memoryMiB = Math.max(MEMORY.min, config.resources?.memoryMiB ?? MEMORY.fallback);
 
@@ -656,14 +700,31 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
       };
 
       /** The portable name of a sandbox's egress policy, or null for any other policy. */
-      const policyOf = (value: z.infer<typeof Network>) =>
-        value.managed
-          ? "archil-managed"
-          : value.egress?.default === "deny"
-            ? "blocked"
-            : value.egress?.default === undefined || value.egress.default === "allow"
-              ? "internet"
-              : null;
+      const policyOf = (value: z.infer<typeof Network>) => {
+        if (value.managed) return "archil-managed";
+        // Deny rules or brokered hosts (object entries) are policies this adapter never sends.
+        const plain = z.array(z.string()).safeParse(value.egress?.allow ?? []);
+
+        if (value.egress?.deny?.length || !plain.success) return null;
+        const allow = plain.data;
+
+        if (value.egress?.default === "deny") {
+          if (!allow.length) return "blocked";
+
+          try {
+            const list = parseEgressAllowlist(allow);
+
+            return list.canonical === config.allowlist ? ALLOW_NETWORK_POLICY : null;
+          } catch {
+            return null;
+          }
+        }
+
+        return (value.egress?.default === undefined || value.egress.default === "allow") &&
+          !allow.length
+          ? "internet"
+          : null;
+      };
 
       const observation = (wire: Wire, ref: SandboxReference | null): SandboxInfo => ({
         reference: ref,
@@ -1007,9 +1068,11 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
 
           if (policy !== token.network)
             return ctx.unknown(
-              token.network === "internet"
-                ? "Archil applied its managed Free-plan egress allowlist, not internet access; destroy this sandbox, use network archil-managed, or use a paid plan"
-                : "Archil left egress open instead of its managed allowlist, which only Free plans apply; destroy this sandbox and use blocked or internet",
+              token.network === ALLOW_NETWORK_POLICY
+                ? "Archil did not apply the requested egress allowlist; destroy this sandbox"
+                : token.network === "internet"
+                  ? "Archil applied its managed Free-plan egress allowlist, not internet access; destroy this sandbox, use network archil-managed, or use a paid plan"
+                  : "Archil left egress open instead of its managed allowlist, which only Free plans apply; destroy this sandbox and use blocked or internet",
               partial(wire.sandbox_id, identity),
             );
         }
@@ -1369,7 +1432,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
           excludedPaths: null,
           mounts: [],
           mountHandling: "none",
-          restore: restoreSupport,
+          restore: { ...restoreSupport, networkPolicies },
           // The holder is a fork of its source: Archil refuses to delete the source while it exists.
           dependencies: source?.ref ? [source.ref] : [],
           nativeDependencies: source ? [{ kind: "archil-sandbox", id: source.id }] : null,
@@ -1632,6 +1695,11 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
         // Omitted, Archil leaves egress open on paid plans; Free plans refuse any policy.
         if (input.networkPolicy === "blocked") body.network = { egress: { default: "deny" } };
 
+        if (input.networkPolicy === ALLOW_NETWORK_POLICY && config.allowlist) {
+          const list = allowlistFromCanonical(config.allowlist);
+          body.network = { egress: { default: "deny", allow: [...list.hosts, ...list.cidrs] } };
+        }
+
         if (input.mounts?.length) body.mounts = nativeMounts(input.mounts);
 
         return body;
@@ -1666,7 +1734,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
         defaultNetworkPolicy: config.network,
         supports: {
           images: ["oci", "prepared"],
-          network: [...NETWORK_POLICIES],
+          network: networkPolicies,
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_OUTPUT_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           createEnv: true,
@@ -1684,7 +1752,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
             if (input.image.kind === "oci" && !OciImage.safeParse(input.image.value).success)
               throw new AdapterError("INVALID_ARGUMENT", "Invalid OCI image reference");
 
-            networkPolicy(input.networkPolicy);
+            requirePolicy(input.networkPolicy);
 
             if (input.region !== undefined && input.region !== config.region)
               throw new AdapterError(
@@ -2743,7 +2811,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
         },
         async resourceCapabilities() {
           return {
-            restore: { status: "supported", value: restoreSupport },
+            restore: { status: "supported", value: { ...restoreSupport, networkPolicies } },
             volumes: {
               status: "supported",
               value: { create: true, inspect: true, list: true, delete: true },
