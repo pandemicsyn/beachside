@@ -3,6 +3,7 @@ import { Image, Beachside } from "beachside";
 import type { Json } from "@beachside/adapter";
 import { createDaytonaAdapter } from "./adapter";
 import { daytona } from "./factory";
+import { daytonaNetworkFields, daytonaProvider } from "./index";
 
 type Body = Record<string, Json> & { name: string; labels: Record<string, string> };
 
@@ -143,4 +144,32 @@ test("the daytona() factory takes an allowlist as its network", () => {
   expect(daytona({ apiKey: "key", target: "us", network: { allow: ["github.com"] } }).bound).toBe(
     true,
   );
+});
+
+test("the low-level Daytona provider refuses mixed or over-limit allowlists before any call", async () => {
+  expect(() => daytonaNetworkFields("allow", "github.com,10.1.0.0/16")).toThrow(/not both/);
+  expect(daytonaNetworkFields("allow", "github.com")).toEqual({ domainAllowList: "github.com" });
+
+  let calls = 0;
+
+  const fetchImpl = Object.assign(
+    async () => {
+      calls++;
+
+      return Response.json({});
+    },
+    { preconnect: fetch.preconnect },
+  );
+
+  const base = { apiKey: "key", target: "us", networkPolicy: "allow" as const, fetch: fetchImpl };
+  await expect(daytonaProvider({ ...base, allowlist: "github.com,10.1.0.0/16" })).rejects.toThrow(
+    /not both/,
+  );
+  await expect(
+    daytonaProvider({
+      ...base,
+      allowlist: Array.from({ length: 11 }, (_, i) => `10.0.${i}.0/24`).join(","),
+    }),
+  ).rejects.toThrow(/at most 10/);
+  expect(calls).toBe(0);
 });

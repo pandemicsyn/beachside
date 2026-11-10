@@ -74,7 +74,7 @@ Live results cover the tested image, region and network setting; see [Provider s
 
 `network: "blocked"` sets E2B's internet access off. Do not rely on it for isolation: in the live test a blocked sandbox resolved no hostnames but could still open a direct IPv4 TCP connection (to `1.1.1.1:443`). Restored snapshots keep the same weakness. See [select a network policy](/docs/guides/images-and-networking/#select-a-network-policy).
 
-`network: { allow: [...] }` sends the entries as E2B's `allowOut` with everything else in `denyOut`, and the adapter checks both lists on the created sandbox and on every restore. The allowlist has not been live-tested. See [allow only some destinations](/docs/guides/images-and-networking/#allow-only-some-destinations).
+`network: { allow: [...] }` sends the entries as E2B's `allowOut` with everything else in `denyOut`, and the adapter checks both lists on the created sandbox and on every restore. Host entries match HTTP on port 80 and TLS on port 443 only; other ports and UDP (QUIC/HTTP3) need an IPv4 range. The allowlist has not been live-tested. See [allow only some destinations](/docs/guides/images-and-networking/#allow-only-some-destinations).
 
 Previews are public by default. A public sandbox accepts inbound traffic from the moment it is created or restored, before you call `preview()`, and anyone with the URL `https://<port>-<sandbox-id>.e2b.app` can reach that port. `preview()` requires running compute with auto-resume off.
 
