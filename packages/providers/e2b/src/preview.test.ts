@@ -7,7 +7,9 @@ import { createSdkTransport, type E2BTransport, type E2BRecord } from "./transpo
 async function fixture(access?: "protected" | "public") {
   let lookups = 0;
   const tokenReads: string[] = [];
+  const tokenTimeouts: number[] = [];
   let token: string | undefined = "private-token";
+  let resumed = false;
   const creates: boolean[] = [];
 
   const record: E2BRecord = {
@@ -19,6 +21,7 @@ async function fixture(access?: "protected" | "public") {
     lifecycle: { autoResume: false },
     allowPublicTraffic: access !== "protected",
     attachmentReady: false,
+    endAt: new Date(Date.now() + 600_000).toISOString(),
   };
 
   const transport: E2BTransport = {
@@ -41,10 +44,11 @@ async function fixture(access?: "protected" | "public") {
       return record;
     },
     list: async () => ({ items: [] }),
-    trafficAccessToken: async (id) => {
+    trafficAccessToken: async (id, _signal, timeoutSeconds) => {
       tokenReads.push(id);
+      tokenTimeouts.push(timeoutSeconds);
 
-      return { sandboxId: id, token, resumed: false };
+      return { sandboxId: id, token, resumed };
     },
     kill: async () => {
       throw Error("unexpected kill");
@@ -74,7 +78,11 @@ async function fixture(access?: "protected" | "public") {
     record,
     creates,
     tokenReads,
+    tokenTimeouts,
     lookups: () => lookups,
+    setResumed: (value: boolean) => {
+      resumed = value;
+    },
     setToken: (value: string | undefined) => {
       token = value;
     },
@@ -228,7 +236,7 @@ test("E2B detail reads expose observed visibility without traffic credentials or
   expect(calls).toEqual(["GET /sandboxes/box"]);
 });
 
-test("E2B traffic token read connects without extending the lifetime and keeps the token out of errors", async () => {
+test("E2B traffic token read connects with the given timeout and keeps the token out of errors", async () => {
   const calls: { path: string; method: string; body: unknown }[] = [];
   let status = 200;
 
@@ -249,22 +257,75 @@ test("E2B traffic token read connects without extending the lifetime and keeps t
   );
 
   const transport = createSdkTransport("key", fetcher);
-  expect(await transport.trafficAccessToken!("box", AbortSignal.timeout(1000))).toEqual({
+  expect(await transport.trafficAccessToken!("box", AbortSignal.timeout(1000), 600)).toEqual({
     sandboxId: "box",
     token: "private-token",
     resumed: false,
   });
   status = 201;
-  expect(await transport.trafficAccessToken!("box", AbortSignal.timeout(1000))).toMatchObject({
+  expect(await transport.trafficAccessToken!("box", AbortSignal.timeout(1000), 600)).toMatchObject({
     resumed: true,
   });
   status = 404;
   await expect(
-    transport.trafficAccessToken!("box", AbortSignal.timeout(1000)),
+    transport.trafficAccessToken!("box", AbortSignal.timeout(1000), 600),
   ).rejects.toMatchObject({ code: "NOT_FOUND" });
   expect(calls[0]).toEqual({
     path: "/v2/sandboxes/box/connect",
     method: "POST",
-    body: { timeout: 1 },
+    body: { timeout: 600 },
   });
+});
+
+test("E2B protected preview connects with the remaining lifetime and refuses a resume", async () => {
+  const f = await fixture("protected");
+
+  try {
+    await f.box.preview(3000);
+    // The observed remaining lifetime, so connect neither extends nor shortens it.
+    expect(f.tokenTimeouts[0]).toBeGreaterThan(590);
+    expect(f.tokenTimeouts[0]).toBeLessThanOrEqual(600);
+
+    // The sandbox paused after the running check, so E2B resumed it with that lifetime.
+    f.setResumed(true);
+    const error = await f.box.preview(3000).catch((caught: Error) => caught);
+    expect(error).toMatchObject({ code: "CONFLICT" });
+    expect(String(error)).not.toContain("private-token");
+    f.setResumed(false);
+
+    // Without a known remaining lifetime no connect is sent.
+    const reads = f.tokenReads.length;
+    f.record.endAt = null;
+    await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    f.record.endAt = new Date(Date.now() - 1000).toISOString();
+    await expect(f.box.preview(3000)).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    expect(f.tokenReads).toHaveLength(reads);
+  } finally {
+    await f.client.close();
+  }
+});
+
+test("E2B connect refusals map to errors without the traffic token", async () => {
+  const fetcher: typeof fetch = Object.assign(
+    async () =>
+      Response.json(
+        {
+          code: 409,
+          message: "sandbox_snapshot_guest_agent_unresponsive",
+          trafficAccessToken: "private-token",
+        },
+        { status: 409 },
+      ),
+    { preconnect() {} },
+  );
+
+  const error = await createSdkTransport("key", fetcher).trafficAccessToken!(
+    "box",
+    AbortSignal.timeout(1000),
+    600,
+  ).catch((caught: Error) => caught);
+
+  expect(error).toMatchObject({ code: "UNAVAILABLE", message: expect.stringContaining("409") });
+  expect(JSON.stringify(error)).not.toContain("private-token");
+  expect(String(error)).not.toContain("private-token");
 });

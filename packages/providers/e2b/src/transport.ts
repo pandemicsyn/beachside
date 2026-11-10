@@ -280,13 +280,15 @@ export type E2BTransport = {
   resume?: (id: string, seconds: number, signal: AbortSignal, memory?: boolean) => Promise<void>;
   renew?: (id: string, seconds: number, signal: AbortSignal) => Promise<void>;
   /**
-   * Reads the private-traffic token of a running sandbox. E2B returns it only from
-   * connect, which never shortens the lifetime; `resumed` is true when E2B had to
-   * resume a sandbox that paused after the caller's running check.
+   * Reads the private-traffic token of a running sandbox. E2B returns it only from connect.
+   * On a running sandbox connect only extends the lifetime, so `timeoutSeconds` should be the
+   * remaining lifetime; `resumed` is true when E2B resumed a sandbox that paused after the
+   * caller's running check, which then runs for `timeoutSeconds` from now.
    */
   trafficAccessToken?: (
     id: string,
     signal: AbortSignal,
+    timeoutSeconds: number,
   ) => Promise<{ token: string | undefined; resumed: boolean; sandboxId: string }>;
   kill(id: string, signal?: AbortSignal): Promise<boolean>;
   run(
@@ -1022,14 +1024,13 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
 
       if (!response.ok) throw new AdapterError("UNAVAILABLE", "E2B renewal response is uncertain");
     },
-    async trafficAccessToken(id, signal) {
+    async trafficAccessToken(id, signal, timeoutSeconds) {
       const response = await fetcher(
         `${E2B_ENDPOINT}/v2/sandboxes/${encodeURIComponent(id)}/connect`,
         {
           method: "POST",
           headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-          // The smallest timeout: connect only ever extends a running sandbox's lifetime.
-          body: JSON.stringify({ timeout: 1 }),
+          body: JSON.stringify({ timeout: timeoutSeconds }),
           redirect: "error",
           signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
         },
@@ -1039,6 +1040,17 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         void response.body?.cancel().catch(() => undefined);
 
         throw new AdapterError("NOT_FOUND", "E2B sandbox is outside the verified scope");
+      }
+
+      // E2B answers 409 when the sandbox can't be connected now, such as a guest agent that
+      // stopped answering after a snapshot. The body is not read, so no token can leak.
+      if (response.status === 409) {
+        void response.body?.cancel().catch(() => undefined);
+
+        throw new AdapterError(
+          "UNAVAILABLE",
+          "E2B could not connect to the sandbox (409); its guest agent may be unresponsive. Inspect it and request the preview again",
+        );
       }
 
       const value = await readNative(
