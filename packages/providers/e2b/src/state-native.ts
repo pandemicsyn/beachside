@@ -63,6 +63,10 @@ function canObserveDelete(token: z.infer<typeof DeleteToken>) {
 /** A fork's acknowledged identity; E2B forks carry no attempt marker, so a lost one stays unknown. */
 const ForkToken = z.strictObject({
   source: z.string().min(1).max(512),
+  /** The source's creation markers and inbound visibility, which E2B copies onto the fork. */
+  operation: z.string().min(1).max(512),
+  submission: z.string().min(1).max(512),
+  allowPublicTraffic: z.boolean().optional(),
   state: z.enum(["uncertain", "accepted"]),
   sandboxId: z.string().min(1).max(512).optional(),
 });
@@ -362,19 +366,47 @@ export function e2bState(input: {
 
   /**
    * The fork as a created sandbox. E2B copies the source's metadata, Beachside creation markers
-   * included, so the fork's reference names the source's creation and differs by sandbox ID.
+   * included, so the fork's reference names the source's creation and differs by sandbox ID. The
+   * record must be that new sandbox, with the source's markers and inbound visibility.
    */
   async function forkResult(
-    source: string,
-    id: string,
+    token: z.infer<typeof ForkToken> & { sandboxId: string },
     ctx: { unknown: AttemptContext["unknown"]; pending: AttemptContext["pending"] },
   ) {
-    const fork = await input.find(id).catch(() => null);
+    const id = token.sandboxId;
+
+    if (id === token.source) return ctx.unknown("E2B returned the source's ID for its fork");
+    let fork;
+
+    try {
+      fork = await input.find(id);
+    } catch (error) {
+      // A definitive refusal ends it; a transient read keeps the acknowledged identity to retry.
+      if (error instanceof AdapterError && ["INVALID_ARGUMENT", "CONFLICT"].includes(error.code))
+        return ctx.unknown("E2B fork record does not match the acknowledged fork; inspect it");
+
+      return ctx.pending(token);
+    }
 
     if (!fork)
       return ctx.unknown("E2B fork is acknowledged but its record is unavailable; inspect it");
 
-    if (fork.state !== "running") return ctx.pending({ source, state: "accepted", sandboxId: id });
+    if (
+      fork.id !== id ||
+      fork.metadata.beachside_operation !== token.operation ||
+      fork.metadata.beachside_submission !== token.submission
+    )
+      return ctx.unknown("E2B fork record does not carry its source's creation markers");
+
+    if (
+      token.allowPublicTraffic !== undefined &&
+      fork.allowPublicTraffic !== token.allowPublicTraffic
+    )
+      return ctx.unknown(
+        "E2B fork's public traffic setting differs from its source's; inspect it before use",
+      );
+
+    if (fork.state !== "running") return ctx.pending(token);
 
     return {
       id: fork.id,
@@ -1107,7 +1139,20 @@ export function e2bState(input: {
         return value;
       },
       async submit(value, ctx) {
-        const token: z.infer<typeof ForkToken> = { source: value.sandbox.id, state: "uncertain" };
+        // The source's markers and visibility, which the fork must carry.
+        const source = await input.find(value.sandbox.id, value.sandbox.reference);
+
+        if (!source) return ctx.reject("NOT_FOUND", "E2B sandbox is missing, expired, or deleted");
+
+        const token: z.infer<typeof ForkToken> = {
+          source: source.id,
+          operation: source.metadata.beachside_operation!,
+          submission: source.metadata.beachside_submission!,
+          state: "uncertain",
+        };
+
+        if (source.allowPublicTraffic !== undefined)
+          token.allowPublicTraffic = source.allowPublicTraffic;
 
         await ctx.checkpoint(token);
 
@@ -1116,10 +1161,9 @@ export function e2bState(input: {
         let forked;
 
         try {
-          // E2B's shortest timeout is one minute; shorter lifetimes round up to it.
           forked = await nativeFork(
             value.sandbox.id,
-            Math.max(60, value.request.lifetimeSeconds ?? input.timeoutSeconds),
+            value.request.lifetimeSeconds ?? input.timeoutSeconds,
             ctx.signal,
           );
         } catch {
@@ -1130,11 +1174,10 @@ export function e2bState(input: {
 
         if (forked.status === "refused") return ctx.reject(forked.code, forked.message);
 
-        token.sandboxId = forked.id;
-        token.state = "accepted";
-        await ctx.checkpoint(token);
+        const accepted = { ...token, state: "accepted" as const, sandboxId: forked.id };
+        await ctx.checkpoint(accepted);
 
-        return forkResult(value.sandbox.id, forked.id, ctx);
+        return forkResult(accepted, ctx);
       },
       async observe(attempt, ctx) {
         const token = ForkToken.safeParse(attempt.token);
@@ -1144,7 +1187,11 @@ export function e2bState(input: {
             "E2B fork identity was not acknowledged; forks carry their source's metadata, so it cannot be found again without replay",
           );
 
-        return forkResult(token.data.source, token.data.sandboxId, ctx);
+        // The saved attempt must be a fork of the source this token names.
+        if (attempt.resource?.kind !== "sandbox" || attempt.resource.nativeId !== token.data.source)
+          return ctx.unknown("E2B fork attempt does not match its source; do not replay");
+
+        return forkResult({ ...token.data, sandboxId: token.data.sandboxId }, ctx);
       },
     },
     volumeCreate: {

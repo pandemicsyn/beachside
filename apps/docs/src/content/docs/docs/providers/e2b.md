@@ -102,9 +102,9 @@ Destroy each sandbox, then close the client; the native timeout is only a fallba
 
 ## Fork
 
-`box.fork()` uses E2B's native fork. E2B pauses the source to checkpoint its memory, which drops its open connections, then resumes it with the same ID and expiry. The fork continues the source's processes with its files. `lifetimeSeconds` sets the fork's timeout (at least one minute) and defaults to the configured lifetime; E2B applies no labels to a fork, so `labels` are refused before anything changes.
+`box.fork()` uses E2B's native fork. E2B pauses the source to checkpoint its memory, which drops its open connections, then resumes it with the same ID and expiry. The fork continues the source's processes with its files. `lifetimeSeconds` sets the fork's timeout and defaults to the configured lifetime. The fork inherits the source's labels, which therefore also match it in `sandboxes.list()` and `beachside gc --label`; E2B cannot set new labels on a fork, so `labels` are refused before anything changes.
 
-The fork carries its source's metadata, including the markers Beachside uses to recognise its own sandboxes. Its reference names the source's creation and differs by sandbox ID, and `sandboxes.list()` returns it next to its source. If a fork's response is lost, its outcome stays unknown: list sandboxes and compare IDs. See [Fork a running sandbox](/docs/guides/snapshots-and-volumes/#fork-a-running-sandbox).
+The fork carries its source's metadata, including the markers Beachside uses to recognise its own sandboxes. Its reference names the source's creation and differs by sandbox ID, and `sandboxes.list()` returns it next to its source. Beachside hands back a fork only when E2B returns a new sandbox ID whose record carries the source's markers and the same public-traffic setting; anything else is reported unknown, so a protected source never yields a public fork unnoticed. If a fork's response is lost, its outcome stays unknown: list sandboxes and compare IDs. See [Fork a running sandbox](/docs/guides/snapshots-and-volumes/#fork-a-running-sandbox).
 
 ## Limits
 

@@ -4,6 +4,7 @@ import {
   AdapterCheckpointError,
   ResourceReference,
   connectAdapter,
+  observeOperation,
   prepareOperation,
   submitOperation,
   type Json,
@@ -78,6 +79,10 @@ function fixture() {
     loseRestore: false,
     loseFork: false,
     refuseFork: false,
+    forkReturnsSource: false,
+    forkFlipsVisibility: false,
+    forkChangesMarkers: false,
+    forkReadFailures: 0,
     // SAFETY: The fixture injects only Error instances or no failure.
     volumeCreateFailure: undefined as Error | undefined,
   };
@@ -122,6 +127,11 @@ function fixture() {
       await getBarrier?.();
 
       if (calls.capture) postCaptureRead?.();
+
+      if (id.startsWith("fork_") && modes.forkReadFailures > 0) {
+        modes.forkReadFailures--;
+        throw new Error("Transient fork read failure");
+      }
 
       const box = boxes.get(id);
 
@@ -182,9 +192,17 @@ function fixture() {
 
         if (modes.refuseFork)
           return { status: "refused", code: "CONFLICT", message: "E2B refused the fork (409)" };
+
+        if (modes.forkReturnsSource) return { status: "forked", id };
         const forkId = `fork_${calls.fork}`;
+
         // E2B copies the source's metadata, Beachside creation markers included.
-        boxes.set(forkId, { ...structuredClone(source), id: forkId, state: "running" });
+        const fork = { ...structuredClone(source), id: forkId, state: "running" };
+
+        if (modes.forkFlipsVisibility) fork.allowPublicTraffic = !source.allowPublicTraffic;
+
+        if (modes.forkChangesMarkers) fork.metadata.beachside_submission = "other";
+        boxes.set(forkId, fork);
 
         if (modes.loseFork) throw new Error("Fork response lost");
 
@@ -2274,9 +2292,12 @@ test("E2B forks a running sandbox natively; the fork carries its source's marker
     });
     expect(f.calls.fork).toBe(0);
 
+    // E2B takes any positive fork timeout, so the requested lifetime is sent unchanged.
     const forked = await source.fork({ lifetimeSeconds: 30 });
     expect(forked.id).toBe("fork_1");
-    expect(f.forkTimeouts).toEqual([60]);
+    await source.fork({ lifetimeSeconds: 600 });
+    expect(f.forkTimeouts).toEqual([30, 600]);
+    expect((await client.sandboxes.list()).items.map((box) => box.id)).toContain("fork_1");
     expect(forked.reference).toMatchObject({ kind: "sandbox", nativeId: "fork_1" });
 
     // A saved fork reference reopens in a fresh connection.
@@ -2320,6 +2341,81 @@ test("E2B fork refusals reject and a lost fork stays unknown without replay", as
     );
     expect(f.calls.fork).toBe(2);
   } finally {
+    await client.close();
+  }
+});
+
+test("E2B fork checks the returned record is a new sandbox with the source's markers and visibility", async () => {
+  const f = fixture();
+  const client = await f.connect();
+
+  try {
+    const source = await client.sandboxes.create({
+      environment: Image.prepared("base"),
+      networkPolicy: "blocked",
+    });
+
+    // The source's own ID back is never treated as its fork.
+    f.modes.forkReturnsSource = true;
+    await expect(source.fork()).rejects.toBeInstanceOf(OutcomeUnknownError);
+    f.modes.forkReturnsSource = false;
+    expect(f.boxes.has(source.id)).toBe(true);
+
+    // A fork whose inbound visibility differs from the source's is not handed out.
+    f.modes.forkFlipsVisibility = true;
+    await expect(source.fork()).rejects.toBeInstanceOf(OutcomeUnknownError);
+    f.modes.forkFlipsVisibility = false;
+
+    // A fork whose markers differ from the source's is not handed out.
+    f.modes.forkChangesMarkers = true;
+    await expect(source.fork()).rejects.toBeInstanceOf(OutcomeUnknownError);
+    f.modes.forkChangesMarkers = false;
+
+    // A transient read of the acknowledged fork keeps its identity and resolves on retry.
+    f.modes.forkReadFailures = 1;
+    const retried = await source.fork();
+    expect(retried.id).toStartWith("fork_");
+    expect(retried.id).not.toBe(source.id);
+  } finally {
+    await client.close();
+  }
+});
+
+test("E2B fork observation requires the saved attempt to name the token's source", async () => {
+  const f = fixture();
+  const client = await f.connect();
+
+  const connection = await connectAdapter(
+    createE2BAdapter(() => f.transport),
+    { config: {}, credentials: { apiKey: "fixture-key" } },
+  );
+
+  try {
+    const a = await client.sandboxes.create({ environment: Image.prepared("base") });
+    const b = await client.sandboxes.create({ environment: Image.prepared("base") });
+    const forked = await a.fork();
+    const record = f.boxes.get(a.id)!;
+
+    const token = {
+      source: a.id,
+      operation: record.metadata.beachside_operation!,
+      submission: record.metadata.beachside_submission!,
+      state: "accepted",
+      sandboxId: forked.id,
+    };
+
+    const observe = (resource: ResourceReference) =>
+      observeOperation(
+        connection.session,
+        "sandbox_fork",
+        { operationId: "op", submissionId: "sub", resource, token, version: 1 },
+        AbortSignal.timeout(5000),
+      );
+
+    expect((await observe(b.reference!))?.kind).toBe("unknown");
+    expect((await observe(a.reference!))?.kind).not.toBe("unknown");
+  } finally {
+    await connection.close();
     await client.close();
   }
 });
