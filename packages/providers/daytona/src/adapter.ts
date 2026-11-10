@@ -46,6 +46,7 @@ import {
 import type { DriverResult } from "@beachside-internal/provider-spi";
 import {
   boundedBytes,
+  DAYTONA_ALLOWLIST_LIMITS,
   daytonaProvider,
   daytonaNetworkMatches,
   daytonaRegistration,
@@ -123,12 +124,7 @@ const Configuration = z
       });
   })
   .transform(({ network, ...value }) => {
-    const allow = allowlistConfig("Daytona", network, {
-      maxHosts: 100,
-      maxCidrs: 10,
-      // Daytona's domain and network allow lists are mutually exclusive on one sandbox.
-      mixed: false,
-    });
+    const allow = allowlistConfig("Daytona", network, DAYTONA_ALLOWLIST_LIMITS);
 
     const named = NamedNetwork.safeParse(network);
 
