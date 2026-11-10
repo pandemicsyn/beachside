@@ -17,6 +17,7 @@ import os,sys,json,stat,errno,ctypes,tempfile,shutil,base64
 op,p,q,flag,stage=sys.argv[1:6]
 published=False
 created=False
+touched=False
 overwrite=flag=='true'
 def kind(s):
  return 'symlink' if stat.S_ISLNK(s.st_mode) else 'file' if stat.S_ISREG(s.st_mode) else 'directory' if stat.S_ISDIR(s.st_mode) else 'unknown'
@@ -56,8 +57,9 @@ try:
   s=os.stat(p) if overwrite else os.lstat(p)
   result={'type':kind(s),'sizeBytes':s.st_size,'modifiedAt':s.st_mtime,'mode':stat.S_IMODE(s.st_mode)}
  elif op=='mkdir':
+  if os.path.lexists(p) and not os.path.isdir(p): raise OSError(errno.EINVAL,'existing entry is not a directory')
   try:
-   if overwrite: os.makedirs(p,exist_ok=True)
+   if overwrite: touched=True;os.makedirs(p,exist_ok=True)
    else: os.mkdir(p)
   except FileExistsError:
    if not os.path.isdir(p): raise OSError(errno.EINVAL,'existing entry is not a directory')
@@ -65,7 +67,7 @@ try:
   try:
    s=os.lstat(p)
    if stat.S_ISDIR(s.st_mode):
-    if overwrite: shutil.rmtree(p)
+    if overwrite: touched=True;shutil.rmtree(p)
     else: os.rmdir(p)
    else: os.unlink(p)
   except FileNotFoundError: pass
@@ -114,7 +116,7 @@ try:
  print(json.dumps({'ok':True,'value':result},ensure_ascii=True))
 except OSError as e:
  code='NOT_FOUND' if e.errno==errno.ENOENT else 'CONFLICT' if e.errno in (errno.EEXIST,errno.ENOTEMPTY) else 'FORBIDDEN' if e.errno in (errno.EACCES,errno.EPERM) else 'CAPACITY' if e.errno in (errno.EFBIG,errno.ENOSPC) else 'UNSUPPORTED' if e.errno in (errno.EXDEV,errno.ENOSYS,errno.EOPNOTSUPP) else 'INVALID_ARGUMENT'
- print(json.dumps({'ok':False,'code':code,'effect':'applied' if published else 'possible' if (created and os.path.lexists(stage)) or (op in ('mkdir','remove') and overwrite) else 'none','temporaryPaths':[stage] if created and os.path.lexists(stage) else []}))
+ print(json.dumps({'ok':False,'code':code,'effect':'applied' if published else 'possible' if (created and os.path.lexists(stage)) or (op in ('mkdir','remove') and touched) else 'none','temporaryPaths':[stage] if created and os.path.lexists(stage) else []}))
 `;
 
 const Receipt = z.discriminatedUnion("ok", [
