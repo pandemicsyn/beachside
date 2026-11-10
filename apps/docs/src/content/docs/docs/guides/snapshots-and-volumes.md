@@ -169,7 +169,7 @@ The fork keeps the source's network policy, size and environment. It is a new sa
 
 An E2B fork carries its source's metadata, including the markers Beachside uses to recognise its sandboxes, so the fork's reference names the source's creation and differs only by sandbox ID. Listing by labels returns forks next to their source, and an E2B fork whose response was lost can't be told apart from its source afterwards: its outcome stays unknown, so list the sandboxes and compare IDs.
 
-A boxd or Archil source with a custom egress policy set outside Beachside is refused, because the fork would inherit a policy that matches neither `blocked` nor `internet`; `checkFork()` reports it first.
+A boxd or Archil source whose egress was changed outside Beachside is refused, because the fork would inherit a policy that matches none the connection offers; `checkFork()` reports it first.
 
 If a fork's outcome is uncertain, the error's operation reference has kind `sandbox_fork`. Recover it as in [Results, errors and saved resources](/docs/guides/recovery/); recovery never forks again.
 

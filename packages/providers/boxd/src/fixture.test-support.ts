@@ -36,6 +36,13 @@ const Request = z.object({
   data: z.instanceof(Uint8Array).default(() => new Uint8Array()),
   labels: z.record(z.string(), z.string()).default({}),
   entries: z.array(z.string()).default([]),
+  spec: z
+    .object({
+      isolated: z.boolean().default(false),
+      labels: z.record(z.string(), z.string()).default({}),
+      egress: z.array(z.string()).default([]),
+    })
+    .optional(),
   config: z
     .object({
       vcpu: z.number().default(0),
@@ -243,6 +250,17 @@ export async function boxdFixture() {
   let failLifecycleRead = false;
   let downloadChunks: Uint8Array[] | undefined;
   let egressFailure: "lose" | "reject" | undefined;
+  /** An older boxd ignores create-time timers and answers without the machine. */
+  let ignoreTimers = false;
+  const restoreSpecs: unknown[] = [];
+  const timer = (seconds: number) => (seconds && !ignoreTimers ? Date.now() + seconds * 1000 : 0);
+
+  const answered = (id: string) => {
+    const machine = machines.get(id);
+
+    return machine && !ignoreTimers ? { ...machine } : undefined;
+  };
+
   let defaultEgress: string[] = [];
   const dialed: string[] = [];
   const definition: Record<string, MethodDefinition<unknown, unknown>> = {};
@@ -357,7 +375,7 @@ export async function boxdFixture() {
               billingOrgId: org,
               billingOrg: org,
               isolated: req.isolated,
-              deleteAtMs: 0,
+              deleteAtMs: timer(req.deleteAfterSecs),
               botProtection: true,
               proxies: req.config?.network?.proxies ?? [],
               egressAllow: [...defaultEgress],
@@ -384,8 +402,21 @@ export async function boxdFixture() {
             } else if (holdCreate) {
               holdCreate = false;
               releaseHeld = () =>
-                ok({ vmId: id, name: req.name, status: "running", image: req.imageRef });
-            } else ok({ vmId: id, name: req.name, status: "running", image: req.imageRef });
+                ok({
+                  vmId: id,
+                  name: req.name,
+                  status: "running",
+                  image: req.imageRef,
+                  machine: answered(id),
+                });
+            } else
+              ok({
+                vmId: id,
+                name: req.name,
+                status: "running",
+                image: req.imageRef,
+                machine: answered(id),
+              });
             break;
           }
 
@@ -500,6 +531,8 @@ export async function boxdFixture() {
               name: req.name,
               status: "running",
               isolated: source.isolated || req.isolated,
+              // A fork copies its source's timer unless the request sets one.
+              deleteAtMs: req.deleteAfterSecs ? timer(req.deleteAfterSecs) : source.deleteAtMs,
               // A fork inherits the source's egress allowlist; labels merge over its labels.
               labels: { ...source.labels, ...req.labels },
               sourceInfo: { kind: "fork", name: source.name, version: null, id: source.vmId },
@@ -508,7 +541,14 @@ export async function boxdFixture() {
             if (loseCreate) {
               loseCreate = false;
               callback({ code: status.UNAVAILABLE, message: "lost after effect" });
-            } else ok({ vmId: id, name: req.name, status: "running", forkedFrom: source.name });
+            } else
+              ok({
+                vmId: id,
+                name: req.name,
+                status: "running",
+                forkedFrom: source.name,
+                machine: answered(id),
+              });
             break;
           }
 
@@ -529,6 +569,16 @@ export async function boxdFixture() {
               break;
             }
 
+            // boxd takes isolation and labels in the spec when a restore sends one.
+            if (req.spec && (req.isolated || Object.keys(req.labels).length)) {
+              callback({
+                code: status.INVALID_ARGUMENT,
+                message: "put labels and isolated in spec",
+              });
+              break;
+            }
+
+            restoreSpecs.push(req.spec ?? null);
             effects.create++;
             record.useCount++;
             const id = crypto.randomUUID();
@@ -541,13 +591,14 @@ export async function boxdFixture() {
               memoryBytes: record.memoryBytes,
               billingOrgId: org,
               billingOrg: org,
-              isolated: req.isolated,
-              deleteAtMs: 0,
+              isolated: req.isolated || (req.spec?.isolated ?? false),
+              deleteAtMs: timer(req.deleteAfterSecs),
               botProtection: true,
               proxies: req.config?.network?.proxies ?? [],
-              // A restore starts with no allowlist; labels merge over the captured ones.
-              egressAllow: [],
-              labels: { ...record.labels, ...req.labels },
+              // A restore starts with no allowlist unless its spec lists one; labels merge over the
+              // captured ones.
+              egressAllow: [...(req.spec?.egress ?? [])],
+              labels: { ...record.labels, ...req.labels, ...req.spec?.labels },
               sourceInfo: {
                 kind: "snapshot",
                 name: record.name,
@@ -557,7 +608,7 @@ export async function boxdFixture() {
               },
             });
             restoreLaterVersion = false;
-            ok({ vmId: id, name: req.name, status: "running" });
+            ok({ vmId: id, name: req.name, status: "running", machine: answered(id) });
             break;
           }
 
@@ -869,6 +920,10 @@ export async function boxdFixture() {
     effects,
     machines,
     disks,
+    restoreSpecs,
+    ignoreCreateTimers() {
+      ignoreTimers = true;
+    },
     snapshots,
     snapshotPendingReads(value: number) {
       snapshotPendingReads = value;

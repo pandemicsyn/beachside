@@ -1,10 +1,23 @@
 import { filesystem, directoryValue, statValue } from "./filesystem";
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { NotFoundError, type Disk, type Machine, type Snapshot } from "@boxd-sh/sdk";
 import {
+  MACHINE_SPEC_VERSION,
+  NotFoundError,
+  type Disk,
+  type Machine,
+  type Snapshot,
+} from "@boxd-sh/sdk";
+import {
+  ALLOW_NETWORK_POLICY,
+  AllowNetworkSetting,
   AdapterError,
   AdapterFilesystemError,
+  allowlistConfig,
+  allowlistFromCanonical,
+  networkPolicyName,
+  parseEgressAllowlist,
+  throwAllowlistError,
   MAX_DIRECTORY_ENTRIES,
   MAX_DIRECTORY_NAME_BYTES,
   AdapterCheckpointError,
@@ -23,6 +36,7 @@ import {
   type CreateInput,
   type DestroyInput,
   type MountSpec,
+  type NetworkSetting,
   type Fact,
   type ObserveContext,
   type ReadContext,
@@ -53,8 +67,12 @@ import { startBoxdProcess } from "./process";
 const Configuration = z
   .strictObject({
     org: z.string().min(1).max(128),
-    /** Egress for new machines: `blocked` (the default) reaches nothing, `internet` is unrestricted. */
-    network: z.enum(["blocked", "internet"]).optional(),
+    /**
+     * Egress for new machines: `blocked` (the default) reaches nothing, `internet` is unrestricted,
+     * and `{ allow: [...] }` reaches only the listed host names, `*.` wildcards and public IPv4
+     * addresses or ranges.
+     */
+    network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).optional(),
     /** @deprecated Use `network`. */
     networkPolicy: z.enum(["blocked", "internet"]).optional(),
     /** The boxd region machines are created in, such as `fra` or `nyc`; defaults to the home region. */
@@ -125,11 +143,57 @@ const Configuration = z
   })
   .transform(({ network, lifetimeSeconds, ...value }) => ({
     ...value,
-    networkPolicy: network ?? value.networkPolicy ?? "blocked",
+    networkPolicy: networkPolicyName(network ?? value.networkPolicy ?? "blocked"),
+    ...boxdAllowlist(network),
     lifetimeSeconds: machineLifetime(
       value.lifecycle?.lifetimeSeconds ?? lifetimeSeconds ?? DEFAULT_LIFETIME_SECONDS,
     ),
   }));
+
+/** IPv4 ranges that are not on the public internet; boxd allowlists take public addresses only. */
+const NON_PUBLIC = [
+  "0.0.0.0/8",
+  "10.0.0.0/8",
+  "100.64.0.0/10",
+  "127.0.0.0/8",
+  "169.254.0.0/16",
+  "172.16.0.0/12",
+  "192.0.0.0/24",
+  "192.168.0.0/16",
+  "198.18.0.0/15",
+  "224.0.0.0/3",
+].map(ipv4Range);
+
+function ipv4Range(cidr: string) {
+  const [address = "", bits = "32"] = cidr.split("/");
+  const start = address.split(".").reduce((total, octet) => total * 256 + Number(octet), 0);
+
+  return { start, end: start + 2 ** (32 - Number(bits)) - 1 };
+}
+
+/** boxd allowlist fields: up to 256 host names, `*.` wildcards and public IPv4 ranges, mixed. */
+function boxdAllowlist(setting: NetworkSetting | undefined) {
+  const fields = allowlistConfig("boxd", setting);
+
+  if (!fields.allowlist) return fields;
+
+  const list = allowlistFromCanonical(fields.allowlist);
+
+  const privateRange = list.cidrs.find((cidr) => {
+    const range = ipv4Range(cidr);
+
+    return NON_PUBLIC.some((blocked) => range.start <= blocked.end && blocked.start <= range.end);
+  });
+
+  return privateRange
+    ? {
+        allowlistError: {
+          code: "UNSUPPORTED" as const,
+          message: `boxd allowlists take public IPv4 addresses only; ${privateRange} is not public`,
+        },
+      }
+    : fields;
+}
 
 /** boxd machines get at least a minute; shorter lifetimes round up to it. */
 function machineLifetime(seconds: number): number {
@@ -143,7 +207,7 @@ const Credentials = z.strictObject({ apiKey: z.string().min(1) });
 
 const Id = z.uuid();
 
-const NetworkPolicy = z.enum(["blocked", "internet"]);
+const NetworkPolicy = z.enum(["blocked", "internet", ALLOW_NETWORK_POLICY]);
 
 type NetworkPolicy = z.infer<typeof NetworkPolicy>;
 
@@ -156,26 +220,55 @@ const CreateToken = z.strictObject({
   lifetimeSeconds: z.number().int().positive().safe().optional(),
 });
 
-/** The native egress allowlist for a policy: `["none"]` reaches nothing, `[]` is unrestricted. */
-function egressFor(policy: NetworkPolicy): string[] {
-  return policy === "blocked" ? ["none"] : [];
+/**
+ * The native egress allowlist for a policy: `["none"]` reaches nothing, `[]` is unrestricted, and
+ * `allow` sends the connection's list (`allowlist`, in canonical form).
+ */
+function egressFor(policy: NetworkPolicy, allowlist: string | undefined): string[] {
+  if (policy !== ALLOW_NETWORK_POLICY) return policy === "blocked" ? ["none"] : [];
+
+  if (!allowlist) throw new AdapterError("UNSUPPORTED", "This boxd connection has no allowlist");
+  const list = allowlistFromCanonical(allowlist);
+
+  return [...list.hosts, ...list.cidrs];
 }
 
-/** The policy a machine's egress allowlist matches, or null for a custom allowlist. */
-function egressPolicy(machine: Pick<Machine, "egressAllow">): NetworkPolicy | null {
-  return sameEgress(machine, "blocked")
+/** The policy a machine's egress allowlist matches, or null for any other allowlist. */
+function egressPolicy(
+  machine: Pick<Machine, "egressAllow">,
+  allowlist: string | undefined,
+): NetworkPolicy | null {
+  return sameEgress(machine, "blocked", allowlist)
     ? "blocked"
-    : sameEgress(machine, "internet")
+    : sameEgress(machine, "internet", allowlist)
       ? "internet"
-      : null;
+      : allowlist && sameEgress(machine, ALLOW_NETWORK_POLICY, allowlist)
+        ? ALLOW_NETWORK_POLICY
+        : null;
 }
 
-function sameEgress(machine: Pick<Machine, "egressAllow">, policy: NetworkPolicy): boolean {
-  const expected = egressFor(policy);
+function sameEgress(
+  machine: Pick<Machine, "egressAllow">,
+  policy: NetworkPolicy,
+  allowlist: string | undefined,
+): boolean {
+  const actual = machine.egressAllow;
+
+  if (policy === ALLOW_NETWORK_POLICY) {
+    if (!allowlist || !actual.length || actual.includes("none")) return false;
+
+    // boxd may store an address as `1.2.3.4` or `1.2.3.4/32`; compare canonical forms.
+    try {
+      return parseEgressAllowlist(actual).canonical === allowlist;
+    } catch {
+      return false;
+    }
+  }
+
+  const expected = egressFor(policy, undefined);
 
   return (
-    machine.egressAllow.length === expected.length &&
-    expected.every((entry, index) => machine.egressAllow[index] === entry)
+    actual.length === expected.length && expected.every((entry, index) => actual[index] === entry)
   );
 }
 
@@ -299,12 +392,9 @@ const snapshotSupport = {
 };
 
 /** Restores replay the captured size, apply the requested network and cannot attach disks. */
-const restoreSupport = {
-  networkPolicies: ["blocked", "internet"],
-  resources: false,
-  mounts: false,
-  independentLifecycle: true,
-};
+function restoreSupport(networkPolicies: string[]) {
+  return { networkPolicies, resources: false, mounts: false, independentLifecycle: true };
+}
 
 const REPLACED =
   "boxd restored a machine from a different snapshot version; inspect it without replay";
@@ -391,7 +481,30 @@ export function createBoxdAdapter(
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {
-      // Exact depth choices boxd cannot honor reject before any provider IO.
+      // Choices boxd cannot honor reject before any provider IO.
+      throwAllowlistError(config);
+
+      // A connection with an allowlist creates with it; otherwise blocked or internet.
+      const networkPolicies: string[] = config.allowlist
+        ? [ALLOW_NETWORK_POLICY]
+        : ["blocked", "internet"];
+
+      const requirePolicy = (value: string): NetworkPolicy => {
+        if (!networkPolicies.includes(value))
+          throw new AdapterError(
+            "UNSUPPORTED",
+            value === ALLOW_NETWORK_POLICY
+              ? "boxd allowlists are set in adapter setup: network: { allow: [...] }"
+              : config.allowlist
+                ? 'This boxd connection creates with its allowlist; use network "allow"'
+                : "boxd offers blocked or internet egress",
+          );
+
+        return NetworkPolicy.parse(value);
+      };
+
+      const restoreValue = restoreSupport(networkPolicies);
+
       if (config.snapshots?.preserve === Preserve.FILESYSTEM)
         throw new AdapterError(
           "UNSUPPORTED",
@@ -634,7 +747,8 @@ export function createBoxdAdapter(
             "boxd create UUID no longer matches the acknowledged attempt",
           );
 
-        if (!sameEgress(machine, token.network ?? "internet")) return "egress" as const;
+        if (!sameEgress(machine, token.network ?? "internet", config.allowlist))
+          return "egress" as const;
 
         if (
           expected &&
@@ -678,6 +792,24 @@ export function createBoxdAdapter(
           mounts,
         };
       };
+
+      /**
+       * A restore's isolation, labels and egress. Labels merge over the captured ones. A spec's
+       * egress is in force from first boot, but boxd adds it to any the snapshot's spec lists, so
+       * the exact list is still set after the restore; `internet` sends none, since a spec cannot
+       * clear a captured list.
+       */
+      const restoreSpec = (network: NetworkPolicy, labels: Record<string, string> | undefined) =>
+        network === "internet"
+          ? { isolated: true, labels }
+          : {
+              spec: {
+                version: MACHINE_SPEC_VERSION,
+                isolated: true,
+                labels: labels ?? {},
+                egress: egressFor(network, config.allowlist),
+              },
+            };
 
       /** Create from an image, or restore an exact snapshot generation; then expiry and readiness. */
       const launch = async (
@@ -744,6 +876,8 @@ export function createBoxdAdapter(
               "fork" in source
                 ? native.machines.fork(source.fork, {
                     name: nativeName(ctx.submissionId),
+                    // Written together with the fork; otherwise it copies the source's timer.
+                    deleteAfter: lifetimeSeconds,
                     // One-way: a fork of an isolated machine stays isolated.
                     isolated: true,
                     // Merged over the source's labels.
@@ -755,6 +889,8 @@ export function createBoxdAdapter(
                           image: source.image,
                           name: nativeName(ctx.submissionId),
                           org: org.slug,
+                          // boxd writes the timer together with the machine.
+                          deleteAfter: lifetimeSeconds,
                           isolated: true,
                           labels: source.labels,
                           config: {
@@ -773,21 +909,37 @@ export function createBoxdAdapter(
                           fromSnapshot: source.snapshot.id,
                           name: nativeName(ctx.submissionId),
                           org: org.slug,
-                          isolated: true,
-                          // Merged over the labels the snapshot captured.
-                          labels: source.labels,
+                          deleteAfter: lifetimeSeconds,
                           config: { proxies, autoSuspendTimeout: 0 },
+                          ...restoreSpec(network, source.labels),
                         },
                   ),
           );
         } catch (error) {
           if (error instanceof AdapterCheckpointError) throw error;
 
-          if (acknowledged)
+          if (acknowledged) {
+            // The machine exists but its reply was lost, or the SDK's fallback expiry failed: apply
+            // the requested egress and lifetime anyway (both idempotent) so it is never left open
+            // or without an end.
+            const id = acknowledged.id;
+            await native
+              .run(readContext(ctx.signal), () =>
+                native.machines.setEgressAllow(id, egressFor(network, config.allowlist)),
+              )
+              .catch(() => undefined);
+            await native
+              .run(readContext(ctx.signal), () =>
+                native.machines.setDeleteAfter(id, lifetimeSeconds),
+              )
+              .catch(() => undefined);
+
             return ctx.unknown(
               "boxd machine exists; creation metadata could not be verified",
               partial(acknowledged, ctx),
             );
+          }
+
           const rejected = createRejection(error, [credentials.apiKey]);
 
           return rejected
@@ -828,30 +980,45 @@ export function createBoxdAdapter(
         let egressProblem: string | undefined;
 
         try {
-          if (!sameEgress(machine, network)) {
+          if (!sameEgress(machine, network, config.allowlist)) {
             const applied = await native.run(readContext(ctx.signal), () =>
-              native.machines.setEgressAllow(token.id, egressFor(network)),
+              native.machines.setEgressAllow(token.id, egressFor(network, config.allowlist)),
             );
 
-            if (!sameEgress({ egressAllow: applied }, network))
+            if (!sameEgress({ egressAllow: applied }, network, config.allowlist))
               egressProblem = "boxd machine exists; its egress differs from the requested network";
           }
         } catch {
           egressProblem = "boxd machine exists; the egress response is unconfirmed";
         }
 
+        // boxd checks allowlist entries only when they are set (it refuses provider-wide wildcards
+        // such as *.amazonaws.com), so a refused list falls back to reaching nothing.
+        if (egressProblem && network === ALLOW_NETWORK_POLICY) {
+          egressProblem =
+            "boxd machine exists; its allowlist was not applied, so it was set to reach nothing";
+          await native
+            .run(readContext(ctx.signal), () =>
+              native.machines.setEgressAllow(token.id, egressFor("blocked", undefined)),
+            )
+            .catch(() => undefined);
+        }
+
         let expiryProblem: string | undefined;
 
-        try {
-          const expiry = await native.run(readContext(ctx.signal), () =>
-            native.machines.setDeleteAfter(token.id, lifetimeSeconds),
-          );
+        // boxd writes the timer with the machine; one from a server that ignored it is set now.
+        if (machine.deleteAt) token.stage = "expiry-installed";
+        else
+          try {
+            const expiry = await native.run(readContext(ctx.signal), () =>
+              native.machines.setDeleteAfter(token.id, lifetimeSeconds),
+            );
 
-          if (expiry) token.stage = "expiry-installed";
-          else expiryProblem = "boxd machine exists; expiry was not acknowledged";
-        } catch {
-          expiryProblem = "boxd machine exists; expiry response is unconfirmed";
-        }
+            if (expiry) token.stage = "expiry-installed";
+            else expiryProblem = "boxd machine exists; expiry was not acknowledged";
+          } catch {
+            expiryProblem = "boxd machine exists; expiry response is unconfirmed";
+          }
 
         if (egressProblem || expiryProblem) {
           if (token.stage === "expiry-installed")
@@ -928,9 +1095,11 @@ export function createBoxdAdapter(
             // and install the lifetime on a machine that has none.
             const network = token.data.network;
 
-            if (network && !sameEgress(machine, network))
+            if (network && !sameEgress(machine, network, config.allowlist))
               await native
-                .run(ctx, () => native.machines.setEgressAllow(machine.id, egressFor(network)))
+                .run(ctx, () =>
+                  native.machines.setEgressAllow(machine.id, egressFor(network, config.allowlist)),
+                )
                 .catch(() => undefined);
 
             const lifetime = token.data.lifetimeSeconds;
@@ -1060,7 +1229,7 @@ export function createBoxdAdapter(
         excludedPaths: null,
         mounts: [],
         mountHandling: ref.ownership === "verified-created" ? "none" : "unknown",
-        restore: restoreSupport,
+        restore: restoreValue,
         dependencies: [],
         nativeDependencies: null,
       });
@@ -1142,7 +1311,7 @@ export function createBoxdAdapter(
         defaultNetworkPolicy: config.networkPolicy,
         supports: {
           images: ["oci"],
-          network: ["blocked", "internet"],
+          network: networkPolicies,
           exec: { commands: ["argv", "shell"], maxOutputBytes: MAX_BYTES },
           fileWrite: { overwrite: true, noClobber: true },
           lifetime: { minSeconds: 1, maxSeconds: Number.MAX_SAFE_INTEGER },
@@ -1153,8 +1322,7 @@ export function createBoxdAdapter(
             if (input.image.kind !== "oci")
               throw new AdapterError("UNSUPPORTED", "boxd creates machines from OCI images");
 
-            if (!NetworkPolicy.safeParse(input.networkPolicy).success)
-              throw new AdapterError("UNSUPPORTED", "boxd offers blocked or internet egress");
+            requirePolicy(input.networkPolicy);
 
             if (input.region !== undefined && input.region !== config.region)
               throw new AdapterError(
@@ -1176,7 +1344,7 @@ export function createBoxdAdapter(
                 lifetimeSeconds: input.lifetimeSeconds,
                 labels: checkLabels(input.labels),
               },
-              NetworkPolicy.parse(input.networkPolicy),
+              requirePolicy(input.networkPolicy),
               ctx,
             ),
           observe: (attempt, ctx) => observeLaunch(attempt, ctx),
@@ -1712,10 +1880,12 @@ export function createBoxdAdapter(
             if (source.status !== "running")
               throw new AdapterError("CONFLICT", "boxd forks a running machine only");
 
-            if (!egressPolicy(source))
+            if (!egressPolicy(source, config.allowlist))
               throw new AdapterError(
                 "UNSUPPORTED",
-                "boxd source has a custom egress allowlist; a fork would inherit it",
+                config.allowlist
+                  ? "boxd source egress is not this connection's allowlist; a fork would inherit it"
+                  : "boxd source has a custom egress allowlist; a fork would inherit it",
               );
 
             // boxd merges the fork's labels over the source's, and the merged set has the limit.
@@ -1729,7 +1899,7 @@ export function createBoxdAdapter(
           },
           async submit(input, ctx) {
             const source = await requireMachine(input.sandbox, readContext(ctx.signal));
-            const network = egressPolicy(source);
+            const network = egressPolicy(source, config.allowlist);
 
             if (!network)
               return ctx.reject("CONFLICT", "boxd source egress changed before the fork");
@@ -1765,11 +1935,7 @@ export function createBoxdAdapter(
                 "boxd restores keep the captured size and cannot attach disks",
               );
 
-            if (!restoreSupport.networkPolicies.includes(input.request.networkPolicy))
-              throw new AdapterError(
-                "UNSUPPORTED",
-                "boxd restores offer blocked or internet egress",
-              );
+            requirePolicy(input.request.networkPolicy);
             checkLabels(input.request.labels);
             await pinnedSnapshot(input.snapshot, ctx);
 
@@ -1785,7 +1951,7 @@ export function createBoxdAdapter(
                 lifetimeSeconds: input.request.lifetimeSeconds,
                 labels: checkLabels(input.request.labels),
               },
-              NetworkPolicy.parse(input.request.networkPolicy),
+              requirePolicy(input.request.networkPolicy),
               ctx,
             ),
           async observe(attempt, ctx) {
@@ -1872,7 +2038,7 @@ export function createBoxdAdapter(
         },
         async resourceCapabilities() {
           return {
-            restore: { status: "supported", value: restoreSupport },
+            restore: { status: "supported", value: restoreValue },
             volumes: {
               status: "supported",
               value: { create: true, inspect: true, list: true, delete: true },
