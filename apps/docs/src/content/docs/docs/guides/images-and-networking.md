@@ -82,7 +82,8 @@ Configure `network` once in adapter setup. Every adapter uses the same names, so
 | Daytona        | `blocked`                   | Requests strict block-all. Creation requires verified organization eligibility, with no automatic fallback. |
 | Daytona        | `internet`                  | Unrestricted egress. Creation requires an organization without limited sandbox egress (Tier 3 and above).   |
 | Daytona        | `daytona-default` (default) | Daytona-only setup value: keeps organization-managed restrictions, including essential-service access.      |
-| boxd           | `internet` (required)       | Allows internet access with native peer/metadata isolation. Strict blocked egress is unsupported.           |
+| boxd           | `blocked` (default)         | Sets the native egress allowlist to `none` right after create, before the machine is handed out.            |
+| boxd           | `internet`                  | Unrestricted egress, with native peer/metadata isolation.                                                   |
 | Vercel Sandbox | `blocked` (default)         | Requests native `deny-all`; network isolation has no recorded live acceptance.                              |
 | Vercel Sandbox | `internet`                  | Requests native `allow-all`.                                                                                |
 | Modal          | `blocked` (default)         | Requests Modal's `blockNetwork`.                                                                            |
@@ -103,7 +104,7 @@ A requested policy is not proof of isolation. E2B's maintained test still connec
 
 Daytona's `internet` never falls back to `daytona-default`: on a Tier 1 or Tier 2 organization it rejects before allocation, because Daytona's default firewall there only reaches essential services. Choose `daytona-default` in setup when that restricted egress is acceptable. boxd's peer/metadata isolation does not block outbound internet.
 
-Omitted create and restore policies use the connection default, so most applications never pass `network` per call. An explicit `create({ network })` or `restore({ network })` must be supported by that connection: E2B, Modal, Runloop and Freestyle accept `blocked` or `internet`, while Daytona and Vercel require a match with the configured policy. boxd accepts only `internet`. A connection configured with an allowlist accepts only `allow`; see [allow only some destinations](#allow-only-some-destinations). Empty or null policies reject rather than selecting a fallback. `client.capabilities().network` lists what the connection accepts.
+Omitted create and restore policies use the connection default, so most applications never pass `network` per call. An explicit `create({ network })` or `restore({ network })` must be supported by that connection: E2B, Modal, Runloop, Freestyle and boxd accept `blocked` or `internet`, while Daytona and Vercel require a match with the configured policy. A connection configured with an allowlist accepts only `allow`; see [allow only some destinations](#allow-only-some-destinations). Empty or null policies reject rather than selecting a fallback. `client.capabilities().network` lists what the connection accepts.
 
 The option was previously named `networkPolicy`, and Vercel used `vercel-deny-all` and `vercel-allow-all`. Those spellings still work and are deprecated; passing both `network` and `networkPolicy` with different values rejects.
 

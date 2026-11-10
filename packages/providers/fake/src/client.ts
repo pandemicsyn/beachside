@@ -238,10 +238,12 @@ export class FakeProviderDriver implements ProviderDriver {
     labels?: Record<string, string>;
     env?: Record<string, string>;
     lifetimeSeconds?: number;
+    forkOf?: SandboxRef;
   }) {
     return this.mutation(
       {
         kind: "create",
+        forkOf: input.forkOf,
         scope: input.scope,
         identity: input.identity,
         image: input.image,

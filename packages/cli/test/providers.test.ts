@@ -26,15 +26,15 @@ afterEach(async () => {
   await rm(home, { recursive: true, force: true });
 });
 
-test("environment-only boxd setup names and binds its required network choice", async () => {
+test("environment-only boxd setup needs only an org and binds optional network and region", async () => {
   const env = { HOME: home, BOXD_API_KEY: "key", BOXD_ORG: "team" };
 
-  expect(missingEnv(descriptor("boxd")!, env)).toEqual(["BOXD_NETWORK"]);
+  expect(missingEnv(descriptor("boxd")!, env)).toEqual([]);
 
-  const ready = { ...env, BOXD_NETWORK: "internet" };
+  const ready = { ...env, BOXD_NETWORK: "internet", BOXD_REGION: "nyc" };
   const profile = resolveProfile({ provider: "boxd" }, await loadConfig(undefined, ready), ready);
 
-  expect(profile.config).toEqual({ org: "team", network: "internet" });
+  expect(profile.config).toEqual({ org: "team", network: "internet", region: "nyc" });
 
   const bound = await loadAdapter(
     profile,

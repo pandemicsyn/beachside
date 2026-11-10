@@ -57,6 +57,8 @@ Import from `beachside`.
 | `FileStreamWriteOptions`      | type      |
 | `FilesystemError`             | re-export |
 | `FileWriteOptions`            | type      |
+| `ForkCapabilities`            | type      |
+| `ForkRequest`                 | re-export |
 | `Image`                       | re-export |
 | `ImageBuildResult`            | type      |
 | `ImageHandle`                 | type      |

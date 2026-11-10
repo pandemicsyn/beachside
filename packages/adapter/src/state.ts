@@ -420,6 +420,12 @@ export const OperationOutcome = z.discriminatedUnion("kind", [
     sandbox: ResourceReference.extend({ kind: z.literal("sandbox") }).optional(),
     mounts: z.array(MountSpec).max(32),
   }),
+  z.strictObject({
+    kind: z.literal("sandbox_fork"),
+    status: z.literal("unknown"),
+    /** The fork, when the provider named it before its outcome became uncertain. */
+    sandbox: ResourceReference.extend({ kind: z.literal("sandbox") }).optional(),
+  }),
   z
     .strictObject({
       kind: z.literal("sandbox_suspend"),
@@ -506,6 +512,57 @@ export const SnapshotRestoreInput = z.strictObject({
 });
 
 export type SnapshotRestoreInput = z.infer<typeof SnapshotRestoreInput>;
+
+/** What a fork sets beyond what it inherits from its source sandbox. */
+export const ForkRequest = z.strictObject({
+  labels: z.record(z.string().min(1).max(64), z.string().max(256)).optional(),
+  /** The fork's lifetime, replacing the adapter setup's. */
+  lifetimeSeconds: z.number().int().positive().safe().optional(),
+});
+
+export type ForkRequest = z.infer<typeof ForkRequest>;
+
+export const SandboxForkInput = z.strictObject({
+  sandbox: z.strictObject({
+    id: z.string().min(1).max(512),
+    reference: ResourceReference.extend({ kind: z.literal("sandbox") }),
+  }),
+  request: ForkRequest,
+});
+
+export type SandboxForkInput = z.infer<typeof SandboxForkInput>;
+
+/** How a native fork copies its source; there is no snapshot-and-restore fallback. */
+export const ForkCapabilities = z.strictObject({
+  preserve: PreserveSchema,
+  /** What the source goes through while the fork is taken; it keeps running afterwards. */
+  interruption: z.enum(["none", "pause"]),
+  /** `resume`: the fork continues the source's processes; `fresh`: it boots from the copied disk. */
+  execution: z.enum(["fresh", "resume"]),
+  /** false: the provider keeps the source until its forks are gone, so destroying it only stops it. */
+  independentLifecycle: z.boolean(),
+  /** Create options a fork applies; others reject before any effect. */
+  options: z.strictObject({
+    labels: z.boolean().optional(),
+    lifetime: LifetimeLimits.optional(),
+  }),
+});
+
+export type ForkCapabilities = z.infer<typeof ForkCapabilities>;
+
+/** Why a fork request asks for an option this adapter does not apply, or null. */
+export function forkOptionProblem(
+  options: ForkCapabilities["options"] | undefined,
+  request: ForkRequest,
+): string | null {
+  if (request.labels && Object.keys(request.labels).length && !options?.labels)
+    return "Fork labels are unsupported by this adapter";
+
+  if (request.lifetimeSeconds !== undefined && !options?.lifetime)
+    return "A fork lifetime is unsupported by this adapter";
+
+  return lifetimeProblem(options?.lifetime, request.lifetimeSeconds);
+}
 
 export const ArtifactDeletionResult = z.strictObject({
   deleted: z.literal(true),
@@ -696,6 +753,8 @@ export type StateCapabilities = {
     list: Support<{ coverage: "provider-scope" | "managed" }>;
     delete: Support<{}>;
   };
+  /** Native `box.fork()`; never emulated with a snapshot and restore. */
+  fork: Support<ForkCapabilities>;
   volumes: Support<VolumeCapabilities>;
   mounts: Support<MountCapabilities>;
   suspension: Support<{
@@ -834,6 +893,9 @@ export async function stateCapabilities(
         : unsupportedState(),
       delete: implemented(!!session.snapshotDelete),
     },
+    fork: session.sandboxFork
+      ? { status: "supported", value: ForkCapabilities.parse(session.sandboxFork.capabilities) }
+      : unsupportedState(),
     imageManagement: {
       inspect: implemented(!!session.imageInspect),
       list: session.imageList
@@ -1075,6 +1137,7 @@ export const DirectCapabilities = z.strictObject({
     .optional(),
   volumes: supportSchema(VolumeCapabilities),
   mounts: supportSchema(MountCapabilities).optional(),
+  fork: supportSchema(ForkCapabilities).optional(),
   suspension: supportSchema(
     z.strictObject({
       preserve: PreserveSchema,

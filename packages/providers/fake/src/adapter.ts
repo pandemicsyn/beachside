@@ -60,6 +60,9 @@ const restoreSupport = {
   independentLifecycle: true,
 };
 
+/** Stands in for the image of a fork; the fake copies the source's real image. */
+const FORK_IMAGE = "fork-of-source";
+
 const errorCodes = {
   invalid: "INVALID_ARGUMENT",
   unsupported: "UNSUPPORTED",
@@ -155,6 +158,8 @@ export function createFakeAdapter(options: {
    * `textOnly` streams decoded text without declaring byte output, like Boat or Runloop.
    */
   processes?: { holdMs?: number; textOnly?: boolean };
+  /** Fork running sandboxes natively: the fork copies the source's image, files and env. */
+  fork?: boolean;
 }) {
   return defineAdapter({
     name: "fake",
@@ -666,6 +671,43 @@ export function createFakeAdapter(options: {
 
       const snapshotHooks = options.snapshots ? snapshots : undefined;
 
+      const sandboxFork: AdapterSession["sandboxFork"] = options.fork
+        ? {
+            recovery: { version: 1, token: Token },
+            capabilities: {
+              preserve: "filesystem",
+              interruption: "none",
+              execution: "fresh",
+              independentLifecycle: true,
+              options: { labels: true, lifetime: { minSeconds: 1, maxSeconds: 86_400 } },
+            },
+            async submit(input, ctx) {
+              return createResult(
+                await driver.create({
+                  scope,
+                  identity: identity(ctx),
+                  image: FORK_IMAGE,
+                  networkPolicy: "blocked",
+                  labels: input.request.labels,
+                  lifetimeSeconds: input.request.lifetimeSeconds,
+                  forkOf: native(input.sandbox.id),
+                }),
+                ctx,
+                bindingScope,
+              );
+            },
+            async observe(attempt, ctx) {
+              const result = await driver.observe({
+                scope,
+                submissionId: attempt.submissionId,
+                operationId: attempt.operationId,
+              });
+
+              return result ? observedCreate(result, ctx, attempt, bindingScope) : null;
+            },
+          }
+        : undefined;
+
       return {
         ...images,
         snapshotProfiles: snapshotHooks?.snapshotProfiles,
@@ -676,6 +718,7 @@ export function createFakeAdapter(options: {
         snapshotDelete: snapshotHooks?.snapshotDelete,
         snapshotRestore: snapshotHooks?.snapshotRestore,
         resourceCapabilities: snapshotHooks?.resourceCapabilities,
+        sandboxFork,
         imageBuild: options.imageBuild ? imageBuild : undefined,
         processes,
         scope: bindingScope,

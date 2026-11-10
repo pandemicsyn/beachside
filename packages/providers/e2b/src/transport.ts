@@ -12,6 +12,7 @@ import {
 } from "e2b";
 import {
   AdapterError,
+  type AdapterErrorCode,
   AdapterFilesystemError,
   type DirectoryResult,
   type FileStat,
@@ -40,6 +41,23 @@ export class E2BDirectoryRejected extends AdapterError {
   constructor() {
     super("INVALID_ARGUMENT", "E2B path is not a directory");
   }
+}
+
+/** The Beachside code for an E2B status that refused a fork before any effect. */
+function forkRefusal(status: number): AdapterErrorCode {
+  if (status === 400) return "INVALID_ARGUMENT";
+
+  if (status === 401) return "UNAUTHENTICATED";
+
+  if (status === 403) return "FORBIDDEN";
+
+  if (status === 404) return "NOT_FOUND";
+
+  if (status === 409) return "CONFLICT";
+
+  if (status === 429) return "RATE_LIMIT";
+
+  return "UNAVAILABLE";
 }
 
 class NativeReadError extends AdapterError {
@@ -222,6 +240,18 @@ export type E2BStateTransport = {
   deleteTemplate?(id: string, signal?: AbortSignal): Promise<boolean>;
   verifyAddress(id: string, names?: string[]): Promise<void>;
   tags(id: string): Promise<{ tag: string; buildId: string }[]>;
+  /**
+   * One native fork of a running sandbox. `refused` means E2B started no fork; a thrown error
+   * leaves the outcome uncertain.
+   */
+  fork?: (
+    id: string,
+    timeoutSeconds: number,
+    signal: AbortSignal,
+  ) => Promise<
+    | { status: "forked"; id: string }
+    | { status: "refused"; code: AdapterErrorCode; message: string }
+  >;
   /** `memory: false` requests a filesystem-only snapshot; omitted captures memory too. */
   capture(
     id: string,
@@ -793,6 +823,51 @@ export function createSdkTransport(apiKey: string, fetcher: typeof fetch = fetch
         );
 
         return { snapshotId: created.snapshotID, names: created.names };
+      },
+      async fork(id, timeoutSeconds, signal) {
+        const response = await fetcher(`${E2B_ENDPOINT}/sandboxes/${encodeURIComponent(id)}/fork`, {
+          method: "POST",
+          headers: {
+            "X-API-Key": apiKey,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ count: 1, timeout: timeoutSeconds }),
+          redirect: "error",
+          signal: AbortSignal.any([signal, AbortSignal.timeout(120_000)]),
+        });
+
+        // E2B documents a non-201 status as a failure before any fork was attempted.
+        if (response.status !== 201) {
+          await response.body?.cancel().catch(() => undefined);
+
+          return {
+            status: "refused",
+            code: forkRefusal(response.status),
+            message: `E2B refused the fork (${response.status})`,
+          };
+        }
+
+        const [result] = await readNative(
+          response,
+          z
+            .array(
+              z.object({
+                sandbox: z.object({ sandboxID: z.string().min(1).max(512) }).optional(),
+                error: z.object({ code: z.number(), message: z.string().max(4096) }).optional(),
+              }),
+            )
+            .length(1),
+          signal,
+        );
+
+        if (result?.sandbox) return { status: "forked", id: result.sandbox.sandboxID };
+
+        return {
+          status: "refused",
+          code: "UNAVAILABLE",
+          message: `E2B could not start the fork (${result?.error?.code ?? "no result"})`,
+        };
       },
       snapshots: readSnapshots,
       deleteSnapshot: (id, signal) => Sandbox.deleteSnapshot(id, { ...opts, signal }),
