@@ -47,16 +47,17 @@ Boat runs sandboxes in the EU (Germany, Finland, France) and does not let you pi
 
 Everything below is tested on every change, using the real Boat client against a simulated API. **No live Boat run has been made yet.**
 
-| Feature           | Support                                                                                                                                                              | Live tested |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Compute lifecycle | Create with an `Idempotency-Key`, inspect, inventory, reference reopening, and destroy by permanent delete with confirmed teardown.                                  | No          |
-| Commands          | argv and shell, with `cwd` and `env`; exact stdout/stderr bytes up to 1 MiB per stream; finite byte stdin; deadlines up to 600 seconds.                              | No          |
-| Streaming output  | Live stdout/stderr as UTF-8 text from detached commands, with no 600-second cap; stop with `terminate()`. No byte output.                                            | No          |
-| Files             | Binary read and overwrite write up to 5 MiB, under `/home/user` or `/tmp`. No-clobber writes are unsupported.                                                        | No          |
-| Suspend/resume    | `suspend()` archives the disk and stops the machine; `resume()` restores the disk onto a fresh machine. Memory, processes and connections are not kept.              | No          |
-| Renewal           | `renew()` sets a new auto-stop window of 60 seconds to 30 days.                                                                                                      | No          |
-| Snapshots         | Capture the disk of a running or archived sandbox as a named snapshot; inspect, list, restore onto a fresh machine and delete. See below.                            | No          |
-| Unsupported       | Fork, snapshot sharing, restore size overrides, volumes, previews, piped input, byte streaming, terminals, directory operations, blocked egress, regions and labels. | —           |
+| Feature           | Support                                                                                                                                                                                  | Live tested |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Compute lifecycle | Create with an `Idempotency-Key`, inspect, inventory, reference reopening, and destroy by permanent delete with confirmed teardown.                                                      | No          |
+| Commands          | argv and shell, with `cwd` and `env`; exact stdout/stderr bytes up to 1 MiB per stream; finite byte stdin; deadlines up to 600 seconds.                                                  | No          |
+| Streaming output  | Live stdout/stderr as UTF-8 text from detached commands, with no 600-second cap; stop with `terminate()`. No byte output.                                                                | No          |
+| Files             | Binary read and overwrite write up to 5 MiB, under `/home/user` or `/tmp`. No-clobber writes are unsupported.                                                                            | No          |
+| Suspend/resume    | `suspend()` archives the disk and stops the machine; `resume()` restores the disk onto a fresh machine. Memory, processes and connections are not kept.                                  | No          |
+| Renewal           | `renew()` sets a new auto-stop window of 60 seconds to 30 days.                                                                                                                          | No          |
+| Snapshots         | Capture the disk of a running or archived sandbox as a named snapshot; inspect, list, restore onto a fresh machine and delete. See below.                                                | No          |
+| Previews          | `preview(port)` hosts the port on an ungated Boat HTTPS URL; anyone holding the URL can open it. Boat's token-gated URLs are not used, because they carry the token in the query string. | No          |
+| Unsupported       | Fork, snapshot sharing, restore size overrides, volumes, protected previews, piped input, byte streaming, terminals, directory operations, blocked egress, regions and labels.           | —           |
 
 ## Snapshots
 

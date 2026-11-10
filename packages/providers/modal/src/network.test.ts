@@ -55,6 +55,14 @@ function fixture(options: { dropNetworkTag?: boolean } = {}) {
     async deleteImage() {
       return "missing";
     },
+    async tunnelUrl(_id, port) {
+      return creates.at(-1)?.encryptedPorts?.includes(port)
+        ? `https://t${port}.r5.modal.host`
+        : null;
+    },
+    async connectToken(id, port) {
+      return { url: `https://${id}-${port}.connect.modal.host`, token: "connect-token" };
+    },
     close() {},
   };
 
@@ -162,4 +170,51 @@ test("network helpers map portable policies", () => {
   expect(modalNetwork("blocked", undefined)).toEqual({ kind: "blocked" });
   expect(modalNetworkTag("internet", undefined)).toBe("internet");
   expect(modalNetworkTag("allow", "a.com")).not.toBe(modalNetworkTag("allow", "b.com"));
+});
+
+test("protected Modal previews mint a connect token for the port, sent as a bearer header", async () => {
+  const native = fixture();
+  const client = await Beachside.connect({ adapter: native.adapter, config: base, credentials });
+
+  try {
+    const box = await client.sandboxes.create({ environment });
+    expect(native.creates[0]!.encryptedPorts).toBeUndefined();
+    expect(await box.preview(3000)).toEqual({
+      access: "protected",
+      url: "https://sb-1-3000.connect.modal.host",
+      headers: { Authorization: "Bearer connect-token" },
+    });
+  } finally {
+    await client.close();
+  }
+});
+
+test("public Modal previews publish the configured ports as tunnels at create", async () => {
+  const native = fixture();
+
+  const client = await Beachside.connect({
+    adapter: native.adapter,
+    config: { ...base, preview: { access: "public", ports: [3000] } },
+    credentials,
+  });
+
+  try {
+    const box = await client.sandboxes.create({ environment });
+    expect(native.creates[0]!.encryptedPorts).toEqual([3000]);
+    expect(await box.preview(3000)).toEqual({
+      access: "public",
+      url: "https://t3000.r5.modal.host",
+    });
+    await expect(box.preview(8080)).rejects.toMatchObject({ code: "UNSUPPORTED" });
+  } finally {
+    await client.close();
+  }
+
+  await expect(
+    Beachside.connect({
+      adapter: native.adapter,
+      config: { ...base, preview: { access: "public" } },
+      credentials,
+    }),
+  ).rejects.toMatchObject({ code: "INVALID_ARGUMENT", message: expect.stringContaining("ports") });
 });

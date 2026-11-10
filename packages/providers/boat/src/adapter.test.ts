@@ -489,3 +489,21 @@ test("API keys never appear in errors", async () => {
   expect(error).toMatchObject({ code: "UNAUTHENTICATED" });
   expect(error?.message).not.toContain("secret-key-123");
 });
+
+test("Boat previews host the port on an ungated public URL", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const box = await client.sandboxes.create();
+    expect(await box.preview(3000)).toEqual({
+      access: "public",
+      url: `https://${box.id}-3000.boat.host`,
+    });
+    const host = fixture.calls.find((call) => call.path.endsWith("/host"));
+    expect(host?.body).toEqual({ port: 3000, public: true });
+    await expect(box.preview(0)).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+  } finally {
+    await client.close();
+  }
+});

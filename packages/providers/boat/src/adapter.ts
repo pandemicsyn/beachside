@@ -14,6 +14,8 @@ import {
   DEFAULT_LIFETIME_SECONDS,
   defineAdapter,
   Preserve,
+  PreviewPort,
+  PreviewResult,
   PreserveSchema,
   resolveSnapshot,
   ResourceMinimums,
@@ -88,6 +90,14 @@ const Configuration = z
      * sandboxes start with none of the account's secrets (`noEnv`).
      */
     environment: z.string().min(1).max(128).optional(),
+    /**
+     * `public` (the only mode): `preview(port)` hosts that port on an ungated Boat HTTPS URL that
+     * anyone holding it can open. Boat's gated URLs carry their token in the query string, which
+     * Beachside previews do not hand out.
+     */
+    preview: z
+      .strictObject({ access: z.literal("public").default("public") })
+      .default({ access: "public" }),
     /** Boat named snapshots keep the disk only; only `Preserve.FILESYSTEM` is accepted. */
     snapshots: z.strictObject({ preserve: PreserveSchema }).optional(),
     lifecycle: z
@@ -224,6 +234,7 @@ type Native = Pick<
   | "getNamedSnapshot"
   | "listNamedSnapshots"
   | "deleteNamedSnapshot"
+  | "hostPort"
 >;
 
 const running = new Set(["ready", "idle", "running"]);
@@ -780,6 +791,24 @@ export function createBoatAdapter(options: BoatAdapterOptions = {}) {
         scope,
         defaultImage: { kind: "prepared", value: config.image },
         defaultNetworkPolicy: config.networkPolicy,
+        async preview(input, ctx) {
+          if (!PreviewPort.safeParse(input.port).success)
+            throw new AdapterError("INVALID_ARGUMENT", "Preview port must be 1 through 65535");
+          await requireRunning(input.sandbox, ctx);
+
+          // Hosting is idempotent per port: each call re-routes the same port and returns its URL.
+          const hosted = await read(ctx, (request) =>
+            native.hostPort(
+              { sandboxId: input.sandbox.id, hostPortRequest: { port: input.port, _public: true } },
+              request,
+            ),
+          );
+
+          if (!hosted.ok || hosted.access !== "public" || hosted.isProtected || !hosted.url)
+            throw new AdapterError("UNAVAILABLE", "Boat did not return a public URL for that port");
+
+          return PreviewResult.parse({ access: "public", url: hosted.url });
+        },
         supports: {
           images: ["prepared"],
           network: ["internet"],

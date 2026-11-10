@@ -32,7 +32,7 @@ This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, 
 | Create, inspect and destroy sandboxes | Tested live     | Tested live          |
 | Pause and resume                      | Tested live     | Tested live          |
 | Protected HTTP previews               | Tested live     | Not tested live      |
-| Public HTTP previews                  | Not supported   | Tested live          |
+| Public HTTP previews                  | Not tested live | Tested live          |
 | Stop a running command                | Tested live     | Tested live          |
 | Extend a sandbox's lifetime           | Tested live     | Tested live          |
 | Reconnect to a sandbox later          | Tested live     | Tested live          |

@@ -95,8 +95,17 @@ const Configuration = z
      */
     resources: ResourceMinimums.optional(),
     preview: z
-      .strictObject({ access: z.enum(["protected", "public"]).default("protected") })
-      .default({ access: "protected" }),
+      .strictObject({
+        /**
+         * `protected` returns the URL with Daytona's sandbox-wide `x-daytona-preview-token` header;
+         * `public` returns a signed URL for that port only, which anyone holding it can open
+         * until it expires.
+         */
+        access: z.enum(["protected", "public"]).default("protected"),
+        /** Lifetime of each public (signed) preview URL: 1 second to 24 hours. */
+        expiresInSeconds: z.number().int().min(1).max(86_400).default(3600),
+      })
+      .default({ access: "protected", expiresInSeconds: 3600 }),
     lifecycle: z
       .strictObject({
         lifetimeSeconds: z.number().int().positive().safe().optional(),
@@ -498,12 +507,6 @@ export function createDaytonaAdapter(
     credentials: Credentials,
     async connect({ config, credentials }) {
       throwAllowlistError(config);
-
-      if (config.preview.access === "public")
-        throw new AdapterError(
-          "UNSUPPORTED",
-          "Daytona public previews require sandbox-wide publication; this adapter supports preview.access protected only",
-        );
 
       const { driver, scope } = await daytonaProvider({
         apiKey: credentials.apiKey,
@@ -2319,9 +2322,18 @@ export function createDaytonaAdapter(
               "Daytona preview requires running compute; resume explicitly before requesting access",
             );
 
+          const publicAccess = config.preview.access === "public";
+
+          // A public preview is a signed, port-scoped URL; the sandbox itself stays private.
+          const endpoint = publicAccess
+            ? `signed-preview-url?expiresInSeconds=${config.preview.expiresInSeconds}`
+            : "preview-url";
+
+          const requestedAt = Date.now();
+
           try {
             const response = await (fetchImpl ?? fetch)(
-              `${config.apiUrl}/sandbox/${encodeURIComponent(input.sandbox.id)}/ports/${input.port}/preview-url`,
+              `${config.apiUrl}/sandbox/${encodeURIComponent(input.sandbox.id)}/ports/${input.port}/${endpoint}`,
               {
                 headers: { Authorization: `Bearer ${credentials.apiKey}` },
                 signal: ctx.signal,
@@ -2354,6 +2366,16 @@ export function createDaytonaAdapter(
 
             if (native.sandboxId !== input.sandbox.id)
               throw new AdapterError("CONFLICT", "Daytona preview response identity differs");
+
+            if (publicAccess)
+              return PreviewResult.parse({
+                access: "public",
+                url: native.url,
+                // Measured from before the request, so the reported time is never late.
+                expiresAt: new Date(
+                  requestedAt + config.preview.expiresInSeconds * 1000,
+                ).toISOString(),
+              });
 
             return PreviewResult.parse({
               access: "protected",

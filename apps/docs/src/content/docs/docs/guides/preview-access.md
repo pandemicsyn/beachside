@@ -3,7 +3,7 @@ title: Preview access
 description: Access an HTTP service running inside a sandbox.
 ---
 
-Use `await box.preview(3000)` to get access to an HTTP service on port 3000 inside a running sandbox. Choose public or protected access when configuring the adapter. The available modes depend on the provider, and each adapter defaults to the mode it can serve: Daytona defaults to protected; E2B, boxd and Vercel default to public. boxd publishes port 3000 by default; Vercel publishes only the `ports` you configure.
+Use `await box.preview(3000)` to get access to an HTTP service on port 3000 inside a running sandbox. Choose public or protected access when configuring the adapter. The available modes depend on the provider, and each adapter defaults to the mode it can serve: Daytona and Modal default to protected (Daytona's public mode signs expiring per-port links); E2B, boxd, Vercel and Boat default to public, and Boat offers public only. boxd publishes port 3000 by default; Vercel publishes only the `ports` you configure.
 
 This example uses Daytona's default protected access. Replace `existing-server-snapshot` with a prepared image whose startup configuration launches an HTTP server on port 3000:
 
@@ -58,7 +58,27 @@ Requests carrying preview headers must use `redirect: "error"`. Otherwise, a red
 
 Daytona's standard tokens cannot be revoked individually. Native stop/start rotates them; native pause/resume retains them. Looking up access can activate the requested preview route. Beachside verifies the sandbox's identity, running state and private visibility first, and does not change visibility during lookup.
 
-Daytona public access reports `UNSUPPORTED`: the native setting would publish ports across the sandbox. The adapter currently supports protected access only.
+## Expiring public links with Daytona
+
+With `preview: { access: "public" }`, Daytona returns a signed URL for that one port that anyone holding it can open, with no headers. The sandbox itself stays private, and the link stops working after `preview.expiresInSeconds` (default **3600**, from 1 second to 24 hours). The result reports when that is:
+
+```ts
+const client = await Beachside.connect({
+  adapter: daytonaAdapter,
+  credentials: { apiKey: process.env.DAYTONA_API_KEY! },
+  config: { target: "us", preview: { access: "public", expiresInSeconds: 900 } },
+});
+// ...
+const preview = await box.preview(3000); // { access: "public", url, expiresAt }
+```
+
+Each call signs a new URL; earlier ones keep working until they expire, and they survive a stop and start. Use this for links you hand to people; keep protected access for your own server-side calls. Signed public access has not been live-tested yet.
+
+## Modal connect tokens and tunnels
+
+Modal defaults to protected access: each `preview(port)` mints a Modal connect token for that port and returns it as an `Authorization: Bearer` header. For public links, set `preview: { access: "public", ports: [3000] }`; Modal publishes those ports as HTTPS tunnels when the sandbox is created, and cannot add more later. Neither mode has been live-tested. See the [Modal adapter README](https://github.com/pandemicsyn/beachside/tree/main/packages/providers/modal#previews).
+
+Some providers' previews carry an `expiresAt` timestamp. When it is present, ask for a new preview before it passes.
 
 ## Public and protected access with E2B
 

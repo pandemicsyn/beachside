@@ -30,6 +30,7 @@ function fixture() {
   };
 
   const calls: string[] = [];
+  let signedExpiry: string | null = null;
 
   const fetcher: typeof fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -65,6 +66,17 @@ function fixture() {
       if (url.pathname === "/api/sandbox" && method === "GET")
         return Response.json({ items: [native] });
 
+      if (url.pathname.endsWith("/ports/3000/signed-preview-url")) {
+        signedExpiry = url.searchParams.get("expiresInSeconds");
+
+        return Response.json({
+          sandboxId: previewId,
+          port: 3000,
+          url: "https://3000-signedtoken.proxy.daytona.work",
+          token: "signedtoken",
+        });
+      }
+
       if (url.pathname.endsWith("/preview-url")) {
         expect(init?.headers).toMatchObject({ Authorization: "Bearer first-key" });
 
@@ -96,11 +108,21 @@ function fixture() {
       previewId = idValue;
     },
     calls,
+    signedExpiry: () => signedExpiry,
     creates: () => creates,
-    connect: (key = "first-key", onReference?: (ref: AdapterRecoveryReference) => void) =>
+    connect: (
+      key = "first-key",
+      onReference?: (ref: AdapterRecoveryReference) => void,
+      preview?: { access: "public"; expiresInSeconds?: number },
+    ) =>
       Beachside.connect({
         adapter,
-        config: { target: "us", networkPolicy: "blocked", ttlMinutes: 15 },
+        config: {
+          target: "us",
+          networkPolicy: "blocked",
+          ttlMinutes: 15,
+          ...(preview && { preview }),
+        },
         credentials: { apiKey: key },
         onReference,
       }),
@@ -196,24 +218,39 @@ test("Daytona malformed credential URLs, lost token and expired sandbox errors c
   }
 });
 
-test("Daytona public setup rejects before native requests", async () => {
-  let calls = 0;
+test("Daytona public preview returns a signed, port-scoped URL that expires", async () => {
+  const f = fixture();
 
-  const fetcher: typeof fetch = Object.assign(
-    async () => {
-      calls++;
+  const client = await f.connect("first-key", undefined, {
+    access: "public",
+    expiresInSeconds: 600,
+  });
 
-      return new Response();
-    },
-    { preconnect() {} },
-  );
+  try {
+    const box = await client.sandboxes.create({ environment: Image.prepared("prepared") });
+    const before = Date.now();
+    const preview = await box.preview(3000);
+
+    expect(preview).toMatchObject({
+      access: "public",
+      url: "https://3000-signedtoken.proxy.daytona.work",
+    });
+    expect(preview).not.toHaveProperty("headers");
+    expect(f.signedExpiry()).toBe("600");
+    // The sandbox itself stays private; only this port's signed URL is shared.
+    expect(f.native.public).toBe(false);
+    const expiresAt = Date.parse(preview.expiresAt ?? "");
+    expect(expiresAt).toBeGreaterThan(before + 590_000);
+    expect(expiresAt).toBeLessThanOrEqual(Date.now() + 600_000);
+  } finally {
+    await client.close();
+  }
+});
+
+test("Daytona public preview lifetimes outside 1 second to 24 hours reject at connect", async () => {
+  const f = fixture();
 
   await expect(
-    Beachside.connect({
-      adapter: createDaytonaAdapter(fetcher),
-      config: { target: "us", networkPolicy: "blocked", preview: { access: "public" } },
-      credentials: { apiKey: "key" },
-    }),
-  ).rejects.toMatchObject({ code: "UNSUPPORTED" });
-  expect(calls).toBe(0);
+    f.connect("first-key", undefined, { access: "public", expiresInSeconds: 86_401 }),
+  ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 });
