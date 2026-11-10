@@ -13,7 +13,7 @@ export async function GET(): Promise<Response> {
 
   const body = `# Beachside
 
-> One TypeScript SDK and CLI for cloud sandboxes on Daytona, E2B, boxd, Boat, Runloop, Freestyle, Vercel and Modal.
+> One TypeScript SDK and CLI for cloud sandboxes on Daytona, E2B, boxd, Boat, Runloop, Freestyle, Archil, Vercel and Modal.
 
 Each page below is the Markdown source of a page on https://beachside.run. The same page is at its address with \`.md\` in place of the trailing slash, for example https://beachside.run/docs/guides/recovery.md.
 

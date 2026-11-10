@@ -19,6 +19,7 @@ beforeEach(async () => {
     join(import.meta.dir, "..", "..", "providers", "freestyle"),
     join(scope, "freestyle"),
   );
+  await symlink(join(import.meta.dir, "..", "..", "providers", "archil"), join(scope, "archil"));
 });
 
 afterEach(async () => {
@@ -119,4 +120,25 @@ test("environment-only Freestyle setup needs only a key and can opt into interne
   );
 
   expect(bound.name).toBe("freestyle");
+});
+
+test("environment-only Archil setup names its region and can opt into internet egress", async () => {
+  const env = { HOME: home, ARCHIL_API_KEY: "key" };
+
+  expect(missingEnv(descriptor("archil")!, env)).toEqual(["ARCHIL_REGION"]);
+
+  const ready = { ...env, ARCHIL_REGION: "aws-eu-west-1", ARCHIL_NETWORK: "internet" };
+
+  const profile = resolveProfile({ provider: "archil" }, await loadConfig(undefined, ready), ready);
+
+  expect(profile.config).toEqual({ region: "aws-eu-west-1", network: "internet" });
+
+  const bound = await loadAdapter(
+    profile,
+    home,
+    ready,
+    new SecretReader(ready, new AbortController().signal),
+  );
+
+  expect(bound.name).toBe("archil");
 });

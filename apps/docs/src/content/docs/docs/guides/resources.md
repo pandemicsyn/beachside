@@ -55,6 +55,7 @@ When no native size is big enough, `Beachside.connect` rejects with `UNSUPPORTED
 | Boat      | Smallest machine type: `small` 2/4 GiB, `default` 4/8 GiB, `large` 8/16 GiB, `xlarge` 16/32 GiB.                                |
 | Runloop   | Smallest size from `X_SMALL` 0.5/1 GiB to `XX_LARGE` 8/32 GiB, then a custom 16 vCPU size with 32 or 64 GiB.                    |
 | Freestyle | Smallest Ubuntu base snapshot: `freestyle/ubuntu-sm` 2/4 GiB up to `freestyle/ubuntu-2xl` 32/64 GiB. Not with a custom `image`. |
+| Archil    | Exact size: vCPUs rounded up to a whole number (1 to 32), memory as given (256 MiB to 64 GiB).                                  |
 | Modal     | Reserved exactly as given; `vcpus` may be fractional. Reported only when both numbers are set.                                  |
 | Daytona   | Applied when the adapter builds a snapshot from an OCI image. A prepared snapshot must already meet the size.                   |
 | E2B       | Applied when the adapter builds a template from an OCI image. A prepared template must already meet the size.                   |
@@ -135,6 +136,7 @@ Pass the returned `nextCursor` to read the next page; it is absent on the last p
 | [Vercel Sandbox (experimental)](/docs/providers/vercel/) | Sessions: `provider-scope`; persistent: `managed` | `unknown` ownership with no creation receipt. Persistent references keep the native generation used to reopen by name.     | Labels; creation time of the named sandbox. |
 | [Runloop (experimental)](/docs/providers/runloop/)       | `provider-scope` (verified account)               | `unknown` ownership.                                                                                                       | No labels (`null`); creation time.          |
 | [Freestyle (experimental)](/docs/providers/freestyle/)   | `provider-scope` (API key's account)              | `unknown` ownership.                                                                                                       | Labels; creation time.                      |
+| [Archil (experimental)](/docs/providers/archil/)         | `provider-scope` (API key's account, one region)  | `unknown` ownership.                                                                                                       | No labels (`null`); creation time.          |
 | Modal (experimental)                                     | `provider-scope` (verified App)                   | Always `null`: the Modal adapter cannot reopen sandboxes.                                                                  | Labels; no creation time (`null`).          |
 
 `operations.inventory()` remains available and returns only `id` and `state`.
@@ -166,6 +168,7 @@ A per-create lifetime replaces the setup value for that sandbox. An adapter neve
 | [Runloop (experimental)](/docs/providers/runloop/)       | 60 seconds to 48 hours | Not when `lifecycle.idleSeconds` is set.        |
 | [Boat (experimental)](/docs/providers/boat/)             | 60 seconds to 30 days  |                                                 |
 | [Freestyle (experimental)](/docs/providers/freestyle/)   | 60 seconds to 30 days  | Counted from creation, including paused time.   |
+| [Archil (experimental)](/docs/providers/archil/)         | 60 seconds to 24 hours | Per powered-on session; expiry pauses.          |
 
 Older adapter-specific names still work for one minor release and reject when set together with `lifecycle.lifetimeSeconds`: E2B, Vercel and Modal `timeoutSeconds`, Daytona `ttlMinutes`, and boxd's top-level `lifetimeSeconds`. From the command line, `beachside create --ttl 30m` and `beachside run --ttl 2h` set a per-create lifetime.
 
@@ -190,7 +193,7 @@ Renewal sets a new expiry window from when the provider processes the request. I
 
 Provider account limits can be tighter. `renewed.requested.forSeconds` reports the resolved setting. `acknowledged: true` means the provider accepted the request, even if the follow-up read failed and `observation` is `null`. If the acknowledgement is lost, recover the operation instead of automatically renewing again.
 
-The experimental [boxd adapter](/docs/providers/boxd/) also supports renewal. [Vercel Sandbox](/docs/providers/vercel/#lifetime-cleanup-and-reopening) renewal instead **adds** 1–86,400 seconds per request to the running session; Vercel caps total session time by plan. See the [renewal example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/sandbox-renew.ts) for saving and reopening a sandbox before renewal.
+The experimental [boxd](/docs/providers/boxd/) and [Archil](/docs/providers/archil/) adapters also support renewal; Archil's window is 60 seconds to 24 hours and applies to the current powered-on session. [Vercel Sandbox](/docs/providers/vercel/#lifetime-cleanup-and-reopening) renewal instead **adds** 1–86,400 seconds per request to the running session; Vercel caps total session time by plan. See the [renewal example](https://github.com/pandemicsyn/beachside/blob/main/apps/docs/examples/sandbox-renew.ts) for saving and reopening a sandbox before renewal.
 
 ### Suspend and resume
 
@@ -211,6 +214,7 @@ What survives suspension depends on the provider:
 | [Daytona](/docs/providers/daytona/#lifetime-idle-stop-and-suspension) | Containers stop: private files are kept and processes end; resume starts fresh processes under the same sandbox ID. Linux VMs pause: files, memory and processes are kept and resume continues them. Requires no mounts and deletion after stopping disabled. The sandbox's expiry clock keeps running while inactive; resume does not reset it.              |
 | [E2B](/docs/providers/e2b/#lifetime-pause-and-snapshots)              | Preserves private files and memory, and drops connections. Requires a verified kill-on-timeout policy with automatic resume disabled; known native mounts are unsupported. Resume uses the current connection's configured lifetime. `execution: "unknown"` means Beachside cannot verify that the original processes survived intervening lifecycle changes. |
 | [boxd (experimental)](/docs/providers/boxd/)                          | Maps native pause and wake with memory, processes, and sockets preserved. Inbound traffic can also wake sleeping machines. This lifecycle mapping has not been live-qualified.                                                                                                                                                                                |
+| [Archil (experimental)](/docs/providers/archil/)                      | Pauses with memory and processes by default, and resume continues them; connections drop. With `Preserve.FILESYSTEM` it stops instead and resume cold-boots. Storage is billed while suspended.                                                                                                                                                               |
 | [Vercel Sandbox (experimental)](/docs/providers/vercel/)              | Suspension and resumption are unsupported.                                                                                                                                                                                                                                                                                                                    |
 
 E2B's paused state has no active-session expiry and needs explicit cleanup. It is saved compute, not a reusable snapshot. Neither E2B nor Daytona promises external-storage durability or connection continuity through suspension.

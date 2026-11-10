@@ -123,6 +123,7 @@ export default defineConfig({
             { slug: "docs/providers/boxd", label: "boxd", badge: "exp" },
             { slug: "docs/providers/runloop", label: "Runloop", badge: "exp" },
             { slug: "docs/providers/freestyle", label: "Freestyle", badge: "exp" },
+            { slug: "docs/providers/archil", label: "Archil", badge: "exp" },
             { slug: "docs/providers/vercel", badge: "exp" },
           ],
         },

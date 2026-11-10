@@ -1,0 +1,51 @@
+import { expect, test } from "bun:test";
+import { setup } from "./fixture.test-support";
+
+test("disks mount at create, survive destroy and can be explicitly deleted", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const volume = await client.volumes.create({ name: "workspace" });
+    expect(volume.reference.ownership).toBe("verified-created");
+
+    // Archil answers a second create with the same name with the existing disk (200).
+    const again = await client.volumes.create({ name: "workspace" });
+    expect(again.reference.nativeId).toBe(volume.reference.nativeId);
+    expect(again.reference.ownership).toBe("unknown");
+    expect(await volume.inspect()).toMatchObject({ state: "ready", filesystem: "object-backed" });
+    expect(JSON.stringify(volume.reference)).not.toContain("disk-secret-token");
+
+    const box = await client.sandboxes.create({
+      mounts: [volume.at("/workspace", { subpath: "app", access: "read-only" })],
+    });
+
+    expect(
+      fixture.calls.find((call) => call.method === "POST" && call.path === "/api/sandboxes")?.body,
+    ).toMatchObject({
+      mounts: [
+        {
+          disk_id: volume.reference.nativeId,
+          path: "/workspace",
+          read_only: true,
+          subdirectory: "app",
+        },
+      ],
+    });
+
+    await expect(box.snapshot()).rejects.toMatchObject({ code: "UNSUPPORTED" });
+    // Archil would delete the disk under the running sandbox; the adapter refuses.
+    await expect(volume.delete()).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(fixture.disks.size).toBe(1);
+    await expect(box.destroy()).rejects.toMatchObject({ code: "UNSUPPORTED" });
+
+    const cleanup = await box.destroy({ storage: "allow-unconfirmed" });
+    expect(cleanup.retainedResources).toContain(volume.reference.nativeId);
+
+    expect((await client.volumes.list()).items).toHaveLength(1);
+    await volume.delete();
+    expect(fixture.disks.size).toBe(0);
+  } finally {
+    await client.close();
+  }
+});

@@ -1,0 +1,46 @@
+{
+  "name": "@beachside/archil",
+  "version": "0.11.0",
+  "private": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && bun build src/index.ts --target node --format esm --outdir dist --external @beachside/adapter --external disk --external zod && tsc -p tsconfig.build.json --noEmit false --declaration --emitDeclarationOnly --outDir dist && bun ../../../scripts/rewrite-declarations.mjs"
+  },
+  "dependencies": {
+    "disk": "1.12.0",
+    "zod": "4.6.6",
+    "@beachside/adapter": "workspace:*"
+  },
+  "devDependencies": {
+    "beachside": "workspace:*"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pandemicsyn/beachside.git",
+    "directory": "packages/providers/archil"
+  },
+  "description": "Experimental Archil Sandboxes provider adapter for Beachside.",
+  "bugs": {
+    "url": "https://github.com/pandemicsyn/beachside/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=22.19"
+  }
+}
