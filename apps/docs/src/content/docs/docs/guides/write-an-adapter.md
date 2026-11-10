@@ -166,7 +166,7 @@ Applications choose provider behavior in adapter setup, not in each call. Use th
 
 Some older adapters still accept earlier native names for these settings as deprecated aliases; new adapters start with the shared names. A few rules keep these options honest:
 
-- Advertise `"blocked"` only when the native policy actually blocks egress, including account-tier exceptions. When a provider cannot block egress at all, require `network: "internet"` in setup instead of defaulting to it silently, as the boxd and Boat adapters do. Do not label peer or metadata isolation as blocked egress.
+- Advertise `"blocked"` only when the native policy actually blocks egress, including account-tier exceptions. When a provider cannot block egress at all, require `network: "internet"` in setup instead of defaulting to it silently, as the Boat adapter does. Do not label peer or metadata isolation as blocked egress.
 - Use one size vocabulary. Do not add native size keys or small/medium/large presets; numbers express sizes for every provider. If an existing adapter had a native size key, keep it as a deprecated alias for one minor release and reject setups that supply both.
 - Keep deprecated native network names working through `networkPolicyAliases`, which maps them to a portable name before the SDK checks support.
 - A caller's `create()` override always wins over the setup default. Reject an unsupported override before allocating anything; never fall back to another image or policy.

@@ -51,6 +51,8 @@ export const FakeAction = z.discriminatedUnion("kind", [
     labels: z.record(z.string(), z.string()).optional(),
     env: CreateEnv.optional(),
     lifetimeSeconds: z.number().int().positive().safe().optional(),
+    /** Fork this running sandbox: copy its image, files and env instead of starting `image`. */
+    forkOf: SandboxRef.optional(),
   }),
   z.strictObject({ kind: z.literal("inspect"), ref: SandboxRef }),
   z.strictObject({

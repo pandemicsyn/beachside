@@ -31,6 +31,7 @@ export const ReferenceSchema = z.strictObject({
     "sandbox_renew",
     "snapshot_capture",
     "snapshot_restore",
+    "sandbox_fork",
     "snapshot_delete",
     "volume_create",
     "volume_delete",

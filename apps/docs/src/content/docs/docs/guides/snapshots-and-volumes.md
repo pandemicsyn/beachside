@@ -129,6 +129,50 @@ Pause application writers before capture if you need consistent data. Passing `c
 
 A restored snapshot does not strengthen the provider's network guarantees. In the maintained E2B test, requested `blocked` networking still allowed direct outbound IPv4 TCP; restored processes may retain outbound access. See [E2B networking](/docs/providers/e2b/#network-and-previews) and the [test evidence](/docs/providers/support/).
 
+## Fork a running sandbox
+
+`box.fork()` copies a running sandbox into a new one with the provider's own fork. Use it to branch an agent's work or try several approaches from the same state. There is no snapshot to manage, and the source keeps running.
+
+```ts
+const check = await source.checkFork();
+if (check.status !== "supported") throw new Error(check.reason);
+
+// labels and lifetimeSeconds apply where `capabilities().fork.value.options` lists them (boxd).
+const branch = await source.fork({ labels: { branch: "a" }, lifetimeSeconds: 1800 });
+try {
+  await branch.exec({ command: ["npm", "test"] });
+} finally {
+  await branch.destroy();
+}
+```
+
+`checkFork()` makes no change. Beyond the options, it runs the adapter's own checks against this source, such as its state, mounted disks, egress and the labels it already carries, so `supported` means `fork()` would be sent. A source that is paused or busy reports `unavailable`.
+
+Fork is native only. An adapter without a native fork rejects with `UNSUPPORTED` before anything changes; Beachside never stands in a snapshot and restore. If you want a copy on such a provider, capture a snapshot and restore it yourself.
+
+`(await source.capabilities()).fork` says what a fork keeps:
+
+- `preserve`: `filesystem` or `filesystem+memory`.
+- `interruption`: what the source goes through while the fork is taken.
+- `execution`: `resume` means the fork continues the source's running processes; `fresh` means it boots from the copied disk.
+- `independentLifecycle`: `false` means the provider keeps the source while forks exist, so destroying it only stops it.
+- `options`: whether `labels` and `lifetimeSeconds` apply. Options the adapter can't apply reject before any fork.
+
+The fork keeps the source's network policy, size and environment. It is a new sandbox with its own reference; save that reference like any other sandbox.
+
+| Provider       | Copies                          | Source                            | Fork options     | Independent lifecycle                         |
+| -------------- | ------------------------------- | --------------------------------- | ---------------- | --------------------------------------------- |
+| boxd           | Disk, RAM and running processes | Pauses for a fraction of a second | Labels, lifetime | Yes                                           |
+| E2B            | Disk, RAM and running processes | Pauses; its open connections drop | Lifetime         | Yes                                           |
+| Archil         | Disk, RAM and running processes | Pause, fork, then resume          | None             | No: source stays stopped until forks are gone |
+| Other adapters | `UNSUPPORTED`                   |                                   |                  |                                               |
+
+An E2B fork carries its source's metadata, including the markers Beachside uses to recognise its sandboxes, so the fork's reference names the source's creation and differs only by sandbox ID. Listing by labels returns forks next to their source, and an E2B fork whose response was lost can't be told apart from its source afterwards: its outcome stays unknown, so list the sandboxes and compare IDs.
+
+A boxd or Archil source with a custom egress policy set outside Beachside is refused, because the fork would inherit a policy that matches neither `blocked` nor `internet`; `checkFork()` reports it first.
+
+If a fork's outcome is uncertain, the error's operation reference has kind `sandbox_fork`. Recover it as in [Results, errors and saved resources](/docs/guides/recovery/); recovery never forks again.
+
 ## Create and mount a volume
 
 A volume stores data separately from compute. `volume.at(path)` describes where to mount it; calling `at()` does not attach storage or change the provider. Pass the descriptor in `mounts` when creating a sandbox.
@@ -209,18 +253,18 @@ The [compiled storage example](https://github.com/pandemicsyn/beachside/blob/mai
 
 ### Current combinations
 
-| Workflow                               | Current support                                                                                                                                                                                                                                            |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Capture and restore private state      | Daytona, Vercel (disposable mode), Runloop, Modal and Boat filesystem capture; E2B, boxd, Freestyle and Archil filesystem and memory capture (Archil restores depend on their snapshot).                                                                   |
-| Capture a sandbox with external mounts | Unsupported by every adapter.                                                                                                                                                                                                                              |
-| Restore with selected volumes          | Daytona only: known mount-free filesystem snapshot, fresh execution and `internet` or `daytona-default` networking.                                                                                                                                        |
-| Restore with `env`, `labels`, lifetime | All three on Daytona, E2B, Modal, Freestyle and Vercel (Vercel lifetime only in disposable mode; Daytona and E2B env only for filesystem snapshots); Runloop env, labels and lifetime (lifetime unless `idleSeconds` is set); Boat and boxd lifetime only. |
-| Labels set at capture                  | Runloop (as snapshot metadata); other adapters reject `snapshot({ labels })` before capture.                                                                                                                                                               |
-| Override restore resource sizes        | Unsupported by Daytona, E2B, boxd, Modal, Boat, Freestyle and Archil; empty overrides are treated as omitted.                                                                                                                                              |
-| Create a sandbox with volumes          | Daytona writable mounts with optional subpaths; boxd whole-disk read-only or writable mounts; Archil disks, read-only or writable, with optional subpaths.                                                                                                 |
-| Manage E2B volumes                     | Private-beta API mapping; live creation was blocked by account HTTP 403. Beachside create-time mounts are unsupported.                                                                                                                                     |
-| Manage Vercel volumes                  | Unsupported.                                                                                                                                                                                                                                               |
-| Copy or version a volume               | Unsupported by Daytona, E2B and boxd.                                                                                                                                                                                                                      |
+| Workflow                               | Current support                                                                                                                                                                                                                                                             |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Capture and restore private state      | Daytona, Vercel (disposable mode), Runloop, Modal and Boat filesystem capture; E2B, boxd, Freestyle and Archil filesystem and memory capture (Archil restores depend on their snapshot).                                                                                    |
+| Capture a sandbox with external mounts | Unsupported by every adapter.                                                                                                                                                                                                                                               |
+| Restore with selected volumes          | Daytona only: known mount-free filesystem snapshot, fresh execution and `internet` or `daytona-default` networking.                                                                                                                                                         |
+| Restore with `env`, `labels`, lifetime | All three on Daytona, E2B, Modal, Freestyle and Vercel (Vercel lifetime only in disposable mode; Daytona and E2B env only for filesystem snapshots); Runloop env, labels and lifetime (lifetime unless `idleSeconds` is set); boxd labels and lifetime; Boat lifetime only. |
+| Labels set at capture                  | Runloop (as snapshot metadata); other adapters reject `snapshot({ labels })` before capture.                                                                                                                                                                                |
+| Override restore resource sizes        | Unsupported by Daytona, E2B, boxd, Modal, Boat, Freestyle and Archil; empty overrides are treated as omitted.                                                                                                                                                               |
+| Create a sandbox with volumes          | Daytona writable mounts with optional subpaths; boxd whole-disk read-only or writable mounts; Archil disks, read-only or writable, with optional subpaths.                                                                                                                  |
+| Manage E2B volumes                     | Private-beta API mapping; live creation was blocked by account HTTP 403. Beachside create-time mounts are unsupported.                                                                                                                                                      |
+| Manage Vercel volumes                  | Unsupported.                                                                                                                                                                                                                                                                |
+| Copy or version a volume               | Unsupported by Daytona, E2B and boxd.                                                                                                                                                                                                                                       |
 
 boxd volumes and mounts have deterministic test coverage but no recorded live storage pass. Vercel has no recorded live acceptance. See [tested provider support](/docs/providers/support/) for evidence per workflow.
 

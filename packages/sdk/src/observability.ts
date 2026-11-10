@@ -206,6 +206,7 @@ const operationKinds = new Set([
   "image_delete",
   "snapshot_capture",
   "snapshot_restore",
+  "sandbox_fork",
   "snapshot_delete",
   "volume_create",
   "volume_delete",

@@ -111,7 +111,7 @@ export async function cleanupCompute(
   // SAFETY: recover parses the creator receipt and verifies current public connection scope before any deletion.
   const creator = await client.recover(entry.reference as AdapterRecoveryReference);
 
-  if (!["create", "snapshot_restore"].includes(creator.reference.kind))
+  if (!["create", "snapshot_restore", "sandbox_fork"].includes(creator.reference.kind))
     throw Error("Compute creator receipt has an incompatible kind");
   await setRole();
 
