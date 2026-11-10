@@ -694,6 +694,12 @@ test("snapshots capture, list, inspect, restore and delete with exact identities
       (await client.snapshots.list({ labels: { "beachside.setup-cache": "k1" } })).items,
     ).toHaveLength(1);
 
+    const creates = createBodies(fixture).length;
+    await expect(snapshot.restore({ labels: { beachside_submission: "x" } })).rejects.toMatchObject(
+      { code: "INVALID_ARGUMENT" },
+    );
+    expect(createBodies(fixture)).toHaveLength(creates);
+
     const restored = await snapshot.restore({ labels: { branch: "b1" } });
     expect(restored.id).not.toBe(source.id);
     expect(createBodies(fixture).at(-1)?.body).toMatchObject({
@@ -701,6 +707,13 @@ test("snapshots capture, list, inspect, restore and delete with exact identities
       metadata: { branch: "b1" },
     });
     expect((await restored.inspect()).state).toBe("running");
+
+    // Restore labels come back from listing, without the adapter's markers.
+    const listedRestore = (await client.sandboxes.list()).items.find(
+      (item) => item.id === restored.id,
+    );
+
+    expect(listedRestore?.labels).toEqual({ branch: "b1" });
 
     await snapshot.delete();
     expect(fixture.snapshots.get(snapshot.id)?.status).toBe("deleted");
@@ -802,10 +815,8 @@ test("inventory and listing are account-scoped; another account cannot reopen a 
     expect(page.items.map((item) => item.id)).toEqual([mine.id]);
     expect(page.items[0]?.reference?.ownership).toBe("unknown");
     // Labels are devbox metadata without the adapter's markers; the creation time is native.
-    expect(page.items[0]).toMatchObject({
-      labels: { job: "ci-7" },
-      createdAt: new Date(1_800_000_000_000).toISOString(),
-    });
+    expect(page.items[0]?.labels).toEqual({ job: "ci-7" });
+    expect(page.items[0]?.createdAt).toBe(new Date(1_800_000_000_000).toISOString());
 
     if (!mine.reference) throw Error("Created sandbox has no reference");
     await expect(alt.sandboxes.get(mine.reference)).rejects.toMatchObject({ code: "CONFLICT" });
