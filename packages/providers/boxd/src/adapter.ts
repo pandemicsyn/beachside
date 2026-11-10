@@ -159,6 +159,15 @@ function egressFor(policy: NetworkPolicy): string[] {
   return policy === "blocked" ? ["none"] : [];
 }
 
+/** The policy a machine's egress allowlist matches, or null for a custom allowlist. */
+function egressPolicy(machine: Pick<Machine, "egressAllow">): NetworkPolicy | null {
+  return sameEgress(machine, "blocked")
+    ? "blocked"
+    : sameEgress(machine, "internet")
+      ? "internet"
+      : null;
+}
+
 function sameEgress(machine: Pick<Machine, "egressAllow">, policy: NetworkPolicy): boolean {
   const expected = egressFor(policy);
 
@@ -571,10 +580,30 @@ export function createBoxdAdapter(
         mounts: [],
       });
 
+      const partialFork = (
+        token: Created,
+        identity: { operationId: string; submissionId: string },
+      ) => ({
+        kind: "sandbox_fork" as const,
+        status: "unknown" as const,
+        sandbox: sandboxReference("boxd", scope, token.id, {
+          operation: identity.operationId,
+          submission: identity.submissionId,
+        }),
+      });
+
+      type Partial = typeof partialCreate | typeof partialRestore | typeof partialFork;
+
+      /** What a launched machine must have come from: a snapshot generation or a forked machine. */
+      type Origin = { id: string; version: number } | { fork: string };
+
+      const partialFor = (expected?: Origin): Partial =>
+        !expected ? partialCreate : "fork" in expected ? partialFork : partialRestore;
+
       const checkpointCreate = async (
         token: Created,
         ctx: AttemptContext<Created>,
-        partial: typeof partialCreate | typeof partialRestore = partialCreate,
+        partial: Partial = partialCreate,
       ) => {
         try {
           await ctx.checkpoint(token);
@@ -589,7 +618,7 @@ export function createBoxdAdapter(
         creation: { operation: string; submission: string },
         ctx: ReadContext,
         mounts: MountSpec[],
-        expected?: { id: string; version: number },
+        expected?: Origin,
       ) => {
         const machine = await find(token.id, ctx);
 
@@ -605,9 +634,17 @@ export function createBoxdAdapter(
 
         if (!sameEgress(machine, token.network ?? "internet")) return "egress" as const;
 
+        if (
+          expected &&
+          "fork" in expected &&
+          (machine.source?.kind !== "fork" || machine.source.id !== expected.fork)
+        )
+          return "replaced" as const;
+
         // boxd restores by snapshot id, which always names its latest version.
         if (
           expected &&
+          "version" in expected &&
           (machine.source?.kind !== "snapshot" ||
             machine.source.id !== expected.id ||
             machine.source.version !== expected.version)
@@ -653,6 +690,12 @@ export function createBoxdAdapter(
               snapshot: { id: string; version: number };
               lifetimeSeconds?: number;
               labels?: Record<string, string>;
+            }
+          | {
+              /** A running machine to fork; the fork inherits its egress, which is `network`. */
+              fork: string;
+              lifetimeSeconds?: number;
+              labels?: Record<string, string>;
             },
         network: NetworkPolicy,
         ctx: AttemptContext<Created>,
@@ -663,8 +706,15 @@ export function createBoxdAdapter(
             : config.lifetimeSeconds;
 
         const mounts = "image" in source ? source.mounts : [];
-        const expected = "snapshot" in source ? source.snapshot : undefined;
-        const partial = expected ? partialRestore : partialCreate;
+
+        const expected: Origin | undefined =
+          "snapshot" in source
+            ? source.snapshot
+            : "fork" in source
+              ? { fork: source.fork }
+              : undefined;
+
+        const partial = partialFor(expected);
 
         const proxies =
           config.preview.access === "public"
@@ -688,36 +738,44 @@ export function createBoxdAdapter(
               },
             },
             () =>
-              native.machines.create(
-                "image" in source
-                  ? {
-                      image: source.image,
-                      name: nativeName(ctx.submissionId),
-                      org: org.slug,
-                      isolated: true,
-                      labels: source.labels,
-                      config: {
-                        vcpu,
-                        proxies,
-                        autoSuspendTimeout: 0,
-                        volumes: source.mounts.map((mount) => ({
-                          diskId: mount.volume.nativeId,
-                          mountPath: mount.path,
-                          readOnly: mount.access === "read-only",
-                        })),
-                      },
-                    }
-                  : {
-                      // A restore replays the captured size; boxd refuses sizing here.
-                      fromSnapshot: source.snapshot.id,
-                      name: nativeName(ctx.submissionId),
-                      org: org.slug,
-                      isolated: true,
-                      // Merged over the labels the snapshot captured.
-                      labels: source.labels,
-                      config: { proxies, autoSuspendTimeout: 0 },
-                    },
-              ),
+              "fork" in source
+                ? native.machines.fork(source.fork, {
+                    name: nativeName(ctx.submissionId),
+                    // One-way: a fork of an isolated machine stays isolated.
+                    isolated: true,
+                    // Merged over the source's labels.
+                    labels: source.labels,
+                  })
+                : native.machines.create(
+                    "image" in source
+                      ? {
+                          image: source.image,
+                          name: nativeName(ctx.submissionId),
+                          org: org.slug,
+                          isolated: true,
+                          labels: source.labels,
+                          config: {
+                            vcpu,
+                            proxies,
+                            autoSuspendTimeout: 0,
+                            volumes: source.mounts.map((mount) => ({
+                              diskId: mount.volume.nativeId,
+                              mountPath: mount.path,
+                              readOnly: mount.access === "read-only",
+                            })),
+                          },
+                        }
+                      : {
+                          // A restore replays the captured size; boxd refuses sizing here.
+                          fromSnapshot: source.snapshot.id,
+                          name: nativeName(ctx.submissionId),
+                          org: org.slug,
+                          isolated: true,
+                          // Merged over the labels the snapshot captured.
+                          labels: source.labels,
+                          config: { proxies, autoSuspendTimeout: 0 },
+                        },
+                  ),
           );
         } catch (error) {
           if (error instanceof AdapterCheckpointError) throw error;
@@ -842,9 +900,9 @@ export function createBoxdAdapter(
       const observeLaunch = async (
         attempt: RecoveryAttempt,
         ctx: ObserveContext<Created>,
-        expected?: { id: string; version: number },
+        expected?: Origin,
       ) => {
-        const partial = expected ? partialRestore : partialCreate;
+        const partial = partialFor(expected);
         const token = CreateToken.safeParse(attempt.token);
 
         if (!token.success)
@@ -1612,6 +1670,58 @@ export function createBoxdAdapter(
               return ctx.unknown("boxd capture identity is unavailable; do not replay");
 
             return captureResult(token.data, ctx, ctx);
+          },
+        },
+        sandboxFork: {
+          recovery: { version: 1, token: CreateToken },
+          // A running source pauses for a moment to hand its memory over, then keeps running.
+          capabilities: {
+            preserve: "filesystem+memory",
+            interruption: "pause",
+            execution: "resume",
+            independentLifecycle: true,
+            options: {
+              labels: true,
+              lifetime: { minSeconds: 1, maxSeconds: Number.MAX_SAFE_INTEGER },
+            },
+          },
+          async prepare(input, ctx) {
+            checkLabels(input.request.labels);
+            const source = await requireMachine(input.sandbox, readContext(ctx.signal));
+
+            if (source.status !== "running")
+              throw new AdapterError("CONFLICT", "boxd forks a running machine only");
+
+            if (!egressPolicy(source))
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "boxd source has a custom egress allowlist; a fork would inherit it",
+              );
+
+            return input;
+          },
+          async submit(input, ctx) {
+            const source = await requireMachine(input.sandbox, readContext(ctx.signal));
+            const network = egressPolicy(source);
+
+            if (!network)
+              return ctx.reject("CONFLICT", "boxd source egress changed before the fork");
+
+            return launch(
+              {
+                fork: source.id,
+                lifetimeSeconds: input.request.lifetimeSeconds,
+                labels: checkLabels(input.request.labels),
+              },
+              network,
+              ctx,
+            );
+          },
+          async observe(attempt, ctx) {
+            if (!attempt.resource)
+              return ctx.unknown("boxd fork source identity is unavailable; do not replay");
+
+            return observeLaunch(attempt, ctx, { fork: attempt.resource.nativeId });
           },
         },
         snapshotRestore: {

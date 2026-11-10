@@ -155,3 +155,83 @@ test("restores keep the snapshot's network policy", async () => {
     await client.close();
   }
 });
+
+test("fork pauses the source, forks its checkpoint into a running sandbox and resumes the source", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+  const path = suitePath();
+
+  try {
+    const source = await client.sandboxes.create();
+    await source.writeFile(path, Uint8Array.of(1, 2, 3), { overwrite: true });
+
+    expect((await source.capabilities()).fork).toMatchObject({
+      status: "supported",
+      value: { preserve: "filesystem+memory", execution: "resume", independentLifecycle: false },
+    });
+
+    const forked = await source.fork();
+    expect(forked.id).not.toBe(source.id);
+    expect(fixture.sandboxes.get(forked.id)?.parent).toBe(source.id);
+    expect(fixture.sandboxes.get(forked.id)?.status).toBe("running");
+    expect(fixture.sandboxes.get(source.id)?.status).toBe("running");
+    expect([...(await forked.readFile(path))]).toEqual([1, 2, 3]);
+
+    // Archil applies no labels or lifetime to a fork, so those reject first.
+    const calls = fixture.calls.length;
+    await expect(source.fork({ labels: { a: "b" } })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+    await expect(source.fork({ lifetimeSeconds: 60 })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+    expect(fixture.calls.slice(calls).some((call) => call.method === "POST")).toBe(false);
+
+    // A source with forks stops but stays until they are gone.
+    const destroyed = await source.destroy();
+    expect(destroyed.retainedResources).toContain(source.id);
+    await forked.destroy();
+  } finally {
+    await client.close();
+  }
+});
+
+test("a refused fork resumes the source and rejects", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const source = await client.sandboxes.create();
+    fixture.failNextFork();
+
+    await expect(source.fork()).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    expect(fixture.sandboxes.get(source.id)?.status).toBe("running");
+    expect(fixture.sandboxes.size).toBe(1);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a fork whose response was lost is recovered by its name, never forked twice", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const source = await client.sandboxes.create();
+    const forks = () => fixture.calls.filter((call) => call.path.endsWith("/fork")).length;
+
+    fixture.loseNextCreateResponse();
+    const lost = await source.submitFork();
+    const saved = JSON.parse(JSON.stringify(lost.reference));
+    const recovered = await (await client.recover(saved)).wait();
+
+    const forkedId =
+      recovered && "reference" in recovered ? (recovered.reference?.nativeId ?? "") : "";
+
+    expect(fixture.sandboxes.get(forkedId)?.parent).toBe(source.id);
+    expect(fixture.sandboxes.get(source.id)?.status).toBe("running");
+    expect(forks()).toBe(1);
+  } finally {
+    await client.close();
+  }
+});

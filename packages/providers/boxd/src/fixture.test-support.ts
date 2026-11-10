@@ -22,6 +22,7 @@ type Transport = ConstructorParameters<typeof Machines>[0];
 
 const Request = z.object({
   vmId: z.string().default(""),
+  sourceVmId: z.string().default(""),
   vm: z.string().default(""),
   snapshot: z.string().default(""),
   enabled: z.boolean().default(false),
@@ -63,7 +64,7 @@ type MachineRecord = {
   proxies: { name: string; port: number }[];
   egressAllow: string[];
   labels: Record<string, string>;
-  sourceInfo?: { kind: string; name: string; version: number; id: string };
+  sourceInfo?: { kind: string; name: string; version: number | null; id: string };
   /** Epoch seconds; boxd reports 0 for machines without a recorded creation time. */
   createdAt?: number;
 };
@@ -172,6 +173,7 @@ async function methods() {
     machines.setEgressAllow("id", []),
     machines.create({ image: "ubuntu:24.04" }),
     machines.create({ fromSnapshot: "snapshot" }),
+    machines.fork("id"),
     snapshots.create("id", "snapshot"),
     snapshots.get("snapshot"),
     snapshots.list(),
@@ -475,6 +477,34 @@ export async function boxdFixture() {
               ok();
             }
 
+            break;
+          }
+
+          case "ForkVm": {
+            const source = machines.get(req.sourceVmId);
+
+            if (!source || source.billingOrgId !== org) {
+              missing();
+              break;
+            }
+
+            effects.create++;
+            const id = crypto.randomUUID();
+            machines.set(id, {
+              ...structuredClone(source),
+              vmId: id,
+              name: req.name,
+              status: "running",
+              isolated: source.isolated || req.isolated,
+              // A fork inherits the source's egress allowlist; labels merge over its labels.
+              labels: { ...source.labels, ...req.labels },
+              sourceInfo: { kind: "fork", name: source.name, version: null, id: source.vmId },
+            });
+
+            if (loseCreate) {
+              loseCreate = false;
+              callback({ code: status.UNAVAILABLE, message: "lost after effect" });
+            } else ok({ vmId: id, name: req.name, status: "running", forkedFrom: source.name });
             break;
           }
 

@@ -971,6 +971,15 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
         mounts: [],
       });
 
+      const partialFork = (id: string, identity: Identity): OperationOutcome => ({
+        kind: "sandbox_fork",
+        status: "unknown",
+        sandbox: sandboxReference("archil", scope, id, {
+          operation: identity.operationId,
+          submission: identity.submissionId,
+        }),
+      });
+
       type Partial = (id: string, identity: Identity) => OperationOutcome;
 
       /** A running sandbox with the requested egress completes the create. */
@@ -2507,6 +2516,110 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
               },
               retainedResources: [ref],
             };
+          },
+        },
+        sandboxFork: {
+          recovery: { version: 1, token: CreateToken },
+          // The source pauses to take a checkpoint, the fork resumes it, then the source resumes.
+          capabilities: {
+            preserve: "filesystem+memory",
+            interruption: "pause",
+            execution: "resume",
+            independentLifecycle: false,
+            options: {},
+          },
+          async prepare(input, ctx) {
+            const source = await requireWire(input.sandbox, ctx);
+
+            if (source.status !== "running")
+              throw new AdapterError(
+                "CONFLICT",
+                `Archil forks a running sandbox, not ${source.status}`,
+              );
+
+            if (held.has(source.sandbox_id))
+              throw new AdapterError(
+                "CONFLICT",
+                "Archil sandbox is already being snapshotted or forked",
+              );
+
+            return input;
+          },
+          async submit(input, ctx) {
+            const source = input.sandbox.id;
+            const policy = policyOf(await network(source, readContext(ctx.signal)));
+
+            if (!policy)
+              return ctx.reject("UNSUPPORTED", "Archil source has a custom egress policy");
+
+            const token = {
+              name: restoreName(ctx.submissionId, source),
+              network: networkPolicy(policy),
+            };
+
+            await ctx.checkpoint(token);
+            held.add(source);
+
+            try {
+              const paused = await park(source, "pause", ctx.signal);
+
+              if ("reason" in paused) {
+                const now = await find(source, readContext(ctx.signal)).catch(() => null);
+
+                return now?.status === "running"
+                  ? ctx.reject("UNAVAILABLE", paused.reason)
+                  : ctx.unknown(`${paused.reason}; the source may be paused, inspect it`);
+              }
+
+              const checkpoint = paused.wire.checkpoint;
+
+              if (!checkpoint) {
+                return (await wake(source, "paused", ctx.signal))
+                  ? ctx.reject("UNAVAILABLE", "Archil reported no checkpoint for the source")
+                  : ctx.unknown("Archil reported no checkpoint and the source did not resume");
+              }
+
+              let result: Awaited<ReturnType<typeof launch>>;
+              let resumed = false;
+
+              try {
+                result = await launch(
+                  {
+                    path: sandboxPath(source, "/fork"),
+                    body: { name: token.name, checkpoint },
+                  },
+                  token,
+                  ctx,
+                  partialFork,
+                );
+              } finally {
+                // The source resumes whatever the fork's outcome; a lost fork stays unknown.
+                resumed = await wake(source, "paused", ctx.signal);
+              }
+
+              if (!resumed && "id" in result)
+                return ctx.unknown(
+                  "Archil fork is running but its source did not resume; inspect the source",
+                  partialFork(result.id, ctx),
+                );
+
+              return result;
+            } finally {
+              held.delete(source);
+            }
+          },
+          async observe(attempt, ctx) {
+            const token = CreateToken.safeParse(attempt.token);
+
+            // The fork's name carries a tag of its source.
+            if (
+              !attempt.resource ||
+              !token.success ||
+              token.data.name !== restoreName(attempt.submissionId, attempt.resource.nativeId)
+            )
+              return ctx.unknown("Archil fork identity is unavailable; do not replay");
+
+            return observeLaunch(token.data, attempt, ctx, partialFork);
           },
         },
         snapshotRestore: {
