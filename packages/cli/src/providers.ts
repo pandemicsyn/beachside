@@ -111,6 +111,16 @@ export const providers: readonly ProviderDescriptor[] = [
     },
   },
   {
+    id: "exe-dev",
+    module: "@beachside/exe-dev",
+    export: "exeDevAdapter",
+    experimental: true,
+    // Env-only setup takes an API token; an SSH key (for protected previews) goes in a profile.
+    credentials: { token: "EXE_API_KEY" },
+    // exe.dev VMs always have internet egress, so the choice is explicit: EXE_NETWORK=internet.
+    config: { network: { env: "EXE_NETWORK", required: true } },
+  },
+  {
     id: "vercel",
     module: "@beachside/vercel",
     export: "vercelAdapter",

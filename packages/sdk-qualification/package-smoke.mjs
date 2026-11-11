@@ -20,6 +20,7 @@ const packages = [
   ["@beachside/runloop", "packages/providers/runloop"],
   ["@beachside/freestyle", "packages/providers/freestyle"],
   ["@beachside/archil", "packages/providers/archil"],
+  ["@beachside/exe-dev", "packages/providers/exe-dev"],
   ["@beachside/vercel", "packages/providers/vercel"],
   ["@beachside/e2b", "packages/providers/e2b"],
   ["beachside", "packages/sdk"],
@@ -82,6 +83,7 @@ async function pack(directory) {
       "@beachside/runloop",
       "@beachside/freestyle",
       "@beachside/archil",
+      "@beachside/exe-dev",
       "@beachside/cli",
     ].includes(manifest.name)
   ) {
@@ -329,6 +331,27 @@ async function flow() {
   await box.readFile("/root/file");
   await restored.destroy(); await snapshot.delete(); await box.destroy(); await client.close();
   return { url, preserve };
+}
+void flow;
+`;
+  else if (mode === "exe-dev")
+    source = `
+import { Beachside } from "beachside";
+import { exeDevAdapter, exeDev } from "@beachside/exe-dev";
+async function flow() {
+  const client = await Beachside.connect({ adapter: exeDevAdapter, config: { network: "internet", resources: { vcpus: 2 }, placement: { pool: "build" }, preview: { access: "public" } }, credentials: { token: "exe1.fixture" } });
+  const box = await client.sandboxes.create({ labels: { app: "smoke" } });
+  const preview = await box.preview(8000);
+  const url: string = preview.url;
+  const fork = await box.fork();
+  const suspended = await box.suspend();
+  const preserve: "filesystem" | "filesystem+memory" = suspended.preserve;
+  await box.resume();
+  await box.exec(["true"]);
+  await box.writeFile("/tmp/file", new Uint8Array([0,255]), { overwrite: true });
+  await box.readFile("/tmp/file");
+  await fork.destroy(); await box.destroy(); await client.close();
+  return { url, preserve, bound: exeDev({ sshKey: "key", network: "internet" }) };
 }
 void flow;
 `;
@@ -1230,6 +1253,29 @@ console.log("Packed Archil imports and local validation passed without provider 
 
   for (const runtime of ["node", "bun"])
     console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], archil)}`);
+
+  const exeDevConsumer = join(temporary, "exe-dev-consumer");
+  await consumer(
+    exeDevConsumer,
+    { ...sdkDeps, "@beachside/exe-dev": archiveOverrides["@beachside/exe-dev"] },
+    archiveOverrides,
+    `
+import { Beachside } from "beachside";
+import { exeDevAdapter } from "@beachside/exe-dev";
+if (exeDevAdapter.name !== "exe-dev") throw Error("External adapter identity mismatch");
+if (exeDevAdapter.config.parse({ network: "internet" }).placement !== "default") throw Error("Placement must default to the account's");
+try {
+  await Beachside.connect({ adapter: exeDevAdapter, config: {}, credentials: { token: "exe1.fixture" } });
+  throw Error("Invalid configuration accepted");
+} catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
+console.log("Packed exe.dev imports and local validation passed without provider IO");
+`,
+  );
+  await checkTypes(exeDevConsumer, "exe-dev");
+  inspectGraph(exeDevConsumer, ["beachside", "@beachside/exe-dev"]);
+
+  for (const runtime of ["node", "bun"])
+    console.log(`${runtime}: ${run(runtime, ["consumer.mjs"], exeDevConsumer)}`);
 
   const e2bDeps = { ...sdkDeps, "@beachside/e2b": archiveOverrides["@beachside/e2b"] };
 

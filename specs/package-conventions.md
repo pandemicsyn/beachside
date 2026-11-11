@@ -15,6 +15,7 @@
 | Runloop adapter (experimental) | `@beachside/runloop` | `@beachside/runloop` |
 | Freestyle adapter (experimental) | `@beachside/freestyle` | `@beachside/freestyle` |
 | Archil adapter (experimental) | `@beachside/archil` | `@beachside/archil` |
+| exe.dev adapter (experimental) | `@beachside/exe-dev` | `@beachside/exe-dev` |
 | Official Vercel adapter | `@beachside/vercel` | `@beachside/vercel` |
 | Command line (`beachside` binary) | `@beachside/cli` | none; run `beachside` |
 | Custom adapter authoring | `@beachside/adapter` | `@beachside/adapter` |
@@ -42,8 +43,8 @@ const beachside = await Beachside.connect({
 
 **Accepted user decision — November 7, 2026.** The split form, `Beachside.connect({ adapter, credentials, config })`, is the canonical setup shown in docs, examples, skills and the landing page, because every adapter supports it, including third-party ones. Every first-party package exports:
 
-- the definition as `<provider>Adapter` (`daytonaAdapter`, `e2bAdapter`, `boxdAdapter`, `boatAdapter`, `runloopAdapter`, `freestyleAdapter`, `archilAdapter`, `modalAdapter`, `vercelAdapter`), and
-- a factory named after the provider (`daytona`, `e2b`, `boxd`, `boat`, `runloop`, `freestyle`, `archil`, `modal`, `vercel`) that takes credentials and config in one object and returns a `BoundAdapter` through `bindAdapter`, with no provider IO.
+- the definition as `<provider>Adapter` (`daytonaAdapter`, `e2bAdapter`, `boxdAdapter`, `boatAdapter`, `runloopAdapter`, `freestyleAdapter`, `archilAdapter`, `exeDevAdapter`, `modalAdapter`, `vercelAdapter`), and
+- a factory named after the provider (`daytona`, `e2b`, `boxd`, `boat`, `runloop`, `freestyle`, `archil`, `exeDev`, `modal`, `vercel`) that takes credentials and config in one object and returns a `BoundAdapter` through `bindAdapter`, with no provider IO.
 
 Factories are optional sugar; they are most useful when code picks a provider at run time, since every factory returns the same type. Third-party authors may ship a factory with `bindAdapter` from `@beachside/adapter`, but are not required to. `Beachside.connect` validates and verifies the binding and owns the session.
 

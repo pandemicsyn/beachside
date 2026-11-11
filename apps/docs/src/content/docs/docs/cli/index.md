@@ -14,7 +14,7 @@ npm install -g @beachside/cli
 beachside adapter add e2b
 ```
 
-The CLI runs on Node.js or Bun; `beachside adapter` uses npm to install. `beachside adapter add` takes one or more provider ids (`daytona`, `e2b`, `vercel`, `boxd`, `modal`, `runloop`, `freestyle`, `archil`, `boat`) and installs each official adapter at the same version as the CLI, so the two always match. It then imports the package to check that the adapter is there. Running it again with nothing to change skips npm, so it is safe in CI setup steps. `beachside adapter ls` shows what is installed and flags an official adapter whose version differs from the CLI's; `beachside adapter rm e2b` removes one.
+The CLI runs on Node.js or Bun; `beachside adapter` uses npm to install. `beachside adapter add` takes one or more provider ids (`daytona`, `e2b`, `vercel`, `boxd`, `modal`, `runloop`, `freestyle`, `archil`, `exe-dev`, `boat`) and installs each official adapter at the same version as the CLI, so the two always match. It then imports the package to check that the adapter is there. Running it again with nothing to change skips npm, so it is safe in CI setup steps. `beachside adapter ls` shows what is installed and flags an official adapter whose version differs from the CLI's; `beachside adapter rm e2b` removes one.
 
 `beachside providers` lists the official adapters, whether each is installed and which credentials are missing.
 

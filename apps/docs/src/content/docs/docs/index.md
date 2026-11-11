@@ -46,6 +46,7 @@ The [Tested provider support](/docs/providers/support/) matrix shows which opera
 | [Runloop](/docs/providers/runloop/)       | Experimental; Runloop sign-ups are invite-only. Devboxes with blocked egress, snapshots and previews.  |
 | [Freestyle](/docs/providers/freestyle/)   | Experimental. Ubuntu microVMs with blocked egress, memory snapshots, pause/resume and public previews. |
 | [Archil](/docs/providers/archil/)         | Experimental. Persistent microVMs on durable disks, with pause/resume, fork snapshots and volumes.     |
+| [exe.dev](/docs/providers/exe-dev/)       | Experimental. Persistent Linux VMs with pause/resume, VM copies as forks and HTTPS previews.           |
 | [Vercel Sandbox](/docs/providers/vercel/) | Short-lived Node 24 sandboxes with commands and files.                                                 |
 | [Modal](/docs/direct-quickstart/)         | Experimental. Commands, files and processes in Modal sandboxes.                                        |
 

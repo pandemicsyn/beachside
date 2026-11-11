@@ -499,6 +499,13 @@ export const providerStatus: ProviderStatus[] = [
     note: "Checked by hand on the Free plan; not yet run through the live qualification suite.",
   },
   {
+    id: "exe-dev",
+    name: "exe.dev",
+    href: "/docs/providers/exe-dev/",
+    experimental: true,
+    note: "Tested against a simulated exe.dev API; not yet run through the live qualification suite.",
+  },
+  {
     id: "modal",
     name: "Modal",
     experimental: true,

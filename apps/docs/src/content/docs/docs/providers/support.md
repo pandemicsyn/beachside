@@ -21,11 +21,12 @@ A live pass covers the image, region and network setting it ran with, not every 
 | [Runloop](/docs/providers/runloop/)       | Experimental | None yet                              | Not yet tested against the live Runloop service; sign-ups are invitation only.                                           |
 | [Freestyle](/docs/providers/freestyle/)   | Experimental | None yet                              | Not yet tested against the live Freestyle service.                                                                       |
 | [Archil](/docs/providers/archil/)         | Experimental | None yet                              | Checked by hand on the Free plan; not yet run through the live qualification suite.                                      |
+| [exe.dev](/docs/providers/exe-dev/)       | Experimental | None yet                              | Tested against a simulated exe.dev API; not yet run through the live qualification suite.                                |
 | Modal                                     | Experimental | None yet                              | Not yet tested against the live Modal service.                                                                           |
 
 ## What has been tested live
 
-This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, Freestyle, Archil, and Modal are experimental; see the notes above and each provider's guide.
+This table covers the supported providers. boxd, Vercel Sandbox, Boat, Runloop, Freestyle, Archil, exe.dev, and Modal are experimental; see the notes above and each provider's guide.
 
 | Feature                               | Daytona         | E2B                  |
 | ------------------------------------- | --------------- | -------------------- |

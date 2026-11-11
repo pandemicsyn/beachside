@@ -20,6 +20,7 @@ beforeEach(async () => {
     join(scope, "freestyle"),
   );
   await symlink(join(import.meta.dir, "..", "..", "providers", "archil"), join(scope, "archil"));
+  await symlink(join(import.meta.dir, "..", "..", "providers", "exe-dev"), join(scope, "exe-dev"));
 });
 
 afterEach(async () => {
@@ -141,4 +142,29 @@ test("environment-only Archil setup names its region and can opt into internet e
   );
 
   expect(bound.name).toBe("archil");
+});
+
+test("environment-only exe.dev setup takes an API key and an explicit internet choice", async () => {
+  const env = { HOME: home, EXE_API_KEY: "exe1.key" };
+
+  expect(missingEnv(descriptor("exe-dev")!, env)).toEqual(["EXE_NETWORK"]);
+
+  const ready = { ...env, EXE_NETWORK: "internet" };
+
+  const profile = resolveProfile(
+    { provider: "exe-dev" },
+    await loadConfig(undefined, ready),
+    ready,
+  );
+
+  expect(profile.config).toEqual({ network: "internet" });
+
+  const bound = await loadAdapter(
+    profile,
+    home,
+    ready,
+    new SecretReader(ready, new AbortController().signal),
+  );
+
+  expect(bound.name).toBe("exe-dev");
 });
