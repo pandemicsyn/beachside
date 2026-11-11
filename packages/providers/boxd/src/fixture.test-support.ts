@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { execFile } from "node:child_process";
 import { z } from "zod";
@@ -318,7 +319,12 @@ export async function boxdFixture() {
       implementation[name] = (call: ServerWritableStream<unknown, object>) => {
         const request = Request.parse(call.request);
         calls.push({ method: name, request: call.request });
-        const chunks = downloadChunks ?? [files.get(request.path) ?? new Uint8Array()];
+
+        // The local guest filesystem mode serves native transfers from the same disk as the helper.
+        const local =
+          localFilesystem && existsSync(request.path) ? readFileSync(request.path) : undefined;
+
+        const chunks = downloadChunks ?? [local ?? files.get(request.path) ?? new Uint8Array()];
         const totalSize = chunks.reduce((sum, bytes) => sum + bytes.length, 0);
 
         for (const [index, data] of chunks.entries())
@@ -802,7 +808,8 @@ export async function boxdFixture() {
             ok();
             break;
           case "UploadFile":
-            files.set(req.path, req.data);
+            if (localFilesystem) writeFileSync(req.path, req.data);
+            else files.set(req.path, req.data);
             ok({ bytesWritten: uploadCount ?? req.data.length });
             break;
           case "ListDir":
