@@ -12,11 +12,18 @@ import { z } from "zod";
 import { type BoxdNativeClient, type CallContext } from "./transport";
 
 // Adapter-owned finite helper. Python 3 is an image prerequisite, never installed automatically.
+/**
+ * Bytes per streamed piece. Pieces move through boxd's native upload and download, which carry
+ * bytes far faster than command output; the helper only splices them in place.
+ */
+const STREAM_CHUNK = 1048576;
+
 export const FILESYSTEM_HELPER = String.raw`
 import os,sys,json,stat,errno,ctypes,tempfile,shutil,base64
 op,p,q,flag,stage=sys.argv[1:6]
 published=False
 created=False
+touched=False
 overwrite=flag=='true'
 def kind(s):
  return 'symlink' if stat.S_ISLNK(s.st_mode) else 'file' if stat.S_ISREG(s.st_mode) else 'directory' if stat.S_ISDIR(s.st_mode) else 'unknown'
@@ -56,8 +63,9 @@ try:
   s=os.stat(p) if overwrite else os.lstat(p)
   result={'type':kind(s),'sizeBytes':s.st_size,'modifiedAt':s.st_mtime,'mode':stat.S_IMODE(s.st_mode)}
  elif op=='mkdir':
+  if os.path.lexists(p) and not os.path.isdir(p): raise OSError(errno.EINVAL,'existing entry is not a directory')
   try:
-   if overwrite: os.makedirs(p,exist_ok=True)
+   if overwrite: touched=True;os.makedirs(p,exist_ok=True)
    else: os.mkdir(p)
   except FileExistsError:
    if not os.path.isdir(p): raise OSError(errno.EINVAL,'existing entry is not a directory')
@@ -65,7 +73,7 @@ try:
   try:
    s=os.lstat(p)
    if stat.S_ISDIR(s.st_mode):
-    if overwrite: shutil.rmtree(p)
+    if overwrite: touched=True;shutil.rmtree(p)
     else: os.rmdir(p)
    else: os.unlink(p)
   except FileNotFoundError: pass
@@ -78,20 +86,24 @@ try:
  elif op=='exists':
   try: os.lstat(p);result={'exists':True}
   except FileNotFoundError: result={'exists':False}
- elif op=='read':
+ elif op=='slice':
   fd=os.open(p,os.O_RDONLY|os.O_NONBLOCK)
   with os.fdopen(fd,'rb') as f:
    if not stat.S_ISREG(os.fstat(f.fileno()).st_mode): raise OSError(errno.EINVAL,'regular file required')
-   f.seek(int(q));data=f.read(65536)
-  result={'data':base64.b64encode(data).decode('ascii'),'eof':len(data)<65536}
- elif op=='append':
+   f.seek(int(q));data=f.read(1048576)
+  out=os.open(stage,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW,0o600)
+  with os.fdopen(out,'wb') as o: o.write(data)
+  result={'size':len(data),'eof':len(data)<1048576}
+ elif op=='absorb':
   fd=os.open(p,os.O_WRONLY|os.O_NOFOLLOW)
   with os.fdopen(fd,'r+b') as f:
    f.seek(0,2)
    if f.tell()!=int(q): raise OSError(errno.EINVAL,'unexpected staging size')
-   data=base64.b64decode(stage,validate=True)
-   if len(data)>65536: raise OSError(errno.EFBIG,'chunk bound exceeded')
+   regular(stage)
+   with open(stage,'rb') as part: data=part.read(1048577)
+   if len(data)>1048576: raise OSError(errno.EFBIG,'chunk bound exceeded')
    f.write(data)
+  os.unlink(stage)
   result={'bytesWritten':len(data)}
  elif op=='reserve':
   parents(p);fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
@@ -114,7 +126,7 @@ try:
  print(json.dumps({'ok':True,'value':result},ensure_ascii=True))
 except OSError as e:
  code='NOT_FOUND' if e.errno==errno.ENOENT else 'CONFLICT' if e.errno in (errno.EEXIST,errno.ENOTEMPTY) else 'FORBIDDEN' if e.errno in (errno.EACCES,errno.EPERM) else 'CAPACITY' if e.errno in (errno.EFBIG,errno.ENOSPC) else 'UNSUPPORTED' if e.errno in (errno.EXDEV,errno.ENOSYS,errno.EOPNOTSUPP) else 'INVALID_ARGUMENT'
- print(json.dumps({'ok':False,'code':code,'effect':'applied' if published else 'possible' if (created and os.path.lexists(stage)) or (op in ('mkdir','remove') and overwrite) else 'none','temporaryPaths':[stage] if created and os.path.lexists(stage) else []}))
+ print(json.dumps({'ok':False,'code':code,'effect':'applied' if published else 'possible' if (created and os.path.lexists(stage)) or (op in ('mkdir','remove') and touched) else 'none','temporaryPaths':[stage] if created and os.path.lexists(stage) else []}))
 `;
 
 const Receipt = z.discriminatedUnion("ok", [
@@ -133,6 +145,15 @@ const Receipt = z.discriminatedUnion("ok", [
     temporaryPaths: z.array(z.string()),
   }),
 ]);
+
+/** The image has no `python3`, which boxd file operations beyond plain reads and writes need. */
+function missingPython(path: string, destination: string) {
+  return new AdapterFilesystemError(
+    "UNSUPPORTED",
+    "boxd file operations need Python 3 in the image (python3 was not found); use an image that has it",
+    { effect: "none", source: path, destination: destination || path, temporaryPaths: [] },
+  );
+}
 
 export function filesystem(native: BoxdNativeClient, id: string) {
   const run = async (
@@ -156,7 +177,8 @@ export function filesystem(native: BoxdNativeClient, id: string) {
       cancelOnAbort: true,
     };
 
-    const mutation = !["stat", "list", "exists", "read"].includes(op);
+    // A slice only writes the reader's private copy, so it changes nothing the caller asked about.
+    const mutation = !["stat", "list", "exists", "slice"].includes(op);
 
     const uncertain = () =>
       new AdapterFilesystemError(
@@ -166,7 +188,7 @@ export function filesystem(native: BoxdNativeClient, id: string) {
           effect: "possible",
           source: path,
           destination: destination || path,
-          temporaryPaths: stage && op !== "append" ? [stage] : [],
+          temporaryPaths: stage ? [stage] : [],
         },
       );
 
@@ -180,6 +202,9 @@ export function filesystem(native: BoxdNativeClient, id: string) {
         }),
       );
 
+      // The shell's "command not found": the helper never ran, so nothing changed.
+      if (call.confirmedExit === 127) throw missingPython(path, destination);
+
       if (call.confirmedExit !== 0 || call.truncated)
         throw new AdapterError(
           "UNAVAILABLE",
@@ -188,6 +213,8 @@ export function filesystem(native: BoxdNativeClient, id: string) {
       receipt = Receipt.parse(JSON.parse(new TextDecoder().decode(result.stdout)));
     } catch (error) {
       if (ctx.signal.aborted) throw ctx.signal.reason;
+
+      if (error instanceof AdapterFilesystemError && error.details.effect === "none") throw error;
 
       if (mutation) throw uncertain();
       throw error;
@@ -213,43 +240,75 @@ export function filesystem(native: BoxdNativeClient, id: string) {
     ctx: FileTransferContext,
   ) => {
     const stage = staging(path);
+    const part = `${stage}.part`;
     let count = 0;
+    // The piece file exists only between its upload and the splice that consumes it.
+    let partLive = false;
+    const temporaries = () => (partLive ? [stage, part] : [stage]);
     ctx.retain?.({ temporaryPaths: [stage] });
 
     try {
       await run("reserve", stage, "", false, ctx);
 
       // Keep the correlated stage on uncertain input/transport failure. No automatic replay.
-      for await (const input of bytes) {
-        for (let offset = 0; offset < input.length; offset += 65536) {
-          ctx.signal.throwIfAborted();
-          const chunk = input.subarray(offset, offset + 65536);
-          const chunkContext = { ...ctx, deadline: Date.now() + 30000 };
+      const flush = async (chunk: Uint8Array) => {
+        ctx.signal.throwIfAborted();
+        const chunkContext = { ...ctx, deadline: Date.now() + 30000 };
 
-          const ack = z
-            .object({ bytesWritten: z.number().int() })
-            .parse(
-              await run(
-                "append",
-                stage,
-                String(count),
-                false,
-                chunkContext,
-                Buffer.from(chunk).toString("base64"),
-              ),
-            );
+        partLive = true;
+        ctx.retain?.({ temporaryPaths: temporaries(), bytesTransferred: count });
 
-          if (ack.bytesWritten !== chunk.length)
-            throw new AdapterFilesystemError("UNAVAILABLE", "boxd staging byte count differs", {
-              effect: "possible",
-              source: stage,
-              destination: path,
-              temporaryPaths: [stage],
-            });
-          count += chunk.length;
-          ctx.retain?.({ temporaryPaths: [stage], bytesTransferred: count });
+        await native.run({ ...chunkContext, uploadBytes: chunk.length }, () =>
+          native.machines.files.upload(id, part, chunk),
+        );
+
+        const ack = z
+          .object({ bytesWritten: z.number().int() })
+          .parse(await run("absorb", stage, String(count), false, chunkContext, part));
+
+        partLive = false;
+
+        if (ack.bytesWritten !== chunk.length)
+          throw new AdapterFilesystemError("UNAVAILABLE", "boxd staging byte count differs", {
+            effect: "possible",
+            source: stage,
+            destination: path,
+            temporaryPaths: [stage],
+          });
+        count += chunk.length;
+        ctx.retain?.({ temporaryPaths: [stage], bytesTransferred: count });
+      };
+
+      // Gather input into whole pieces so small writes do not each cost a round trip.
+      let pending: Uint8Array[] = [];
+      let pendingBytes = 0;
+
+      const drain = async () => {
+        if (!pendingBytes) return;
+        const piece = Buffer.concat(pending);
+        pending = [];
+        pendingBytes = 0;
+        await flush(piece);
+      };
+
+      try {
+        for await (const input of bytes) {
+          for (let offset = 0; offset < input.length;) {
+            const take = Math.min(STREAM_CHUNK - pendingBytes, input.length - offset);
+            pending.push(input.subarray(offset, offset + take));
+            pendingBytes += take;
+            offset += take;
+
+            if (pendingBytes === STREAM_CHUNK) await drain();
+          }
         }
+      } catch (error) {
+        // Bytes already taken from the producer still reach the stage, so the count stays true.
+        if (!ctx.signal.aborted) await drain();
+        throw error;
       }
+
+      await drain();
 
       await run("publish", stage, path, overwrite, { ...ctx, deadline: Date.now() + 30000 });
       ctx.retain?.({ effect: "applied", temporaryPaths: [], bytesTransferred: count });
@@ -258,12 +317,16 @@ export function filesystem(native: BoxdNativeClient, id: string) {
     } catch (error) {
       if (error instanceof AdapterFilesystemError) {
         if (error.details.effect === "applied")
-          ctx.retain?.({ effect: "applied", temporaryPaths: [stage], bytesTransferred: count });
+          ctx.retain?.({
+            effect: "applied",
+            temporaryPaths: temporaries(),
+            bytesTransferred: count,
+          });
         throw new AdapterFilesystemError(error.code, error.message, {
           ...error.details,
           source: stage,
           destination: path,
-          temporaryPaths: [stage],
+          temporaryPaths: temporaries(),
           bytesTransferred: count,
         });
       }
@@ -292,36 +355,54 @@ export function filesystem(native: BoxdNativeClient, id: string) {
     read(path: string, ctx: ReadContext) {
       let offset = 0;
       const cancellation = new AbortController();
+      // Each piece is copied to a private file, then fetched with boxd's native download.
+      const slice = `/tmp/.beachside-${randomUUID()}`;
       ctx = { ...ctx, signal: AbortSignal.any([ctx.signal, cancellation.signal]) };
+
+      // Best effort: the slice file holds a copy of bytes the caller is reading anyway.
+      const discard = () =>
+        run("remove", slice, "", false, {
+          signal: AbortSignal.timeout(30000),
+          deadline: Date.now() + 30000,
+        }).catch(() => undefined);
 
       return new ReadableStream<Uint8Array>(
         {
-          cancel() {
+          async cancel() {
             cancellation.abort();
+            await discard();
           },
           async pull(controller) {
             try {
-              const chunk = z.object({ data: z.string().max(87384), eof: z.boolean() }).parse(
-                await run("read", path, String(offset), false, {
-                  ...ctx,
-                  deadline: Date.now() + 30000,
-                }),
-              );
+              const deadline = Date.now() + 30000;
 
-              const bytes = Buffer.from(chunk.data, "base64");
+              const chunk = z
+                .object({
+                  size: z.number().int().nonnegative().max(STREAM_CHUNK),
+                  eof: z.boolean(),
+                })
+                .parse(
+                  await run("slice", path, String(offset), false, { ...ctx, deadline }, slice),
+                );
 
-              if (
-                bytes.length > 65536 ||
-                bytes.toString("base64") !== chunk.data ||
-                (!chunk.eof && bytes.length !== 65536)
-              )
+              const bytes = chunk.size
+                ? await native.run({ ...ctx, deadline, maxBytes: STREAM_CHUNK }, () =>
+                    native.machines.files.download(id, slice),
+                  )
+                : new Uint8Array();
+
+              if (bytes.length !== chunk.size || (!chunk.eof && bytes.length !== STREAM_CHUNK))
                 throw new AdapterError("UNAVAILABLE", "boxd file chunk is malformed");
               offset += bytes.length;
 
               if (bytes.length) controller.enqueue(bytes);
 
-              if (chunk.eof) controller.close();
+              if (chunk.eof) {
+                await discard();
+                controller.close();
+              }
             } catch (error) {
+              await discard();
               controller.error(error);
             }
           },

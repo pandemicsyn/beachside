@@ -78,10 +78,19 @@ test("guest filesystem preserves links, recursive opt-in, exact bytes and no-clo
     const path = join(dir, "data");
     await f.box.writeFile(path, Uint8Array.of(0, 255, 128));
     expect(readFileSync(path)).toEqual(Buffer.from([0, 255, 128]));
+
+    for (const recursive of [false, true])
+      await expect(f.box.makeDirectory(path, { recursive })).rejects.toMatchObject({
+        code: "INVALID_ARGUMENT",
+      });
     await expect(f.box.writeFile(path, Uint8Array.of(7))).rejects.toMatchObject({
       code: "CONFLICT",
     });
     symlinkSync("missing", join(dir, "dangling"));
+    symlinkSync("nested", join(dir, "nested-link"));
+    const listed = await f.box.readDirectory(dir);
+    expect(listed.entries.find((entry) => entry.name === "nested-link")?.type).toBe("symlink");
+    expect(listed.entries).toEqual(await f.box.listFiles(dir));
     expect(await f.box.fileExists(join(dir, "dangling"))).toBe(true);
     expect(await f.box.fileExists(join(dir, "missing"))).toBe(false);
     expect((await f.box.statFile(join(dir, "dangling"))).type).toBe("symlink");

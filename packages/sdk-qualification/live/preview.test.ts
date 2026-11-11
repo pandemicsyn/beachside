@@ -36,27 +36,24 @@ describe("Beachside native HTTP preview", () => {
       const empty = await box.preview(3001, { signal: t.signal });
       expect(empty.access).toBe(access); // Access exists even before a listener is started.
 
+      // Without a listener a provider may answer with an error page or refuse the connection.
       const emptyResponse = await fetch(empty.url, {
         headers: empty.access === "protected" ? empty.headers : undefined,
         redirect: "manual",
         signal: t.signal,
-      });
+      }).catch(() => undefined);
 
-      expect(emptyResponse.ok).toBe(false);
-      await emptyResponse.body?.cancel();
+      t.signal.throwIfAborted();
+
+      expect(emptyResponse?.ok ?? false).toBe(false);
+      await emptyResponse?.body?.cancel();
       expect((await box.inspect({ signal: t.signal })).expires).toEqual(before.expires);
 
       // Owned compute cleanup stops this server; no process-control extension is exercised.
       const marker = `preview-${t.ledger.runId}`;
       const root = `/tmp/beachside-preview-${t.ledger.runId}`;
-      await box.exec(
-        [
-          "/bin/sh",
-          "-c",
-          `mkdir -m 700 '${root}' && printf '%s' '${marker}' > '${root}/index.html' && nohup python3 -m http.server 3000 --bind 0.0.0.0 --directory '${root}' > '${root}/server.log' 2>&1 < /dev/null &`,
-        ],
-        { signal: t.signal },
-      );
+      await t.exec(box, `mkdir -m 700 '${root}' && printf '%s' '${marker}' > '${root}/index.html'`);
+      await t.background(box, `python3 -m http.server 3000 --bind 0.0.0.0 --directory '${root}'`);
       const preview = await box.preview(3000, { signal: t.signal });
       expect(preview.access).toBe(access);
       const headers = preview.access === "protected" ? preview.headers : undefined;
@@ -65,14 +62,17 @@ describe("Beachside native HTTP preview", () => {
       let ready = false;
 
       while (!signal.aborted) {
-        const response = await fetch(preview.url, { headers, redirect: "manual", signal });
+        // A refused connection means the server is not up yet.
+        const response = await fetch(preview.url, { headers, redirect: "manual", signal }).catch(
+          () => undefined,
+        );
 
-        if (response.ok && (await response.text()) === marker) {
+        if (response?.ok && (await response.text()) === marker) {
           ready = true;
           break;
         }
 
-        await response.body?.cancel().catch(() => undefined);
+        await response?.body?.cancel().catch(() => undefined);
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 

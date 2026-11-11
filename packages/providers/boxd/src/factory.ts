@@ -6,7 +6,7 @@ import { boxdAdapter } from "./adapter";
 export type BoxdOptions = z.input<typeof boxdAdapter.credentials> &
   z.input<typeof boxdAdapter.config>;
 
-/** Experimental boxd adapter; egress is `blocked` unless you set `network: "internet"`. Same as `Beachside.connect({ adapter: boxdAdapter, credentials, config })`. */
+/** boxd adapter; egress is `blocked` unless you set `network: "internet"`. Same as `Beachside.connect({ adapter: boxdAdapter, credentials, config })`. */
 export function boxd(options: BoxdOptions): BoundAdapter {
   const { apiKey, ...config } = options;
 

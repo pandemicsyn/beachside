@@ -9,14 +9,14 @@ import "../styles/tokens.css";
 const title = "Beachside | One SDK. Every sandbox.";
 
 const description =
-  "Beachside is a typed TypeScript API for Daytona, E2B, boxd, Boat, Runloop, Freestyle, Archil and Vercel sandboxes, with a public adapter API for other providers.";
+  "Beachside is a typed TypeScript API for boxd, Daytona, E2B, Boat, Runloop, Freestyle, Archil and Vercel sandboxes, with a public adapter API for other providers.";
 
 const fonts =
   "https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap";
 
 const github = "https://github.com/pandemicsyn/beachside";
 
-const providers = ["daytona", "e2b", "boxd", "vercel"];
+const providers = ["boxd", "daytona", "e2b", "vercel"];
 
 const install = `npm install beachside @beachside/${providers[0]}`;
 
@@ -26,9 +26,9 @@ const skillInstall = "beachside skill setup";
 
 // One shell session per provider: only the setup line (and Daytona's snapshot) changes.
 const cliSessions = [
+  { provider: "boxd", env: "BOXD_API_KEY=... BOXD_ORG=... BOXD_NETWORK=internet", create: "", id: "bx_7kq2m9" },
   { provider: "e2b", env: "E2B_API_KEY=...", create: "", id: "i8mq2v0x7cz4" },
   { provider: "daytona", env: "DAYTONA_API_KEY=... DAYTONA_TARGET=us", create: " --prepared daytona-small", id: "3f2c9a1e-5b7d" },
-  { provider: "boxd", env: "BOXD_API_KEY=... BOXD_ORG=... BOXD_NETWORK=internet", create: "", id: "bx_7kq2m9" },
   { provider: "vercel", env: "VERCEL_TOKEN=... VERCEL_TEAM_ID=... VERCEL_PROJECT_ID=...", create: "", id: "sbx_x2Lq9Ma" },
 ].map(({ provider, env, create, id }) => {
   // Same layout as `beachside ls`: columns padded to their widest cell, two spaces apart.
@@ -153,7 +153,7 @@ const sunBands = [
             <div class="eyebrow"><span></span>Sandbox router for TypeScript</div>
             <h1>One SDK.<br />Every <span class="accent-word">sandbox.</span></h1>
             <p class="lede">
-              A typed API to create, run code in, and tear down sandboxes on Daytona, E2B, boxd, Boat, Runloop, Freestyle, Archil and Vercel.
+              A typed API to create, run code in, and tear down sandboxes on boxd, Daytona, E2B, Boat, Runloop, Freestyle, Archil and Vercel.
               Keep application workflows consistent while configuring each provider explicitly.
             </p>
             <div class="cta-stack">
@@ -203,23 +203,22 @@ const sunBands = [
                   }
                 </div>
               </div>
-              <pre class="code" aria-label="Example: create a sandbox and run a command"><code><span class="k">import</span> {"{"} Beachside<span data-image-import>, Image</span> {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
-<span class="k">import</span> {"{"} <span data-typed-plain>daytonaAdapter</span> {"}"} <span class="k">from</span> <span class="s">"@beachside/<span data-module>daytona</span>"</span>
+              <pre class="code" aria-label="Example: create a sandbox and run a command"><code><span class="k">import</span> {"{"} Beachside<span data-image-import hidden>, Image</span> {"}"} <span class="k">from</span> <span class="s">"beachside"</span>
+<span class="k">import</span> {"{"} <span data-typed-plain>boxdAdapter</span> {"}"} <span class="k">from</span> <span class="s">"@beachside/<span data-module>boxd</span>"</span>
 
 <span class="k">const</span> client = <span class="k">await</span> Beachside.connect({"{"}
-  adapter: <span class="typed"><span data-typed>daytonaAdapter</span><span class="caret" data-caret></span></span>,
-  credentials: {"{"} <span data-credentials>apiKey: process.env.<span class="t">DAYTONA_API_KEY</span>!</span> {"}"},
+  adapter: <span class="typed"><span data-typed>boxdAdapter</span><span class="caret" data-caret></span></span>,
+  credentials: {"{"} <span data-credentials>apiKey: process.env.<span class="t">BOXD_API_KEY</span>!</span> {"}"},
   config: {"{"}
-<span data-options>    target: <span class="s">"us"</span>,
-    environment: Image.prepared(<span class="s">"daytona-small"</span>),
-    network: <span class="s">"daytona-default"</span>,</span>
+<span data-options>    org: process.env.<span class="t">BOXD_ORG</span>!,
+    network: <span class="s">"internet"</span>,</span>
   {"}"},
 {"}"})
 <span class="k">await</span> client.sandboxes.with({"{}"}, <span class="k">async</span> (box) =&gt; {"{"}
   <span class="k">const</span> run = <span class="k">await</span> box.exec([<span class="s">"printf"</span>, <span class="s">"ready"</span>])
   console.log(run.stdoutText())
 {"}"})
-<span class="k">await</span> client.close()<span data-pad></span></code></pre>
+<span class="k">await</span> client.close()<span data-pad>{"\n "}</span></code></pre>
               <div class="code-status" aria-live="polite">
                 <span class="status-dot" data-status-dot></span>
                 <span class="status-text" data-status>connecting…</span>
@@ -243,9 +242,9 @@ const sunBands = [
         <div class="wrap adapters-row">
           <a class="adapters-label" href="/docs/#choose-a-provider">Adapters &amp; support →</a>
           <ul class="chips">
+            <li class="chip chip-boxd"><span></span>boxd</li>
             <li class="chip chip-daytona"><span></span>Daytona</li>
             <li class="chip chip-e2b"><span></span>E2B</li>
-            <li class="chip chip-boxd"><span></span>boxd (exp)</li>
             <li class="chip chip-boat"><span></span>Boat (exp)</li>
             <li class="chip chip-runloop"><span></span>Runloop (exp)</li>
             <li class="chip chip-freestyle"><span></span>Freestyle (exp)</li>
@@ -427,7 +426,7 @@ const sunBands = [
 
       let tick: ReturnType<typeof setInterval> | undefined;
 
-      let current = "daytona";
+      let current = "boxd";
 
       // Each provider's split-form setup. An option is [key, env var] (reads process.env) or [key, , literal].
       const optionsNode = document.querySelector<HTMLElement>("[data-options]");
@@ -620,7 +619,7 @@ const sunBands = [
 
       setTyped("");
 
-      setTimeout(() => runHero("daytona", ""), motionOn() ? 900 : 0);
+      setTimeout(() => runHero("boxd", ""), motionOn() ? 900 : 0);
 
       // CLI section: type each command, print its output, and replay when the provider changes.
       const cliTerm = document.querySelector<HTMLElement>("[data-cli-sessions]");

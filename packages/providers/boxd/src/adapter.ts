@@ -596,7 +596,53 @@ export function createBoxdAdapter(
         return (await find(box.id, ctx)) ?? unavailable();
       };
 
+      // boxd wakes a paused machine on guest access; refuse instead, so only resume() wakes it.
+      const requireRunning = async (box: Sandbox, ctx: ReadContext) => {
+        const machine = await requireMachine(box, ctx);
+
+        if (state(machine.status) !== "running")
+          throw new AdapterError(
+            "UNAVAILABLE",
+            `boxd machine is ${machine.status}; resume it first`,
+          );
+
+        return machine;
+      };
+
       const disks = (ctx: ReadContext) => native.run(ctx, () => native.disks.list());
+
+      /**
+       * Best effort: flush and freeze (`-f`) or thaw (`-u`) a machine's writable disks. True when
+       * every disk answered; a missing `fsfreeze` or a gone machine leaves durability unconfirmed.
+       */
+      const settleDisks = async (
+        id: string,
+        paths: readonly string[],
+        mode: "-f" | "-u",
+        signal: AbortSignal,
+      ) => {
+        if (!paths.length) return false;
+        const call: CallContext = { ...readContext(signal, 10), maxBytes: 4096, truncated: false };
+
+        try {
+          await native.run(call, () =>
+            native.machines.exec(id, {
+              command: [
+                "/bin/sh",
+                "-c",
+                'sync; for p do fsfreeze "$0" "$p" || exit 1; done',
+                mode,
+                ...paths,
+              ],
+              encoding: "buffer",
+            }),
+          );
+        } catch {
+          return false;
+        }
+
+        return call.confirmedExit === 0;
+      };
 
       const findDisk = async (ref: ResourceReference, ctx: ReadContext) => {
         checkedRef(ref, "volume");
@@ -1429,10 +1475,25 @@ export function createBoxdAdapter(
             const token = { id: input.id, mounts: input.mounts };
             await ctx.checkpoint(token);
 
+            // Deleting a machine does not unmount its disks; freeze them so the journal is clean.
+            const writable = input.mounts.length
+              ? (await disks(readContext(ctx.signal)).catch(() => [])).flatMap((disk) =>
+                  disk.attachments
+                    .filter((at) => at.machineId === input.id && at.mountMode !== "ro")
+                    .map((at) => at.mountPath),
+                )
+              : [];
+
+            const frozen = await settleDisks(input.id, writable, "-f", ctx.signal);
+
             try {
               await native.run(readContext(ctx.signal), () => native.machines.delete(input.id));
             } catch (error) {
-              if (definitiveRejection(error)) return rejection(ctx, error);
+              if (definitiveRejection(error)) {
+                if (frozen) await settleDisks(input.id, writable, "-u", ctx.signal);
+
+                return rejection(ctx, error);
+              }
 
               return ctx.pending(token);
             }
@@ -1476,7 +1537,7 @@ export function createBoxdAdapter(
         exec: {
           finiteStdin: "bytes",
           async prepare(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return input;
           },
@@ -1528,7 +1589,7 @@ export function createBoxdAdapter(
         processes: {
           supports: { sustainedOutput: true, binaryOutput: true, execCapture: "bytes" },
           async start(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return startBoxdProcess(native, input, ctx);
           },
@@ -1581,7 +1642,7 @@ export function createBoxdAdapter(
         files: {
           maxBytes: MAX_BYTES,
           async read(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return native.run({ ...ctx, maxBytes: input.maxBytes ?? MAX_BYTES }, () =>
               native.machines.files.download(input.sandbox.id, input.path),
@@ -1591,7 +1652,7 @@ export function createBoxdAdapter(
             async prepare(input, ctx) {
               if (input.bytes.length > MAX_BYTES)
                 throw new AdapterError("CAPACITY", "boxd file exceeds the write bound");
-              await requireMachine(input.sandbox, ctx);
+              await requireRunning(input.sandbox, ctx);
 
               return input;
             },
@@ -1641,7 +1702,17 @@ export function createBoxdAdapter(
             },
           },
           async readDirectory(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
+
+            // boxd's native listing follows symlinks, so prefer the exact lstat helper.
+            try {
+              return directoryValue(
+                await filesystem(native, input.sandbox.id).run("list", input.path, "", false, ctx),
+              );
+            } catch (error) {
+              if (!(error instanceof AdapterFilesystemError && error.code === "UNSUPPORTED"))
+                throw error;
+            }
 
             const listing = await native.run(ctx, () =>
               native.machines.files.listDir(input.sandbox.id, input.path),
@@ -1674,14 +1745,14 @@ export function createBoxdAdapter(
             };
           },
           async list(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return directoryValue(
               await filesystem(native, input.sandbox.id).run("list", input.path, "", false, ctx),
             ).entries;
           },
           async stat(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return statValue(
               await filesystem(native, input.sandbox.id).run(
@@ -1694,7 +1765,7 @@ export function createBoxdAdapter(
             );
           },
           async exists(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return z
               .object({ exists: z.boolean() })
@@ -1709,12 +1780,12 @@ export function createBoxdAdapter(
               ).exists;
           },
           async readStream(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return filesystem(native, input.sandbox.id).read(input.path, ctx);
           },
           async writeStream(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return filesystem(native, input.sandbox.id).write(
               input.path,
@@ -1724,7 +1795,7 @@ export function createBoxdAdapter(
             );
           },
           async copy(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return filesystem(native, input.sandbox.id).transfer(
               "copy",
@@ -1735,7 +1806,7 @@ export function createBoxdAdapter(
             );
           },
           async move(input, ctx) {
-            await requireMachine(input.sandbox, ctx);
+            await requireRunning(input.sandbox, ctx);
 
             return filesystem(native, input.sandbox.id).transfer(
               "move",
@@ -1747,7 +1818,7 @@ export function createBoxdAdapter(
           },
           makeDirectory: {
             async prepare(input, ctx) {
-              await requireMachine(input.sandbox, ctx);
+              await requireRunning(input.sandbox, ctx);
 
               return input;
             },
@@ -1769,7 +1840,7 @@ export function createBoxdAdapter(
           },
           remove: {
             async prepare(input, ctx) {
-              await requireMachine(input.sandbox, ctx);
+              await requireRunning(input.sandbox, ctx);
 
               return input;
             },

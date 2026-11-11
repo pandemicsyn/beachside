@@ -77,11 +77,18 @@ export async function renewal(t: TestResources, box: AdapterSandbox) {
       : after;
 
   expect(deadline).toBeLessThanOrEqual(upperBase + resolved * 1000 + 5000);
-  const max = t.client.provider === "daytona" ? 86400 : t.client.provider === "vercel" ? 300 : 3600;
-  await expect(box.renew({ forSeconds: max + 1 }, { signal: t.signal })).rejects.toMatchObject({
-    code: "INVALID_ARGUMENT",
-    effect: "none",
-  });
+  // Known provider ceilings, else the adapter's declared one; boxd documents none, so it has none to test.
+  const renewal = (await box.capabilities()).lifecycle?.renew;
+
+  const max =
+    { daytona: 86400, vercel: 300, e2b: 3600 }[t.client.provider] ??
+    (renewal?.status === "supported" ? renewal.value.maxSeconds : undefined);
+
+  if (max !== undefined)
+    await expect(box.renew({ forSeconds: max + 1 }, { signal: t.signal })).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+      effect: "none",
+    });
 }
 
 export async function execution(t: TestResources, box: AdapterSandbox) {
@@ -361,7 +368,7 @@ describe("Beachside sandbox", () => {
       const bytes = new TextEncoder().encode(nonce);
       await box.writeFile(path, bytes, { overwrite: true, signal: t.signal });
       // Reuse the snapshot suite's in-memory nonce/counter and bounded socket probe.
-      await t.exec(box, `nohup python3 -u -c ${quote(memoryProgram)} >/dev/null 2>&1 </dev/null &`);
+      await t.background(box, `python3 -u -c ${quote(memoryProgram)}`);
       let memoryBefore: ReturnType<typeof memorySample> | undefined;
 
       for (let attempt = 0; attempt < 20; attempt++) {

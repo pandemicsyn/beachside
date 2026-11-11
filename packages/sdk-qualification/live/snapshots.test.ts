@@ -48,7 +48,7 @@ export async function snapshotRoundtrip(
   expect(plan.value.sourceState).toBe("running");
   t.at("snapshot/write");
   await source.writeFile(path, bytes, { overwrite: true, signal: t.signal });
-  await t.exec(source, `python3 -c ${quote(memoryProgram)} >/tmp/beachside-memory-error 2>&1 &`);
+  await t.background(source, `python3 -c ${quote(memoryProgram)}`);
   let before: ReturnType<typeof memorySample> | undefined;
 
   for (let index = 0; index < 10 && !before; index++) {
