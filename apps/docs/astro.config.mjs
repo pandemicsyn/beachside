@@ -118,9 +118,9 @@ export default defineConfig({
           items: [
             { slug: "docs/providers/support" },
             { slug: "docs/providers/boxd", label: "boxd" },
+            { slug: "docs/providers/freestyle", label: "Freestyle" },
             { slug: "docs/providers/daytona" },
             { slug: "docs/providers/e2b" },
-            { slug: "docs/providers/freestyle", label: "Freestyle" },
             { slug: "docs/providers/boat", label: "Boat", badge: "exp" },
             { slug: "docs/providers/runloop", label: "Runloop", badge: "exp" },
             { slug: "docs/providers/archil", label: "Archil", badge: "exp" },

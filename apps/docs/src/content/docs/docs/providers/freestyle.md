@@ -90,4 +90,16 @@ Deadlines run up to 24 hours on VMs whose guest agent supports long execs. Older
 
 Beachside sends each mutation once and the adapter adds no retries; Freestyle's SDK replays only reads. Slow calls run as Freestyle background requests, which the SDK follows until they finish. Each create and each snapshot carries a `beachside-<hash>` slug derived from its submission, so a create or capture whose response was lost is found by that slug instead of being resent. A refusal Freestyle answers with a 4xx is reported as that error; a lost response, a 5xx, or a `VM_NON_RESPONSIVE` command is `OUTCOME_UNKNOWN`. Listed VMs report `ownership: "unknown"`.
 
+## Limits
+
+- No OCI images, image builds, volumes, mounts or regions. Images are Freestyle snapshots of its Ubuntu bases.
+- Egress allowlists match IPv4 ranges only, because Freestyle firewalls cannot match host names.
+- Previews are public only: anyone with the `style.dev` URL can open the port. Protected previews are not wired yet.
+- Commands, writes, processes and previews need a running VM and are refused with `CONFLICT` while it is paused. Reads, listings, `stat` and `exists` still work without waking it.
+- Captured command output is at most 1 MiB across stdout and stderr, and finite stdin at most 1 MiB. Buffered file reads and writes stop at 8 MiB; use streams for larger files.
+- Command deadlines run up to 24 hours only on VMs whose guest agent supports long execs; older agents refuse anything over five minutes.
+- Lifetime runs from 60 seconds to 30 days, counted from creation including paused time.
+- Freestyle may limit pause and snapshots by plan; a plan refusal surfaces as Freestyle's own error.
+- Listed VMs report `ownership: "unknown"`.
+
 See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/129) and the [Freestyle documentation](https://www.freestyle.sh/docs).

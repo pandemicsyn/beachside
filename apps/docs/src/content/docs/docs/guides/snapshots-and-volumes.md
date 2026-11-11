@@ -81,15 +81,15 @@ Close the connection in an outer `finally`, as in [Getting started](/docs/direct
 
 | Provider                                           | Captured state                            | Effect on a running source                | Restored execution                               |
 | -------------------------------------------------- | ----------------------------------------- | ----------------------------------------- | ------------------------------------------------ |
-| Daytona                                            | Private filesystem                        | Stop, capture, then restart               | Fresh processes; RAM is not retained             |
-| Daytona Linux VM, `Preserve.FILESYSTEM_AND_MEMORY` | Private filesystem, RAM and process state | May pause briefly; keeps running          | Resume captured processes in a new VM            |
-| E2B                                                | Private filesystem, RAM and process state | Pause and resume; active connections drop | Resume captured processes in independent compute |
-| Modal                                              | Private root filesystem                   | May pause briefly; keeps running          | Fresh processes; RAM is not retained             |
 | boxd                                               | Private disk, RAM and process state       | Brief pause; keeps running                | Resume captured processes in a new machine       |
+| Freestyle                                          | Private disk, RAM and process state       | Keeps running; any pause is undocumented  | Resume captured processes in a new VM            |
+| Daytona                                            | Private filesystem                        | Stop, capture, then restart               | Fresh processes; RAM is not retained             |
+| Modal                                              | Private root filesystem                   | May pause briefly; keeps running          | Fresh processes; RAM is not retained             |
+| Daytona Linux VM, `Preserve.FILESYSTEM_AND_MEMORY` | Private filesystem, RAM and process state | May pause briefly; keeps running          | Resume captured processes in a new VM            |
 | Vercel (disposable mode)                           | Private filesystem                        | Source session stops                      | Fresh processes; RAM is not retained             |
 | Runloop                                            | Private disk                              | May pause briefly; keeps running          | Fresh processes; RAM is not retained             |
 | Boat                                               | Private disk                              | Keeps running; any pause is undocumented  | Fresh processes; RAM is not retained             |
-| Freestyle                                          | Private disk, RAM and process state       | Keeps running; any pause is undocumented  | Resume captured processes in a new VM            |
+| E2B                                                | Private filesystem, RAM and process state | Pause and resume; active connections drop | Resume captured processes in independent compute |
 | Archil                                             | Private disk, RAM and process state       | Pause, fork, then resume                  | Resume captured processes in a dependent fork    |
 | Archil, `Preserve.FILESYSTEM`                      | Private disk                              | Stop, fork, then restart                  | Fresh processes in a dependent fork              |
 

@@ -112,7 +112,7 @@ const targets = [
       ? renderSupportMatrix(reports, metadata)
       : renderSupportOverview(
           [...reports, ...packageReports],
-          [...metadata, boxd.support, freestyle.support],
+          [boxd.support, freestyle.support, ...metadata],
         ),
   ],
 ] as const;
