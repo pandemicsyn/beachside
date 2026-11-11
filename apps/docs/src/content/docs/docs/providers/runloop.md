@@ -75,4 +75,13 @@ A command that passes its deadline is killed through Runloop and reported as `OU
 
 Beachside sends each mutation once and the adapter adds no retries. Creates and snapshot captures carry `beachside_operation` and `beachside_submission` metadata, so a create or capture whose response was lost is found by that marker instead of being resent. A refusal Runloop answers with a 4xx is reported as that error; a lost response or 5xx is `OUTCOME_UNKNOWN`. A lost or failed command result is never replayed. Listed Devboxes and snapshots not created through this connection report `ownership: "unknown"`.
 
+## Limits
+
+- Not yet tested against the live Runloop service, and sign-ups are by invitation.
+- No OCI images or image builds, volumes, mounts, renewal, piped input, byte streaming, terminals, directory operations or regions.
+- Command deadlines go up to an hour.
+- Files are limited to 64 MiB, and no-clobber writes are unsupported.
+- Suspend keeps the disk only; memory and connections are lost.
+- Shutdown is refused while a disk snapshot is in progress.
+
 See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/47) and the [Runloop API reference](https://docs.runloop.ai/docs/api-reference).

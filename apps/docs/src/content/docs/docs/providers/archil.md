@@ -108,4 +108,15 @@ Archil has no file API for sandboxes. Buffered reads use the official SDK's chun
 
 Beachside sends each mutation once and the adapter adds no retries; the SDK's own retries are bypassed by an adapter-owned single-attempt client. Each create, capture and restore carries an adapter-chosen `bs-…` name derived from its submission, so a create whose response was lost is found by that name instead of being resent. A refusal Archil answers with a 4xx is reported as that error; a lost response or a 5xx is `OUTCOME_UNKNOWN`.
 
+## Limits
+
+- Not yet run through the live provider qualification suite, so it stays experimental.
+- No labels, and restores cannot change resources, env, labels, lifetime or mounts.
+- Restores and forks depend on what they came from: a source with snapshots or forks cannot be deleted, and `snapshot.restore()` needs `requireIndependentLifecycle: false`.
+- Sandboxes with mounted disks cannot be snapshotted or forked.
+- Command deadlines go up to 1 hour and captured output to 1 MiB; run longer work as a process.
+- Buffered file reads and writes stop at 32 MiB; use streams for larger files. File operations need Python 3 and `dd` in the image.
+- Destroying a sandbox with mounted disks needs `destroy({ storage: "allow-unconfirmed" })`, and a mounted disk cannot be deleted.
+- The Free plan allows 5 concurrent sandboxes and 30-minute sessions, and only Archil's managed network (`network: "archil-managed"`); `blocked`, `internet` and allowlists need a paid plan.
+
 See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/188) and the [Archil documentation](https://docs.archil.com/compute/sandboxes/introduction).
