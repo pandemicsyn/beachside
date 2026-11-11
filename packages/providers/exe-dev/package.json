@@ -1,6 +1,6 @@
 {
   "name": "@beachside/exe-dev",
-  "version": "0.0.0",
+  "version": "0.14.0",
   "private": false,
   "files": [
     "dist",
