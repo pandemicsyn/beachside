@@ -805,7 +805,9 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
         const record = result.exitCode === 0 ? parseWrapper(result.stdout) : null;
 
         if (!record)
-          return ctx.unknown("exe.dev ran the command but its result record could not be decoded");
+          return ctx.unknown(
+            `exe.dev ran the command but its result record could not be decoded (exit ${result.exitCode})`,
+          );
 
         return record;
       };

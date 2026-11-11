@@ -207,6 +207,18 @@ export function exeDevFixture() {
       ]);
 
       signal?.removeEventListener("abort", kill);
+
+      // Diagnostics for CI runners whose guest tools differ from a developer machine.
+      if (process.env.GITHUB_ACTIONS && (code !== 0 || err.length > 0))
+        console.error(
+          JSON.stringify({
+            exit: code,
+            command: command.slice(0, 400),
+            stderr: new TextDecoder().decode(err).slice(0, 2000),
+            stdout: new TextDecoder().decode(out).slice(0, 400),
+          }),
+        );
+
       exit = code;
       stdout = out;
       stderr = err;
