@@ -18,7 +18,7 @@ Updated November 10, 2026, at version 0.10.0. This is the only work queue. Contr
 - **Add-on follow-ups:** `attach` with keep-alive, `renew`, minting one Tailscale key per sandbox from an OAuth client, and hooks that bring servers back after resume and clear tailnet and pairing state before a snapshot. Deferred until the first `--with` build ships.
 - **Setup scripts:** one `setup` key in the SDK and CLI for scripts and command lists run in a new sandbox, plus `startup` for every boot without processes (restore, filesystem-only resume). Named, provider-neutral `setups` in `beachside.json` (`--setup node`, `--setup ./setup.sh`, `--setup-cmd`), run by Beachside over `exec` with live output, recorded by digest so restores skip finished setup and `--if-not-exists` checks it. `--with` add-ons move onto the same engine. Later: `--cache`, which snapshots after setup and restores that snapshot for the same digest. Design only. (#185)
 - **Secrets:** a `secret(value, { for: "github" })` helper backed by a pluggable credential broker, so tokens reach a sandbox without being written into it. Design only.
-- **Live tests for experimental adapters:** Vercel, Boat, Runloop, Freestyle, Archil and Modal have no live passes yet. See [qualification gaps](#qualification-gaps).
+- **Live tests for experimental adapters:** Vercel, Boat, Runloop, Archil and Modal have no live passes yet. See [qualification gaps](#qualification-gaps).
 - **Rebrand cleanup:** deprecate the old `@sandbar-sdk/*` npm packages and redirect the old docs domain.
 
 ## Shipped
@@ -30,7 +30,7 @@ Updated November 10, 2026, at version 0.10.0. This is the only work queue. Contr
 
 ### Providers
 
-boxd (#82, #102), Daytona and E2B are supported and live-tested. Vercel Sandbox (#93, #103), Boat (#116, #147), Runloop (#125, #145), Modal (#126, #132, #141) and Freestyle VMs (#174) are experimental.
+boxd (#82, #102), Daytona, E2B and Freestyle VMs (#174) are supported and live-tested. Vercel Sandbox (#93, #103), Boat (#116, #147), Runloop (#125, #145) and Modal (#126, #132, #141) are experimental.
 
 - **Setup is the same everywhere:** `Beachside.connect({ adapter, credentials, config })`, plus an optional factory per package (#159).
 - **Portable options:** one network vocabulary (#109), `resources: { vcpus, memoryMiB }` (#122), one lifetime key and `--ttl` (#146), working defaults that match provider limits (#110), and clean create rejections with the provider's reason (#108).
@@ -65,7 +65,7 @@ Use the existing [Bun integration suites](packages/sdk-qualification/provider-qu
 
 | Priority | Remaining work                          | Completion condition                                                                                                                                                                                  |
 | -------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1        | Experimental adapters                   | Vercel, Boat, Runloop, Freestyle, Archil and Modal have no live passes. Run each provider's maintained profile.                                                                                       |
+| 1        | Experimental adapters                   | Vercel, Boat, Runloop, Archil and Modal have no live passes. Run each provider's maintained profile.                                                                                                  |
 | 2        | Finite exec input                       | `execution-stdin` has not run live. Qualify bytes, EOF, output and cleanup for each claimed provider configuration.                                                                                   |
 | 3        | Configured creation and private ingress | Run the configured-creation scenario. Qualify E2B private-default ingress denial, including restore where claimed.                                                                                    |
 | 4        | E2B network isolation                   | At `431cdaa`, blocked compute still reached `1.1.1.1:443` directly. Investigate provider and configuration evidence before rerunning. Do not claim isolation or silently change the requested policy. |

@@ -280,6 +280,12 @@ test("directories, metadata, symlinks and removal run in the guest", async () =>
     await box.writeFile(join(dir, "x/y/f.txt"), new TextEncoder().encode("hi"), {
       overwrite: true,
     });
+
+    // A file in the way rejects cleanly, recursive or not, and changes nothing.
+    for (const recursive of [false, true])
+      await expect(box.makeDirectory(join(dir, "x/y/f.txt"), { recursive })).rejects.toMatchObject({
+        code: "INVALID_ARGUMENT",
+      });
     symlinkSync(join(dir, "x/y/f.txt"), join(dir, "link"));
     symlinkSync(join(dir, "missing"), join(dir, "dangling"));
 

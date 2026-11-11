@@ -303,10 +303,10 @@ test("overview provider rows count live-passed features and mark experimental pr
   expect(row("Daytona")).toMatch(/Supported +\| 1 feature, last run September 29, 2026/);
   expect(row("E2B")).toMatch(/Supported +\| None yet/);
   expect(row("Boat")).toMatch(/Experimental +\| None yet/);
-  // boxd is supported with its profile and results beside its package.
+  // boxd and Freestyle are supported with their profiles and results beside their packages.
   expect(
     providerStatus.filter((status) => !status.experimental).map((status) => status.id),
-  ).toEqual(["boxd", ...officialSupport.map((profile) => profile.id)]);
+  ).toEqual(["boxd", ...officialSupport.map((profile) => profile.id), "freestyle"]);
 });
 
 test("official declarations and caveats move to the evidence page with stable anchors", () => {
