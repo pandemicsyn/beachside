@@ -334,6 +334,26 @@ export class TestResources {
     return output.stdoutText(512);
   }
 
+  /**
+   * Starts a long-running guest program. boxd runs each command in its own PID namespace, so
+   * anything a command backgrounds ends with it; there the program is a detached process instead,
+   * which lives as long as this client's call stays open.
+   */
+  async background(box: AdapterSandbox, command: string) {
+    if (this.client.provider !== "boxd") {
+      await this.exec(box, `nohup ${command} >/dev/null 2>&1 </dev/null &`);
+
+      return;
+    }
+
+    const job = await box.processes.start(
+      { command: { kind: "shell", script: `exec ${command}` }, maxOutputBytes: 4096 },
+      { signal: this.signal },
+    );
+
+    await job.detach();
+  }
+
   async destroy(role: string) {
     await cleanupCompute(
       this.client,

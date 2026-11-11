@@ -598,6 +598,39 @@ export function createBoxdAdapter(
 
       const disks = (ctx: ReadContext) => native.run(ctx, () => native.disks.list());
 
+      /**
+       * Best effort: flush and freeze (`-f`) or thaw (`-u`) a machine's writable disks. True when
+       * every disk answered; a missing `fsfreeze` or a gone machine leaves durability unconfirmed.
+       */
+      const settleDisks = async (
+        id: string,
+        paths: readonly string[],
+        mode: "-f" | "-u",
+        signal: AbortSignal,
+      ) => {
+        if (!paths.length) return false;
+        const call: CallContext = { ...readContext(signal, 10), maxBytes: 4096, truncated: false };
+
+        try {
+          await native.run(call, () =>
+            native.machines.exec(id, {
+              command: [
+                "/bin/sh",
+                "-c",
+                'sync; for p do fsfreeze "$0" "$p" || exit 1; done',
+                mode,
+                ...paths,
+              ],
+              encoding: "buffer",
+            }),
+          );
+        } catch {
+          return false;
+        }
+
+        return call.confirmedExit === 0;
+      };
+
       const findDisk = async (ref: ResourceReference, ctx: ReadContext) => {
         checkedRef(ref, "volume");
 
@@ -1429,10 +1462,25 @@ export function createBoxdAdapter(
             const token = { id: input.id, mounts: input.mounts };
             await ctx.checkpoint(token);
 
+            // Deleting a machine does not unmount its disks; freeze them so the journal is clean.
+            const writable = input.mounts.length
+              ? (await disks(readContext(ctx.signal)).catch(() => [])).flatMap((disk) =>
+                  disk.attachments
+                    .filter((at) => at.machineId === input.id && at.mountMode !== "ro")
+                    .map((at) => at.mountPath),
+                )
+              : [];
+
+            const frozen = await settleDisks(input.id, writable, "-f", ctx.signal);
+
             try {
               await native.run(readContext(ctx.signal), () => native.machines.delete(input.id));
             } catch (error) {
-              if (definitiveRejection(error)) return rejection(ctx, error);
+              if (definitiveRejection(error)) {
+                if (frozen) await settleDisks(input.id, writable, "-u", ctx.signal);
+
+                return rejection(ctx, error);
+              }
 
               return ctx.pending(token);
             }

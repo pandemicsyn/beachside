@@ -368,7 +368,7 @@ describe("Beachside sandbox", () => {
       const bytes = new TextEncoder().encode(nonce);
       await box.writeFile(path, bytes, { overwrite: true, signal: t.signal });
       // Reuse the snapshot suite's in-memory nonce/counter and bounded socket probe.
-      await t.exec(box, `nohup python3 -u -c ${quote(memoryProgram)} >/dev/null 2>&1 </dev/null &`);
+      await t.background(box, `python3 -u -c ${quote(memoryProgram)}`);
       let memoryBefore: ReturnType<typeof memorySample> | undefined;
 
       for (let attempt = 0; attempt < 20; attempt++) {

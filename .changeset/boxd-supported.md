@@ -7,3 +7,5 @@ boxd is now a supported provider: it is out of experimental in the docs and is t
 File operations on an image without Python 3 now fail with a clear UNSUPPORTED error instead of an unknown outcome.
 
 `makeDirectory` on an existing file now rejects with INVALID_ARGUMENT and no effect, recursive or not, instead of an unknown outcome.
+
+Destroying a machine with writable disks now flushes and freezes them first, so the next machine can mount them (read-only mounts used to fail after an unclean stop). The docs explain that boxd ends background processes with the command that started them.

@@ -96,7 +96,7 @@ export default defineProviderProfile({
     return Routing.parse(
       saved ?? {
         org: environment.BEACHSIDE_BOXD_ORG,
-        imageId: environment.BEACHSIDE_BOXD_IMAGE ?? "ubuntu:24.04",
+        imageId: environment.BEACHSIDE_BOXD_IMAGE ?? "python:3.12-slim",
         networkPolicy: "internet",
         nativeLifetimeSeconds: 900,
         previewAccess: environment.BEACHSIDE_BOXD_PREVIEW_ACCESS ?? "protected",

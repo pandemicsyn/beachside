@@ -326,6 +326,15 @@ test("independent block disks mount exclusively, survive destroy and can be expl
     await expect(box.destroy()).rejects.toMatchObject({ code: "UNSUPPORTED" });
     const cleanup = await box.destroy({ storage: "allow-unconfirmed" });
     expect(cleanup.retainedResources).toContain(volume.reference.nativeId);
+
+    // The writable disk is flushed and frozen before the machine is deleted.
+    const freeze = fixture.calls.findIndex(
+      (call) => call.method === "Exec" && JSON.stringify(call.request).includes("fsfreeze"),
+    );
+
+    expect(freeze).toBeGreaterThan(-1);
+    expect(JSON.stringify(fixture.calls[freeze]?.request)).toContain("/workspace");
+    expect(fixture.calls.findIndex((call) => call.method === "DestroyVm")).toBeGreaterThan(freeze);
     expect((await volume.inspect()).state).toBe("ready");
     await volume.delete();
     expect(fixture.disks.size).toBe(0);

@@ -88,6 +88,10 @@ Use streams for files over 1 MiB; they move 64 KiB chunks with no default size l
 
 Copies and streamed writes without overwrite need hard links in the destination filesystem, and moves without overwrite need Linux `renameat2`. Moves across filesystems fail without touching the source. A failed streamed write can leave a `.beachside-<uuid>` temporary file beside the destination, named in the error; an interrupted no-clobber buffered write can leave partial contents. See [files and output](/docs/guides/files-and-output/).
 
+## Background processes
+
+boxd runs every command in its own process namespace, so anything a command leaves in the background (`nohup server &`, `setsid`, a double fork) stops when that command returns. To keep a server running, start it with `box.processes.start()` and `detach()`. It keeps running while this client stays connected, and ends when the client closes or the machine is destroyed. A server that must outlive your client needs a service manager such as systemd inside the image.
+
 ## Public previews
 
 Public previews are the default. To route more ports, set `preview: { access: "public", ports: [3000, 8080] }` when connecting. **These routes are open to anyone with the URL.** After starting a server, `box.preview(3000)` returns `{ access: "public", url }`. It only looks up the existing route on a running machine; it does not create routes or wake the machine, and the URL does not prove your server is ready.
@@ -110,7 +114,7 @@ A source whose egress no longer matches the connection's `blocked`, `internet` o
 
 `suspend()` uses boxd's native pause, and `resume()` wakes the machine under the same ID. Inspecting or reopening does not wake it; inbound traffic can.
 
-A disk attaches to one machine at a time, including read-only mounts, with no subpaths. Disks survive destroy and must be deleted explicitly; they have no expiry. Persistence and locking on mounted disks are not established, so destroying a machine with mounts fails with `UNSUPPORTED` unless you pass `storage: "allow-unconfirmed"` (or set `cleanup: { storage: "allow-unconfirmed" }` when connecting). Flush writers first. Cleanup reports the retained disk IDs.
+A disk attaches to one machine at a time, including read-only mounts, with no subpaths. Disks survive destroy and must be deleted explicitly; they have no expiry. Persistence and locking on mounted disks are not established, so destroying a machine with mounts fails with `UNSUPPORTED` unless you pass `storage: "allow-unconfirmed"` (or set `cleanup: { storage: "allow-unconfirmed" }` when connecting). Before deleting the machine, Beachside flushes and freezes its writable disks (`fsfreeze`, when the image has it) so the next machine can mount them, read-only too. Stop your writers first. Cleanup reports the retained disk IDs.
 
 A refused create carries a matching code and boxd's reason, for example `CAPACITY` for a quota. boxd writes the expiry together with the machine, on creates, restores and forks. If egress, preview setup or the first readiness check is unconfirmed, you get a partial create whose `outcome.sandbox` you can reopen and destroy. A disk whose create response was lost is not tracked; check your boxd disks and confirm it is yours before deleting it. See [recovery](/docs/guides/recovery/#partial-and-unknown-outcomes).
 
@@ -121,6 +125,7 @@ A refused create carries a matching code and boxd's reason, for example `CAPACIT
 - Snapshots of machines with mounted disks are rejected, and restores cannot attach disks or change the captured size.
 - Create-time `env`, image builds and image management are unsupported. Each connection works in one region.
 - Buffered command output, stdin and file transfers are limited to 1 MiB; most filesystem operations need Python 3.
+- Background processes end with the command that started them; detached processes last while the client stays connected.
 - Disks survive destroy and must be deleted explicitly. Closing the client destroys nothing.
 
 See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/41), [live test evidence](https://github.com/pandemicsyn/beachside/blob/main/packages/providers/boxd/qualification/live-qualification.md) and the [boxd TypeScript SDK docs](https://docs.boxd.sh/reference/typescript-sdk).

@@ -52,14 +52,8 @@ describe("Beachside native HTTP preview", () => {
       // Owned compute cleanup stops this server; no process-control extension is exercised.
       const marker = `preview-${t.ledger.runId}`;
       const root = `/tmp/beachside-preview-${t.ledger.runId}`;
-      await box.exec(
-        [
-          "/bin/sh",
-          "-c",
-          `mkdir -m 700 '${root}' && printf '%s' '${marker}' > '${root}/index.html' && nohup python3 -m http.server 3000 --bind 0.0.0.0 --directory '${root}' > '${root}/server.log' 2>&1 < /dev/null &`,
-        ],
-        { signal: t.signal },
-      );
+      await t.exec(box, `mkdir -m 700 '${root}' && printf '%s' '${marker}' > '${root}/index.html'`);
+      await t.background(box, `python3 -m http.server 3000 --bind 0.0.0.0 --directory '${root}'`);
       const preview = await box.preview(3000, { signal: t.signal });
       expect(preview.access).toBe(access);
       const headers = preview.access === "protected" ? preview.headers : undefined;
