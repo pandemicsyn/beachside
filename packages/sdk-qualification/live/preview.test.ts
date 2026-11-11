@@ -12,7 +12,8 @@ const enabled =
     (provider === "e2b" && process.env.BEACHSIDE_E2B_PREVIEW_ACCESS === "public") ||
     (provider === "boxd" &&
       featureSupported("previewPublic") &&
-      process.env.BEACHSIDE_BOXD_PREVIEW_ACCESS === "public"));
+      process.env.BEACHSIDE_BOXD_PREVIEW_ACCESS === "public") ||
+    (provider === "freestyle" && featureSupported("previewPublic")));
 
 describe("Beachside native HTTP preview", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
