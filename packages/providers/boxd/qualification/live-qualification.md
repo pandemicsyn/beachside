@@ -19,73 +19,73 @@ Only explicit network scenario evidence measures egress: the paired probe covers
 
 - Image / authority: oci; unspecified / verified-organization.
 - Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
-- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- SDK: 0.12.0, commit `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
 - Fresh-process reopen: not recorded.
-- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
-- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-preview-python312slim).
+- Harness commit: `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261111-1db711f-preview-python312slim).
 
 | Scenario       | Latest live result | Date       |
 | -------------- | ------------------ | ---------- |
-| preview-public | failed             | 2026-11-10 |
+| preview-public | passed             | 2026-11-11 |
 
 ### internet-requested · hosted-default · /tmp
 
 - Image / authority: oci; unspecified / verified-organization.
 - Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
-- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- SDK: 0.12.0, commit `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
 - Fresh-process reopen: required.
-- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
-- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-snapshots-python312slim).
+- Harness commit: `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261111-1db711f-snapshots-python312slim).
 
 | Scenario           | Latest live result | Date       |
 | ------------------ | ------------------ | ---------- |
-| snapshot-roundtrip | failed             | 2026-11-10 |
+| snapshot-roundtrip | passed             | 2026-11-11 |
 
 ### internet-requested · hosted-default · /tmp
 
 - Image / authority: oci; unspecified / verified-organization.
 - Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
-- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- SDK: 0.12.0, commit `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
 - Fresh-process reopen: not recorded.
-- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
-- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-volumes-python312slim).
+- Harness commit: `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261111-1db711f-volumes-python312slim).
 
 | Scenario    | Latest live result | Date       |
 | ----------- | ------------------ | ---------- |
-| volume-crud | passed             | 2026-11-10 |
+| volume-crud | passed             | 2026-11-11 |
 
 ### internet-requested · hosted-default · /tmp
 
 - Image / authority: oci; unspecified / verified-organization.
 - Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
-- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- SDK: 0.12.0, commit `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
 - Fresh-process reopen: not recorded.
-- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
-- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-volumes-python312slim).
+- Harness commit: `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261111-1db711f-volumes-python312slim).
 
 | Scenario           | Latest live result | Date       |
 | ------------------ | ------------------ | ---------- |
-| volume-persistence | failed             | 2026-11-10 |
+| volume-persistence | passed             | 2026-11-11 |
 
 ### internet-requested · hosted-default · /tmp
 
 - Image / authority: oci; unspecified / verified-organization.
 - Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
-- SDK: 0.12.0, commit `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
+- SDK: 0.12.0, commit `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
 - Fresh-process reopen: not recorded.
-- Harness commit: `3eafa0b8dc6432e265b52ad3df9ebb2ab0bd5447`.
-- Evidence: [reviewed record](boxd-live-bun-junit-20261110-3eafa0b-sandbox-python312slim).
+- Harness commit: `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261111-1db711f-sandbox-python312slim).
 
 | Scenario                 | Latest live result | Date       |
 | ------------------------ | ------------------ | ---------- |
-| execution-stdin          | passed             | 2026-11-10 |
-| execution                | passed             | 2026-11-10 |
-| file-directories (/tmp)  | failed             | 2026-11-10 |
-| files (/tmp)             | passed             | 2026-11-10 |
-| lifecycle-renew          | failed             | 2026-11-10 |
-| lifecycle-reopen         | passed             | 2026-11-10 |
-| lifecycle-suspend-resume | failed             | 2026-11-10 |
-| sandbox-lifecycle        | passed             | 2026-11-10 |
+| execution-stdin          | passed             | 2026-11-11 |
+| execution                | passed             | 2026-11-11 |
+| file-directories (/tmp)  | failed             | 2026-11-11 |
+| files (/tmp)             | passed             | 2026-11-11 |
+| lifecycle-renew          | passed             | 2026-11-11 |
+| lifecycle-reopen         | passed             | 2026-11-11 |
+| lifecycle-suspend-resume | failed             | 2026-11-11 |
+| sandbox-lifecycle        | passed             | 2026-11-11 |
 
 ### internet-requested · hosted-default · /tmp
 

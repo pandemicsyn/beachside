@@ -7,26 +7,26 @@ description: Declared adapter support and dated live acceptance, with provider c
 
 Adapter support and live validation are separate facts. **Supported** means implemented; **conditional** requires the configuration in the linked note; **unsupported** means the adapter does not expose the workflow. Live results are **passed**, **failed**, **blocked**, or **not-run**. Each pass applies to its recorded source/configuration, not the current head or every provider account. Fixture and packed tests never produce live passes.
 
-| Feature                             | boxd                                                  |
-| ----------------------------------- | ----------------------------------------------------- |
-| Sandbox lifecycle                   | [Conditional · passed at 3eafa0b8](#boxd-lifecycle)   |
-| Native sandbox suspend/resume       | [Conditional · failed](#boxd-suspension)              |
-| Protected HTTP preview              | [Unsupported · not-run](#boxd-previewProtected)       |
-| Public HTTP preview                 | [Conditional · failed](#boxd-previewPublic)           |
-| Local-handle process termination    | [Conditional · not-run](#boxd-termination)            |
-| Configured lifetime renewal         | [Conditional · failed](#boxd-renewal)                 |
-| Scoped sandbox reopening            | [Conditional · passed at 3eafa0b8](#boxd-reopening)   |
-| Execution and captured output       | [Conditional · passed at 3eafa0b8](#boxd-execution)   |
-| Process streams and terminals       | [Unsupported · not-run](#boxd-streaming)              |
-| Finite execution input              | [Conditional · passed at 3eafa0b8](#boxd-finiteStdin) |
-| Binary files and overwrite          | [Conditional · passed at 3eafa0b8](#boxd-files)       |
-| Directory primitives                | [Conditional · failed](#boxd-directories)             |
-| OCI image builds                    | [Unsupported · not-run](#boxd-oci)                    |
-| Measured network controls           | [Conditional · not-run](#boxd-network)                |
-| Cold snapshot with selected storage | [Unsupported · not-run](#boxd-storageComposition)     |
-| Snapshot roundtrip                  | [Conditional · failed](#boxd-snapshots)               |
-| Volume CRUD                         | [Conditional · passed at 3eafa0b8](#boxd-volumes)     |
-| Mounted persistence                 | [Conditional · failed](#boxd-persistence)             |
+| Feature                             | boxd                                                    |
+| ----------------------------------- | ------------------------------------------------------- |
+| Sandbox lifecycle                   | [Conditional · passed at 1db711fd](#boxd-lifecycle)     |
+| Native sandbox suspend/resume       | [Conditional · failed](#boxd-suspension)                |
+| Protected HTTP preview              | [Unsupported · not-run](#boxd-previewProtected)         |
+| Public HTTP preview                 | [Conditional · passed at 1db711fd](#boxd-previewPublic) |
+| Local-handle process termination    | [Conditional · not-run](#boxd-termination)              |
+| Configured lifetime renewal         | [Conditional · passed at 1db711fd](#boxd-renewal)       |
+| Scoped sandbox reopening            | [Conditional · passed at 1db711fd](#boxd-reopening)     |
+| Execution and captured output       | [Conditional · passed at 1db711fd](#boxd-execution)     |
+| Process streams and terminals       | [Unsupported · not-run](#boxd-streaming)                |
+| Finite execution input              | [Conditional · passed at 1db711fd](#boxd-finiteStdin)   |
+| Binary files and overwrite          | [Conditional · passed at 1db711fd](#boxd-files)         |
+| Directory primitives                | [Conditional · failed](#boxd-directories)               |
+| OCI image builds                    | [Unsupported · not-run](#boxd-oci)                      |
+| Measured network controls           | [Conditional · not-run](#boxd-network)                  |
+| Cold snapshot with selected storage | [Unsupported · not-run](#boxd-storageComposition)       |
+| Snapshot roundtrip                  | [Conditional · passed at 1db711fd](#boxd-snapshots)     |
+| Volume CRUD                         | [Conditional · passed at 1db711fd](#boxd-volumes)       |
+| Mounted persistence                 | [Conditional · passed at 1db711fd](#boxd-persistence)   |
 
 The [live evidence detail](./live-qualification.md) contains only reviewed records supplied for this external profile. Missing records remain not-run; declarations do not establish live acceptance.
 

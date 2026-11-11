@@ -11,17 +11,17 @@ A live pass covers the image, region and network setting it ran with, not every 
 
 ## Providers
 
-| Provider                                  | Status       | Passed live                            | Notes                                                                                                                                                       |
-| ----------------------------------------- | ------------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [boxd](/docs/providers/boxd/)             | Supported    | 6 features, last run November 10, 2026 | Live-tested across sandboxes, commands, files and reconnecting; egress allowlists, snapshots, fork and servers in sandboxes were also checked live by hand. |
-| [Daytona](/docs/providers/daytona/)       | Supported    | 14 features, last run October 9, 2026  | Live-tested across sandboxes, commands, files, previews, snapshots and volumes.                                                                             |
-| [E2B](/docs/providers/e2b/)               | Supported    | 11 features, last run October 9, 2026  | Live-tested across sandboxes, commands, files, previews, pause/resume and snapshots.                                                                        |
-| [Vercel Sandbox](/docs/providers/vercel/) | Experimental | None yet                               | Not yet tested against the live Vercel service.                                                                                                             |
-| [Boat](/docs/providers/boat/)             | Experimental | None yet                               | Not yet tested against the live Boat service.                                                                                                               |
-| [Runloop](/docs/providers/runloop/)       | Experimental | None yet                               | Not yet tested against the live Runloop service; sign-ups are invitation only.                                                                              |
-| [Freestyle](/docs/providers/freestyle/)   | Experimental | None yet                               | Not yet tested against the live Freestyle service.                                                                                                          |
-| [Archil](/docs/providers/archil/)         | Experimental | None yet                               | Checked by hand on the Free plan; not yet run through the live qualification suite.                                                                         |
-| Modal                                     | Experimental | None yet                               | Not yet tested against the live Modal service.                                                                                                              |
+| Provider                                  | Status       | Passed live                             | Notes                                                                                                                                                       |
+| ----------------------------------------- | ------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [boxd](/docs/providers/boxd/)             | Supported    | 10 features, last run November 11, 2026 | Live-tested across sandboxes, commands, files and reconnecting; egress allowlists, snapshots, fork and servers in sandboxes were also checked live by hand. |
+| [Daytona](/docs/providers/daytona/)       | Supported    | 14 features, last run October 9, 2026   | Live-tested across sandboxes, commands, files, previews, snapshots and volumes.                                                                             |
+| [E2B](/docs/providers/e2b/)               | Supported    | 11 features, last run October 9, 2026   | Live-tested across sandboxes, commands, files, previews, pause/resume and snapshots.                                                                        |
+| [Vercel Sandbox](/docs/providers/vercel/) | Experimental | None yet                                | Not yet tested against the live Vercel service.                                                                                                             |
+| [Boat](/docs/providers/boat/)             | Experimental | None yet                                | Not yet tested against the live Boat service.                                                                                                               |
+| [Runloop](/docs/providers/runloop/)       | Experimental | None yet                                | Not yet tested against the live Runloop service; sign-ups are invitation only.                                                                              |
+| [Freestyle](/docs/providers/freestyle/)   | Experimental | None yet                                | Not yet tested against the live Freestyle service.                                                                                                          |
+| [Archil](/docs/providers/archil/)         | Experimental | None yet                                | Checked by hand on the Free plan; not yet run through the live qualification suite.                                                                         |
+| Modal                                     | Experimental | None yet                                | Not yet tested against the live Modal service.                                                                                                              |
 
 ## What has been tested live
 
@@ -32,9 +32,9 @@ This table covers the supported providers. Vercel Sandbox, Boat, Runloop, Freest
 | Create, inspect and destroy sandboxes | Tested live     | Tested live          | Tested live          |
 | Pause and resume                      | Tested live     | Tested live          | **Failed live test** |
 | Protected HTTP previews               | Tested live     | Not tested live      | Not supported        |
-| Public HTTP previews                  | Not tested live | Tested live          | **Failed live test** |
+| Public HTTP previews                  | Not tested live | Tested live          | Tested live          |
 | Stop a running command                | Tested live     | Tested live          | Not tested live      |
-| Extend a sandbox's lifetime           | Tested live     | Tested live          | **Failed live test** |
+| Extend a sandbox's lifetime           | Tested live     | Tested live          | Tested live          |
 | Reconnect to a sandbox later          | Tested live     | Tested live          | Tested live          |
 | Run commands and capture output       | Tested live     | Tested live          | Tested live          |
 | Stream output and use terminals       | Tested live     | Tested live          | Not supported        |
@@ -44,9 +44,9 @@ This table covers the supported providers. Vercel Sandbox, Boat, Runloop, Freest
 | Build images                          | Not tested live | Not tested live      | Not supported        |
 | Block outbound network                | Not tested live | **Failed live test** | Not tested live      |
 | Restore a snapshot with volumes       | Tested live     | Not supported        | Not supported        |
-| Snapshot and restore                  | Tested live     | Tested live          | **Failed live test** |
+| Snapshot and restore                  | Tested live     | Tested live          | Tested live          |
 | Create and delete volumes             | Tested live     | Not supported        | Tested live          |
-| Mount volumes                         | Tested live     | Not supported        | **Failed live test** |
+| Mount volumes                         | Tested live     | Not supported        | Tested live          |
 
 ## Known limits
 
