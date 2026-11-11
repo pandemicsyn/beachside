@@ -82,7 +82,7 @@ Every VM this adapter creates has the `beachside` tag, so you can attach an inte
 
 ## Commands, processes and files
 
-exe.dev runs one shell command line per `ssh <vm> <command>` request and returns stdout and stderr as separate byte frames with the exit code. It has no stdin, so the adapter stages finite stdin into a private file in the VM first, and runs each command through a small `sh` wrapper that bounds the output and returns it byte for byte. Processes run as detached jobs in the VM whose output the adapter reads back. Files use a small Python 3 helper in the VM. Every request costs a round trip, so uploads go out as 40 KiB positioned writes, eight at a time, and the staged file's size and SHA-256 are checked before it is published; downloads read 4 MiB ranges; your image needs `sh`, `base64` and Python 3, which `exeuntu` has.
+exe.dev runs one shell command line per `ssh <vm> <command>` request and returns stdout and stderr as separate byte frames with the exit code. It has no stdin, so the adapter stages finite stdin into a private file in the VM first, and runs each command through a small `sh` wrapper that bounds the output and returns it byte for byte. Processes run as detached jobs in the VM whose output the adapter reads back. Files use a small Python 3 helper in the VM. Every request costs a round trip, so uploads go out as 40 KiB positioned writes, sixteen at a time, and the staged file's size and SHA-256 are checked before it is published; downloads read 4 MiB ranges; your image needs `sh`, `base64` and Python 3, which `exeuntu` has.
 
 ## Destroy and recovery
 

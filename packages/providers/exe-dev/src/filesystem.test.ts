@@ -74,3 +74,31 @@ linuxGuest("a rate-limited chunk is sent again; it was refused, not applied", as
     await client.close();
   }
 });
+
+linuxGuest(
+  "an upload that outlasts the transfer's setup window still verifies and publishes",
+  async () => {
+    const { client, box, dir } = await setup();
+
+    try {
+      const bytes = pattern(STAGE_CHUNK_BYTES * 3);
+
+      // A 1 s setup window: the chunks alone take longer than that through the fixture.
+      const written = await box.writeFileStream(
+        `${dir}/slow.bin`,
+        (async function* () {
+          for (let i = 0; i < 3; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            yield bytes.subarray(i * STAGE_CHUNK_BYTES, (i + 1) * STAGE_CHUNK_BYTES);
+          }
+        })(),
+        { setupTimeoutMs: 1000 },
+      );
+
+      expect(written).toBe(bytes.length);
+      expect(Buffer.from(readFileSync(`${dir}/slow.bin`)).equals(Buffer.from(bytes))).toBe(true);
+    } finally {
+      await client.close();
+    }
+  },
+);

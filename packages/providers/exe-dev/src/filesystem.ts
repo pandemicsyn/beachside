@@ -143,7 +143,7 @@ export const STAGE_CHUNK_BYTES = 40 * 1024;
  * Staging requests in flight at once. Each exe.dev request costs a round trip of most of a
  * second, so chunks go out in parallel as positioned writes and are verified before publish.
  */
-export const UPLOAD_CONCURRENCY = 8;
+export const UPLOAD_CONCURRENCY = 16;
 
 /** Times a rate-limited chunk (HTTP 429, so not applied) is sent again before failing. */
 const RATE_LIMIT_RETRIES = 4;
@@ -395,9 +395,10 @@ export function filesystem(run: GuestRunner) {
 
       if (failure) throw failure;
 
-      const staged = z
-        .object({ size: z.number().int(), sha256: z.string() })
-        .parse(await helper("digest", stage, "", false, ctx));
+      const staged = z.object({ size: z.number().int(), sha256: z.string() }).parse(
+        // The transfer's setup deadline has long passed on a large upload; hashing gets its own.
+        await helper("digest", stage, "", false, { ...ctx, deadline: Date.now() + 60_000 }),
+      );
 
       if (staged.size !== count || staged.sha256 !== digest.digest("hex"))
         throw new AdapterFilesystemError("UNAVAILABLE", "exe.dev staged bytes do not match", {
