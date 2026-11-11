@@ -337,7 +337,7 @@ export class TestResources {
   /**
    * Starts a long-running guest program. boxd runs each command in its own PID namespace, so
    * anything a command backgrounds ends with it; there the program is a detached process instead,
-   * which lives as long as this client's call stays open.
+   * which keeps running after detach.
    */
   async background(box: AdapterSandbox, command: string) {
     if (this.client.provider !== "boxd") {

@@ -55,7 +55,7 @@ This table covers the supported providers. Vercel Sandbox, Boat, Runloop, Freest
 - A machine created from an OCI image gets its egress (`blocked` or an allowlist) a moment after it starts, so the image's own startup can briefly reach the internet. Restores and forks have their egress from the first boot.
 - Snapshots of machines with mounted disks are rejected, and restores keep the captured size.
 - Create-time `env` is unsupported; pass `exec({ env })` instead.
-- Anything a command leaves in the background stops when the command returns; use `processes.start()` and `detach()`, which last while the client stays connected.
+- Anything a command leaves in the background stops when the command returns; use `processes.start()` and `detach()` for servers.
 - Disks survive destroy and must be deleted explicitly.
 
 **Daytona**

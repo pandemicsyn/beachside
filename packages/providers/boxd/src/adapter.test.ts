@@ -6,9 +6,26 @@ import { adapterSuite, snapshotSuite } from "@beachside/adapter/testing";
 import { Beachside, OutcomeUnknownError, Preserve } from "beachside";
 import { createBoxdAdapter } from "./adapter";
 import { boxdFixture } from "./fixture.test-support";
-import { regionTarget } from "./transport";
+import { regionTarget, type CallContext } from "./transport";
 
 const fixtures: Awaited<ReturnType<typeof boxdFixture>>[] = [];
+
+/** Answers filesystem helper calls the way a shell without `python3` does: exit 127. */
+function helperMissing<T>(ctx: CallContext, action: () => Promise<T>): () => Promise<T> {
+  if (!(ctx.cancelOnAbort && ctx.maxBytes === 524288)) return action;
+
+  return () => {
+    ctx.confirmedExit = 127;
+
+    // SAFETY: helper calls resolve to the exec result the adapter reads, here a shell's 127.
+    return Promise.resolve({
+      stdout: new Uint8Array(),
+      stderr: new TextEncoder().encode("sh: 1: python3: not found"),
+      exitCode: 127,
+      success: false,
+    } as never);
+  };
+}
 
 afterEach(() => {
   for (const fixture of fixtures.splice(0)) fixture.close();
@@ -506,8 +523,20 @@ test("expiry failure preserves an acknowledged UUID and observation never create
 });
 
 test("foreign native orgs and truncated directories fail rather than fabricating safe observations", async () => {
-  const { fixture, connect } = await setup();
-  const client = await connect();
+  const { fixture } = await setup();
+
+  // An image without Python: the listing falls back to boxd's native one.
+  const adapter = createBoxdAdapter((key) => {
+    const native = fixture.factory(key);
+
+    return { ...native, run: (ctx, action) => native.run(ctx, helperMissing(ctx, action)) };
+  });
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main", networkPolicy: "internet" },
+    credentials: { apiKey: "fixture-main" },
+  });
 
   try {
     const box = await client.sandboxes.create();
@@ -1636,21 +1665,7 @@ test("file operations without python3 fail cleanly instead of reporting an unkno
 
     return {
       ...native,
-      run(ctx, action) {
-        if (ctx.cancelOnAbort && ctx.maxBytes === 524288) {
-          ctx.confirmedExit = 127;
-
-          // SAFETY: helper calls resolve to the exec result the adapter reads, here a shell's 127.
-          return Promise.resolve({
-            stdout: new Uint8Array(),
-            stderr: new TextEncoder().encode("sh: 1: python3: not found"),
-            exitCode: 127,
-            success: false,
-          } as never);
-        }
-
-        return native.run(ctx, action);
-      },
+      run: (ctx, action) => native.run(ctx, helperMissing(ctx, action)),
     };
   });
 
@@ -1667,6 +1682,26 @@ test("file operations without python3 fail cleanly instead of reporting an unkno
       code: "UNSUPPORTED",
       effect: "none",
     });
+  } finally {
+    await client.close();
+  }
+});
+
+test("guest access on a suspended machine is refused instead of waking it", async () => {
+  const { fixture, connect } = await setup();
+  const client = await connect();
+
+  try {
+    const box = await client.sandboxes.create();
+    await box.suspend();
+    const before = fixture.calls.filter((call) => call.method === "Exec").length;
+
+    await expect(box.exec({ command: { kind: "argv", argv: ["true"] } })).rejects.toMatchObject({
+      code: "UNAVAILABLE",
+    });
+    await expect(box.readFile("/etc/hostname")).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    expect(fixture.calls.filter((call) => call.method === "Exec")).toHaveLength(before);
+    expect((await box.inspect()).state).toBe("suspended");
   } finally {
     await client.close();
   }
