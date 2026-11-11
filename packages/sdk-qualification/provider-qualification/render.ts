@@ -76,6 +76,11 @@ const packageReports = external
       ),
     );
 
+// boxd is supported; its profile and results live beside its package.
+const boxd = await loadProviderProfile(
+  fileURLToPath(new URL("./boxd-profile.ts", import.meta.url)),
+);
+
 const outputDirectory = option("--output");
 
 if (external && !outputDirectory) throw new Error("External metadata requires --output directory");
@@ -101,7 +106,7 @@ const targets = [
     outputDirectory ? join(outputDirectory, "support.md") : supportPage,
     external
       ? renderSupportMatrix(reports, metadata)
-      : renderSupportOverview([...reports, ...packageReports], metadata),
+      : renderSupportOverview([...reports, ...packageReports], [...metadata, boxd.support]),
   ],
 ] as const;
 

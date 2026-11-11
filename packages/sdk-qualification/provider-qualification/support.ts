@@ -432,6 +432,20 @@ export type ProviderStatus = {
 /** Hand-maintained release status; live columns are computed from recorded results. */
 export const providerStatus: ProviderStatus[] = [
   {
+    id: "boxd",
+    name: "boxd",
+    href: "/docs/providers/boxd/",
+    experimental: false,
+    note: "Live-tested across sandboxes, commands, files, pause/resume, previews, snapshots and volumes; egress allowlists, fork and servers in sandboxes were also checked live by hand.",
+    limits: [
+      "A machine created from an OCI image gets its egress (`blocked` or an allowlist) a moment after it starts, so the image's own startup can briefly reach the internet. Restores and forks have their egress from the first boot.",
+      "Snapshots of machines with mounted disks are rejected, and restores keep the captured size.",
+      "Create-time `env` is unsupported; pass `exec({ env })` instead.",
+      "Anything a command leaves in the background stops when the command returns; use `processes.start()` and `detach()` for servers.",
+      "Disks survive destroy and must be deleted explicitly.",
+    ],
+  },
+  {
     id: "daytona",
     name: "Daytona",
     href: "/docs/providers/daytona/",
@@ -455,13 +469,6 @@ export const providerStatus: ProviderStatus[] = [
       "Protected previews return an `e2b-traffic-access-token` header; they have not been tested live yet.",
       "File workflows were live-tested in `/home/user`; other paths and custom templates need their own checks.",
     ],
-  },
-  {
-    id: "boxd",
-    name: "boxd",
-    href: "/docs/providers/boxd/",
-    experimental: true,
-    note: "Only the basics have run live: sandboxes, commands, files and reconnecting. Previews, pause/resume and volumes have not.",
   },
   {
     id: "vercel",
@@ -503,7 +510,7 @@ export const providerStatus: ProviderStatus[] = [
     name: "exe.dev",
     href: "/docs/providers/exe-dev/",
     experimental: true,
-    note: "Tested against a simulated exe.dev API; not yet run through the live qualification suite.",
+    note: "Checked by hand against the live exe.dev service; not yet run through the live qualification suite.",
   },
   {
     id: "modal",

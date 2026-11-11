@@ -26,6 +26,7 @@ const implemented = new Set([
   "persistence",
   "snapshots",
   "network",
+  "termination",
 ]);
 
 const notes: Partial<Record<keyof typeof features, string>> = {
@@ -52,12 +53,14 @@ const notes: Partial<Record<keyof typeof features, string>> = {
   snapshots:
     "Native memory + disk capture of a running machine without mounted disks, with a brief pause; the source keeps running. Each capture uses an attempt-derived unique name and the reference pins the captured version, checked before inspect/restore/delete; a restore that boots another version is unknown with the machine identity. Restores resume captured processes in a new machine at the captured size, with no mounts or resizing. Provider-scope list; no scheduled deletion. No live qualification.",
   streaming:
-    "Native execution stream cancellation kills the process group; it cannot satisfy Beachside detach/disconnect. Sustained process/terminal IO unsupported.",
+    "Sustained byte and text output streams from native exec, and detach keeps the command running unobserved. Terminals and incremental stdin are unsupported, so the shared streams-and-terminals workflow does not apply.",
+  termination:
+    "Terminate cancels the native exec call, which kills the command's process group. Deterministic coverage; live not-run.",
   network:
-    "Blocked (the setup default) and internet policies. Blocked sets the native egress allowlist to `none` after create and before the machine is handed out; internet leaves it empty. Peer/metadata isolation is enabled either way. No live qualification yet.",
+    "Blocked (the setup default), internet and `{ allow }` allowlists through the native egress allowlist. A create from an OCI image applies it right after create, before hand-out; restores send it in the machine spec, in force from first boot. Peer/metadata isolation is enabled either way. An allowlist create, restore and fork were checked live by hand on November 10, 2026; the paired network workflow has not run.",
   oci: "OCI images boot directly; no Beachside image-build hook or retained image artifact.",
   directories:
-    "Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/exists, recursive-opt-in mkdir/remove, copy and staged 64 KiB streams. Private Linux filesystem with hardlinks; no-clobber move requires renameat2 and cross-filesystem move rejects without copy/delete. Failed transfers retain correlated staging paths; no replay. Walk/text lines compose these hooks. Local Python workflow and protobuf transport coverage are separate; expanded file-directories live not-run.",
+    "Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/exists, recursive-opt-in mkdir/remove, copy and staged 1 MiB streams. Private Linux filesystem with hardlinks; no-clobber move requires renameat2 and cross-filesystem move rejects without copy/delete. Failed transfers retain correlated staging paths; no replay. Walk/text lines compose these hooks. Local Python workflow and protobuf transport coverage are separate; expanded file-directories live not-run.",
 };
 
 // SAFETY: These keys are taken from the fixed features literal.
@@ -93,7 +96,7 @@ export default defineProviderProfile({
     return Routing.parse(
       saved ?? {
         org: environment.BEACHSIDE_BOXD_ORG,
-        imageId: environment.BEACHSIDE_BOXD_IMAGE ?? "ubuntu:24.04",
+        imageId: environment.BEACHSIDE_BOXD_IMAGE ?? "python:3.12-slim",
         networkPolicy: "internet",
         nativeLifetimeSeconds: 900,
         previewAccess: environment.BEACHSIDE_BOXD_PREVIEW_ACCESS ?? "protected",

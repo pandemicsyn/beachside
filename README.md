@@ -12,9 +12,9 @@ Each provider is a separately installed adapter, and you can bring your own.
 
 | Provider | Package |
 | --- | --- |
+| boxd | `@beachside/boxd` |
 | Daytona | `@beachside/daytona` |
 | E2B | `@beachside/e2b` |
-| boxd (exp) | `@beachside/boxd` |
 | Boat (exp) | `@beachside/boat` |
 | Runloop (exp) | `@beachside/runloop` |
 | Freestyle (exp) | `@beachside/freestyle` |

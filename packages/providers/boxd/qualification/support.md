@@ -7,26 +7,26 @@ description: Declared adapter support and dated live acceptance, with provider c
 
 Adapter support and live validation are separate facts. **Supported** means implemented; **conditional** requires the configuration in the linked note; **unsupported** means the adapter does not expose the workflow. Live results are **passed**, **failed**, **blocked**, or **not-run**. Each pass applies to its recorded source/configuration, not the current head or every provider account. Fixture and packed tests never produce live passes.
 
-| Feature                             | boxd                                                |
-| ----------------------------------- | --------------------------------------------------- |
-| Sandbox lifecycle                   | [Conditional · passed at fcb59d40](#boxd-lifecycle) |
-| Native sandbox suspend/resume       | [Conditional · not-run](#boxd-suspension)           |
-| Protected HTTP preview              | [Unsupported · not-run](#boxd-previewProtected)     |
-| Public HTTP preview                 | [Conditional · not-run](#boxd-previewPublic)        |
-| Local-handle process termination    | [Unsupported · not-run](#boxd-termination)          |
-| Configured lifetime renewal         | [Conditional · not-run](#boxd-renewal)              |
-| Scoped sandbox reopening            | [Conditional · passed at fcb59d40](#boxd-reopening) |
-| Execution and captured output       | [Conditional · passed at fcb59d40](#boxd-execution) |
-| Process streams and terminals       | [Unsupported · not-run](#boxd-streaming)            |
-| Finite execution input              | [Conditional · not-run](#boxd-finiteStdin)          |
-| Binary files and overwrite          | [Conditional · passed at fcb59d40](#boxd-files)     |
-| Directory primitives                | [Conditional · not-run](#boxd-directories)          |
-| OCI image builds                    | [Unsupported · not-run](#boxd-oci)                  |
-| Measured network controls           | [Unsupported · not-run](#boxd-network)              |
-| Cold snapshot with selected storage | [Unsupported · not-run](#boxd-storageComposition)   |
-| Snapshot roundtrip                  | [Conditional · not-run](#boxd-snapshots)            |
-| Volume CRUD                         | [Conditional · not-run](#boxd-volumes)              |
-| Mounted persistence                 | [Conditional · not-run](#boxd-persistence)          |
+| Feature                             | boxd                                                    |
+| ----------------------------------- | ------------------------------------------------------- |
+| Sandbox lifecycle                   | [Conditional · passed at fc3671e7](#boxd-lifecycle)     |
+| Native sandbox suspend/resume       | [Conditional · passed at fc3671e7](#boxd-suspension)    |
+| Protected HTTP preview              | [Unsupported · not-run](#boxd-previewProtected)         |
+| Public HTTP preview                 | [Conditional · passed at 1db711fd](#boxd-previewPublic) |
+| Local-handle process termination    | [Conditional · not-run](#boxd-termination)              |
+| Configured lifetime renewal         | [Conditional · passed at fc3671e7](#boxd-renewal)       |
+| Scoped sandbox reopening            | [Conditional · passed at fc3671e7](#boxd-reopening)     |
+| Execution and captured output       | [Conditional · passed at fc3671e7](#boxd-execution)     |
+| Process streams and terminals       | [Unsupported · not-run](#boxd-streaming)                |
+| Finite execution input              | [Conditional · passed at fc3671e7](#boxd-finiteStdin)   |
+| Binary files and overwrite          | [Conditional · passed at fc3671e7](#boxd-files)         |
+| Directory primitives                | [Conditional · passed at fc3671e7](#boxd-directories)   |
+| OCI image builds                    | [Unsupported · not-run](#boxd-oci)                      |
+| Measured network controls           | [Conditional · not-run](#boxd-network)                  |
+| Cold snapshot with selected storage | [Unsupported · not-run](#boxd-storageComposition)       |
+| Snapshot roundtrip                  | [Conditional · passed at 1db711fd](#boxd-snapshots)     |
+| Volume CRUD                         | [Conditional · passed at 1db711fd](#boxd-volumes)       |
+| Mounted persistence                 | [Conditional · passed at 1db711fd](#boxd-persistence)   |
 
 The [live evidence detail](./live-qualification.md) contains only reviewed records supplied for this external profile. Missing records remain not-run; declarations do not establish live acceptance.
 
@@ -60,7 +60,7 @@ Explicit preview.access public config creates pinned ports (profile 3000/3001) a
 
 ### Local-handle process termination
 
-Not implemented by this adapter.
+Terminate cancels the native exec call, which kills the command's process group. Deterministic coverage; live not-run.
 
 <a id="boxd-renewal"></a>
 
@@ -84,7 +84,7 @@ Buffered argv/shell and captured nonzero exit passed in the fcb59d4 baseline wit
 
 ### Process streams and terminals
 
-Native execution stream cancellation kills the process group; it cannot satisfy Beachside detach/disconnect. Sustained process/terminal IO unsupported.
+Sustained byte and text output streams from native exec, and detach keeps the command running unobserved. Terminals and incremental stdin are unsupported, so the shared streams-and-terminals workflow does not apply.
 
 <a id="boxd-finiteStdin"></a>
 
@@ -102,7 +102,7 @@ Bounded native binary reads/overwrite upload and Python 3 atomic exclusive-creat
 
 ### Directory primitives
 
-Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/exists, recursive-opt-in mkdir/remove, copy and staged 64 KiB streams. Private Linux filesystem with hardlinks; no-clobber move requires renameat2 and cross-filesystem move rejects without copy/delete. Failed transfers retain correlated staging paths; no replay. Walk/text lines compose these hooks. Local Python workflow and protobuf transport coverage are separate; expanded file-directories live not-run.
+Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/exists, recursive-opt-in mkdir/remove, copy and staged 1 MiB streams. Private Linux filesystem with hardlinks; no-clobber move requires renameat2 and cross-filesystem move rejects without copy/delete. Failed transfers retain correlated staging paths; no replay. Walk/text lines compose these hooks. Local Python workflow and protobuf transport coverage are separate; expanded file-directories live not-run.
 
 <a id="boxd-oci"></a>
 
@@ -114,7 +114,7 @@ OCI images boot directly; no Beachside image-build hook or retained image artifa
 
 ### Measured network controls
 
-`blocked` (the default), `internet` and `{ allow }` allowlists are supported through boxd's native egress allowlist. Peer/metadata isolation is enabled; it does not block internet egress. Paired network qualification has not run.
+Blocked (the setup default), internet and `{ allow }` allowlists through the native egress allowlist. A create from an OCI image applies it right after create, before hand-out; restores send it in the machine spec, in force from first boot. Peer/metadata isolation is enabled either way. An allowlist create, restore and fork were checked live by hand on November 10, 2026; the paired network workflow has not run.
 
 <a id="boxd-storageComposition"></a>
 
@@ -139,14 +139,6 @@ Independent block disks with configured size (10 GiB by default); create/inspect
 ### Mounted persistence
 
 Whole-disk create-time read-only/read-write mounts, one machine per disk even read-only. Unknown durability requires explicit allow-unconfirmed cleanup. Native host placement restrictions may reject multi-disk creates. No live qualification yet.
-
-## Other integrations
-
-This page covers only the supplied external profile. Other adapter results are recorded separately.
-
-## Runtimes
-
-The SDK targets server-side Node.js and Bun. Packed consumer checks exercise emitted JavaScript and strict TypeScript declarations; live records retain the tested runtime/platform. Package and fixture checks do not establish live provider behavior on other runtimes.
 
 ## Updating support
 

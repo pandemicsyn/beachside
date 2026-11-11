@@ -139,7 +139,7 @@ Leave out schemes, ports and paths. `0.0.0.0/0` and an empty list reject with `I
 | boxd      | Yes   | Public only | Up to 256 entries, mixed. Matches HTTP and HTTPS by host name and other traffic by address; lookups of unlisted names are refused. Non-public ranges reject at connect. Applied right after create from an image, and from first boot on restores.                                |
 | Boat      | No    | No          | Rejects allowlists.                                                                                                                                                                                                                                                               |
 
-Over-limit or unsupported lists reject at connect with `UNSUPPORTED`, naming the limit. Provider DNS is usually left open, and host rules do not stop a client that sends an allowed name to a shared server for another site (domain fronting), so treat an allowlist as egress control, not a full sandbox for hostile code. No allowlist has a recorded live pass yet.
+Over-limit or unsupported lists reject at connect with `UNSUPPORTED`, naming the limit. Provider DNS is usually left open, and host rules do not stop a client that sends an allowed name to a shared server for another site (domain fronting), so treat an allowlist as egress control, not a full sandbox for hostile code. boxd's allowlist passed a live check on November 10, 2026: listed hosts and addresses were reachable, unlisted names failed to resolve, and restores and forks kept the list. Other providers' allowlists have not run live yet.
 
 ## Set environment variables
 

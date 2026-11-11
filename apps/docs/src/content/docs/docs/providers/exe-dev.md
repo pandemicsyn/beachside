@@ -55,7 +55,7 @@ exe.dev VMs live until they are deleted; exe.dev has no lifetime or idle stop. E
 
 ## What works
 
-Everything below is tested against a simulated exe.dev API on every change. It has not yet been run against the live service, so the adapter stays experimental and the [support page](/docs/providers/support/) lists no recorded live pass.
+Everything below is tested against a simulated exe.dev API on every change and has been checked by hand against the live service. It has not yet been run through the live qualification suite, so the adapter stays experimental and the [support page](/docs/providers/support/) lists no recorded live pass.
 
 | Feature           | Support                                                                                                                                                                                                                                          |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

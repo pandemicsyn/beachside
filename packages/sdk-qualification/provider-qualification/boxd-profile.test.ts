@@ -6,7 +6,7 @@ test("boxd profile retains explicit internet routing, native expiry and honest u
   const routing = profileRouting(profile, { BEACHSIDE_BOXD_ORG: "team" });
   expect(routing).toEqual({
     org: "team",
-    imageId: "ubuntu:24.04",
+    imageId: "python:3.12-slim",
     networkPolicy: "internet",
     nativeLifetimeSeconds: 900,
     previewAccess: "protected",
