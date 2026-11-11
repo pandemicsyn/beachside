@@ -38,6 +38,12 @@ import {
   parseWrapper,
   quote,
   wrapperScript,
+  DIRECT_EXEC_SECONDS,
+  jobCleanup,
+  jobKill,
+  jobLauncher,
+  jobPoll,
+  parseJobStart,
 } from "./exec";
 import { directoryValue, Exists, filesystem, statValue } from "./filesystem";
 import {
@@ -63,6 +69,11 @@ export const DEFAULT_IMAGE = "exeuntu";
 
 /** Longest a buffered command may run; exe.dev keeps a quiet `ssh` response alive. */
 export const MAX_EXEC_SECONDS = 3600;
+
+/** First and longest wait between reads of a long command's record. */
+const JOB_POLL_FIRST_MS = 500;
+
+const JOB_POLL_MAX_MS = 5000;
 
 /** Combined stdout/stderr bound collected through the guest wrapper. */
 export const MAX_OUTPUT_BYTES = 1_048_576;
@@ -342,6 +353,8 @@ export type ExeDevAdapterOptions = {
   processPollMs?: number;
   /** Clock for signed token expiry, in epoch milliseconds. */
   now?: () => number;
+  /** Longest command deadline sent as one request; longer ones run as guest jobs (25 s). */
+  directExecSeconds?: number;
 };
 
 /** Constructing a definition performs no provider IO. */
@@ -349,6 +362,7 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
   const pollMs = options.pollIntervalMs ?? 1000;
   const settleSeconds = options.settleSeconds ?? 120;
   const now = options.now ?? Date.now;
+  const directExecSeconds = options.directExecSeconds ?? DIRECT_EXEC_SECONDS;
 
   return defineAdapter({
     name: "exe-dev",
@@ -816,6 +830,80 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
         return ctx.pending(acknowledged, { pollAfterMs: pollMs });
       };
 
+      /**
+       * A command past exe.dev's per-request limit: start the wrapper detached once, then read
+       * its record file with growing waits until it finishes or the deadline passes.
+       */
+      const runJob = async (
+        input: ExecInput,
+        ctx: AttemptContext,
+        script: string,
+        stdinPath: string | undefined,
+      ) => {
+        const run = guest(input.sandbox.id);
+        const until = Date.now() + Math.max(1, Math.ceil(input.deadlineSeconds)) * 1000;
+        const outputBytes = Math.ceil((input.maxOutputBytes * 4) / 3) + 65_536;
+        let directory: string | null;
+
+        try {
+          directory = parseJobStart(
+            new TextDecoder().decode(
+              (await run(jobLauncher(script), readContext(ctx.signal, 30))).stdout,
+            ),
+          );
+        } catch (error) {
+          if (stdinPath !== undefined)
+            await run(`rm -f -- ${quote(stdinPath)}`, readContext(ctx.signal, 30)).catch(
+              () => undefined,
+            );
+
+          return rejection(ctx, error, "exe.dev command start was not confirmed");
+        }
+
+        if (!directory)
+          return ctx.unknown(
+            "exe.dev started the command but did not report its job; do not replay",
+          );
+        let wait = JOB_POLL_FIRST_MS;
+
+        while (Date.now() < until) {
+          try {
+            await delay(Math.min(wait, Math.max(1, until - Date.now())), ctx.signal);
+          } catch {
+            break;
+          }
+
+          wait = Math.min(wait * 1.5, JOB_POLL_MAX_MS);
+          let stdout: Uint8Array;
+
+          try {
+            ({ stdout } = await run(jobPoll(directory), readContext(ctx.signal, 30), outputBytes));
+          } catch {
+            // One failed read is not evidence about the job; the next poll tries again.
+            continue;
+          }
+
+          if (stdout.length === 0) continue;
+          const record = parseWrapper(new TextDecoder().decode(stdout));
+
+          if (!record)
+            return ctx.unknown(
+              "exe.dev ran the command but its result record could not be decoded",
+            );
+          await run(jobCleanup(directory), readContext(ctx.signal, 30)).catch(() => undefined);
+
+          return record;
+        }
+
+        await run(jobKill(directory), readContext(AbortSignal.timeout(30_000), 30)).catch(
+          () => undefined,
+        );
+
+        return ctx.unknown(
+          `exe.dev command passed its ${input.deadlineSeconds}s deadline; it was stopped, but it may have had effects`,
+        );
+      };
+
       /** Run one command once and collect its result, or explain why the outcome is unknown. */
       const runCommand = async (input: ExecInput, ctx: AttemptContext) => {
         const files = filesystem(guest(input.sandbox.id));
@@ -832,6 +920,8 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
           }
 
         const script = wrapperScript({ ...input, stdinPath, maxBytes: input.maxOutputBytes });
+
+        if (input.deadlineSeconds > directExecSeconds) return runJob(input, ctx, script, stdinPath);
         const deadline = AbortSignal.timeout(Math.max(1, Math.ceil(input.deadlineSeconds)) * 1000);
         const signal = AbortSignal.any([ctx.signal, deadline]);
         let result;
@@ -1204,7 +1294,9 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
               maxBytes: input.maxOutputBytes,
             });
 
-            if (sshBodyBytes(input.sandbox.id, script) > MAX_REQUEST_BYTES)
+            const sent = input.deadlineSeconds > directExecSeconds ? jobLauncher(script) : script;
+
+            if (sshBodyBytes(input.sandbox.id, sent) > MAX_REQUEST_BYTES)
               throw new AdapterError(
                 "CAPACITY",
                 "exe.dev commands must fit one 64 KB request; upload long scripts as files first",

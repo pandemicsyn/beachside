@@ -149,3 +149,48 @@ export function parseWrapper(stdout: string): WrapperResult | null {
     truncated: stdoutBytes.length < lengths[0] || stderrBytes.length < lengths[1],
   };
 }
+
+/**
+ * exe.dev documents a 30-second limit for one API request, so a command whose deadline is
+ * longer runs as a detached guest job instead: one request starts the same wrapper in its own
+ * process group, writing its record to a private file, and later requests read that file.
+ */
+export const DIRECT_EXEC_SECONDS = 25;
+
+export const JOB_RECORD = "BEACHSIDE-RUN-1";
+
+/** Start the wrapper detached; prints the job directory once the job is running. */
+export function jobLauncher(wrapper: string): string {
+  const body = `${wrapper}\n`;
+
+  return [
+    "beachside_j=$(mktemp -d /tmp/beachside-run.XXXXXXXX) || exit 97",
+    `setsid sh -c ${quote(`sh -c ${quote(body)} >"$1/record.tmp" 2>/dev/null </dev/null; mv -f "$1/record.tmp" "$1/record"`)} sh "$beachside_j" </dev/null >/dev/null 2>&1 &`,
+    `printf '%s\\n' "$!" >"$beachside_j/pid"`,
+    `printf '${JOB_RECORD} %s\\n' "$beachside_j"`,
+  ].join("\n");
+}
+
+const JobStart = new RegExp(`^${JOB_RECORD} (/tmp/beachside-run\\.[A-Za-z0-9]{8})\\n$`);
+
+/** The job directory a launcher printed, or null when it is missing or malformed. */
+export function parseJobStart(stdout: string): string | null {
+  return JobStart.exec(stdout)?.[1] ?? null;
+}
+
+/** Prints the finished record, or nothing while the job is still running. */
+export function jobPoll(directory: string): string {
+  return `if [ -f ${quote(`${directory}/record`)} ]; then cat ${quote(`${directory}/record`)}; fi`;
+}
+
+/** Remove a finished job's directory. */
+export function jobCleanup(directory: string): string {
+  return `rm -rf -- ${quote(directory)}`;
+}
+
+/** Stop a job that passed its deadline: the whole process group, then its directory. */
+export function jobKill(directory: string): string {
+  const pid = quote(`${directory}/pid`);
+
+  return `if [ -f ${pid} ]; then kill -KILL "-$(cat ${pid})" 2>/dev/null; fi; rm -rf -- ${quote(directory)}`;
+}

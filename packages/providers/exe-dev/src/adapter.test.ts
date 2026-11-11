@@ -567,3 +567,80 @@ test("capabilities name what exe.dev supports and what it does not", async () =>
     await client.close();
   }
 });
+
+function jobSetup() {
+  const fixture = exeDevFixture();
+  fixtures.push(fixture);
+
+  // Every command with a deadline over one second runs as a detached guest job.
+  const adapter = createExeDevAdapter({
+    fetch: fixture.fetch,
+    pollIntervalMs: 1,
+    settleSeconds: 1,
+    directExecSeconds: 1,
+  });
+
+  const connect = () =>
+    Beachside.connect({
+      adapter,
+      config: { network: "internet" },
+      credentials: { token: "exe1.fixture-main" },
+    });
+
+  return { fixture, connect };
+}
+
+linuxGuest("a long command runs as a guest job and returns the same exact result", async () => {
+  const { fixture, connect } = jobSetup();
+  const client = await connect();
+
+  try {
+    const box = await client.sandboxes.create({ env: { GREETING: "hi" } });
+
+    const failed = await box
+      .exec({
+        command: {
+          kind: "shell",
+          script: 'sleep 1; printf "%s|" "$GREETING"; cat; printf "\\377" >&2; exit 4',
+        },
+        stdin: new TextEncoder().encode("in"),
+        deadlineSeconds: 60,
+      })
+      .then(
+        () => undefined,
+        (error: Error) => error,
+      );
+
+    if (!(failed instanceof NonzeroExitError)) throw failed ?? Error("Expected exit 4");
+    expect(failed.result.exitCode).toBe(4);
+    expect(new TextDecoder().decode(failed.result.stdout)).toBe("hi|in");
+    expect([...failed.result.stderr]).toEqual([255]);
+    // One start, then reads of the record file; never the command itself again.
+    expect(
+      fixture.commands("ssh").filter((call) => call.command.includes("beachside-run.XXXXXXXX")),
+    ).toHaveLength(1);
+  } finally {
+    await client.close();
+  }
+});
+
+linuxGuest("a guest job past its deadline is stopped and reported unknown", async () => {
+  const { connect } = jobSetup();
+  const client = await connect();
+
+  try {
+    const box = await client.sandboxes.create();
+    const marker = `/tmp/beachside-job-${box.id}`;
+
+    await expect(
+      box.exec({
+        command: { kind: "shell", script: `sleep 3; touch ${marker}` },
+        deadlineSeconds: 2,
+      }),
+    ).rejects.toBeInstanceOf(OutcomeUnknownError);
+    await Bun.sleep(2000);
+    expect(await Bun.file(marker).exists()).toBe(false);
+  } finally {
+    await client.close();
+  }
+});
