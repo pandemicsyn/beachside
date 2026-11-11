@@ -87,4 +87,15 @@ Beachside sends each mutation once; the generated client and the adapter add no 
 
 If provisioning outlasts the in-call wait, the sandbox id is already saved and Beachside finishes by reading its state. If a create ends `cancelled` or `error`, the error's `outcome.sandbox` holds the reference so you can inspect or destroy it.
 
+## Limits
+
+- Not yet tested against the live Boat service.
+- No blocked egress: sandboxes always reach the internet.
+- No fork, volumes, protected previews, piped input, byte streaming, terminals, directory operations, regions or labels.
+- Command deadlines go up to 600 seconds; run longer work as a streamed process.
+- Files are limited to 5 MiB, under `/home/user` or `/tmp`, and no-clobber writes are unsupported.
+- Suspend archives the disk only; memory, processes and connections are lost.
+- Previews are public: anyone with the URL can open the port.
+- Named snapshots count toward your Boat plan's allowance and survive the sandbox, so delete them when done.
+
 See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/40), [Boat API docs](https://docs.boat.dev/api/v1) and [TypeScript SDK docs](https://docs.boat.dev/sdks/typescript).
