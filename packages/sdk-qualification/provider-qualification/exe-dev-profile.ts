@@ -53,7 +53,7 @@ const featureIds = Object.keys(features) as (keyof typeof features)[];
 
 export default defineProviderProfile({
   id: "exe-dev",
-  nativeVersion: "@exedev/sdk 0.4.1",
+  nativeVersion: "exedev SDK 0.4.1",
   configuredEnvironment: true,
   fileNoClobber: true,
   credentialVariables: ["EXE_API_KEY"],
