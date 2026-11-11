@@ -1,0 +1,514 @@
+{
+  "schemaVersion": 1,
+  "records": [
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:56:47.998Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "sandbox-lifecycle",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "sandbox-lifecycle"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:56:47.998Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "execution",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "execution"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:56:47.998Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "execution-stdin",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "execution-stdin"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:56:47.998Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "files",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "files"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:56:47.998Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "file-directories",
+      "status": "failed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "file-directories"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:56:47.998Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-renew",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-renew"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:56:47.998Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-suspend-resume",
+      "status": "failed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-suspend-resume"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:56:47.998Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-reopen",
+      "status": "failed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-reopen"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:58:10.583Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default",
+        "stateProbe": "snapshot-roundtrip-v3",
+        "freshProcess": true,
+        "preserve": "filesystem+memory",
+        "restoreExecution": "resume",
+        "sourceAfter": "running"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "snapshot-roundtrip",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "snapshot-roundtrip"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-snapshots-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "harnessCommit": "28fc92b75ae0ba477ec828967b1a1ff33b38331b",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:58:39.333Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "preview-public",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "preview-public"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-28fc92b-preview-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "harnessCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T01:04:47.115Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "sandbox-lifecycle",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "sandbox-lifecycle"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "harnessCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T01:04:47.115Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "execution",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "execution"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "harnessCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T01:04:47.115Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "execution-stdin",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "execution-stdin"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "harnessCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T01:04:47.115Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "files",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "files"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "harnessCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T01:04:47.115Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "file-directories",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "file-directories"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "harnessCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T01:04:47.115Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-renew",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-renew"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "harnessCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T01:04:47.115Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-suspend-resume",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-suspend-resume"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu"
+    },
+    {
+      "provider": "freestyle",
+      "sdkCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "harnessCommit": "3a07a2ff24dacf59bd96d2542951cf7aa7da1282",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "freestyle SDK 0.2.21",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T01:04:47.115Z",
+      "configuration": {
+        "imageClass": "prepared",
+        "fileRoot": "/tmp",
+        "authorityClass": "api-key",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-reopen",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-reopen"
+      },
+      "evidenceRef": "freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu"
+    }
+  ]
+}

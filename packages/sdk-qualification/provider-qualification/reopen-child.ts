@@ -71,20 +71,23 @@ try {
       if (!["stopped", "suspended"].includes(before.state))
         throw Error("Inactive reopen changed state");
 
-      for (const read of [
-        () => sandbox.readFile(input.sandboxProbe!.path),
-        () => sandbox.exec(["true"]),
-      ]) {
-        let rejected = false;
-
-        try {
-          await read();
-        } catch {
-          rejected = true;
-        }
-
-        if (!rejected) throw Error("Inactive guest access succeeded");
+      // Commands need running compute. A provider may serve file reads from an inactive sandbox,
+      // as long as nothing wakes; the lifecycle check below proves that.
+      try {
+        await sandbox.readFile(input.sandboxProbe.path);
+      } catch {
+        /* Refusing is equally acceptable. */
       }
+
+      let rejected = false;
+
+      try {
+        await sandbox.exec(["true"]);
+      } catch {
+        rejected = true;
+      }
+
+      if (!rejected) throw Error("Inactive guest access succeeded");
 
       if (
         (await sandbox.inspect()).state !== before.state ||

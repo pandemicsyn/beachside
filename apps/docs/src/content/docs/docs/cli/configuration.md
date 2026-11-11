@@ -16,7 +16,7 @@ Set `BEACHSIDE_PROVIDER` (or pass `--provider`) and the provider's own variables
 | `boxd`      | `BOXD_API_KEY`, `BOXD_ORG`; optional `BOXD_NETWORK=internet` and `BOXD_REGION`                                             |
 | `boat`      | `BOAT_API_KEY`, `BOAT_NETWORK=internet`                                                                                    |
 | `runloop`   | `RUNLOOP_API_KEY`; optional `RUNLOOP_NETWORK=internet` (experimental)                                                      |
-| `freestyle` | `FREESTYLE_API_KEY`; optional `FREESTYLE_NETWORK=internet` (experimental)                                                  |
+| `freestyle` | `FREESTYLE_API_KEY`; optional `FREESTYLE_NETWORK=internet`                                                                 |
 | `archil`    | `ARCHIL_API_KEY`, `ARCHIL_REGION`; optional `ARCHIL_NETWORK=internet`, or `archil-managed` on the Free plan (experimental) |
 | `exe-dev`   | `EXE_API_KEY`, `EXE_NETWORK=internet` (experimental)                                                                       |
 | `vercel`    | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                                                                      |

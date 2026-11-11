@@ -471,6 +471,19 @@ export const providerStatus: ProviderStatus[] = [
     ],
   },
   {
+    id: "freestyle",
+    name: "Freestyle",
+    href: "/docs/providers/freestyle/",
+    experimental: false,
+    note: "Live-tested across sandboxes, commands, files, pause/resume, renewal, snapshots and public previews.",
+    limits: [
+      "No OCI images, volumes or regions; images are Freestyle snapshots of Ubuntu bases.",
+      "Egress allowlists match IPv4 ranges only, because Freestyle firewalls cannot match host names.",
+      "Protected previews are unsupported; public `style.dev` routes are open to anyone with the URL.",
+      "Commands and writes need a running VM; reads, listings and stat work on a paused VM without waking it.",
+    ],
+  },
+  {
     id: "vercel",
     name: "Vercel Sandbox",
     href: "/docs/providers/vercel/",
@@ -490,13 +503,6 @@ export const providerStatus: ProviderStatus[] = [
     href: "/docs/providers/runloop/",
     experimental: true,
     note: "Not yet tested against the live Runloop service; sign-ups are invitation only.",
-  },
-  {
-    id: "freestyle",
-    name: "Freestyle",
-    href: "/docs/providers/freestyle/",
-    experimental: true,
-    note: "Not yet tested against the live Freestyle service.",
   },
   {
     id: "archil",
