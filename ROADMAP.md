@@ -84,6 +84,6 @@ Daytona and E2B live passes date from October 9, 2026. Snapshot, streaming and f
 
 ## Provider candidates
 
-Tensorlake (#45), Cloudflare Sandboxes (#44), Prime Intellect (#43), exe.dev (#42) and Isorun (#46) are candidates, not scheduled work. Pick the next adapter after a usability review: can an application create, run, move files, reopen, handle partial outcomes and clean up with clear ownership on it? A new adapter must cover everything its provider supports when it lands.
+Tensorlake (#45), Cloudflare Sandboxes (#44), Prime Intellect (#43) and Isorun (#46) are candidates, not scheduled work. Pick the next adapter after a usability review: can an application create, run, move files, reopen, handle partial outcomes and clean up with clear ownership on it? A new adapter must cover everything its provider supports when it lands.
 
 Accounting, a hosted service or management UI, and Rust are not planned. Completed plans live in Git history; don't start parallel backlogs.
