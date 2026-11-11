@@ -7,7 +7,7 @@ Replace the bracketed fields, then copy the prompt into your coding agent. Give 
 
 ```text wrap title="Application prompt"
 Build [describe the feature] in this project using the Beachside TypeScript SDK.
-Use [Daytona, E2B, boxd or Vercel] as the sandbox provider.
+Use [boxd, Freestyle, Daytona, E2B or Vercel] as the sandbox provider.
 Read that provider's setup guide and supported operations before choosing a workflow.
 
 Read these docs first:
@@ -23,9 +23,9 @@ Install "beachside" and the selected adapter package from npm at matching
 versions, never a 0.0.0 placeholder.
 
 Use Beachside and Image from "beachside", and the adapter definition from
-the selected package: e2bAdapter from "@beachside/e2b", daytonaAdapter from
-"@beachside/daytona", boxdAdapter from "@beachside/boxd", or vercelAdapter
-from "@beachside/vercel". Connect with
+the selected package: boxdAdapter from "@beachside/boxd", freestyleAdapter
+from "@beachside/freestyle", daytonaAdapter from "@beachside/daytona",
+e2bAdapter from "@beachside/e2b", or vercelAdapter from "@beachside/vercel". Connect with
 Beachside.connect({ adapter, credentials, config }) for every provider.
 Run the SDK on the server and read credentials from environment variables.
 
@@ -38,7 +38,9 @@ Vercel defaults to disposable Node 24 in iad1 with blocked networking. It suppor
 bounded byte output and overwrite-only files, without stdin, process streams,
 snapshots or volumes; cleanup stops compute and retains named metadata.
 boxd defaults to blocked egress (set network "internet" to open it) and requires overwrite:true.
-Neither provider inherits Daytona/E2B streaming or storage guarantees.
+Freestyle defaults to blocked egress on its freestyle/ubuntu base (set network
+"internet" to open it); commands and writes need a running VM.
+Vercel, boxd and Freestyle do not inherit Daytona/E2B streaming or storage guarantees.
 
 Use argument arrays for commands. Use the explicit shell form only when
 shell syntax is needed. Preserve byte output, check truncation, and handle

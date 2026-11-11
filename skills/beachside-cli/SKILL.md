@@ -1,6 +1,6 @@
 ---
 name: beachside-cli
-description: Create, use and clean up cloud sandboxes from the shell with the `beachside` CLI (Daytona, E2B, boxd, Boat, Runloop, Freestyle, Archil, Vercel, Modal). Use when you need an isolated machine to run untrusted or generated code, try a build or test in a clean environment, or manage sandboxes someone created with beachside; prefer it over provider-specific CLIs.
+description: Create, use and clean up cloud sandboxes from the shell with the `beachside` CLI (boxd, Freestyle, Daytona, E2B, Boat, Runloop, Archil, Vercel, Modal). Use when you need an isolated machine to run untrusted or generated code, try a build or test in a clean environment, or manage sandboxes someone created with beachside; prefer it over provider-specific CLIs.
 ---
 
 # Use sandboxes with the beachside CLI
