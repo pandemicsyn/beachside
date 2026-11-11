@@ -102,3 +102,25 @@ linuxGuest(
     }
   },
 );
+
+linuxGuest("making a directory over a file is an invalid argument with no effect", async () => {
+  const { client, box, dir } = await setup();
+
+  try {
+    const file = `${dir}/sentinel.bin`;
+    await box.writeFile(file, new Uint8Array([1, 2, 3]));
+
+    for (const [path, recursive] of [
+      [file, true],
+      [file, false],
+      [`${file}/child`, true],
+    ] as const)
+      await expect(box.makeDirectory(path, { recursive })).rejects.toMatchObject({
+        code: "INVALID_ARGUMENT",
+      });
+
+    expect([...(await box.readFile(file))]).toEqual([1, 2, 3]);
+  } finally {
+    await client.close();
+  }
+});

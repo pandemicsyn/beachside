@@ -29,7 +29,7 @@ describe("Beachside finite E2B text streaming", () => {
           // Block exit on a file the test writes only after observing stdout.
           command: {
             kind: "shell",
-            script: `printf early; printf err >&2; while [ ! -f /home/user/beachside-stream-${t.ledger.runId} ]; do sleep 0.1; done; exit 7`,
+            script: `printf early; printf err >&2; while [ ! -f ${fixture!.fileRoot}/beachside-stream-${t.ledger.runId} ]; do sleep 0.1; done; exit 7`,
           },
           maxOutputBytes: 4096,
         },
@@ -58,7 +58,7 @@ describe("Beachside finite E2B text streaming", () => {
             expect(exited).toBe(false);
             released = true;
             await box.writeFile(
-              `/home/user/beachside-stream-${t.ledger.runId}`,
+              `${fixture!.fileRoot}/beachside-stream-${t.ledger.runId}`,
               new Uint8Array([1]),
               { signal: t.signal },
             );

@@ -303,7 +303,7 @@ describe("Beachside sandbox", () => {
           ...(featureSupported("finiteStdin") ? ["execution-stdin" as const] : []),
           "files",
           "lifecycle-reopen",
-          "lifecycle-renew",
+          ...(featureSupported("renewal") ? ["lifecycle-renew" as const] : []),
           "lifecycle-suspend-resume",
           ...(featureSupported("directories") ? ["file-directories" as const] : []),
         ],
@@ -348,7 +348,7 @@ describe("Beachside sandbox", () => {
     async () => directories(fixture!.resources, box, fixture!.fileRoot),
     241000,
   );
-  (liveEnabled ? test : test.skip)(
+  (liveEnabled && featureSupported("renewal") ? test : test.skip)(
     "lifecycle-renew",
     async () => renewal(fixture!.resources, box),
     241000,
