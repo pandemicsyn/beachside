@@ -12,8 +12,11 @@ import { z } from "zod";
 import { type BoxdNativeClient, type CallContext } from "./transport";
 
 // Adapter-owned finite helper. Python 3 is an image prerequisite, never installed automatically.
-/** Bytes per streamed helper call; base64 of a read chunk stays under the helper's output bound. */
-const STREAM_CHUNK = 262144;
+/**
+ * Bytes per streamed piece. Pieces move through boxd's native upload and download, which carry
+ * bytes far faster than command output; the helper only splices them in place.
+ */
+const STREAM_CHUNK = 1048576;
 
 export const FILESYSTEM_HELPER = String.raw`
 import os,sys,json,stat,errno,ctypes,tempfile,shutil,base64
@@ -83,20 +86,24 @@ try:
  elif op=='exists':
   try: os.lstat(p);result={'exists':True}
   except FileNotFoundError: result={'exists':False}
- elif op=='read':
+ elif op=='slice':
   fd=os.open(p,os.O_RDONLY|os.O_NONBLOCK)
   with os.fdopen(fd,'rb') as f:
    if not stat.S_ISREG(os.fstat(f.fileno()).st_mode): raise OSError(errno.EINVAL,'regular file required')
-   f.seek(int(q));data=f.read(262144)
-  result={'data':base64.b64encode(data).decode('ascii'),'eof':len(data)<262144}
- elif op=='append':
+   f.seek(int(q));data=f.read(1048576)
+  out=os.open(stage,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW,0o600)
+  with os.fdopen(out,'wb') as o: o.write(data)
+  result={'size':len(data),'eof':len(data)<1048576}
+ elif op=='absorb':
   fd=os.open(p,os.O_WRONLY|os.O_NOFOLLOW)
   with os.fdopen(fd,'r+b') as f:
    f.seek(0,2)
    if f.tell()!=int(q): raise OSError(errno.EINVAL,'unexpected staging size')
-   data=sys.stdin.buffer.read(262145)
-   if len(data)>262144: raise OSError(errno.EFBIG,'chunk bound exceeded')
+   regular(stage)
+   with open(stage,'rb') as part: data=part.read(1048577)
+   if len(data)>1048576: raise OSError(errno.EFBIG,'chunk bound exceeded')
    f.write(data)
+  os.unlink(stage)
   result={'bytesWritten':len(data)}
  elif op=='reserve':
   parents(p);fd=os.open(p,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600);os.close(fd)
@@ -170,7 +177,8 @@ export function filesystem(native: BoxdNativeClient, id: string) {
       cancelOnAbort: true,
     };
 
-    const mutation = !["stat", "list", "exists", "read"].includes(op);
+    // A slice only writes the reader's private copy, so it changes nothing the caller asked about.
+    const mutation = !["stat", "list", "exists", "slice"].includes(op);
 
     const uncertain = () =>
       new AdapterFilesystemError(
@@ -180,7 +188,7 @@ export function filesystem(native: BoxdNativeClient, id: string) {
           effect: "possible",
           source: path,
           destination: destination || path,
-          temporaryPaths: stage && op !== "append" ? [stage] : [],
+          temporaryPaths: stage ? [stage] : [],
         },
       );
 
@@ -232,34 +240,75 @@ export function filesystem(native: BoxdNativeClient, id: string) {
     ctx: FileTransferContext,
   ) => {
     const stage = staging(path);
+    const part = `${stage}.part`;
     let count = 0;
+    // The piece file exists only between its upload and the splice that consumes it.
+    let partLive = false;
+    const temporaries = () => (partLive ? [stage, part] : [stage]);
     ctx.retain?.({ temporaryPaths: [stage] });
 
     try {
       await run("reserve", stage, "", false, ctx);
 
       // Keep the correlated stage on uncertain input/transport failure. No automatic replay.
-      for await (const input of bytes) {
-        for (let offset = 0; offset < input.length; offset += STREAM_CHUNK) {
-          ctx.signal.throwIfAborted();
-          const chunk = input.subarray(offset, offset + STREAM_CHUNK);
-          const chunkContext = { ...ctx, deadline: Date.now() + 30000 };
+      const flush = async (chunk: Uint8Array) => {
+        ctx.signal.throwIfAborted();
+        const chunkContext = { ...ctx, deadline: Date.now() + 30000 };
 
-          const ack = z
-            .object({ bytesWritten: z.number().int() })
-            .parse(await run("append", stage, String(count), false, chunkContext, "", chunk));
+        partLive = true;
+        ctx.retain?.({ temporaryPaths: temporaries(), bytesTransferred: count });
 
-          if (ack.bytesWritten !== chunk.length)
-            throw new AdapterFilesystemError("UNAVAILABLE", "boxd staging byte count differs", {
-              effect: "possible",
-              source: stage,
-              destination: path,
-              temporaryPaths: [stage],
-            });
-          count += chunk.length;
-          ctx.retain?.({ temporaryPaths: [stage], bytesTransferred: count });
+        await native.run({ ...chunkContext, uploadBytes: chunk.length }, () =>
+          native.machines.files.upload(id, part, chunk),
+        );
+
+        const ack = z
+          .object({ bytesWritten: z.number().int() })
+          .parse(await run("absorb", stage, String(count), false, chunkContext, part));
+
+        partLive = false;
+
+        if (ack.bytesWritten !== chunk.length)
+          throw new AdapterFilesystemError("UNAVAILABLE", "boxd staging byte count differs", {
+            effect: "possible",
+            source: stage,
+            destination: path,
+            temporaryPaths: [stage],
+          });
+        count += chunk.length;
+        ctx.retain?.({ temporaryPaths: [stage], bytesTransferred: count });
+      };
+
+      // Gather input into whole pieces so small writes do not each cost a round trip.
+      let pending: Uint8Array[] = [];
+      let pendingBytes = 0;
+
+      const drain = async () => {
+        if (!pendingBytes) return;
+        const piece = Buffer.concat(pending);
+        pending = [];
+        pendingBytes = 0;
+        await flush(piece);
+      };
+
+      try {
+        for await (const input of bytes) {
+          for (let offset = 0; offset < input.length;) {
+            const take = Math.min(STREAM_CHUNK - pendingBytes, input.length - offset);
+            pending.push(input.subarray(offset, offset + take));
+            pendingBytes += take;
+            offset += take;
+
+            if (pendingBytes === STREAM_CHUNK) await drain();
+          }
         }
+      } catch (error) {
+        // Bytes already taken from the producer still reach the stage, so the count stays true.
+        if (!ctx.signal.aborted) await drain();
+        throw error;
       }
+
+      await drain();
 
       await run("publish", stage, path, overwrite, { ...ctx, deadline: Date.now() + 30000 });
       ctx.retain?.({ effect: "applied", temporaryPaths: [], bytesTransferred: count });
@@ -268,12 +317,16 @@ export function filesystem(native: BoxdNativeClient, id: string) {
     } catch (error) {
       if (error instanceof AdapterFilesystemError) {
         if (error.details.effect === "applied")
-          ctx.retain?.({ effect: "applied", temporaryPaths: [stage], bytesTransferred: count });
+          ctx.retain?.({
+            effect: "applied",
+            temporaryPaths: temporaries(),
+            bytesTransferred: count,
+          });
         throw new AdapterFilesystemError(error.code, error.message, {
           ...error.details,
           source: stage,
           destination: path,
-          temporaryPaths: [stage],
+          temporaryPaths: temporaries(),
           bytesTransferred: count,
         });
       }
@@ -302,38 +355,54 @@ export function filesystem(native: BoxdNativeClient, id: string) {
     read(path: string, ctx: ReadContext) {
       let offset = 0;
       const cancellation = new AbortController();
+      // Each piece is copied to a private file, then fetched with boxd's native download.
+      const slice = `/tmp/.beachside-${randomUUID()}`;
       ctx = { ...ctx, signal: AbortSignal.any([ctx.signal, cancellation.signal]) };
+
+      // Best effort: the slice file holds a copy of bytes the caller is reading anyway.
+      const discard = () =>
+        run("remove", slice, "", false, {
+          signal: AbortSignal.timeout(30000),
+          deadline: Date.now() + 30000,
+        }).catch(() => undefined);
 
       return new ReadableStream<Uint8Array>(
         {
-          cancel() {
+          async cancel() {
             cancellation.abort();
+            await discard();
           },
           async pull(controller) {
             try {
+              const deadline = Date.now() + 30000;
+
               const chunk = z
-                .object({ data: z.string().max(Math.ceil(STREAM_CHUNK / 3) * 4), eof: z.boolean() })
+                .object({
+                  size: z.number().int().nonnegative().max(STREAM_CHUNK),
+                  eof: z.boolean(),
+                })
                 .parse(
-                  await run("read", path, String(offset), false, {
-                    ...ctx,
-                    deadline: Date.now() + 30000,
-                  }),
+                  await run("slice", path, String(offset), false, { ...ctx, deadline }, slice),
                 );
 
-              const bytes = Buffer.from(chunk.data, "base64");
+              const bytes = chunk.size
+                ? await native.run({ ...ctx, deadline, maxBytes: STREAM_CHUNK }, () =>
+                    native.machines.files.download(id, slice),
+                  )
+                : new Uint8Array();
 
-              if (
-                bytes.length > STREAM_CHUNK ||
-                bytes.toString("base64") !== chunk.data ||
-                (!chunk.eof && bytes.length !== STREAM_CHUNK)
-              )
+              if (bytes.length !== chunk.size || (!chunk.eof && bytes.length !== STREAM_CHUNK))
                 throw new AdapterError("UNAVAILABLE", "boxd file chunk is malformed");
               offset += bytes.length;
 
               if (bytes.length) controller.enqueue(bytes);
 
-              if (chunk.eof) controller.close();
+              if (chunk.eof) {
+                await discard();
+                controller.close();
+              }
             } catch (error) {
+              await discard();
               controller.error(error);
             }
           },

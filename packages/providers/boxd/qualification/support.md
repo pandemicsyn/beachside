@@ -102,7 +102,7 @@ Bounded native binary reads/overwrite upload and Python 3 atomic exclusive-creat
 
 ### Directory primitives
 
-Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/exists, recursive-opt-in mkdir/remove, copy and staged 64 KiB streams. Private Linux filesystem with hardlinks; no-clobber move requires renameat2 and cross-filesystem move rejects without copy/delete. Failed transfers retain correlated staging paths; no replay. Walk/text lines compose these hooks. Local Python workflow and protobuf transport coverage are separate; expanded file-directories live not-run.
+Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/exists, recursive-opt-in mkdir/remove, copy and staged 1 MiB streams. Private Linux filesystem with hardlinks; no-clobber move requires renameat2 and cross-filesystem move rejects without copy/delete. Failed transfers retain correlated staging paths; no replay. Walk/text lines compose these hooks. Local Python workflow and protobuf transport coverage are separate; expanded file-directories live not-run.
 
 <a id="boxd-oci"></a>
 

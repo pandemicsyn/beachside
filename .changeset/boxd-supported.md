@@ -12,4 +12,4 @@ Destroying a machine with writable disks now flushes and freezes them first, so 
 
 Commands, file calls and processes on a suspended machine now fail with UNAVAILABLE instead of silently waking it, and `readDirectory()` reports symlinks exactly when the image has Python.
 
-File streams move 256 KiB per helper call instead of 64 KiB (writes go over stdin), about four times faster.
+File streams move 1 MiB pieces through boxd's native upload and download instead of 64 KiB through command output.
