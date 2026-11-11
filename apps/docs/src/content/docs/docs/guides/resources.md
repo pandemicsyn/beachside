@@ -135,7 +135,7 @@ Pass the returned `nextCursor` to read the next page; it is absent on the last p
 | [boxd](/docs/providers/boxd/)                            | `provider-scope` (verified org)                   | `unknown` ownership; `null` for machines without a UUID.                                                                   | Machine labels; creation time.              |
 | [Vercel Sandbox (experimental)](/docs/providers/vercel/) | Sessions: `provider-scope`; persistent: `managed` | `unknown` ownership with no creation receipt. Persistent references keep the native generation used to reopen by name.     | Labels; creation time of the named sandbox. |
 | [Runloop (experimental)](/docs/providers/runloop/)       | `provider-scope` (verified account)               | `unknown` ownership.                                                                                                       | Labels (Devbox metadata); creation time.    |
-| [Freestyle (experimental)](/docs/providers/freestyle/)   | `provider-scope` (API key's account)              | `unknown` ownership.                                                                                                       | Labels; creation time.                      |
+| [Freestyle](/docs/providers/freestyle/)                  | `provider-scope` (API key's account)              | `unknown` ownership.                                                                                                       | Labels; creation time.                      |
 | [Archil (experimental)](/docs/providers/archil/)         | `provider-scope` (API key's account, one region)  | `unknown` ownership.                                                                                                       | No labels (`null`); creation time.          |
 | Modal (experimental)                                     | `provider-scope` (verified App)                   | Always `null`: the Modal adapter cannot reopen sandboxes.                                                                  | Labels; no creation time (`null`).          |
 
@@ -167,7 +167,7 @@ A per-create lifetime replaces the setup value for that sandbox. An adapter neve
 | Modal (experimental)                                     | up to 24 hours         |                                                 |
 | [Runloop (experimental)](/docs/providers/runloop/)       | 60 seconds to 48 hours | Not when `lifecycle.idleSeconds` is set.        |
 | [Boat (experimental)](/docs/providers/boat/)             | 60 seconds to 30 days  |                                                 |
-| [Freestyle (experimental)](/docs/providers/freestyle/)   | 60 seconds to 30 days  | Counted from creation, including paused time.   |
+| [Freestyle](/docs/providers/freestyle/)                  | 60 seconds to 30 days  | Counted from creation, including paused time.   |
 | [Archil (experimental)](/docs/providers/archil/)         | 60 seconds to 24 hours | Per powered-on session; expiry pauses.          |
 
 Older adapter-specific names still work for one minor release and reject when set together with `lifecycle.lifetimeSeconds`: E2B, Vercel and Modal `timeoutSeconds`, Daytona `ttlMinutes`, and boxd's top-level `lifetimeSeconds`. From the command line, `beachside create --ttl 30m` and `beachside run --ttl 2h` set a per-create lifetime.
