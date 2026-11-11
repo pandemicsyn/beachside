@@ -9,18 +9,18 @@ Adapter support and live validation are separate facts. **Supported** means impl
 
 | Feature                             | boxd                                                    |
 | ----------------------------------- | ------------------------------------------------------- |
-| Sandbox lifecycle                   | [Conditional · passed at 47911ef6](#boxd-lifecycle)     |
-| Native sandbox suspend/resume       | [Conditional · failed](#boxd-suspension)                |
+| Sandbox lifecycle                   | [Conditional · passed at fc3671e7](#boxd-lifecycle)     |
+| Native sandbox suspend/resume       | [Conditional · passed at fc3671e7](#boxd-suspension)    |
 | Protected HTTP preview              | [Unsupported · not-run](#boxd-previewProtected)         |
 | Public HTTP preview                 | [Conditional · passed at 1db711fd](#boxd-previewPublic) |
 | Local-handle process termination    | [Conditional · not-run](#boxd-termination)              |
-| Configured lifetime renewal         | [Conditional · failed](#boxd-renewal)                   |
-| Scoped sandbox reopening            | [Conditional · failed](#boxd-reopening)                 |
-| Execution and captured output       | [Conditional · passed at 47911ef6](#boxd-execution)     |
+| Configured lifetime renewal         | [Conditional · passed at fc3671e7](#boxd-renewal)       |
+| Scoped sandbox reopening            | [Conditional · passed at fc3671e7](#boxd-reopening)     |
+| Execution and captured output       | [Conditional · passed at fc3671e7](#boxd-execution)     |
 | Process streams and terminals       | [Unsupported · not-run](#boxd-streaming)                |
-| Finite execution input              | [Conditional · passed at 47911ef6](#boxd-finiteStdin)   |
-| Binary files and overwrite          | [Conditional · passed at 47911ef6](#boxd-files)         |
-| Directory primitives                | [Conditional · failed](#boxd-directories)               |
+| Finite execution input              | [Conditional · passed at fc3671e7](#boxd-finiteStdin)   |
+| Binary files and overwrite          | [Conditional · passed at fc3671e7](#boxd-files)         |
+| Directory primitives                | [Conditional · passed at fc3671e7](#boxd-directories)   |
 | OCI image builds                    | [Unsupported · not-run](#boxd-oci)                      |
 | Measured network controls           | [Conditional · not-run](#boxd-network)                  |
 | Cold snapshot with selected storage | [Unsupported · not-run](#boxd-storageComposition)       |
