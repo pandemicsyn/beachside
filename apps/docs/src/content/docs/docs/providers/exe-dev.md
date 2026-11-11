@@ -57,7 +57,7 @@ exe.dev VMs live until they are deleted; exe.dev has no lifetime or idle stop. E
 
 ## What works
 
-Everything below is tested against a simulated exe.dev API on every change and has been checked by hand against the live service. It has not yet been run through the live qualification suite, so the adapter stays experimental and the [support page](/docs/providers/support/) lists no recorded live pass.
+Everything below is tested against a simulated exe.dev API on every change. It was also checked by hand against the live service in November 2026, with the default `exeuntu` image and an API token. Create with labels and env, commands, files, processes, suspend/resume, fork and destroy all passed. In Beachside's provider qualification suite, streaming output and process termination passed, along with most of the sandbox workflow. The sandbox run then hit exe.dev's request rate limit before it finished, so the adapter stays experimental, and the [support page](/docs/providers/support/) lists no recorded live pass. Not yet checked live: previews (protected previews need an SSH key credential, and public previews need a token allowed to run `share`), commands longer than 25 seconds as guest jobs, and the latest rate-limit handling.
 
 | Feature           | Support                                                                                                                                                                                                                                                                                                |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -91,5 +91,19 @@ exe.dev runs one shell command line per `ssh <vm> <command>` request and returns
 `destroy()` deletes the VM and reports it gone only when exe.dev lists it as deleted. exe.dev's `not_found` also means "not visible to this token", so that answer, or a VM missing from a later listing, is `OUTCOME_UNKNOWN` with the reference kept. exe.dev keeps a deleted VM's name for 24 hours.
 
 Beachside sends each mutation once. The adapter sends a request again only when exe.dev answers 429, which it does before running anything, waiting longer each time (up to four times). Each create and fork uses a VM name derived from its submission (`bs-…`), so a create whose response was lost is found by that name instead of being sent again. A refusal exe.dev answers with 400, 401, 403, 404, 405 or 413 is reported as that error. A lost response, a 5xx or a 422 (which exe.dev uses for a command that ran and failed) is `OUTCOME_UNKNOWN`. A 409 on this attempt's own name is observed by name instead of refused.
+
+## Limits
+
+- Not yet through a complete live provider qualification run, so it stays experimental.
+- Internet egress only. `blocked` and allowlists are refused until exe.dev's SDK can set egress at create.
+- VMs have no lifetime or idle stop: they run and bill until destroyed. Destroy what you create, or find leftovers by their `beachside` tag with `beachside gc`.
+- No terminals (the HTTPS API has no PTY), snapshots, volumes, mounts or per-VM regions. `fork()` copies a VM and boots the copy fresh; memory and processes do not carry over.
+- Every command, with its env, must fit one 64 KB request. Captured output stops at 1 MiB across both streams, and stdin at 1 MiB. Upload long scripts as files first.
+- Commands longer than 25 seconds run as guest jobs that the adapter polls, so they cost a few extra requests and finish up to 5 seconds after the command does.
+- Every guest call is at least one exe.dev request (about 0.7 seconds each). exe.dev rate-limits busy accounts. The adapter retries a 429 up to four times and then reports `RATE_LIMIT`, so spread out heavy file or command loops.
+- Labels share the VM comment, limited to 200 bytes in total.
+- Resume reports execution as unknown, because SDK 0.4.1 does not say whether exe.dev fell back to a cold boot.
+- The image needs `sh`, core utilities and Python 3. Without `fallocate`, the output bound limits what is returned but not what a command writes to disk.
+- Tokens are per-command: a token without `ssh` cannot run anything in a VM, and one without `share` cannot make public previews. A tag-scoped key sees only VMs with its tag.
 
 See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/42) and the [exe.dev documentation](https://exe.dev/docs).

@@ -516,7 +516,7 @@ export const providerStatus: ProviderStatus[] = [
     name: "exe.dev",
     href: "/docs/providers/exe-dev/",
     experimental: true,
-    note: "Checked by hand against the live exe.dev service; not yet run through the live qualification suite.",
+    note: "Checked by hand against the live exe.dev service; the qualification suite passed streaming and termination but has not yet completed the sandbox workflow.",
   },
   {
     id: "modal",
