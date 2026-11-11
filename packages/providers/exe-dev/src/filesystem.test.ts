@@ -124,3 +124,15 @@ linuxGuest("making a directory over a file is an invalid argument with no effect
     await client.close();
   }
 });
+
+linuxGuest("a rate-limited command is sent again, because exe.dev refused it unrun", async () => {
+  const { fixture, client, box } = await setup();
+
+  try {
+    fixture.failNextSsh(fixture.error(429, "rate limited"), /BEACHSIDE-EXEC/);
+    const result = await box.exec({ command: { kind: "shell", script: "printf once" } });
+    expect(new TextDecoder().decode(result.stdout)).toBe("once");
+  } finally {
+    await client.close();
+  }
+});

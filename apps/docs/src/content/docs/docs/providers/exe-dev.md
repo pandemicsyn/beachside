@@ -88,6 +88,6 @@ exe.dev runs one shell command line per `ssh <vm> <command>` request and returns
 
 `destroy()` deletes the VM and reports it gone once exe.dev confirms. exe.dev keeps a deleted VM's name for 24 hours.
 
-Beachside sends each mutation once and the adapter adds no retries. Each create and fork uses a VM name derived from its submission (`bs-…`), so a create whose response was lost is found by that name instead of being sent again. A refusal exe.dev answers with a 4xx is reported as that error; a lost response or a 5xx is `OUTCOME_UNKNOWN`.
+Beachside sends each mutation once. The adapter sends a request again only when exe.dev answers 429, which it does before running anything, waiting longer each time (up to four times). Each create and fork uses a VM name derived from its submission (`bs-…`), so a create whose response was lost is found by that name instead of being sent again. A refusal exe.dev answers with a 4xx is reported as that error; a lost response or a 5xx is `OUTCOME_UNKNOWN`.
 
 See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/42) and the [exe.dev documentation](https://exe.dev/docs).

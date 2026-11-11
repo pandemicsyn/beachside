@@ -81,6 +81,9 @@ export const MARKER_TAG = "beachside";
  * metacharacters (`<`, `>`, `&`, quotes), so labels are space-separated `key=value` pairs
  * with both sides percent-encoded: `beachside: team=core run=live`.
  */
+/** How long a running-VM lookup is reused for the next guest call from the same client. */
+const RUNNING_REUSE_MS = 3000;
+
 const LABEL_PREFIX = "beachside:";
 
 /** exe.dev keeps comments up to 200 bytes. */
@@ -456,8 +459,27 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
         return vm;
       };
 
+      /**
+       * Running VMs this client looked up in the last few seconds. Every guest call first proves
+       * the VM is running, so a paused VM is never woken; reusing a fresh lookup keeps a burst of
+       * file and command calls from spending exe.dev's request rate on `ls`. Pause and delete by
+       * this client drop the entry at once.
+       */
+      const running = new Map<string, { vm: VM; at: number }>();
+
       const requireRunning = async (box: Sandbox, ctx: ReadContext) => {
+        const seen = running.get(box.id);
+
+        if (seen && !held.has(box.id) && Date.now() - seen.at < RUNNING_REUSE_MS) {
+          if (box.reference) checkedRef(box.reference);
+
+          return seen.vm;
+        }
+
+        running.delete(box.id);
         const vm = await requireVm(box, ctx);
+
+        if (vm.info.status === "running") running.set(box.id, { vm, at: Date.now() });
 
         if (vm.info.status !== "running")
           throw new AdapterError(
@@ -994,6 +1016,7 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
             let result;
 
             try {
+              running.delete(token.name);
               result = await api(callSignal(readContext(ctx.signal, 120))).rm([token.name]);
             } catch (error) {
               const native = failure(error);
@@ -1370,6 +1393,7 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
             await ctx.checkpoint(token);
             // Process observers stop polling first: their guest commands keep the VM busy.
             held.add(token.name);
+            running.delete(token.name);
 
             try {
               await api(callSignal(readContext(ctx.signal, 120)))

@@ -88,7 +88,7 @@ export default defineProviderProfile({
   },
   configuration() {
     return {
-      imageClass: "prepared",
+      imageClass: "oci",
       fileRoot: "/tmp",
       authorityClass: "api-key",
       network: "internet-requested",

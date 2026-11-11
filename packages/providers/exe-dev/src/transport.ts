@@ -133,6 +133,35 @@ function requestUrl(input: RequestInfo | URL): URL {
  * wrapper refuses other origins and redirects so the token stays on exe.dev, and ties every
  * request to the call's signal.
  */
+/** Rate-limited requests are sent again this many times, waiting longer each time. */
+export const RATE_LIMIT_RETRIES = 4;
+
+export const RATE_LIMIT_BASE_MS = 500;
+
+const RATE_LIMIT_MAX_WAIT_MS = 10_000;
+
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason);
+
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", stop);
+      resolve();
+    }, ms);
+
+    const stop = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+
+    signal.addEventListener("abort", stop, { once: true });
+  });
+}
+
 export function callFetch(base: NativeFetch, signal: AbortSignal): typeof fetch {
   const wrapped = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestUrl(input);
@@ -140,8 +169,23 @@ export function callFetch(base: NativeFetch, signal: AbortSignal): typeof fetch 
     if (url.origin !== EXE_DEV_API || url.pathname !== "/exec")
       throw new FetchRefused("exe.dev SDK requested another endpoint");
     const signals = init?.signal ? [signal, init.signal] : [signal];
+    const combined = AbortSignal.any(signals);
 
-    return base(input, { ...init, redirect: "error", signal: AbortSignal.any(signals) });
+    // exe.dev answers 429 before it runs anything, so sending the same request again cannot
+    // repeat an effect. Every other status, and every lost response, is returned as it is.
+    for (let attempt = 0; ; attempt++) {
+      const response = await base(input, { ...init, redirect: "error", signal: combined });
+
+      if (response.status !== 429 || attempt >= RATE_LIMIT_RETRIES) return response;
+      await response.body?.cancel();
+      const after = Number(response.headers.get("retry-after"));
+      await pause(
+        Number.isFinite(after) && after > 0
+          ? Math.min(after * 1000, RATE_LIMIT_MAX_WAIT_MS)
+          : RATE_LIMIT_BASE_MS * 2 ** attempt,
+        combined,
+      );
+    }
   };
 
   // SAFETY: the wrapper has fetch's call signature; `typeof fetch` also carries Bun's static
