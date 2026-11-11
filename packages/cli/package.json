@@ -1,6 +1,6 @@
 {
   "name": "@beachside/cli",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": false,
   "type": "module",
   "description": "Agent-first command line for creating and managing Beachside sandboxes.",

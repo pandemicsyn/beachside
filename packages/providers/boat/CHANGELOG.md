@@ -1,5 +1,16 @@
 # @beachside/boat
 
+## 0.13.0
+
+### Minor Changes
+
+- [#196](https://github.com/pandemicsyn/beachside/pull/196) [`9e3ab39`](https://github.com/pandemicsyn/beachside/commit/9e3ab396c38a718c9f26693073d6b6c93ad80972) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Previews on more providers. Daytona's `preview: { access: "public" }` now returns an expiring signed URL for one port (`preview.expiresInSeconds`, default 1 hour) instead of rejecting, and previews gain an optional `expiresAt`. Modal gets `box.preview(port)`: protected by default through a connect token sent as a bearer header, or public tunnels for `preview.ports` declared at create (public tunnels need `network: "internet"` or an allowlist, because Modal refuses open ports on a blocked network). Boat gets public previews through its host-port API.
+
+### Patch Changes
+
+- Updated dependencies [[`f95dce3`](https://github.com/pandemicsyn/beachside/commit/f95dce3c58353ed8ea14b23c5205f1619e4e374b), [`9e3ab39`](https://github.com/pandemicsyn/beachside/commit/9e3ab396c38a718c9f26693073d6b6c93ad80972), [`f89fde4`](https://github.com/pandemicsyn/beachside/commit/f89fde43eb1e548fad65c5da7b8e2c9328b62383)]:
+  - @beachside/adapter@0.13.0
+
 ## 0.12.0
 
 ### Patch Changes

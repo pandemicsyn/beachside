@@ -1,5 +1,18 @@
 # @beachside/runloop
 
+## 0.13.0
+
+### Minor Changes
+
+- [#194](https://github.com/pandemicsyn/beachside/pull/194) [`f95dce3`](https://github.com/pandemicsyn/beachside/commit/f95dce3c58353ed8ea14b23c5205f1619e4e374b) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Egress allowlists: set `network: { allow: ["registry.npmjs.org", "*.github.com", "10.0.0.0/8"] }` in adapter setup to let sandboxes reach only those hosts and IPv4 ranges. Supported on E2B, Vercel, Modal, Runloop, Archil (paid plans), Daytona (Tier 3+; hosts or ranges, not both) and Freestyle (IPv4 ranges only); where the provider reports the list back, the adapter checks it recorded exactly that list. Modal also gains `network: "internet"`; it previously always blocked egress.
+
+- [#195](https://github.com/pandemicsyn/beachside/pull/195) [`4053134`](https://github.com/pandemicsyn/beachside/commit/4053134d9c03da86889d69e40b039f4ea3ca27b4) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Runloop: `create({ labels })` and `restore({ labels })` are now stored as Devbox metadata and returned by `sandboxes.list()`, so `beachside gc --label` works on Runloop. Keys starting with `beachside_` stay reserved.
+
+### Patch Changes
+
+- Updated dependencies [[`f95dce3`](https://github.com/pandemicsyn/beachside/commit/f95dce3c58353ed8ea14b23c5205f1619e4e374b), [`9e3ab39`](https://github.com/pandemicsyn/beachside/commit/9e3ab396c38a718c9f26693073d6b6c93ad80972), [`f89fde4`](https://github.com/pandemicsyn/beachside/commit/f89fde43eb1e548fad65c5da7b8e2c9328b62383)]:
+  - @beachside/adapter@0.13.0
+
 ## 0.12.0
 
 ### Patch Changes

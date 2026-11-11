@@ -1,5 +1,24 @@
 # @beachside/e2b
 
+## 0.13.0
+
+### Minor Changes
+
+- [#193](https://github.com/pandemicsyn/beachside/pull/193) [`473b891`](https://github.com/pandemicsyn/beachside/commit/473b89100af12f8fd6f691edddfa69745ff3189c) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - E2B: upgrade to `e2b@2.63.0` and support protected previews. With `preview: { access: "protected" }`, `box.preview(port)` now returns the sandbox's traffic token as an `e2b-traffic-access-token` header instead of rejecting.
+
+  The connect call that returns the token uses the sandbox's observed remaining lifetime as its timeout, so a running sandbox's lifetime is unchanged; if the sandbox paused after the running check, E2B resumes it with that remaining lifetime and `preview()` rejects with `CONFLICT`.
+
+  **Compatibility:** `e2b@2.63.0` requires Node 22.19 or newer, so `@beachside/e2b` now declares `engines.node >=22.19` (previously Node 20 worked).
+
+- [#194](https://github.com/pandemicsyn/beachside/pull/194) [`f95dce3`](https://github.com/pandemicsyn/beachside/commit/f95dce3c58353ed8ea14b23c5205f1619e4e374b) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Egress allowlists: set `network: { allow: ["registry.npmjs.org", "*.github.com", "10.0.0.0/8"] }` in adapter setup to let sandboxes reach only those hosts and IPv4 ranges. Supported on E2B, Vercel, Modal, Runloop, Archil (paid plans), Daytona (Tier 3+; hosts or ranges, not both) and Freestyle (IPv4 ranges only); where the provider reports the list back, the adapter checks it recorded exactly that list. Modal also gains `network: "internet"`; it previously always blocked egress.
+
+- [#198](https://github.com/pandemicsyn/beachside/pull/198) [`f89fde4`](https://github.com/pandemicsyn/beachside/commit/f89fde43eb1e548fad65c5da7b8e2c9328b62383) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Add `box.fork()`, `box.submitFork()` and `box.checkFork()`. A fork copies a running sandbox with the provider's native fork; adapters without one reject with `UNSUPPORTED`, and Beachside never emulates a fork with a snapshot and restore. `capabilities().fork` reports what a fork keeps, how the source is interrupted, whether processes resume and whether the fork's lifecycle is independent. boxd, E2B and Archil fork natively with memory and running processes. Adapters declare a fork with the new `sandboxFork` session hook; uncertain forks recover through operation kind `sandbox_fork`.
+
+### Patch Changes
+
+- Updated dependencies [[`f95dce3`](https://github.com/pandemicsyn/beachside/commit/f95dce3c58353ed8ea14b23c5205f1619e4e374b), [`9e3ab39`](https://github.com/pandemicsyn/beachside/commit/9e3ab396c38a718c9f26693073d6b6c93ad80972), [`f89fde4`](https://github.com/pandemicsyn/beachside/commit/f89fde43eb1e548fad65c5da7b8e2c9328b62383)]:
+  - @beachside/adapter@0.13.0
+
 ## 0.12.0
 
 ### Patch Changes
