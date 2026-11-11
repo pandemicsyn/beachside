@@ -76,7 +76,11 @@ export const MAX_FILE_BYTES = 8 * 1024 * 1024;
 /** The tag every VM this adapter creates carries; tag-scoped keys can be limited to it. */
 export const MARKER_TAG = "beachside";
 
-/** Prefix of the VM comment that carries Beachside labels as JSON. */
+/**
+ * Prefix of the VM comment that carries Beachside labels. exe.dev refuses comments with HTML
+ * metacharacters (`<`, `>`, `&`, quotes), so labels are space-separated `key=value` pairs
+ * with both sides percent-encoded: `beachside: team=core run=live`.
+ */
 const LABEL_PREFIX = "beachside:";
 
 /** exe.dev keeps comments up to 200 bytes. */
@@ -215,7 +219,13 @@ const LifecycleToken = z.strictObject({
 /** Beachside label limits, kept inside the 200-byte VM comment as compact JSON. */
 const Labels = z.record(z.string().min(1).max(64), z.string().max(256));
 
-const LabelJson = z.record(z.string(), z.string());
+/** Percent-encode everything but unreserved characters, so no comment metacharacter remains. */
+function labelWord(value: string): string {
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
 
 function attemptName(submissionId: string): string {
   return `bs-${createHash("sha256").update(submissionId).digest("hex").slice(0, 24)}`;
@@ -227,7 +237,12 @@ function labelComment(labels: Record<string, string> | undefined): string | unde
 
   if (!Labels.safeParse(labels).success)
     throw new AdapterError("INVALID_ARGUMENT", "exe.dev labels need keys of 1-64 characters");
-  const comment = `${LABEL_PREFIX}${JSON.stringify(labels)}`;
+
+  const pairs = Object.entries(labels).map(
+    ([key, value]) => `${labelWord(key)}=${labelWord(value)}`,
+  );
+
+  const comment = `${LABEL_PREFIX} ${pairs.join(" ")}`;
 
   if (Buffer.byteLength(comment) > MAX_COMMENT_BYTES)
     throw new AdapterError(
@@ -240,15 +255,21 @@ function labelComment(labels: Record<string, string> | undefined): string | unde
 
 /** Labels read back from a VM comment; anything else is no labels. */
 function commentLabels(comment: string | undefined): Record<string, string> {
-  if (!comment?.startsWith(LABEL_PREFIX)) return {};
+  if (!comment?.startsWith(`${LABEL_PREFIX} `)) return {};
+  const labels: Record<string, string> = {};
 
   try {
-    const parsed = LabelJson.safeParse(JSON.parse(comment.slice(LABEL_PREFIX.length)));
+    for (const pair of comment.slice(LABEL_PREFIX.length + 1).split(" ")) {
+      const [key, value, extra] = pair.split("=");
 
-    return parsed.success ? parsed.data : {};
+      if (!key || value === undefined || extra !== undefined) return {};
+      labels[decodeURIComponent(key)] = decodeURIComponent(value);
+    }
   } catch {
     return {};
   }
+
+  return Labels.safeParse(labels).success ? labels : {};
 }
 
 function state(native: string | undefined): SandboxState {

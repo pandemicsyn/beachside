@@ -51,7 +51,7 @@ Protected previews need `sshKey`, because they are signed for one VM's HTTPS pro
 | `placement`      | `default`   | `default` follows your account (a Personal plan's shared capacity or a team's default pool). `standalone` reserves capacity for each VM, billed by the second. `{ pool: "name" }` places VMs in a team pool. |
 | `preview.access` | `protected` | `protected` signs a one-hour token sent as the `X-Exedev-Authorization` header and needs `sshKey`. `public` makes the VM's web port public.                                                                  |
 
-exe.dev VMs live until they are deleted; exe.dev has no lifetime or idle stop. Every VM the adapter creates is tagged `beachside`, and labels are kept as JSON in the VM's comment (200 bytes at most), so `client.sandboxes.list()` reads them back and `beachside gc` can find and remove the VMs you are done with.
+exe.dev VMs live until they are deleted; exe.dev has no lifetime or idle stop. Every VM the adapter creates is tagged `beachside`, and labels are kept in the VM's comment as percent-encoded `key=value` pairs (`beachside: team=core`, 200 bytes at most, since exe.dev refuses quotes and other HTML characters in comments), so `client.sandboxes.list()` reads them back and `beachside gc` can find and remove the VMs you are done with.
 
 ## What works
 

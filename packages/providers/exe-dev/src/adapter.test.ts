@@ -126,7 +126,7 @@ test("create sends one tagged, quiet `new` with image, size, placement and label
         "--image=ubuntu:24.04",
         "--cpu=4",
         "--memory=8GB",
-        `--comment=beachside:{"team":"core"}`,
+        "--comment=beachside: team=core",
       ]),
     );
     expect(call?.words.find((word) => word.startsWith("--name="))).toMatch(
@@ -384,7 +384,7 @@ test("fork copies the VM under its own name and replaces the labels", async () =
     expect(fork.id).not.toBe(box.id);
     expect(fixture.effects.copy).toBe(1);
     expect(fixture.vms.get(fork.id)?.tags).toContain("beachside");
-    expect(fixture.vms.get(fork.id)?.comment).toBe('beachside:{"role":"fork"}');
+    expect(fixture.vms.get(fork.id)?.comment).toBe("beachside: role=fork");
   } finally {
     await client.close();
   }
@@ -435,9 +435,15 @@ test("list reads labels back from the VM comment; destroy confirms deletion", as
   const client = await connect();
 
   try {
-    const box = await client.sandboxes.create({ labels: { team: "core" } });
+    const box = await client.sandboxes.create({
+      labels: { team: "core", "app.kind": `it's <a&b> "x" = y` },
+    });
+
     const listed = await client.sandboxes.list();
-    expect(listed.items.find((item) => item.id === box.id)?.labels).toEqual({ team: "core" });
+    expect(listed.items.find((item) => item.id === box.id)?.labels).toEqual({
+      team: "core",
+      "app.kind": `it's <a&b> "x" = y`,
+    });
     await box.destroy();
     expect(fixture.vms.has(box.id)).toBe(false);
     expect(JSON.stringify(box.reference)).not.toContain("fixture-main");

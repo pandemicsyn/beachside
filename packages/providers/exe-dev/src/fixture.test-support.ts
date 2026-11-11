@@ -272,6 +272,9 @@ export function exeDevFixture() {
         vm.memoryGB = Number((flag("memory") ?? "8GB").replace(/GB$/, ""));
         vm.tags = flags.get("tag") ?? [];
         vm.comment = flag("comment") ?? "";
+
+        if (/[<>&"']/.test(vm.comment))
+          return error(422, "comment must not contain HTML metacharacters");
         vm.placement = flag("standalone") ? "standalone" : (flag("pool") ?? "default");
         vms.set(name, vm);
 
@@ -357,6 +360,9 @@ export function exeDevFixture() {
         const vm = owned(args[0], account);
 
         if (!vm) return error(404, "VM not found");
+
+        if (/[<>&"']/.test(args[1] ?? ""))
+          return error(422, "comment must not contain HTML metacharacters");
         vm.comment = args[1] ?? "";
 
         return json(200, { vm_name: vm.name, comment: vm.comment });
