@@ -19,20 +19,20 @@ Only explicit network scenario evidence measures egress: the paired probe covers
 
 - Image / authority: oci; unspecified / verified-organization.
 - Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
-- SDK: 0.12.0, commit `47911ef6d1c776ebe396c6477db0e744717f66eb`.
+- SDK: 0.12.0, commit `fc3671e7d2f2f1f48231d935c9b94e4ee534303c`.
 - Fresh-process reopen: not recorded.
-- Harness commit: `47911ef6d1c776ebe396c6477db0e744717f66eb`.
-- Evidence: [reviewed record](boxd-live-bun-junit-20261111-47911ef-sandbox-python312slim).
+- Harness commit: `fc3671e7d2f2f1f48231d935c9b94e4ee534303c`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim).
 
 | Scenario                 | Latest live result | Date       |
 | ------------------------ | ------------------ | ---------- |
 | execution-stdin          | passed             | 2026-11-11 |
 | execution                | passed             | 2026-11-11 |
-| file-directories (/tmp)  | failed             | 2026-11-11 |
+| file-directories (/tmp)  | passed             | 2026-11-11 |
 | files (/tmp)             | passed             | 2026-11-11 |
-| lifecycle-renew          | failed             | 2026-11-11 |
-| lifecycle-reopen         | failed             | 2026-11-11 |
-| lifecycle-suspend-resume | failed             | 2026-11-11 |
+| lifecycle-renew          | passed             | 2026-11-11 |
+| lifecycle-reopen         | passed             | 2026-11-11 |
+| lifecycle-suspend-resume | passed             | 2026-11-11 |
 | sandbox-lifecycle        | passed             | 2026-11-11 |
 
 ### internet-requested · hosted-default · /tmp

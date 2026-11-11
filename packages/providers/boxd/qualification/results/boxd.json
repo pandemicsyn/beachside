@@ -1369,6 +1369,230 @@
         "testName": "lifecycle-reopen"
       },
       "evidenceRef": "boxd-live-bun-junit-20261111-47911ef-sandbox-python312slim"
+    },
+    {
+      "provider": "boxd",
+      "sdkCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "harnessCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "boxd SDK 0.3.0",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:52:01.700Z",
+      "configuration": {
+        "imageClass": "oci",
+        "fileRoot": "/tmp",
+        "authorityClass": "verified-organization",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "sandbox-lifecycle",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "sandbox-lifecycle"
+      },
+      "evidenceRef": "boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim"
+    },
+    {
+      "provider": "boxd",
+      "sdkCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "harnessCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "boxd SDK 0.3.0",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:52:01.700Z",
+      "configuration": {
+        "imageClass": "oci",
+        "fileRoot": "/tmp",
+        "authorityClass": "verified-organization",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "execution",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "execution"
+      },
+      "evidenceRef": "boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim"
+    },
+    {
+      "provider": "boxd",
+      "sdkCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "harnessCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "boxd SDK 0.3.0",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:52:01.700Z",
+      "configuration": {
+        "imageClass": "oci",
+        "fileRoot": "/tmp",
+        "authorityClass": "verified-organization",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "execution-stdin",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "execution-stdin"
+      },
+      "evidenceRef": "boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim"
+    },
+    {
+      "provider": "boxd",
+      "sdkCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "harnessCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "boxd SDK 0.3.0",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:52:01.700Z",
+      "configuration": {
+        "imageClass": "oci",
+        "fileRoot": "/tmp",
+        "authorityClass": "verified-organization",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "files",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "files"
+      },
+      "evidenceRef": "boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim"
+    },
+    {
+      "provider": "boxd",
+      "sdkCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "harnessCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "boxd SDK 0.3.0",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:52:01.700Z",
+      "configuration": {
+        "imageClass": "oci",
+        "fileRoot": "/tmp",
+        "authorityClass": "verified-organization",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "file-directories",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "file-directories"
+      },
+      "evidenceRef": "boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim"
+    },
+    {
+      "provider": "boxd",
+      "sdkCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "harnessCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "boxd SDK 0.3.0",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:52:01.700Z",
+      "configuration": {
+        "imageClass": "oci",
+        "fileRoot": "/tmp",
+        "authorityClass": "verified-organization",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-renew",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-renew"
+      },
+      "evidenceRef": "boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim"
+    },
+    {
+      "provider": "boxd",
+      "sdkCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "harnessCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "boxd SDK 0.3.0",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:52:01.700Z",
+      "configuration": {
+        "imageClass": "oci",
+        "fileRoot": "/tmp",
+        "authorityClass": "verified-organization",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-suspend-resume",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-suspend-resume"
+      },
+      "evidenceRef": "boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim"
+    },
+    {
+      "provider": "boxd",
+      "sdkCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "harnessCommit": "fc3671e7d2f2f1f48231d935c9b94e4ee534303c",
+      "sdkVersion": "0.12.0",
+      "nativeVersion": "boxd SDK 0.3.0",
+      "runtime": "Bun 1.3.14",
+      "platform": "darwin-arm64",
+      "timestamp": "2026-11-11T00:52:01.700Z",
+      "configuration": {
+        "imageClass": "oci",
+        "fileRoot": "/tmp",
+        "authorityClass": "verified-organization",
+        "network": "internet-requested",
+        "regionClass": "hosted-default"
+      },
+      "schemaVersion": 1,
+      "mode": "live",
+      "scenario": "lifecycle-reopen",
+      "status": "passed",
+      "runCleanup": "confirmed",
+      "runner": {
+        "name": "bun:test",
+        "format": "junit",
+        "testName": "lifecycle-reopen"
+      },
+      "evidenceRef": "boxd-live-bun-junit-20261111-fc3671e-sandbox-python312slim"
     }
   ]
 }
