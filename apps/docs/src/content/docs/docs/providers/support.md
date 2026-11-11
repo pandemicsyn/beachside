@@ -16,7 +16,7 @@ A live pass covers the image, region and network setting it ran with, not every 
 | [boxd](/docs/providers/boxd/)             | Supported    | 12 features, last run November 11, 2026 | Live-tested across sandboxes, commands, files, pause/resume, previews, snapshots and volumes; egress allowlists, fork and servers in sandboxes were also checked live by hand. |
 | [Daytona](/docs/providers/daytona/)       | Supported    | 14 features, last run October 9, 2026   | Live-tested across sandboxes, commands, files, previews, snapshots and volumes.                                                                                                |
 | [E2B](/docs/providers/e2b/)               | Supported    | 11 features, last run October 9, 2026   | Live-tested across sandboxes, commands, files, previews, pause/resume and snapshots.                                                                                           |
-| [Freestyle](/docs/providers/freestyle/)   | Supported    | 7 features, last run November 11, 2026  | Live-tested across sandboxes, commands, files, pause/resume, renewal, snapshots and public previews.                                                                           |
+| [Freestyle](/docs/providers/freestyle/)   | Supported    | 10 features, last run November 11, 2026 | Live-tested across sandboxes, commands, files, pause/resume, renewal, snapshots and public previews.                                                                           |
 | [Vercel Sandbox](/docs/providers/vercel/) | Experimental | None yet                                | Not yet tested against the live Vercel service.                                                                                                                                |
 | [Boat](/docs/providers/boat/)             | Experimental | None yet                                | Not yet tested against the live Boat service.                                                                                                                                  |
 | [Runloop](/docs/providers/runloop/)       | Experimental | None yet                                | Not yet tested against the live Runloop service; sign-ups are invitation only.                                                                                                 |
@@ -27,26 +27,26 @@ A live pass covers the image, region and network setting it ran with, not every 
 
 This table covers the supported providers. Vercel Sandbox, Boat, Runloop, Archil, and Modal are experimental; see the notes above and each provider's guide.
 
-| Feature                               | Daytona         | E2B                  | boxd            | Freestyle            |
-| ------------------------------------- | --------------- | -------------------- | --------------- | -------------------- |
-| Create, inspect and destroy sandboxes | Tested live     | Tested live          | Tested live     | Tested live          |
-| Pause and resume                      | Tested live     | Tested live          | Tested live     | **Failed live test** |
-| Protected HTTP previews               | Tested live     | Not tested live      | Not supported   | Not supported        |
-| Public HTTP previews                  | Not tested live | Tested live          | Tested live     | Tested live          |
-| Stop a running command                | Tested live     | Tested live          | Not tested live | Not tested live      |
-| Extend a sandbox's lifetime           | Tested live     | Tested live          | Tested live     | Tested live          |
-| Reconnect to a sandbox later          | Tested live     | Tested live          | Tested live     | **Failed live test** |
-| Run commands and capture output       | Tested live     | Tested live          | Tested live     | Tested live          |
-| Stream output and use terminals       | Tested live     | Tested live          | Not supported   | Not tested live      |
-| Send input to a command               | Not tested live | Not tested live      | Tested live     | Tested live          |
-| Read and write files                  | Tested live     | Tested live          | Tested live     | Tested live          |
-| List, copy and move files             | Tested live     | Tested live          | Tested live     | **Failed live test** |
-| Build images                          | Not tested live | Not tested live      | Not supported   | Not supported        |
-| Block outbound network                | Not tested live | **Failed live test** | Not tested live | Not tested live      |
-| Restore a snapshot with volumes       | Tested live     | Not supported        | Not supported   | Not supported        |
-| Snapshot and restore                  | Tested live     | Tested live          | Tested live     | Tested live          |
-| Create and delete volumes             | Tested live     | Not supported        | Tested live     | Not supported        |
-| Mount volumes                         | Tested live     | Not supported        | Tested live     | Not supported        |
+| Feature                               | Daytona         | E2B                  | boxd            | Freestyle       |
+| ------------------------------------- | --------------- | -------------------- | --------------- | --------------- |
+| Create, inspect and destroy sandboxes | Tested live     | Tested live          | Tested live     | Tested live     |
+| Pause and resume                      | Tested live     | Tested live          | Tested live     | Tested live     |
+| Protected HTTP previews               | Tested live     | Not tested live      | Not supported   | Not supported   |
+| Public HTTP previews                  | Not tested live | Tested live          | Tested live     | Tested live     |
+| Stop a running command                | Tested live     | Tested live          | Not tested live | Not tested live |
+| Extend a sandbox's lifetime           | Tested live     | Tested live          | Tested live     | Tested live     |
+| Reconnect to a sandbox later          | Tested live     | Tested live          | Tested live     | Tested live     |
+| Run commands and capture output       | Tested live     | Tested live          | Tested live     | Tested live     |
+| Stream output and use terminals       | Tested live     | Tested live          | Not supported   | Not tested live |
+| Send input to a command               | Not tested live | Not tested live      | Tested live     | Tested live     |
+| Read and write files                  | Tested live     | Tested live          | Tested live     | Tested live     |
+| List, copy and move files             | Tested live     | Tested live          | Tested live     | Tested live     |
+| Build images                          | Not tested live | Not tested live      | Not supported   | Not supported   |
+| Block outbound network                | Not tested live | **Failed live test** | Not tested live | Not tested live |
+| Restore a snapshot with volumes       | Tested live     | Not supported        | Not supported   | Not supported   |
+| Snapshot and restore                  | Tested live     | Tested live          | Tested live     | Tested live     |
+| Create and delete volumes             | Tested live     | Not supported        | Tested live     | Not supported   |
+| Mount volumes                         | Tested live     | Not supported        | Tested live     | Not supported   |
 
 ## Known limits
 

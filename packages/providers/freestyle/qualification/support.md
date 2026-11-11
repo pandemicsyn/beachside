@@ -9,18 +9,18 @@ Adapter support and live validation are separate facts. **Supported** means impl
 
 | Feature                             | Freestyle                                                    |
 | ----------------------------------- | ------------------------------------------------------------ |
-| Sandbox lifecycle                   | [Conditional · passed at 28fc92b7](#freestyle-lifecycle)     |
-| Native sandbox suspend/resume       | [Conditional · failed](#freestyle-suspension)                |
+| Sandbox lifecycle                   | [Conditional · passed at 3a07a2ff](#freestyle-lifecycle)     |
+| Native sandbox suspend/resume       | [Conditional · passed at 3a07a2ff](#freestyle-suspension)    |
 | Protected HTTP preview              | [Unsupported · not-run](#freestyle-previewProtected)         |
 | Public HTTP preview                 | [Conditional · passed at 28fc92b7](#freestyle-previewPublic) |
 | Local-handle process termination    | [Conditional · not-run](#freestyle-termination)              |
-| Configured lifetime renewal         | [Conditional · passed at 28fc92b7](#freestyle-renewal)       |
-| Scoped sandbox reopening            | [Conditional · failed](#freestyle-reopening)                 |
-| Execution and captured output       | [Conditional · passed at 28fc92b7](#freestyle-execution)     |
+| Configured lifetime renewal         | [Conditional · passed at 3a07a2ff](#freestyle-renewal)       |
+| Scoped sandbox reopening            | [Conditional · passed at 3a07a2ff](#freestyle-reopening)     |
+| Execution and captured output       | [Conditional · passed at 3a07a2ff](#freestyle-execution)     |
 | Process streams and terminals       | [Conditional · not-run](#freestyle-streaming)                |
-| Finite execution input              | [Conditional · passed at 28fc92b7](#freestyle-finiteStdin)   |
-| Binary files and overwrite          | [Conditional · passed at 28fc92b7](#freestyle-files)         |
-| Directory primitives                | [Conditional · failed](#freestyle-directories)               |
+| Finite execution input              | [Conditional · passed at 3a07a2ff](#freestyle-finiteStdin)   |
+| Binary files and overwrite          | [Conditional · passed at 3a07a2ff](#freestyle-files)         |
+| Directory primitives                | [Conditional · passed at 3a07a2ff](#freestyle-directories)   |
 | OCI image builds                    | [Unsupported · not-run](#freestyle-oci)                      |
 | Measured network controls           | [Conditional · not-run](#freestyle-network)                  |
 | Cold snapshot with selected storage | [Unsupported · not-run](#freestyle-storageComposition)       |

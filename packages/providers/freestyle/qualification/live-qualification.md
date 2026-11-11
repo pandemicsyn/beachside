@@ -19,6 +19,26 @@ Only explicit network scenario evidence measures egress: the paired probe covers
 
 - Image / authority: prepared; unspecified / api-key.
 - Runtime: Bun 1.3.14, darwin-arm64. Native interface: freestyle SDK 0.2.21.
+- SDK: 0.12.0, commit `3a07a2ff24dacf59bd96d2542951cf7aa7da1282`.
+- Fresh-process reopen: not recorded.
+- Harness commit: `3a07a2ff24dacf59bd96d2542951cf7aa7da1282`.
+- Evidence: [reviewed record](freestyle-live-bun-junit-20261111-3a07a2f-sandbox-ubuntu).
+
+| Scenario                 | Latest live result | Date       |
+| ------------------------ | ------------------ | ---------- |
+| execution-stdin          | passed             | 2026-11-11 |
+| execution                | passed             | 2026-11-11 |
+| file-directories (/tmp)  | passed             | 2026-11-11 |
+| files (/tmp)             | passed             | 2026-11-11 |
+| lifecycle-renew          | passed             | 2026-11-11 |
+| lifecycle-reopen         | passed             | 2026-11-11 |
+| lifecycle-suspend-resume | passed             | 2026-11-11 |
+| sandbox-lifecycle        | passed             | 2026-11-11 |
+
+### internet-requested · hosted-default · /tmp
+
+- Image / authority: prepared; unspecified / api-key.
+- Runtime: Bun 1.3.14, darwin-arm64. Native interface: freestyle SDK 0.2.21.
 - SDK: 0.12.0, commit `28fc92b75ae0ba477ec828967b1a1ff33b38331b`.
 - Fresh-process reopen: not recorded.
 - Harness commit: `28fc92b75ae0ba477ec828967b1a1ff33b38331b`.
@@ -40,25 +60,5 @@ Only explicit network scenario evidence measures egress: the paired probe covers
 | Scenario           | Latest live result | Date       |
 | ------------------ | ------------------ | ---------- |
 | snapshot-roundtrip | passed             | 2026-11-11 |
-
-### internet-requested · hosted-default · /tmp
-
-- Image / authority: prepared; unspecified / api-key.
-- Runtime: Bun 1.3.14, darwin-arm64. Native interface: freestyle SDK 0.2.21.
-- SDK: 0.12.0, commit `28fc92b75ae0ba477ec828967b1a1ff33b38331b`.
-- Fresh-process reopen: not recorded.
-- Harness commit: `28fc92b75ae0ba477ec828967b1a1ff33b38331b`.
-- Evidence: [reviewed record](freestyle-live-bun-junit-20261111-28fc92b-sandbox-ubuntu).
-
-| Scenario                 | Latest live result | Date       |
-| ------------------------ | ------------------ | ---------- |
-| execution-stdin          | passed             | 2026-11-11 |
-| execution                | passed             | 2026-11-11 |
-| file-directories (/tmp)  | failed             | 2026-11-11 |
-| files (/tmp)             | passed             | 2026-11-11 |
-| lifecycle-renew          | passed             | 2026-11-11 |
-| lifecycle-reopen         | failed             | 2026-11-11 |
-| lifecycle-suspend-resume | failed             | 2026-11-11 |
-| sandbox-lifecycle        | passed             | 2026-11-11 |
 
 A missing row means no validated live result is recorded. Unsupported and blocked operations are not passes.
