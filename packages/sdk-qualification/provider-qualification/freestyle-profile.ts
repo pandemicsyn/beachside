@@ -5,6 +5,7 @@ import { defineProviderProfile } from "./profile";
 import { features, supportMetadataSchema } from "./support";
 
 const Routing = z.object({
+  imageId: z.string().min(1),
   networkPolicy: z.literal("internet"),
   nativeLifetimeSeconds: z.literal(900),
 });
@@ -77,8 +78,14 @@ export default defineProviderProfile({
       ),
     ),
   },
-  configure(_environment, saved) {
-    return Routing.parse(saved ?? { networkPolicy: "internet", nativeLifetimeSeconds: 900 });
+  configure(environment, saved) {
+    return Routing.parse(
+      saved ?? {
+        imageId: environment.BEACHSIDE_FREESTYLE_IMAGE ?? "freestyle/ubuntu",
+        networkPolicy: "internet",
+        nativeLifetimeSeconds: 900,
+      },
+    );
   },
   configuration() {
     return {
@@ -97,6 +104,7 @@ export default defineProviderProfile({
         adapter: freestyleAdapter,
         credentials: { apiKey: credentials.BEACHSIDE_FREESTYLE_API_KEY },
         config: {
+          image: config.imageId,
           network: config.networkPolicy,
           lifecycle: { lifetimeSeconds: config.nativeLifetimeSeconds },
           preview: { access: "public", ports: [3000, 3001] },

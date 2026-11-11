@@ -185,7 +185,7 @@ At `ecc73de`, the sustained process suite passed on Daytona borrowed Linux/us/da
 
 ## Freestyle profile
 
-`freestyle-profile.ts` configures `@beachside/freestyle` with an API key, the default `freestyle/ubuntu` snapshot, explicit internet policy, a 900-second `ttlSeconds` expiry and public previews on ports 3000 and 3001. Set `BEACHSIDE_QUAL_PROVIDER=freestyle`, `BEACHSIDE_QUAL_PROFILE` to this profile and `BEACHSIDE_FREESTYLE_API_KEY`. Freestyle has no volumes, so `volumes.test.ts` does not apply. Results live in `packages/providers/freestyle/qualification/results`; render its pages with `--profile packages/sdk-qualification/provider-qualification/freestyle-profile.ts --results packages/providers/freestyle/qualification/results --output packages/providers/freestyle/qualification`.
+`freestyle-profile.ts` configures `@beachside/freestyle` with an API key, the default `freestyle/ubuntu` snapshot, explicit internet policy, a 900-second `ttlSeconds` expiry and public previews on ports 3000 and 3001. Set `BEACHSIDE_QUAL_PROVIDER=freestyle`, `BEACHSIDE_QUAL_PROFILE` to this profile and `BEACHSIDE_FREESTYLE_API_KEY`, and optionally `BEACHSIDE_FREESTYLE_IMAGE`. Freestyle has no volumes, so `volumes.test.ts` does not apply. Results live in `packages/providers/freestyle/qualification/results`; render its pages with `--profile packages/sdk-qualification/provider-qualification/freestyle-profile.ts --results packages/providers/freestyle/qualification/results --output packages/providers/freestyle/qualification`.
 
 ## Experimental boxd profile
 
