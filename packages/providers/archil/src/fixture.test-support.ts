@@ -635,8 +635,13 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
         if (message instanceof Uint8Array) {
           const proc = findProcess(socket.data.sandbox, socket.data.process ?? "");
 
-          proc?.child.stdin.write(message);
-          void proc?.child.stdin.flush();
+          // The child may already have exited; a late frame must not crash the fixture.
+          try {
+            proc?.child.stdin.write(message);
+            void Promise.resolve(proc?.child.stdin.flush()).catch(() => undefined);
+          } catch {
+            // Writing to an exited child raises EPIPE; ignore it like a closed pipe.
+          }
 
           return;
         }
@@ -671,7 +676,7 @@ export function archilFixture(options: { plan?: "free" | "developer" } = {}) {
         } else if (parsed.type === "close_stdin") {
           const proc = findProcess(socket.data.sandbox, socket.data.process ?? "");
 
-          void proc?.child.stdin.end();
+          void Promise.resolve(proc?.child.stdin.end()).catch(() => undefined);
         }
       },
       close(socket) {
