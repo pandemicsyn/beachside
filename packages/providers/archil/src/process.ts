@@ -301,8 +301,9 @@ export function observeProcess(
     sent = name === "SIGKILL" ? "SIGKILL" : "SIGTERM";
 
     const code = await options.signalCommand(
-      // The process group first, so the program and its children all get the signal.
-      `f=${quote(reference.pidFile)}; p=$(cat "$f" 2>/dev/null) && [ -n "$p" ] && { kill -${name === "SIGKILL" ? "KILL" : "TERM"} -- "-$p" 2>/dev/null || kill -${name === "SIGKILL" ? "KILL" : "TERM"} "$p" 2>/dev/null; }${
+      // A signal sent right after start can beat the launcher's PID file, so wait up to 2s
+      // for it; then the process group first, so the program and its children all get it.
+      `f=${quote(reference.pidFile)}; i=0; while [ ! -s "$f" ] && [ $i -lt 20 ]; do sleep 0.1; i=$((i+1)); done; p=$(cat "$f" 2>/dev/null) && [ -n "$p" ] && { kill -${name === "SIGKILL" ? "KILL" : "TERM"} -- "-$p" 2>/dev/null || kill -${name === "SIGKILL" ? "KILL" : "TERM"} "$p" 2>/dev/null; }${
         // A killed shell cannot remove its PID file; a terminated program may still be running.
         name === "SIGKILL" ? ' && rm -f "$f"' : ""
       }`,
