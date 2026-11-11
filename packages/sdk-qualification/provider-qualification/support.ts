@@ -446,6 +446,19 @@ export const providerStatus: ProviderStatus[] = [
     ],
   },
   {
+    id: "freestyle",
+    name: "Freestyle",
+    href: "/docs/providers/freestyle/",
+    experimental: false,
+    note: "Live-tested across sandboxes, commands, files, pause/resume, renewal, snapshots and public previews.",
+    limits: [
+      "No OCI images, volumes or regions; images are Freestyle snapshots of Ubuntu bases.",
+      "Egress allowlists match IPv4 ranges only, because Freestyle firewalls cannot match host names.",
+      "Protected previews are unsupported; public `style.dev` routes are open to anyone with the URL.",
+      "Commands and writes need a running VM; reads, listings and stat work on a paused VM without waking it.",
+    ],
+  },
+  {
     id: "daytona",
     name: "Daytona",
     href: "/docs/providers/daytona/",
@@ -468,19 +481,6 @@ export const providerStatus: ProviderStatus[] = [
       "Volumes and volume mounts are not supported.",
       "Protected previews return an `e2b-traffic-access-token` header; they have not been tested live yet.",
       "File workflows were live-tested in `/home/user`; other paths and custom templates need their own checks.",
-    ],
-  },
-  {
-    id: "freestyle",
-    name: "Freestyle",
-    href: "/docs/providers/freestyle/",
-    experimental: false,
-    note: "Live-tested across sandboxes, commands, files, pause/resume, renewal, snapshots and public previews.",
-    limits: [
-      "No OCI images, volumes or regions; images are Freestyle snapshots of Ubuntu bases.",
-      "Egress allowlists match IPv4 ranges only, because Freestyle firewalls cannot match host names.",
-      "Protected previews are unsupported; public `style.dev` routes are open to anyone with the URL.",
-      "Commands and writes need a running VM; reads, listings and stat work on a paused VM without waking it.",
     ],
   },
   {

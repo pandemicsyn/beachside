@@ -11,8 +11,8 @@ Set the default environment and network policy in adapter setup. Your applicatio
 
 | Provider       | Prepared image                            | Connection setup                                                                                          |
 | -------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| E2B            | `base`, or a ready owned template ID/name | `templateId` defaults to `base`. Set it to use your own template.                                         |
 | Daytona        | Active Linux snapshot ID/name             | Set `environment: Image.prepared("your-snapshot")`. It must be available in your organization and region. |
+| E2B            | `base`, or a ready owned template ID/name | `templateId` defaults to `base`. Set it to use your own template.                                         |
 | Vercel Sandbox | `vercel/sandbox/universal:latest`         | Default. Set `image` to a managed Node 22, 24 or 26 image instead; other images are unsupported.          |
 
 Daytona calls its prepared images snapshots. Selecting one as an image is different from capturing a sandbox's current state. For capture and restore, use the [snapshot APIs](/docs/guides/snapshots-and-volumes/).
@@ -64,9 +64,9 @@ Deletion follows the snapshot deletion rules. The reference must match the conne
 
 | Provider       | Images                      | Get, list and delete                                                                                                   |
 | -------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| E2B            | Templates                   | Supported. Delete only removes a private, single-build template that no sandbox uses. See [E2B](/docs/providers/e2b/). |
-| Daytona        | Native snapshots            | Supported. Delete refuses general snapshots and snapshots used by warm pools. See [Daytona](/docs/providers/daytona/). |
 | boxd           | OCI images, booted directly | Unsupported: there is no provider-side image resource.                                                                 |
+| Daytona        | Native snapshots            | Supported. Delete refuses general snapshots and snapshots used by warm pools. See [Daytona](/docs/providers/daytona/). |
+| E2B            | Templates                   | Supported. Delete only removes a private, single-build template that no sandbox uses. See [E2B](/docs/providers/e2b/). |
 | Vercel Sandbox | Managed images only         | Unsupported.                                                                                                           |
 
 Image deletion has deterministic test coverage only; no live deletion has been recorded.
@@ -77,13 +77,13 @@ Configure `network` once in adapter setup. Every adapter uses the same names, so
 
 | Provider       | `network`                   | Meaning                                                                                                     |
 | -------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| E2B            | `blocked` (default)         | Requests E2B's disabled-internet setting; measured strict outbound isolation has not passed.                |
-| E2B            | `internet`                  | Requests internet access.                                                                                   |
+| boxd           | `blocked` (default)         | Sets the native egress allowlist to `none` right after create, before the machine is handed out.            |
+| boxd           | `internet`                  | Unrestricted egress, with native peer/metadata isolation.                                                   |
 | Daytona        | `blocked`                   | Requests strict block-all. Creation requires verified organization eligibility, with no automatic fallback. |
 | Daytona        | `internet`                  | Unrestricted egress. Creation requires an organization without limited sandbox egress (Tier 3 and above).   |
 | Daytona        | `daytona-default` (default) | Daytona-only setup value: keeps organization-managed restrictions, including essential-service access.      |
-| boxd           | `blocked` (default)         | Sets the native egress allowlist to `none` right after create, before the machine is handed out.            |
-| boxd           | `internet`                  | Unrestricted egress, with native peer/metadata isolation.                                                   |
+| E2B            | `blocked` (default)         | Requests E2B's disabled-internet setting; measured strict outbound isolation has not passed.                |
+| E2B            | `internet`                  | Requests internet access.                                                                                   |
 | Vercel Sandbox | `blocked` (default)         | Requests native `deny-all`; network isolation has no recorded live acceptance.                              |
 | Vercel Sandbox | `internet`                  | Requests native `allow-all`.                                                                                |
 | Modal          | `blocked` (default)         | Requests Modal's `blockNetwork`.                                                                            |
@@ -129,14 +129,14 @@ Leave out schemes, ports and paths. `0.0.0.0/0` and an empty list reject with `I
 
 | Provider  | Hosts | IPv4 ranges | Notes                                                                                                                                                                                                                                                                             |
 | --------- | ----- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Daytona   | ≤ 100 | ≤ 10        | Hosts or ranges, not both in one list. HTTPS only, through Daytona's TLS proxy: clients with their own CA bundle or pinned certificates must trust `/etc/daytona/netleash/ca.crt`. `*.` also matches the bare name. Needs Tier 3 and above; lower tiers reject before allocation. |
-| E2B       | Yes   | Yes         | Host rules match HTTP on port 80 (by `Host`) and TLS on port 443 (by SNI); other ports and UDP (QUIC/HTTP3) need an IPv4 range. Sent as E2B's `allowOut` over a deny-all `denyOut`.                                                                                               |
+| boxd      | Yes   | Public only | Up to 256 entries, mixed. Matches HTTP and HTTPS by host name and other traffic by address; lookups of unlisted names are refused. Non-public ranges reject at connect. Applied right after create from an image, and from first boot on restores.                                |
+| Freestyle | No    | Yes         | Firewall rules match addresses only, so host names reject with `UNSUPPORTED`. The firewall is not read back.                                                                                                                                                                      |
 | Vercel    | Yes   | Yes         | Host rules match TLS SNI only; plain HTTP needs an IPv4 range. Vercel reports the policy back as `allowedDomains` and `allowedCIDRs`.                                                                                                                                             |
 | Modal     | Yes   | Yes         | Host rules cover TLS only (port 443, by SNI) and `*.` also matches the bare name. Modal's domain allowlist is beta.                                                                                                                                                               |
 | Runloop   | Yes   | Yes         | Host names are DNS hostnames; Runloop does not document which ports or protocols they cover. Attaches an account network policy named `beachside-allow-<digest>`, shared by equal lists.                                                                                          |
-| Freestyle | No    | Yes         | Firewall rules match addresses only, so host names reject with `UNSUPPORTED`. The firewall is not read back.                                                                                                                                                                      |
+| Daytona   | ≤ 100 | ≤ 10        | Hosts or ranges, not both in one list. HTTPS only, through Daytona's TLS proxy: clients with their own CA bundle or pinned certificates must trust `/etc/daytona/netleash/ca.crt`. `*.` also matches the bare name. Needs Tier 3 and above; lower tiers reject before allocation. |
 | Archil    | Yes   | Yes         | A deny-by-default policy; needs a paid plan.                                                                                                                                                                                                                                      |
-| boxd      | Yes   | Public only | Up to 256 entries, mixed. Matches HTTP and HTTPS by host name and other traffic by address; lookups of unlisted names are refused. Non-public ranges reject at connect. Applied right after create from an image, and from first boot on restores.                                |
+| E2B       | Yes   | Yes         | Host rules match HTTP on port 80 (by `Host`) and TLS on port 443 (by SNI); other ports and UDP (QUIC/HTTP3) need an IPv4 range. Sent as E2B's `allowOut` over a deny-all `denyOut`.                                                                                               |
 | Boat      | No    | No          | Rejects allowlists.                                                                                                                                                                                                                                                               |
 
 Over-limit or unsupported lists reject at connect with `UNSUPPORTED`, naming the limit. Provider DNS is usually left open, and host rules do not stop a client that sends an allowed name to a shared server for another site (domain fronting), so treat an allowlist as egress control, not a full sandbox for hostile code. boxd's allowlist passed a live check on November 10, 2026: listed hosts and addresses were reachable, unlisted names failed to resolve, and restores and forks kept the list. Other providers' allowlists have not run live yet.
@@ -160,10 +160,10 @@ Values are often secrets, so Beachside never writes them into operation referenc
 
 | Provider       | Create-time `env`                                                               |
 | -------------- | ------------------------------------------------------------------------------- |
+| boxd           | Unsupported: boxd's native machine env is not established for exec sessions.    |
 | Daytona        | Native sandbox `env` on creation.                                               |
-| E2B            | Native sandbox `envs` on creation.                                              |
 | Vercel Sandbox | Native session `env` on creation; persistent sandboxes keep it on resume.       |
 | Modal          | Native sandbox environment, sent with the single create request (experimental). |
-| boxd           | Unsupported: boxd's native machine env is not established for exec sessions.    |
+| E2B            | Native sandbox `envs` on creation.                                              |
 
 `client.capabilities().createEnv` reports whether the connection supports it. On a connection that does not, `checkCreate({ env })` returns `unsupported` and `create({ env })` rejects with `UnsupportedFeatureError` before allocating anything; pass the variables per call with `exec({ env })` instead. `snapshot.restore()` does not take `env`; whether a restored sandbox keeps the source's variables depends on the provider's snapshot, so pass them per call if a restored sandbox needs them. Live provider acceptance of create-time variables has not been run.

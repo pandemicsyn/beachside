@@ -1,6 +1,6 @@
 ---
 name: beachside
-description: Build application code that creates and drives cloud sandboxes with the Beachside TypeScript SDK (beachside) on Daytona, E2B, boxd, Boat, Runloop, Freestyle, Archil, Vercel or Modal. Use when writing or changing code that imports beachside or an @beachside/<provider> adapter, or when asked to run untrusted or generated code in a sandbox from a Node.js or Bun service.
+description: Build application code that creates and drives cloud sandboxes with the Beachside TypeScript SDK (beachside) on boxd, Freestyle, Daytona, E2B, Boat, Runloop, Archil, Vercel or Modal. Use when writing or changing code that imports beachside or an @beachside/<provider> adapter, or when asked to run untrusted or generated code in a sandbox from a Node.js or Bun service.
 ---
 
 # Build with the Beachside SDK
@@ -17,12 +17,12 @@ Beachside is one TypeScript API over several sandbox providers. The application 
 
 | Provider               | Package                | Connect with                                                                                                                                                               |
 | ---------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| E2B                    | `@beachside/e2b`       | `Beachside.connect({ adapter: e2bAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                      |
-| Daytona                | `@beachside/daytona`   | `Beachside.connect({ adapter: daytonaAdapter, credentials: { apiKey }, config: { target: "us", environment: Image.prepared("<snapshot>"), network: "daytona-default" } })` |
 | boxd                   | `@beachside/boxd`      | `Beachside.connect({ adapter: boxdAdapter, credentials: { apiKey }, config: { org, network: "internet" } })`                                                               |
+| Freestyle              | `@beachside/freestyle` | `Beachside.connect({ adapter: freestyleAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                |
+| Daytona                | `@beachside/daytona`   | `Beachside.connect({ adapter: daytonaAdapter, credentials: { apiKey }, config: { target: "us", environment: Image.prepared("<snapshot>"), network: "daytona-default" } })` |
 | Boat                   | `@beachside/boat`      | `Beachside.connect({ adapter: boatAdapter, credentials: { apiKey }, config: { network: "internet" } })`                                                                    |
 | Runloop (experimental) | `@beachside/runloop`   | `Beachside.connect({ adapter: runloopAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                  |
-| Freestyle              | `@beachside/freestyle` | `Beachside.connect({ adapter: freestyleAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                |
+| E2B                    | `@beachside/e2b`       | `Beachside.connect({ adapter: e2bAdapter, credentials: { apiKey }, config: { network: "blocked" } })`                                                                      |
 | Archil (experimental)  | `@beachside/archil`    | `Beachside.connect({ adapter: archilAdapter, credentials: { apiKey }, config: { region: "aws-us-east-1", network: "blocked" } })`                                          |
 | Vercel                 | `@beachside/vercel`    | `Beachside.connect({ adapter: vercelAdapter, credentials: { token }, config: { teamId, projectId } })`                                                                     |
 | Modal (experimental)   | `@beachside/modal`     | `Beachside.connect({ adapter: modalAdapter, credentials: { tokenId, tokenSecret }, config: { appName } })`                                                                 |

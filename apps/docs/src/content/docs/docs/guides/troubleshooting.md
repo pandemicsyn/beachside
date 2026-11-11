@@ -22,9 +22,9 @@ Check that credentials are available to the server process, then check the adapt
 
 | Provider | Check                                                                                                            |
 | -------- | ---------------------------------------------------------------------------------------------------------------- |
-| E2B      | Pass an API key, commonly stored as `E2B_API_KEY`. `E2B_API_ID` is not an API key.                               |
-| Daytona  | Pass `apiKey` and an available target region, such as `target: "us"`.                                            |
 | boxd     | Pass a member API key and your authenticated default organization ID/slug; add `network: "internet"` for egress. |
+| Daytona  | Pass `apiKey` and an available target region, such as `target: "us"`.                                            |
+| E2B      | Pass an API key, commonly stored as `E2B_API_KEY`. `E2B_API_ID` is not an API key.                               |
 | Vercel   | Pass a bearer token with access to the configured `teamId`, `projectId` and sandbox API.                         |
 
 `Beachside.connect` verifies credentials and scope using provider reads. Connecting successfully does not guarantee access to every image, policy or operation. Follow the [provider setup guides](/docs/providers/support/) for account and configuration limits.
