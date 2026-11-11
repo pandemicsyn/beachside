@@ -514,6 +514,19 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
         setup: { expiry: "acknowledged" as const, readiness: "unconfirmed" as const },
       });
 
+      /** A fork's VM exists but is not confirmed ready; the caller gets its reference to clean up. */
+      const partialFork = (
+        name: string,
+        identity: { operationId: string; submissionId: string },
+      ): OperationOutcome => ({
+        kind: "sandbox_fork" as const,
+        status: "unknown" as const,
+        sandbox: sandboxReference("exe-dev", scope, name, {
+          operation: identity.operationId,
+          submission: identity.submissionId,
+        }),
+      });
+
       /** Poll a read until it settles, the local wait ends, or the caller aborts. */
       const settle = async <T>(
         signal: AbortSignal,
@@ -617,6 +630,7 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
         identity: { operationId: string; submissionId: string },
         signal: AbortSignal,
         outcome: Settle,
+        partial: typeof partialCreate = partialCreate,
       ) => {
         if (!vm)
           return outcome.unknown(
@@ -643,7 +657,7 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
                 env
                   ? "exe.dev VM is running but its sandbox environment was not confirmed; destroy it"
                   : "exe.dev VM is running but its sandbox environment was never written; destroy it",
-                partialCreate(vm.name, identity),
+                partial(vm.name, identity),
               );
           }
 
@@ -664,7 +678,7 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
 
         return outcome.unknown(
           `exe.dev VM is ${status} before it was running; inspect or destroy it`,
-          partialCreate(vm.name, identity),
+          partial(vm.name, identity),
         );
       };
 
@@ -1132,10 +1146,11 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
 
           if (url.protocol !== "https:" || !/^[a-z0-9-]+\.[a-z0-9.-]+$/i.test(url.hostname))
             throw new AdapterError("UNAVAILABLE", "exe.dev reported an invalid VM URL");
-          const route = await read(ctx, (native) => native.vm(vm.name).shareShow());
 
           if (config.preview.access === "public") {
             // exe.dev makes one port per VM public: the one its main URL forwards to.
+            const route = await read(ctx, (native) => native.vm(vm.name).shareShow());
+
             if (route.status !== "public" || route.port !== input.port) {
               await read(ctx, (native) => native.vm(vm.name).sharePort(String(input.port)));
               await read(ctx, (native) => native.vm(vm.name).shareSetPublic());
@@ -1150,18 +1165,23 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
               "exe.dev protected previews sign a VM token and need the sshKey credential; or set preview.access public",
             );
 
-          const port =
-            input.port === route.port
-              ? ""
-              : input.port >= ALTERNATE_PORTS.min && input.port <= ALTERNATE_PORTS.max
-                ? `:${input.port}`
-                : undefined;
+          // Ports 3000-9999 have their own URL and need no share call; any other port must be
+          // the one the VM's main URL forwards to.
+          let port: string;
 
-          if (port === undefined)
-            throw new AdapterError(
-              "UNSUPPORTED",
-              `exe.dev forwards ports ${ALTERNATE_PORTS.min}-${ALTERNATE_PORTS.max} and the VM's web port (${route.port})`,
-            );
+          if (input.port >= ALTERNATE_PORTS.min && input.port <= ALTERNATE_PORTS.max)
+            port = `:${input.port}`;
+          else {
+            const route = await read(ctx, (native) => native.vm(vm.name).shareShow());
+
+            if (input.port !== route.port)
+              throw new AdapterError(
+                "UNSUPPORTED",
+                `exe.dev forwards ports ${ALTERNATE_PORTS.min}-${ALTERNATE_PORTS.max} and the VM's web port (${route.port})`,
+              );
+            port = "";
+          }
+
           const exp = Math.floor(now() / 1000) + PREVIEW_SECONDS;
 
           return {
@@ -1501,6 +1521,9 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
           async submit(input, ctx) {
             const name = attemptName(ctx.submissionId);
             const token: CreateToken = { name };
+            const source = await find(input.sandbox.id, readContext(ctx.signal));
+
+            if (!source) return ctx.reject("NOT_FOUND", "exe.dev source VM is unavailable");
             await ctx.checkpoint(token);
             let copy: VM;
 
@@ -1514,20 +1537,31 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
             if (copy.name !== name)
               return ctx.unknown("exe.dev copy acknowledgement does not match the attempt");
             const acknowledged: CreateToken = { name, acknowledged: true };
-            await ctx.checkpoint(acknowledged);
-            const comment = labelComment(input.request.labels) ?? "";
 
             try {
-              // A copy keeps its source's comment; the fork's own labels replace it.
-              await api(callSignal(readContext(ctx.signal)))
-                .vm(name)
-                .comment(comment);
-            } catch {
-              return ctx.unknown(
-                "exe.dev copied the VM but its labels were not confirmed; inspect or destroy it",
-                partialCreate(name, ctx),
-              );
+              await ctx.checkpoint(acknowledged);
+            } catch (error) {
+              if (error instanceof AdapterCheckpointError) error.outcome = partialFork(name, ctx);
+              throw error;
             }
+
+            // A copy keeps its source's comment; the fork's own labels replace it. An unlabelled
+            // fork of a commented source gets the bare prefix (no labels) rather than an empty
+            // comment, and a fork that already matches needs no call.
+            const comment =
+              labelComment(input.request.labels) ?? (source.info.comment ? LABEL_PREFIX : "");
+
+            if (comment !== (source.info.comment ?? ""))
+              try {
+                await api(callSignal(readContext(ctx.signal)))
+                  .vm(name)
+                  .comment(comment);
+              } catch {
+                return ctx.unknown(
+                  "exe.dev copied the VM but its labels were not confirmed; destroy it with the returned reference",
+                  partialFork(name, ctx),
+                );
+              }
 
             try {
               const result = await settle(ctx.signal, async (read) => {
@@ -1540,7 +1574,8 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
                     : undefined;
               });
 
-              if (result) return launched(result.current, acknowledged, ctx, ctx.signal, ctx);
+              if (result)
+                return launched(result.current, acknowledged, ctx, ctx.signal, ctx, partialFork);
             } catch {
               /* A failed readiness read is not evidence; continue through observation. */
             }
@@ -1553,7 +1588,14 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
             if (!token.success || token.data.name !== attemptName(attempt.submissionId))
               return ctx.unknown("exe.dev fork identity is unavailable; do not replay");
 
-            return launched(await find(token.data.name, ctx), token.data, attempt, ctx.signal, ctx);
+            return launched(
+              await find(token.data.name, ctx),
+              token.data,
+              attempt,
+              ctx.signal,
+              ctx,
+              partialFork,
+            );
           },
         },
         async resourceCapabilities() {

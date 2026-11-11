@@ -390,19 +390,83 @@ test("fork copies the VM under its own name and replaces the labels", async () =
   }
 });
 
+linuxGuest("a fork keeps the create-time env and boots from the copied disk", async () => {
+  const { connect } = setup();
+  const client = await connect();
+
+  try {
+    const box = await client.sandboxes.create({ env: { GREETING: "copied" } });
+    const fork = await box.fork();
+
+    const result = await fork.exec({
+      command: { kind: "shell", script: 'printf "%s" "$GREETING"' },
+    });
+
+    expect(new TextDecoder().decode(result.stdout)).toBe("copied");
+  } finally {
+    await client.close();
+  }
+});
+
+test("an unlabelled fork sends no comment; one of a labelled source clears its labels", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const plain = await client.sandboxes.create();
+    await plain.fork();
+    expect(fixture.commands("comment")).toHaveLength(0);
+
+    const labelled = await client.sandboxes.create({ labels: { role: "source" } });
+    const fork = await labelled.fork();
+    expect(fixture.vms.get(fork.id)?.comment).toBe("beachside:");
+    const listed = await client.sandboxes.list();
+    expect(listed.items.find((item) => item.id === fork.id)?.labels).toEqual({});
+  } finally {
+    await client.close();
+  }
+});
+
+test("a fork whose labels fail is unknown but returns the copy for cleanup", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const box = await client.sandboxes.create();
+    fixture.failNextComment(fixture.error(502, "bad gateway"));
+
+    const error = await box.fork({ labels: { role: "fork" } }).then(
+      () => undefined,
+      (failure: Error) => failure,
+    );
+
+    if (!(error instanceof OutcomeUnknownError)) throw error ?? Error("expected an unknown fork");
+    const copies = [...fixture.vms.keys()].filter((name) => name !== box.id);
+    expect(copies).toHaveLength(1);
+    expect(JSON.stringify(error)).toContain(copies[0] ?? "missing");
+  } finally {
+    await client.close();
+  }
+});
+
 test("protected previews sign a VM token; public previews share the web port", async () => {
   const { fixture, connect } = setup();
   const client = await connect({}, { token: "exe1.fixture-main", sshKey: openSshKey() });
 
   try {
     const box = await client.sandboxes.create();
-    const main = await box.preview(8000);
+    const shares = () => fixture.commands("share").length;
+    const before = shares();
+    const main = await box.preview(80);
     expect(main.url).toBe(`https://${box.id}.exe.xyz/`);
 
     if (main.access !== "protected") throw new Error("expected a protected preview");
     expect(main.headers["X-Exedev-Authorization"]).toMatch(/^Bearer exe0\./);
+    expect(shares()).toBe(before + 1);
+    // Ports 3000-9999 have their own URL, so no share call (or share permission) is needed.
     expect((await box.preview(3000)).url).toBe(`https://${box.id}.exe.xyz:3000/`);
-    await expect(box.preview(80)).rejects.toThrow(/3000-9999/);
+    expect(shares()).toBe(before + 1);
+    await expect(box.preview(22)).rejects.toThrow(/3000-9999/);
   } finally {
     await client.close();
   }

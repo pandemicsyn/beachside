@@ -115,7 +115,10 @@ export function exeDevFixture() {
   let held: Promise<void> | undefined;
   let bootPolls = 0;
   let createFault: Response | undefined;
+  let commentFault: Response | undefined;
   let sshFault: Response | "lost" | undefined;
+  /** Commands that must match before the fault applies; undefined matches the next one. */
+  let sshFaultMatch: RegExp | undefined;
 
   let commandOverride:
     | ((command: string) => { exit: number; stdout?: string } | undefined)
@@ -161,7 +164,7 @@ export function exeDevFixture() {
       createdAt: new Date().toISOString(),
       polls: bootPolls,
       home,
-      share: { port: 8000, status: "private" },
+      share: { port: 80, status: "private" },
       placement: from?.placement ?? "default",
     };
   };
@@ -169,8 +172,12 @@ export function exeDevFixture() {
   const ssh = async (vm: FixtureVm, command: string, signal?: AbortSignal | null) => {
     if (vm.status !== "running") return error(422, `VM ${vm.name} is not running`);
     effects.ssh++;
-    const fault = sshFault;
-    sshFault = undefined;
+    const fault = sshFaultMatch && !sshFaultMatch.test(command) ? undefined : sshFault;
+
+    if (fault) {
+      sshFault = undefined;
+      sshFaultMatch = undefined;
+    }
 
     if (fault && fault !== "lost") return fault;
     const override = commandOverride?.(command);
@@ -207,11 +214,13 @@ export function exeDevFixture() {
 
     if (fault === "lost") throw new TypeError("fetch failed");
 
-    const frames = [
-      ...(stdout.length ? [{ stdout: Buffer.from(stdout).toString("base64") }] : []),
-      ...(stderr.length ? [{ stderr: Buffer.from(stderr).toString("base64") }] : []),
-      { exit_code: exit },
-    ];
+    // exe.dev streams output in many small frames; the SDK refuses frames over 1 MiB.
+    const split = (name: "stdout" | "stderr", bytes: Uint8Array) =>
+      Array.from({ length: Math.ceil(bytes.length / 32_768) }, (_, i) => ({
+        [name]: Buffer.from(bytes.subarray(i * 32_768, (i + 1) * 32_768)).toString("base64"),
+      }));
+
+    const frames = [...split("stdout", stdout), ...split("stderr", stderr), { exit_code: exit }];
 
     return new Response(frames.map((frame) => JSON.stringify(frame)).join("\n") + "\n", {
       status: 200,
@@ -360,6 +369,10 @@ export function exeDevFixture() {
         const vm = owned(args[0], account);
 
         if (!vm) return error(404, "VM not found");
+        const fault = commentFault;
+        commentFault = undefined;
+
+        if (fault) return fault;
 
         if (/[<>&"']/.test(args[1] ?? ""))
           return error(422, "comment must not contain HTML metacharacters");
@@ -448,11 +461,15 @@ export function exeDevFixture() {
     setBootPolls(polls: number) {
       bootPolls = polls;
     },
+    failNextComment(response: Response) {
+      commentFault = response;
+    },
     failNextCreate(response: Response) {
       createFault = response;
     },
-    failNextSsh(response: Response | "lost") {
+    failNextSsh(response: Response | "lost", match?: RegExp) {
       sshFault = response;
+      sshFaultMatch = match;
     },
     overrideCommands(
       handler: ((command: string) => { exit: number; stdout?: string } | undefined) | undefined,

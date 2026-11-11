@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { posix } from "node:path";
 import {
   AdapterError,
@@ -22,7 +22,7 @@ import type { GuestRunner } from "./process";
  * streams separately.
  */
 export const FILESYSTEM_HELPER = String.raw`
-import os,sys,json,stat,errno,ctypes,tempfile,shutil,base64
+import os,sys,json,stat,errno,ctypes,tempfile,shutil,base64,hashlib
 op,p,q,flag,stage,data_arg=sys.argv[1:7]
 published=False
 created=False
@@ -81,15 +81,22 @@ try:
  elif op=='exists':
   try: os.lstat(p);result={'exists':True}
   except FileNotFoundError: result={'exists':False}
- elif op=='append':
+ elif op=='pwrite':
+  data=base64.b64decode(data_arg,validate=True)
+  if len(data)>65536: raise OSError(errno.EFBIG,'chunk bound exceeded')
   fd=os.open(p,os.O_WRONLY|os.O_NOFOLLOW)
-  with os.fdopen(fd,'r+b') as f:
-   f.seek(0,2)
-   if f.tell()!=int(q): raise OSError(errno.EINVAL,'unexpected staging size')
-   data=base64.b64decode(data_arg,validate=True)
-   if len(data)>65536: raise OSError(errno.EFBIG,'chunk bound exceeded')
-   f.write(data)
-  result={'bytesWritten':len(data)}
+  try:
+   if not stat.S_ISREG(os.fstat(fd).st_mode): raise OSError(errno.EINVAL,'regular file required')
+   n=os.pwrite(fd,data,int(q))
+  finally: os.close(fd)
+  result={'bytesWritten':n}
+ elif op=='digest':
+  fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+  with os.fdopen(fd,'rb') as f:
+   if not stat.S_ISREG(os.fstat(f.fileno()).st_mode): raise OSError(errno.EINVAL,'regular file required')
+   h=hashlib.sha256();size=0
+   for block in iter(lambda:f.read(1048576),b''): h.update(block);size+=len(block)
+  result={'size':size,'sha256':h.hexdigest()}
  elif op=='read':
   fd=os.open(p,os.O_RDONLY|os.O_NONBLOCK)
   with os.fdopen(fd,'rb') as f:
@@ -126,8 +133,20 @@ except OSError as e:
  print(json.dumps({'ok':False,'code':code,'effect':'applied' if published else 'possible' if (created and os.path.lexists(stage)) or (op in ('mkdir','remove') and overwrite) else 'none','temporaryPaths':[stage] if created and os.path.lexists(stage) else []}),file=sys.stderr if op=='read' else sys.stdout)
 `;
 
-/** Raw bytes appended per staging request, so the encoded chunk fits one 64 KB request. */
-export const STAGE_CHUNK_BYTES = 32 * 1024;
+/**
+ * Raw bytes written per staging request: the base64 chunk, the helper and the SDK's quoting
+ * must fit one 64 KB request body.
+ */
+export const STAGE_CHUNK_BYTES = 40 * 1024;
+
+/**
+ * Staging requests in flight at once. Each exe.dev request costs a round trip of most of a
+ * second, so chunks go out in parallel as positioned writes and are verified before publish.
+ */
+export const UPLOAD_CONCURRENCY = 8;
+
+/** Times a rate-limited chunk (HTTP 429, so not applied) is sent again before failing. */
+const RATE_LIMIT_RETRIES = 4;
 
 /** Bytes read per streamed range request. */
 export const READ_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -159,7 +178,7 @@ const ReadReceipt = z.discriminatedUnion("ok", [
   Failure,
 ]);
 
-const reads = new Set(["stat", "list", "exists"]);
+const reads = new Set(["stat", "list", "exists", "digest"]);
 
 const text = new TextDecoder();
 
@@ -225,6 +244,9 @@ export function filesystem(run: GuestRunner) {
       receipt = Receipt.parse(JSON.parse(text.decode(result.stdout)));
     } catch (error) {
       if (ctx.signal.aborted) throw ctx.signal.reason;
+
+      // A rate-limited request was refused before it ran, so nothing changed.
+      if (error instanceof AdapterError && error.code === "RATE_LIMIT") throw error;
 
       if (!reads.has(op)) throw uncertain();
 
@@ -292,36 +314,99 @@ export function filesystem(run: GuestRunner) {
     try {
       await helper("reserve", stage, "", false, ctx);
 
-      // Keep the correlated stage on uncertain input or transport failure; nothing replays.
-      for await (const input of bytes)
-        for (let offset = 0; offset < input.length; offset += STAGE_CHUNK_BYTES) {
-          ctx.signal.throwIfAborted();
-          const chunk = input.subarray(offset, offset + STAGE_CHUNK_BYTES);
+      // Chunks are positioned writes into this attempt's private stage, so they may land in any
+      // order and a rate-limited one (refused, not applied) can be sent again. Any other failure
+      // keeps the correlated stage and stops; the digest below proves the bytes before publish.
+      const digest = createHash("sha256");
+      const inflight = new Set<Promise<void>>();
+      let failure: Error | undefined;
 
-          const ack = z
-            .object({ bytesWritten: z.number().int() })
-            .parse(
-              await helper(
-                "append",
-                stage,
-                String(count),
-                false,
-                { ...ctx, deadline: Date.now() + 60_000 },
-                "",
-                chunk,
-              ),
+      const send = async (chunk: Uint8Array, at: number) => {
+        for (let attempt = 0; ; attempt++) {
+          ctx.signal.throwIfAborted();
+
+          try {
+            const ack = z
+              .object({ bytesWritten: z.number().int() })
+              .parse(
+                await helper(
+                  "pwrite",
+                  stage,
+                  String(at),
+                  false,
+                  { ...ctx, deadline: Date.now() + 60_000 },
+                  "",
+                  chunk,
+                ),
+              );
+
+            if (ack.bytesWritten !== chunk.length)
+              throw new AdapterFilesystemError(
+                "UNAVAILABLE",
+                "exe.dev staging byte count differs",
+                { effect: "possible", source: stage, destination: path, temporaryPaths: [stage] },
+              );
+
+            return;
+          } catch (error) {
+            if (
+              !(error instanceof AdapterError) ||
+              error.code !== "RATE_LIMIT" ||
+              attempt >= RATE_LIMIT_RETRIES
+            )
+              throw error;
+            await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+          }
+        }
+      };
+
+      const settleOne = async () => {
+        await Promise.race(inflight);
+
+        if (failure) throw failure;
+      };
+
+      try {
+        for await (const input of bytes)
+          for (let offset = 0; offset < input.length; offset += STAGE_CHUNK_BYTES) {
+            if (failure) throw failure;
+            const chunk = input.subarray(offset, offset + STAGE_CHUNK_BYTES);
+            digest.update(chunk);
+
+            const job = send(chunk, count).then(
+              () => {
+                inflight.delete(job);
+              },
+              (error: Error) => {
+                inflight.delete(job);
+                failure ??= error;
+              },
             );
 
-          if (ack.bytesWritten !== chunk.length)
-            throw new AdapterFilesystemError("UNAVAILABLE", "exe.dev staging byte count differs", {
-              effect: "possible",
-              source: stage,
-              destination: path,
-              temporaryPaths: [stage],
-            });
-          count += chunk.length;
-          ctx.retain?.({ temporaryPaths: [stage], bytesTransferred: count });
-        }
+            inflight.add(job);
+            count += chunk.length;
+
+            if (inflight.size >= UPLOAD_CONCURRENCY) await settleOne();
+          }
+      } finally {
+        // Never report a result while chunks are still being written.
+        await Promise.allSettled(inflight);
+      }
+
+      if (failure) throw failure;
+
+      const staged = z
+        .object({ size: z.number().int(), sha256: z.string() })
+        .parse(await helper("digest", stage, "", false, ctx));
+
+      if (staged.size !== count || staged.sha256 !== digest.digest("hex"))
+        throw new AdapterFilesystemError("UNAVAILABLE", "exe.dev staged bytes do not match", {
+          effect: "possible",
+          source: stage,
+          destination: path,
+          temporaryPaths: [stage],
+        });
+      ctx.retain?.({ temporaryPaths: [stage], bytesTransferred: count });
 
       await helper("publish", stage, path, overwrite, { ...ctx, deadline: Date.now() + 60_000 });
       ctx.retain?.({ effect: "applied", temporaryPaths: [], bytesTransferred: count });
@@ -340,6 +425,16 @@ export function filesystem(run: GuestRunner) {
           bytesTransferred: count,
         });
       }
+
+      // A chunk that stayed rate limited: earlier chunks may sit in the stage, never the target.
+      if (error instanceof AdapterError)
+        throw new AdapterFilesystemError(error.code, error.message, {
+          effect: "possible",
+          source: stage,
+          destination: path,
+          temporaryPaths: [stage],
+          bytesTransferred: count,
+        });
 
       throw error;
     }
