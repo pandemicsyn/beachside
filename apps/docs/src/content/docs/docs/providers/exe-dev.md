@@ -101,6 +101,7 @@ Beachside sends each mutation once. The adapter sends a request again only when 
 - Every command, with its env, must fit one 64 KB request. Captured output stops at 1 MiB across both streams, and stdin at 1 MiB. Upload long scripts as files first.
 - Commands longer than 25 seconds run as guest jobs that the adapter polls, so they cost a few extra requests and finish up to 5 seconds after the command does.
 - Every guest call is at least one exe.dev request (about 0.7 seconds each). exe.dev rate-limits busy accounts. The adapter retries a 429 up to four times and then reports `RATE_LIMIT`, so spread out heavy file or command loops.
+- Uploads are slow: a 10 MiB streamed upload measured about 0.3 MiB/s live with eight writes in flight (the adapter now sends sixteen), and downloads about 2 MiB/s. With the SDK's default 30-second transfer timeouts that 10 MiB upload timed out, so raise `transfers.setupTimeoutMs` and `inactivityTimeoutMs` for large files.
 - Labels share the VM comment, limited to 200 bytes in total.
 - Resume reports execution as unknown, because SDK 0.4.1 does not say whether exe.dev fell back to a cold boot.
 - The image needs `sh`, core utilities and Python 3. Without `fallocate`, the output bound limits what is returned but not what a command writes to disk.
