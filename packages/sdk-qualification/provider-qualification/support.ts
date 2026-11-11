@@ -436,7 +436,7 @@ export const providerStatus: ProviderStatus[] = [
     name: "boxd",
     href: "/docs/providers/boxd/",
     experimental: false,
-    note: "Live-tested across sandboxes, commands, files and reconnecting; egress allowlists, snapshots, fork and servers in sandboxes were also checked live by hand.",
+    note: "Live-tested across sandboxes, commands, files, pause/resume, previews, snapshots and volumes; egress allowlists, fork and servers in sandboxes were also checked live by hand.",
     limits: [
       "A machine created from an OCI image gets its egress (`blocked` or an allowlist) a moment after it starts, so the image's own startup can briefly reach the internet. Restores and forks have their egress from the first boot.",
       "Snapshots of machines with mounted disks are rejected, and restores keep the captured size.",
