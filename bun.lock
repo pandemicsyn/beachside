@@ -39,6 +39,7 @@
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/exe-dev": "workspace:*",
         "@beachside/freestyle": "workspace:*",
         "@beachside/modal": "workspace:*",
         "@beachside/runloop": "workspace:*",
@@ -83,6 +84,7 @@
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/exe-dev": "workspace:*",
         "@beachside/freestyle": "workspace:*",
         "@beachside/modal": "workspace:*",
         "@beachside/runloop": "workspace:*",
@@ -152,6 +154,18 @@
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "e2b": "2.63.0",
+        "zod": "4.6.6",
+      },
+      "devDependencies": {
+        "beachside": "workspace:*",
+      },
+    },
+    "packages/providers/exe-dev": {
+      "name": "@beachside/exe-dev",
+      "version": "0.0.0",
+      "dependencies": {
+        "@beachside/adapter": "workspace:*",
+        "@exedev/sdk": "0.4.1",
         "zod": "4.6.6",
       },
       "devDependencies": {
@@ -245,6 +259,7 @@
         "@beachside/boxd": "workspace:*",
         "@beachside/daytona": "workspace:*",
         "@beachside/e2b": "workspace:*",
+        "@beachside/exe-dev": "workspace:*",
         "@beachside/freestyle": "workspace:*",
         "@beachside/runloop": "workspace:*",
         "@beachside/vercel": "workspace:*",
@@ -329,6 +344,8 @@
     "@beachside/daytona": ["@beachside/daytona@workspace:packages/providers/daytona"],
 
     "@beachside/e2b": ["@beachside/e2b@workspace:packages/providers/e2b"],
+
+    "@beachside/exe-dev": ["@beachside/exe-dev@workspace:packages/providers/exe-dev"],
 
     "@beachside/freestyle": ["@beachside/freestyle@workspace:packages/providers/freestyle"],
 
@@ -525,6 +542,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.28.1", "", { "os": "win32", "cpu": "ia32" }, "sha512-zvb/mB2bSCoJOpoCBgYKKpX6YM6mJBlBUVUtVj41DlZJVEB6/0CKlRYxP5wWl1C1ILiCoAU5wZZ4q1P3qeS6Eg=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.1", "", { "os": "win32", "cpu": "x64" }, "sha512-bm4Mowrv+GXMlpWX++EcXw/iLyd1o3+bJkC2DkWXYVvgZCqD/bSj9ctZeAMC3cIxgjRVR2Dufaiu4YPxr5gW1A=="],
+
+    "@exedev/sdk": ["@exedev/sdk@0.4.1", "", {}, "sha512-2A+AdIxm6l4Q0RbvXjqNuH75gW+9RFoC96h8Q+ORO8mudlWjAe/ToT3wtwj1/jsilfr56zZVAZt1i0EifjIyxA=="],
 
     "@expressive-code/core": ["@expressive-code/core@0.44.2", "", { "dependencies": { "@ctrl/tinycolor": "^4.0.4", "hast-util-select": "^6.0.2", "hast-util-to-html": "^9.0.1", "hast-util-to-text": "^4.0.1", "hastscript": "^9.0.0", "postcss": "^8.4.38", "postcss-nested": "^6.0.1", "unist-util-visit": "^5.0.0", "unist-util-visit-parents": "^6.0.1" } }, "sha512-Yw5KonQCD1HoOO2P89y4wifqS9qrJcGVY0LkVMUsVZjhi++bhz4WwQ37inenKFNOEVo50P7cjoVsCdaVnUbq8w=="],
 

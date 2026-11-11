@@ -42,7 +42,7 @@ const beachside = await Beachside.connect({
 });
 ```
 
-Every first-party package also exports a factory named after the provider (`boxd`, `freestyle`, `daytona`, `e2b`, `boat`, `runloop`, `archil`, `modal`, `vercel`) that takes credentials and config in one object, as in `Beachside.connect(e2b({ apiKey }))`. It does no provider IO and builds the same setup; it helps when code picks a provider at run time, since every factory returns the same `BoundAdapter` type. Definitions are named `<provider>Adapter`.
+Every first-party package also exports a factory named after the provider (`boxd`, `freestyle`, `daytona`, `e2b`, `boat`, `runloop`, `archil`, `exeDev`, `modal`, `vercel`) that takes credentials and config in one object, as in `Beachside.connect(e2b({ apiKey }))`. It does no provider IO and builds the same setup; it helps when code picks a provider at run time, since every factory returns the same `BoundAdapter` type. Definitions are named `<provider>Adapter`.
 
 `acme` is the installed adapter definition; config and credentials follow its schemas. Ordinary capture results provide `snapshot.reference` for application persistence. The existing explicit connection `onReference` callback is a compatibility API for operation checkpoints: it is awaited before dispatch and when native tokens or pending observations change. See [Results and saved resources](/docs/guides/recovery/#existing-asynchronous-operations) and the [tested custom adapter example](/docs/guides/write-an-adapter/).
 

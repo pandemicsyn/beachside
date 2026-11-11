@@ -36,6 +36,7 @@ for (const name of [
   "@beachside/runloop",
   "@beachside/freestyle",
   "@beachside/archil",
+  "@beachside/exe-dev",
   "@beachside/modal",
   "@beachside/cli",
 ])
@@ -148,6 +149,14 @@ cases.push({
   overrides: [adapterName],
   runtime: `import { archilAdapter } from "@beachside/archil"; if (archilAdapter.name !== "archil") throw Error("Unexpected adapter");`,
   types: `import { archilAdapter } from "@beachside/archil"; const name: string = archilAdapter.name; void name;`,
+});
+
+cases.push({
+  name: "exe-dev",
+  packageName: "@beachside/exe-dev",
+  overrides: [adapterName],
+  runtime: `import { exeDevAdapter } from "@beachside/exe-dev"; if (exeDevAdapter.name !== "exe-dev") throw Error("Unexpected adapter");`,
+  types: `import { exeDevAdapter } from "@beachside/exe-dev"; const name: string = exeDevAdapter.name; void name;`,
 });
 
 cases.push({

@@ -11,6 +11,7 @@ import e2b from "../../../../examples/getting-started-e2b.ts?raw";
 import boat from "../../../../examples/getting-started-boat.ts?raw";
 import runloop from "../../../../examples/getting-started-runloop.ts?raw";
 import archil from "../../../../examples/getting-started-archil.ts?raw";
+import exeDev from "../../../../examples/getting-started-exe-dev.ts?raw";
 import vercel from "../../../../examples/getting-started-vercel.ts?raw";
 import modal from "../../../../examples/getting-started-modal.ts?raw";
 
@@ -67,6 +68,13 @@ npm install beachside @beachside/runloop
 
 ```sh
 npm install beachside @beachside/archil
+```
+
+  </TabItem>
+  <TabItem label="exe.dev (experimental)">
+
+```sh
+npm install beachside @beachside/exe-dev
 ```
 
   </TabItem>
@@ -164,6 +172,15 @@ ARCHIL_API_KEY="<your-archil-api-key>"
 Create an API key in the [Archil console](https://console.archil.com). The example runs in `aws-us-east-1` with all outside network access blocked, which needs a paid Archil plan. On the Free plan, change `network` to `"archil-managed"`.
 
   </TabItem>
+  <TabItem label="exe.dev (experimental)">
+
+```sh title=".env.local"
+EXE_API_KEY="<your-exe-dev-token>"
+```
+
+Create a token with `ssh exe.dev token` (see [API tokens](https://exe.dev/docs/https-api)). exe.dev VMs have internet egress, so the example asks for `network: "internet"`.
+
+  </TabItem>
   <TabItem label="Vercel (experimental)">
 
 ```sh title=".env.local"
@@ -216,6 +233,9 @@ Choose a provider and save the example as `quickstart.ts`:
   </TabItem>
   <TabItem label="Archil (experimental)">
     <Code code={archil} lang="ts" title="quickstart.ts" />
+  </TabItem>
+  <TabItem label="exe.dev (experimental)">
+    <Code code={exeDev} lang="ts" title="quickstart.ts" />
   </TabItem>
   <TabItem label="Vercel (experimental)">
     <Code code={vercel} lang="ts" title="quickstart.ts" />

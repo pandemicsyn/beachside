@@ -35,6 +35,7 @@
     "@beachside/runloop": "workspace:*",
     "@beachside/freestyle": "workspace:*",
     "@beachside/archil": "workspace:*",
+    "@beachside/exe-dev": "workspace:*",
     "@beachside/vercel": "workspace:*"
   }
 }

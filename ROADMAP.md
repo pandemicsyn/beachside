@@ -19,7 +19,7 @@ Updated November 10, 2026, at version 0.10.0. This is the only work queue. Contr
 - **Setup scripts:** one `setup` key in the SDK and CLI for scripts and command lists run in a new sandbox, plus `startup` for every boot without processes (restore, filesystem-only resume). Named, provider-neutral `setups` in `beachside.json` (`--setup node`, `--setup ./setup.sh`, `--setup-cmd`), run by Beachside over `exec` with live output, recorded by digest so restores skip finished setup and `--if-not-exists` checks it. `--with` add-ons move onto the same engine. Later: `--cache`, which snapshots after setup and restores that snapshot for the same digest. Design only. (#185)
 - **Secrets:** a `secret(value, { for: "github" })` helper backed by a pluggable credential broker, so tokens reach a sandbox without being written into it. Design only.
 - **Protected previews everywhere:** boxd and Freestyle have no built-in token check on preview URLs (boxd only offers a browser-only bot check; Freestyle needs an authorizer you host for its forward auth), so `preview.access: "protected"` is refused there today. Options to support it from adapter setup: inject a small token-checking auth proxy in the sandbox and route the preview to it (returns the token as a header, same on every provider); expose the port through an ngrok tunnel; or serve it only on a Tailscale tailnet, reusing the add-on Tailscale plumbing. Design only.
-- **Live tests for experimental adapters:** Vercel, Boat, Runloop, Archil and Modal have no live passes yet. See [qualification gaps](#qualification-gaps).
+- **Live tests for experimental adapters:** Vercel, Boat, Runloop, Archil, exe.dev and Modal have no live passes yet. See [qualification gaps](#qualification-gaps).
 - **Rebrand cleanup:** deprecate the old `@sandbar-sdk/*` npm packages and redirect the old docs domain.
 
 ## Shipped
@@ -66,7 +66,7 @@ Use the existing [Bun integration suites](packages/sdk-qualification/provider-qu
 
 | Priority | Remaining work                          | Completion condition                                                                                                                                                                                  |
 | -------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1        | Experimental adapters                   | Vercel, Boat, Runloop, Archil and Modal have no live passes. Run each provider's maintained profile.                                                                                                  |
+| 1        | Experimental adapters                   | Vercel, Boat, Runloop, Archil, exe.dev and Modal have no live passes. Run each provider's maintained profile.                                                                                         |
 | 2        | Finite exec input                       | `execution-stdin` has not run live. Qualify bytes, EOF, output and cleanup for each claimed provider configuration.                                                                                   |
 | 3        | Configured creation and private ingress | Run the configured-creation scenario. Qualify E2B private-default ingress denial, including restore where claimed.                                                                                    |
 | 4        | E2B network isolation                   | At `431cdaa`, blocked compute still reached `1.1.1.1:443` directly. Investigate provider and configuration evidence before rerunning. Do not claim isolation or silently change the requested policy. |
@@ -84,6 +84,6 @@ Daytona and E2B live passes date from October 9, 2026. Snapshot, streaming and f
 
 ## Provider candidates
 
-Tensorlake (#45), Cloudflare Sandboxes (#44), Prime Intellect (#43), exe.dev (#42) and Isorun (#46) are candidates, not scheduled work. Pick the next adapter after a usability review: can an application create, run, move files, reopen, handle partial outcomes and clean up with clear ownership on it? A new adapter must cover everything its provider supports when it lands.
+Tensorlake (#45), Cloudflare Sandboxes (#44), Prime Intellect (#43) and Isorun (#46) are candidates, not scheduled work. Pick the next adapter after a usability review: can an application create, run, move files, reopen, handle partial outcomes and clean up with clear ownership on it? A new adapter must cover everything its provider supports when it lands.
 
 Accounting, a hosted service or management UI, and Rust are not planned. Completed plans live in Git history; don't start parallel backlogs.

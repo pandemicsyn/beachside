@@ -124,6 +124,7 @@ export default defineConfig({
             { slug: "docs/providers/boat", label: "Boat", badge: "exp" },
             { slug: "docs/providers/runloop", label: "Runloop", badge: "exp" },
             { slug: "docs/providers/archil", label: "Archil", badge: "exp" },
+            { slug: "docs/providers/exe-dev", label: "exe.dev", badge: "exp" },
             { slug: "docs/providers/vercel", badge: "exp" },
           ],
         },

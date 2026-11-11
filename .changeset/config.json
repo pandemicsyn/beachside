@@ -18,6 +18,7 @@
       "@beachside/runloop",
       "@beachside/freestyle",
       "@beachside/archil",
+      "@beachside/exe-dev",
       "@beachside/modal",
       "@beachside/vercel",
       "@beachside/cli"

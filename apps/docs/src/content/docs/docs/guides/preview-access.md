@@ -3,7 +3,7 @@ title: Preview access
 description: Access an HTTP service running inside a sandbox.
 ---
 
-Use `await box.preview(3000)` to get access to an HTTP service on port 3000 inside a running sandbox. Choose public or protected access when configuring the adapter. The available modes depend on the provider, and each adapter defaults to the mode it can serve: Daytona, Modal, Runloop and Archil default to protected (Daytona's public mode signs expiring per-port links); E2B, boxd, Vercel, Boat and Freestyle default to public, and Boat and Freestyle offer public only. boxd publishes port 3000 by default; Vercel publishes only the `ports` you configure.
+Use `await box.preview(3000)` to get access to an HTTP service on port 3000 inside a running sandbox. Choose public or protected access when configuring the adapter. The available modes depend on the provider, and each adapter defaults to the mode it can serve: Daytona, Modal, Runloop, Archil and exe.dev default to protected (Daytona's public mode signs expiring per-port links); E2B, boxd, Vercel, Boat and Freestyle default to public, and Boat and Freestyle offer public only. boxd publishes port 3000 by default; Vercel publishes only the `ports` you configure.
 
 This example uses Daytona's default protected access. Replace `existing-server-snapshot` with a prepared image whose startup configuration launches an HTTP server on port 3000:
 

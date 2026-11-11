@@ -303,7 +303,7 @@ describe("Beachside sandbox", () => {
           ...(featureSupported("finiteStdin") ? ["execution-stdin" as const] : []),
           "files",
           "lifecycle-reopen",
-          "lifecycle-renew",
+          ...(featureSupported("renewal") ? ["lifecycle-renew" as const] : []),
           "lifecycle-suspend-resume",
           ...(featureSupported("directories") ? ["file-directories" as const] : []),
         ],
@@ -348,7 +348,7 @@ describe("Beachside sandbox", () => {
     async () => directories(fixture!.resources, box, fixture!.fileRoot),
     241000,
   );
-  (liveEnabled ? test : test.skip)(
+  (liveEnabled && featureSupported("renewal") ? test : test.skip)(
     "lifecycle-renew",
     async () => renewal(fixture!.resources, box),
     241000,
@@ -418,7 +418,11 @@ describe("Beachside sandbox", () => {
         const after = memorySample(await t.exec(box, memoryRead));
         expect(after.nonce).toBe(memoryBefore.nonce);
         expect(after.count).toBeGreaterThan(memoryBefore.count);
-        expect(resumed.observation.expires.status).toBe("known");
+
+        // exe.dev VMs have no lifetime; every other preserving provider reports one.
+        if (t.client.provider === "exe-dev")
+          expect(resumed.observation.expires).toEqual(before.expires);
+        else expect(resumed.observation.expires.status).toBe("known");
       }
       // Shared afterAll cleanup destroys the owned logical sandbox from any state.
     },

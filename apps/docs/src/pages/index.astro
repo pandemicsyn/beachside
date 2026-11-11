@@ -249,6 +249,7 @@ const sunBands = [
             <li class="chip chip-boat"><span></span>Boat (exp)</li>
             <li class="chip chip-runloop"><span></span>Runloop (exp)</li>
             <li class="chip chip-archil"><span></span>Archil (exp)</li>
+            <li class="chip chip-exe-dev"><span></span>exe.dev (exp)</li>
             <li class="chip chip-vercel"><span></span>Vercel (exp)</li>
             <li class="chip chip-modal"><span></span>Modal (exp)</li>
             <li class="chip chip-yours">+ your adapter</li>
@@ -1460,6 +1461,14 @@ const sunBands = [
       .chip-archil span {
         border-radius: 2px;
         background: var(--sb-lav);
+      }
+      .chip-exe-dev {
+        background: color-mix(in srgb, var(--sb-ink) 8%, var(--sb-surface));
+        color: var(--sb-ink);
+      }
+      .chip-exe-dev span {
+        border-radius: 50%;
+        background: var(--sb-ink);
       }
       .chip-vercel {
         background: color-mix(in srgb, var(--sb-aqua) 18%, var(--sb-surface));
