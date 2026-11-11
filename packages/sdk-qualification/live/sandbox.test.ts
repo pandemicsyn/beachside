@@ -418,7 +418,11 @@ describe("Beachside sandbox", () => {
         const after = memorySample(await t.exec(box, memoryRead));
         expect(after.nonce).toBe(memoryBefore.nonce);
         expect(after.count).toBeGreaterThan(memoryBefore.count);
-        expect(resumed.observation.expires.status).toBe("known");
+
+        // exe.dev VMs have no lifetime; every other preserving provider reports one.
+        if (t.client.provider === "exe-dev")
+          expect(resumed.observation.expires).toEqual(before.expires);
+        else expect(resumed.observation.expires.status).toBe("known");
       }
       // Shared afterAll cleanup destroys the owned logical sandbox from any state.
     },
