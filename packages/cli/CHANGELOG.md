@@ -1,5 +1,17 @@
 # @beachside/cli
 
+## 0.13.0
+
+### Minor Changes
+
+- [#197](https://github.com/pandemicsyn/beachside/pull/197) [`3ab2e60`](https://github.com/pandemicsyn/beachside/commit/3ab2e6044ff20ed4c672c6ab208ba5dba940d6d6) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - boxd moves to `@boxd-sh/sdk` 0.3.0 and gains blocked egress, labels and regions. `network` now defaults to `blocked`, which sets the machine's native egress allowlist to `none` before Beachside hands it out; set `network: "internet"` (or `BOXD_NETWORK=internet` in the CLI) for open egress. `create({ labels })` and `restore({ labels })` set boxd machine labels, and `sandboxes.list()` returns them. A new `region` setting (`BOXD_REGION` in the CLI) sends machine, disk and snapshot calls to that boxd region.
+
+### Patch Changes
+
+- Updated dependencies [[`f95dce3`](https://github.com/pandemicsyn/beachside/commit/f95dce3c58353ed8ea14b23c5205f1619e4e374b), [`9e3ab39`](https://github.com/pandemicsyn/beachside/commit/9e3ab396c38a718c9f26693073d6b6c93ad80972), [`f89fde4`](https://github.com/pandemicsyn/beachside/commit/f89fde43eb1e548fad65c5da7b8e2c9328b62383)]:
+  - @beachside/adapter@0.13.0
+  - beachside@0.13.0
+
 ## 0.12.0
 
 ### Minor Changes
