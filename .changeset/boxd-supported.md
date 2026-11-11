@@ -11,3 +11,5 @@ File operations on an image without Python 3 now fail with a clear UNSUPPORTED e
 Destroying a machine with writable disks now flushes and freezes them first, so the next machine can mount them (read-only mounts used to fail after an unclean stop). The docs explain that boxd ends background processes with the command that started them.
 
 Commands, file calls and processes on a suspended machine now fail with UNAVAILABLE instead of silently waking it, and `readDirectory()` reports symlinks exactly when the image has Python.
+
+File streams move 256 KiB per helper call instead of 64 KiB (writes go over stdin), about four times faster.

@@ -12,6 +12,9 @@ import { z } from "zod";
 import { type BoxdNativeClient, type CallContext } from "./transport";
 
 // Adapter-owned finite helper. Python 3 is an image prerequisite, never installed automatically.
+/** Bytes per streamed helper call; base64 of a read chunk stays under the helper's output bound. */
+const STREAM_CHUNK = 262144;
+
 export const FILESYSTEM_HELPER = String.raw`
 import os,sys,json,stat,errno,ctypes,tempfile,shutil,base64
 op,p,q,flag,stage=sys.argv[1:6]
@@ -84,15 +87,15 @@ try:
   fd=os.open(p,os.O_RDONLY|os.O_NONBLOCK)
   with os.fdopen(fd,'rb') as f:
    if not stat.S_ISREG(os.fstat(f.fileno()).st_mode): raise OSError(errno.EINVAL,'regular file required')
-   f.seek(int(q));data=f.read(65536)
-  result={'data':base64.b64encode(data).decode('ascii'),'eof':len(data)<65536}
+   f.seek(int(q));data=f.read(262144)
+  result={'data':base64.b64encode(data).decode('ascii'),'eof':len(data)<262144}
  elif op=='append':
   fd=os.open(p,os.O_WRONLY|os.O_NOFOLLOW)
   with os.fdopen(fd,'r+b') as f:
    f.seek(0,2)
    if f.tell()!=int(q): raise OSError(errno.EINVAL,'unexpected staging size')
-   data=base64.b64decode(stage,validate=True)
-   if len(data)>65536: raise OSError(errno.EFBIG,'chunk bound exceeded')
+   data=sys.stdin.buffer.read(262145)
+   if len(data)>262144: raise OSError(errno.EFBIG,'chunk bound exceeded')
    f.write(data)
   result={'bytesWritten':len(data)}
  elif op=='reserve':
@@ -237,23 +240,14 @@ export function filesystem(native: BoxdNativeClient, id: string) {
 
       // Keep the correlated stage on uncertain input/transport failure. No automatic replay.
       for await (const input of bytes) {
-        for (let offset = 0; offset < input.length; offset += 65536) {
+        for (let offset = 0; offset < input.length; offset += STREAM_CHUNK) {
           ctx.signal.throwIfAborted();
-          const chunk = input.subarray(offset, offset + 65536);
+          const chunk = input.subarray(offset, offset + STREAM_CHUNK);
           const chunkContext = { ...ctx, deadline: Date.now() + 30000 };
 
           const ack = z
             .object({ bytesWritten: z.number().int() })
-            .parse(
-              await run(
-                "append",
-                stage,
-                String(count),
-                false,
-                chunkContext,
-                Buffer.from(chunk).toString("base64"),
-              ),
-            );
+            .parse(await run("append", stage, String(count), false, chunkContext, "", chunk));
 
           if (ack.bytesWritten !== chunk.length)
             throw new AdapterFilesystemError("UNAVAILABLE", "boxd staging byte count differs", {
@@ -317,19 +311,21 @@ export function filesystem(native: BoxdNativeClient, id: string) {
           },
           async pull(controller) {
             try {
-              const chunk = z.object({ data: z.string().max(87384), eof: z.boolean() }).parse(
-                await run("read", path, String(offset), false, {
-                  ...ctx,
-                  deadline: Date.now() + 30000,
-                }),
-              );
+              const chunk = z
+                .object({ data: z.string().max(Math.ceil(STREAM_CHUNK / 3) * 4), eof: z.boolean() })
+                .parse(
+                  await run("read", path, String(offset), false, {
+                    ...ctx,
+                    deadline: Date.now() + 30000,
+                  }),
+                );
 
               const bytes = Buffer.from(chunk.data, "base64");
 
               if (
-                bytes.length > 65536 ||
+                bytes.length > STREAM_CHUNK ||
                 bytes.toString("base64") !== chunk.data ||
-                (!chunk.eof && bytes.length !== 65536)
+                (!chunk.eof && bytes.length !== STREAM_CHUNK)
               )
                 throw new AdapterError("UNAVAILABLE", "boxd file chunk is malformed");
               offset += bytes.length;

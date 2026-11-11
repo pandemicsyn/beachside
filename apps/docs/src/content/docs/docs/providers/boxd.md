@@ -84,7 +84,7 @@ Live results cover the tested image, region and network setting; see [Provider s
 
 Native reads, overwrite writes and command input need nothing in the image. `readDirectory()` uses Python when the image has it; without Python it falls back to boxd's own listing, which reports a symlink to a folder as a folder. `listFiles()`, stat/exists, no-clobber writes, mkdir/remove, copy/move and file streams need **Python 3 in your Linux image**; Beachside does not install it. Each helper call has a 30-second deadline.
 
-Use streams for files over 1 MiB; they move 64 KiB chunks with no default size limit, and a streamed read can see concurrent changes. Directory listings are complete or fail with `OUTPUT_CAPACITY`.
+Use streams for files over 1 MiB; they move 256 KiB chunks with no default size limit, and a streamed read can see concurrent changes. Directory listings are complete or fail with `OUTPUT_CAPACITY`.
 
 Copies and streamed writes without overwrite need hard links in the destination filesystem, and moves without overwrite need Linux `renameat2`. Moves across filesystems fail without touching the source. A failed streamed write can leave a `.beachside-<uuid>` temporary file beside the destination, named in the error; an interrupted no-clobber buffered write can leave partial contents. See [files and output](/docs/guides/files-and-output/).
 
