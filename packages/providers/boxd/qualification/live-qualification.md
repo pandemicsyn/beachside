@@ -19,6 +19,26 @@ Only explicit network scenario evidence measures egress: the paired probe covers
 
 - Image / authority: oci; unspecified / verified-organization.
 - Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
+- SDK: 0.12.0, commit `47911ef6d1c776ebe396c6477db0e744717f66eb`.
+- Fresh-process reopen: not recorded.
+- Harness commit: `47911ef6d1c776ebe396c6477db0e744717f66eb`.
+- Evidence: [reviewed record](boxd-live-bun-junit-20261111-47911ef-sandbox-python312slim).
+
+| Scenario                 | Latest live result | Date       |
+| ------------------------ | ------------------ | ---------- |
+| execution-stdin          | passed             | 2026-11-11 |
+| execution                | passed             | 2026-11-11 |
+| file-directories (/tmp)  | failed             | 2026-11-11 |
+| files (/tmp)             | passed             | 2026-11-11 |
+| lifecycle-renew          | failed             | 2026-11-11 |
+| lifecycle-reopen         | failed             | 2026-11-11 |
+| lifecycle-suspend-resume | failed             | 2026-11-11 |
+| sandbox-lifecycle        | passed             | 2026-11-11 |
+
+### internet-requested · hosted-default · /tmp
+
+- Image / authority: oci; unspecified / verified-organization.
+- Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
 - SDK: 0.12.0, commit `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
 - Fresh-process reopen: not recorded.
 - Harness commit: `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
@@ -66,26 +86,6 @@ Only explicit network scenario evidence measures egress: the paired probe covers
 | Scenario           | Latest live result | Date       |
 | ------------------ | ------------------ | ---------- |
 | volume-persistence | passed             | 2026-11-11 |
-
-### internet-requested · hosted-default · /tmp
-
-- Image / authority: oci; unspecified / verified-organization.
-- Runtime: Bun 1.3.14, darwin-arm64. Native interface: boxd SDK 0.3.0.
-- SDK: 0.12.0, commit `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
-- Fresh-process reopen: not recorded.
-- Harness commit: `1db711fd797bd28497eea0c9384cd2b9c600abdf`.
-- Evidence: [reviewed record](boxd-live-bun-junit-20261111-1db711f-sandbox-python312slim).
-
-| Scenario                 | Latest live result | Date       |
-| ------------------------ | ------------------ | ---------- |
-| execution-stdin          | passed             | 2026-11-11 |
-| execution                | passed             | 2026-11-11 |
-| file-directories (/tmp)  | failed             | 2026-11-11 |
-| files (/tmp)             | passed             | 2026-11-11 |
-| lifecycle-renew          | passed             | 2026-11-11 |
-| lifecycle-reopen         | passed             | 2026-11-11 |
-| lifecycle-suspend-resume | failed             | 2026-11-11 |
-| sandbox-lifecycle        | passed             | 2026-11-11 |
 
 ### internet-requested · hosted-default · /tmp
 
