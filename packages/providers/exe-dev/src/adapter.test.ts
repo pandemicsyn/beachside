@@ -221,13 +221,52 @@ test("create refusals reject cleanly; 5xx stays unknown and is never resent", as
   const client = await connect();
 
   try {
-    fixture.failNextCreate(fixture.error(422, "image not found"));
+    fixture.failNextCreate(fixture.error(400, "image not found"));
     await expect(client.sandboxes.create()).rejects.toThrow(/image not found/);
+
+    // exe.dev answers 422 for a command that ran and failed, so it proves no absence of effect.
+    fixture.failNextCreate(fixture.error(422, "command failed"));
+    await expect(client.sandboxes.create()).rejects.toBeInstanceOf(OutcomeUnknownError);
 
     fixture.failNextCreate(fixture.error(502, "bad gateway"));
     const submitted = await client.sandboxes.submitCreate();
     await expect(submitted.observe()).rejects.toBeInstanceOf(OutcomeUnknownError);
-    expect(created(fixture)).toHaveLength(2);
+    expect(created(fixture)).toHaveLength(3);
+  } finally {
+    await client.close();
+  }
+});
+
+test("a VM that runs but never accepts a command is handed back as unknown, not left pending", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    // A token without the `ssh` permission: exe.dev runs the VM but refuses every command.
+    fixture.overrideCommands(() => ({ exit: 255 }));
+
+    const failed = await client.sandboxes.create().then(
+      () => undefined,
+      (error: Error) => error,
+    );
+
+    if (!(failed instanceof OutcomeUnknownError)) throw failed ?? Error("Expected unknown");
+    expect(failed.message).toMatch(/allows `ssh`/);
+    expect(created(fixture)).toHaveLength(1);
+  } finally {
+    await client.close();
+  }
+});
+
+test("destroy confirms only a VM exe.dev lists as deleted; not_found may be a hidden VM", async () => {
+  const { fixture, connect } = setup();
+  const client = await connect();
+
+  try {
+    const box = await client.sandboxes.create();
+    fixture.hideNextRm();
+    await expect(box.destroy()).rejects.toBeInstanceOf(OutcomeUnknownError);
+    expect(fixture.effects.destroy).toBe(0);
   } finally {
     await client.close();
   }

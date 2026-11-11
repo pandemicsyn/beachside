@@ -36,10 +36,11 @@ const codes = new Map<number, AdapterErrorCode>([
 
 /**
  * HTTP statuses that mean exe.dev refused the command before any effect: a malformed or
- * unauthorized request, an unknown command, an oversized body, a command that returned an
- * error (422) or rate limiting. A 5xx or 504 leaves the outcome unknown.
+ * unauthorized request, an unknown command, an oversized body, a name conflict or rate
+ * limiting. exe.dev documents 422 as "the command ran but returned a non-zero exit code", so
+ * it is not proof of no effect and stays unknown, like a 5xx or 504.
  */
-const definitive = new Set([400, 401, 403, 404, 405, 409, 413, 422, 429]);
+const definitive = new Set([400, 401, 403, 404, 405, 409, 413, 429]);
 
 /** The fetch signature the adapter accepts and hands to the SDK. */
 export type NativeFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;

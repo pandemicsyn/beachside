@@ -207,6 +207,8 @@ const CreateToken = z.strictObject({
   env: z.literal(true).optional(),
   /** exe.dev acknowledged the create. */
   acknowledged: z.literal(true).optional(),
+  /** When observation first saw the VM running but could not yet run a command in it. */
+  runningSince: z.number().int().nonnegative().optional(),
 });
 
 type CreateToken = z.infer<typeof CreateToken>;
@@ -654,6 +656,8 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
         outcome: Settle,
         partial: typeof partialCreate = partialCreate,
       ) => {
+        if (!vm || vm.name !== token.name) launchEnv.delete(token.name);
+
         if (!vm)
           return outcome.unknown(
             token.acknowledged
@@ -693,7 +697,27 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
           };
         }
 
-        if (status === "starting" || status === "creating" || status === "running" || !status)
+        if (status === "running") {
+          // exe.dev runs the VM but will not run commands in it: still booting, or a token
+          // without the `ssh` permission. Wait a bounded time, then hand back the VM.
+          const since = token.runningSince ?? Date.now();
+
+          if (Date.now() - since >= settleSeconds * 1000) {
+            launchEnv.delete(token.name);
+
+            return outcome.unknown(
+              "exe.dev VM is running but no command could run in it; check that the token allows `ssh`, then use or destroy the VM",
+              partial(vm.name, identity),
+            );
+          }
+
+          return outcome.pending(
+            { ...token, acknowledged: true, runningSince: since },
+            { pollAfterMs: pollMs },
+          );
+        }
+
+        if (status === "starting" || status === "creating" || !status)
           return outcome.pending({ ...token, acknowledged: true }, { pollAfterMs: pollMs });
 
         launchEnv.delete(token.name);
@@ -746,6 +770,10 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
         try {
           created = await api(ctx.signal).new(request);
         } catch (error) {
+          // The name is this attempt's own, so a conflict may be this attempt's VM whose
+          // acknowledgement was lost: observation finds it by name instead of refusing.
+          if (failure(error).status === 409) return ctx.pending(token, { pollAfterMs: pollMs });
+
           if (refusedBeforeEffect(failure(error))) launchEnv.delete(name);
 
           return rejection(
@@ -816,6 +844,14 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
               maxOutputBytes: Math.ceil((input.maxOutputBytes * 4) / 3) + 65_536,
             });
         } catch (error) {
+          // The wrapper removes staged stdin once the command has opened it; when the request
+          // failed, remove it here too (best effort; removing an opened file is harmless).
+          if (stdinPath !== undefined)
+            await guest(input.sandbox.id)(
+              `rm -f -- ${quote(stdinPath)}`,
+              readContext(ctx.signal, 30),
+            ).catch(() => undefined);
+
           if (deadline.aborted)
             return ctx.unknown(
               `exe.dev command passed its ${input.deadlineSeconds}s deadline; it may still be running in the VM`,
@@ -1027,11 +1063,18 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
               return ctx.pending(token, { pollAfterMs: pollMs });
             }
 
-            if (result.deleted.includes(token.name) || result.not_found?.includes(token.name)) {
+            if (result.deleted.includes(token.name)) {
               held.delete(token.name);
 
               return { computeStopped: true, retainedResources: [] };
             }
+
+            // exe.dev's `not_found` means missing *or not visible to this token*, so it is not
+            // proof that a billable VM is gone.
+            if (result.not_found?.includes(token.name))
+              return ctx.unknown(
+                "exe.dev reports the VM missing or not visible to this credential; confirm with a credential that can see it",
+              );
 
             return ctx.reject(
               "CONFLICT",
@@ -1047,11 +1090,12 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
             if (!token.success || token.data.name !== attempt.sandbox?.id)
               return ctx.unknown("exe.dev deletion identity is unavailable; do not replay");
 
-            if (!(await find(token.data.name, ctx))) {
-              held.delete(token.data.name);
-
-              return { computeStopped: true, retainedResources: [] };
-            }
+            // A VM missing from the listing may be deleted or only hidden from this credential,
+            // so neither case confirms deletion.
+            if (!(await find(token.data.name, ctx)))
+              return ctx.unknown(
+                "exe.dev delete response was lost and this credential no longer sees the VM; confirm it is gone with a credential that can see it",
+              );
 
             return ctx.unknown(
               "exe.dev delete response was lost and the VM still exists; destroy it again explicitly",
@@ -1084,8 +1128,14 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
               throw new AdapterError("CAPACITY", "exe.dev process capture exceeds its byte bound");
             // Validates argv, env names and NUL bytes before any effect.
             commandLine(input);
-            await requireRunning(input.sandbox, ctx);
             const format = input.output?.format ?? "text";
+
+            if (format === "bytes" && !ctx.onOutputBytes)
+              throw new AdapterError(
+                "UNSUPPORTED",
+                "exe.dev binary output requires a byte consumer hook",
+              );
+            await requireRunning(input.sandbox, ctx);
 
             const directory = parseLauncher(
               new TextDecoder().decode(
@@ -1557,6 +1607,9 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
               // Tags are copied, so the fork keeps the marker tag; labels are set below.
               copy = await api(ctx.signal).vm(input.sandbox.id).cp({ name, waitUntil: "created" });
             } catch (error) {
+              // As for create: a conflict on this attempt's own name is observed, not refused.
+              if (failure(error).status === 409) return ctx.pending(token, { pollAfterMs: pollMs });
+
               return rejection(ctx, error, "exe.dev copy response was not confirmed");
             }
 

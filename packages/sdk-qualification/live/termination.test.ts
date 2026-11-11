@@ -5,7 +5,7 @@ import { liveEnabled, setupLive, finishLive } from "./providers";
 const enabled =
   liveEnabled && ["e2b", "exe-dev"].includes(process.env.BEACHSIDE_QUAL_PROVIDER ?? "");
 
-describe("Beachside E2B native process termination", () => {
+describe("Beachside native process termination", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   let box: AdapterSandbox;
   beforeAll(async () => {

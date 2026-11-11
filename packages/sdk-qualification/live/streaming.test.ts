@@ -5,7 +5,7 @@ import { liveEnabled, setupLive, finishLive } from "./providers";
 const enabled =
   liveEnabled && ["e2b", "exe-dev"].includes(process.env.BEACHSIDE_QUAL_PROVIDER ?? "");
 
-describe("Beachside finite E2B text streaming", () => {
+describe("Beachside finite text streaming", () => {
   let fixture: Awaited<ReturnType<typeof setupLive>> | undefined;
   let box: AdapterSandbox;
   beforeAll(async () => {

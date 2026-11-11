@@ -39,7 +39,9 @@ Pass at least one of these; you can pass both.
 
 Protected previews need `sshKey`, because they are signed for one VM's HTTPS proxy. A key added with `ssh-key add --tag=beachside` can only reach VMs that carry the `beachside` tag, which every VM this adapter creates has.
 
-`connect` makes one `whoami` call. The scope is a one-way digest of the account email it returns, so a saved sandbox reference reopens with any credential of the same account.
+`connect` makes one `whoami` call. The scope is a one-way digest of the account email it returns, so a saved sandbox reference reopens with another credential of the same account, as long as that credential can see the VM. A tag-scoped key sees only VMs with its tag.
+
+A token must be allowed to run `whoami`, `ls`, `new`, `rm`, `cp`, `ssh`, `stat`, `pause`, `resume` and `comment`; public previews also need the `share` commands. Without `ssh`, a create finds the VM running but cannot use it, and reports `OUTCOME_UNKNOWN` with the VM's reference after the settle window.
 
 ## Setup
 
@@ -82,12 +84,12 @@ Every VM this adapter creates has the `beachside` tag, so you can attach an inte
 
 ## Commands, processes and files
 
-exe.dev runs one shell command line per `ssh <vm> <command>` request and returns stdout and stderr as separate byte frames with the exit code. It has no stdin, so the adapter stages finite stdin into a private file in the VM first, and runs each command through a small `sh` wrapper that bounds the output and returns it byte for byte. Processes run as detached jobs in the VM whose output the adapter reads back. Files use a small Python 3 helper in the VM. Every request costs a round trip, so uploads go out as 40 KiB positioned writes, sixteen at a time, and the staged file's size and SHA-256 are checked before it is published; downloads read 4 MiB ranges; your image needs `sh`, `base64` and Python 3, which `exeuntu` has.
+exe.dev runs one shell command line per `ssh <vm> <command>` request and returns stdout and stderr as separate byte frames with the exit code. It has no stdin, so the adapter stages finite stdin into a private file in the VM first, and runs each command through a small `sh` wrapper that bounds the output and returns it byte for byte. Processes run as detached jobs in the VM whose output the adapter reads back. Files use a small Python 3 helper in the VM. Every request costs a round trip, so uploads go out as 40 KiB positioned writes, sixteen at a time, and the staged file's size and SHA-256 are checked before it is published; downloads read 4 MiB ranges; your image needs `sh`, `base64`, `mktemp`, `wc`, `head`, `tr`, `setsid`, `mkfifo` and Python 3, which `exeuntu` has. While a command runs, `fallocate --punch-hole` frees disk past the output bound; without it, or on a filesystem without holes, a noisy command can still fill the guest disk even though the returned output stays bounded.
 
 ## Destroy and recovery
 
-`destroy()` deletes the VM and reports it gone once exe.dev confirms. exe.dev keeps a deleted VM's name for 24 hours.
+`destroy()` deletes the VM and reports it gone only when exe.dev lists it as deleted. exe.dev's `not_found` also means "not visible to this token", so that answer, or a VM missing from a later listing, is `OUTCOME_UNKNOWN` with the reference kept. exe.dev keeps a deleted VM's name for 24 hours.
 
-Beachside sends each mutation once. The adapter sends a request again only when exe.dev answers 429, which it does before running anything, waiting longer each time (up to four times). Each create and fork uses a VM name derived from its submission (`bs-…`), so a create whose response was lost is found by that name instead of being sent again. A refusal exe.dev answers with a 4xx is reported as that error; a lost response or a 5xx is `OUTCOME_UNKNOWN`.
+Beachside sends each mutation once. The adapter sends a request again only when exe.dev answers 429, which it does before running anything, waiting longer each time (up to four times). Each create and fork uses a VM name derived from its submission (`bs-…`), so a create whose response was lost is found by that name instead of being sent again. A refusal exe.dev answers with 400, 401, 403, 404, 405 or 413 is reported as that error. A lost response, a 5xx or a 422 (which exe.dev uses for a command that ran and failed) is `OUTCOME_UNKNOWN`. A 409 on this attempt's own name is observed by name instead of refused.
 
 See the [provider research issue](https://github.com/pandemicsyn/beachside/issues/42) and the [exe.dev documentation](https://exe.dev/docs).

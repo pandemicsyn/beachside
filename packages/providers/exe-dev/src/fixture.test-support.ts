@@ -120,6 +120,9 @@ export function exeDevFixture() {
   /** Commands that must match before the fault applies; undefined matches the next one. */
   let sshFaultMatch: RegExp | undefined;
 
+  /** The next `rm` answers `not_found`, as for a VM this token cannot see. */
+  let hideNextRm = false;
+
   let commandOverride:
     | ((command: string) => { exit: number; stdout?: string } | undefined)
     | undefined;
@@ -309,7 +312,7 @@ export function exeDevFixture() {
         for (const name of args) {
           const vm = owned(name, account);
 
-          if (!vm) notFound.push(name);
+          if (!vm || hideNextRm) notFound.push(name);
           else {
             effects.destroy++;
             vms.delete(name);
@@ -317,6 +320,8 @@ export function exeDevFixture() {
             deleted.push(name);
           }
         }
+
+        hideNextRm = false;
 
         return json(200, { deleted, failed: notFound, not_found: notFound, errors: {} });
       }
@@ -477,6 +482,9 @@ export function exeDevFixture() {
       handler: ((command: string) => { exit: number; stdout?: string } | undefined) | undefined,
     ) {
       commandOverride = handler;
+    },
+    hideNextRm() {
+      hideNextRm = true;
     },
     loseNextCreateResponse() {
       loseNextCreate = true;
