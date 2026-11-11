@@ -1,5 +1,32 @@
 # @beachside/boxd
 
+## 0.13.0
+
+### Minor Changes
+
+- [#197](https://github.com/pandemicsyn/beachside/pull/197) [`3ab2e60`](https://github.com/pandemicsyn/beachside/commit/3ab2e6044ff20ed4c672c6ab208ba5dba940d6d6) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - boxd moves to `@boxd-sh/sdk` 0.3.0 and gains blocked egress, labels and regions. `network` now defaults to `blocked`, which sets the machine's native egress allowlist to `none` before Beachside hands it out; set `network: "internet"` (or `BOXD_NETWORK=internet` in the CLI) for open egress. `create({ labels })` and `restore({ labels })` set boxd machine labels, and `sandboxes.list()` returns them. A new `region` setting (`BOXD_REGION` in the CLI) sends machine, disk and snapshot calls to that boxd region.
+
+- [#201](https://github.com/pandemicsyn/beachside/pull/201) [`99d3d14`](https://github.com/pandemicsyn/beachside/commit/99d3d14b69fe39fed598d2470a6d0a78bb382d17) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - boxd egress allowlists: `network: { allow: [...] }` takes up to 256 host names, `*.` wildcards and public IPv4 addresses or ranges, through boxd's native egress allowlist. Restores now carry their egress in the machine spec, so `blocked` or the allowlist is in force from first boot, and creates, restores and forks write their expiry together with the machine. A list boxd refuses leaves the machine reaching nothing.
+
+- [#198](https://github.com/pandemicsyn/beachside/pull/198) [`f89fde4`](https://github.com/pandemicsyn/beachside/commit/f89fde43eb1e548fad65c5da7b8e2c9328b62383) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - Add `box.fork()`, `box.submitFork()` and `box.checkFork()`. A fork copies a running sandbox with the provider's native fork; adapters without one reject with `UNSUPPORTED`, and Beachside never emulates a fork with a snapshot and restore. `capabilities().fork` reports what a fork keeps, how the source is interrupted, whether processes resume and whether the fork's lifecycle is independent. boxd, E2B and Archil fork natively with memory and running processes. Adapters declare a fork with the new `sandboxFork` session hook; uncertain forks recover through operation kind `sandbox_fork`.
+
+### Patch Changes
+
+- [#203](https://github.com/pandemicsyn/beachside/pull/203) [`c22ed44`](https://github.com/pandemicsyn/beachside/commit/c22ed4489cc61e2e83037e2dda53395a7437381b) Thanks [@pandemicsyn](https://github.com/pandemicsyn)! - boxd is now a supported provider: it is out of experimental in the docs and is the landing page's default provider.
+
+  File operations on an image without Python 3 now fail with a clear UNSUPPORTED error instead of an unknown outcome.
+
+  `makeDirectory` on an existing file now rejects with INVALID_ARGUMENT and no effect, recursive or not, instead of an unknown outcome.
+
+  Destroying a machine with writable disks now flushes and freezes them first, so the next machine can mount them (read-only mounts used to fail after an unclean stop). The docs explain that boxd ends background processes with the command that started them.
+
+  Commands, file calls and processes on a suspended machine now fail with UNAVAILABLE instead of silently waking it, and `readDirectory()` reports symlinks exactly when the image has Python.
+
+  File streams move 1 MiB pieces through boxd's native upload and download instead of 64 KiB through command output.
+
+- Updated dependencies [[`f95dce3`](https://github.com/pandemicsyn/beachside/commit/f95dce3c58353ed8ea14b23c5205f1619e4e374b), [`9e3ab39`](https://github.com/pandemicsyn/beachside/commit/9e3ab396c38a718c9f26693073d6b6c93ad80972), [`f89fde4`](https://github.com/pandemicsyn/beachside/commit/f89fde43eb1e548fad65c5da7b8e2c9328b62383)]:
+  - @beachside/adapter@0.13.0
+
 ## 0.12.0
 
 ### Patch Changes

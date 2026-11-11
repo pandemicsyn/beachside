@@ -61,14 +61,14 @@
     },
     "packages/adapter": {
       "name": "@beachside/adapter",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "zod": "4.6.6",
       },
     },
     "packages/cli": {
       "name": "@beachside/cli",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "bin": {
         "beachside": "./dist/main.js",
       },
@@ -101,7 +101,7 @@
     },
     "packages/providers/archil": {
       "name": "@beachside/archil",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "disk": "1.12.0",
@@ -113,7 +113,7 @@
     },
     "packages/providers/boat": {
       "name": "@beachside/boat",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "@boatdev/sdk": "1.9.9",
@@ -125,7 +125,7 @@
     },
     "packages/providers/boxd": {
       "name": "@beachside/boxd",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "@boxd-sh/sdk": "0.3.0",
@@ -138,7 +138,7 @@
     },
     "packages/providers/daytona": {
       "name": "@beachside/daytona",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "zod": "4.6.6",
@@ -150,7 +150,7 @@
     },
     "packages/providers/e2b": {
       "name": "@beachside/e2b",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "e2b": "2.63.0",
@@ -183,7 +183,7 @@
     },
     "packages/providers/freestyle": {
       "name": "@beachside/freestyle",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "freestyle": "0.2.21",
@@ -195,7 +195,7 @@
     },
     "packages/providers/modal": {
       "name": "@beachside/modal",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "@bufbuild/protobuf": "2.0.0",
@@ -209,7 +209,7 @@
     },
     "packages/providers/runloop": {
       "name": "@beachside/runloop",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "zod": "4.6.6",
@@ -220,7 +220,7 @@
     },
     "packages/providers/vercel": {
       "name": "@beachside/vercel",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "tar-stream": "3.2.2",
@@ -233,7 +233,7 @@
     },
     "packages/sdk": {
       "name": "beachside",
-      "version": "0.12.0",
+      "version": "0.13.0",
       "dependencies": {
         "@beachside/adapter": "workspace:*",
         "@opentelemetry/api": "1.9.1",
