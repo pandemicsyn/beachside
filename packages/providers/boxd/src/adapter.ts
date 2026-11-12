@@ -491,7 +491,7 @@ export function createBoxdAdapter(
           env: "BOXD_ORG",
           required: true,
           description:
-            "The boxd org id (org-...) or slug the key belongs to; `boxd auth` shows it.",
+            "The id (org-...) of the boxd org the key belongs to; `boxd auth --json` lists your orgs with their ids.",
         },
         network: {
           env: "BOXD_NETWORK",
