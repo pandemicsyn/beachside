@@ -143,7 +143,7 @@ const Configuration = z
       ? ALLOW_NETWORK_POLICY
       : (z.enum(["blocked", "internet"]).optional().parse(network) ??
         value.networkPolicy ??
-        "blocked"),
+        "internet"),
     lifetimeSeconds: nativeLifetime(
       value.lifecycle?.lifetimeSeconds ?? timeoutSeconds ?? defaultLifetime(MAX_LIFETIME_SECONDS),
     ),

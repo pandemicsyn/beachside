@@ -1,6 +1,6 @@
 ---
 title: Freestyle
-description: Use the Freestyle adapter for Ubuntu microVMs with blocked egress, memory snapshots, pause/resume, terminals and public previews.
+description: Use the Freestyle adapter for Ubuntu microVMs with egress controls, memory snapshots, pause/resume, terminals and public previews.
 ---
 
 The `@beachside/freestyle` package implements the public Beachside adapter interface for [Freestyle VMs](https://www.freestyle.sh). Install it with `npm install beachside @beachside/freestyle`. Use Node 20+ or Bun. It uses Freestyle's official TypeScript SDK, [`freestyle`](https://www.npmjs.com/package/freestyle), pinned to 0.2.21.
@@ -12,7 +12,7 @@ import { freestyleAdapter } from "@beachside/freestyle";
 const client = await Beachside.connect({
   adapter: freestyleAdapter,
   credentials: { apiKey: process.env.FREESTYLE_API_KEY! },
-  config: { network: "blocked" },
+  config: {},
 });
 try {
   const box = await client.sandboxes.create();
@@ -34,7 +34,7 @@ The package also exports `freestyle()`, which takes credentials and config in on
 
 | Setting                      | Default            | Notes                                                                                                                                                                                                                                                                                                 |
 | ---------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `network`                    | `blocked`          | `blocked` creates the VM with an empty firewall, so it can reach nothing. `internet` allows every public destination. `{ allow: [...] }` allows only those IPv4 ranges; Freestyle firewalls cannot match host names ([allowlists](/docs/guides/images-and-networking/#allow-only-some-destinations)). |
+| `network`                    | `internet`         | `blocked` creates the VM with an empty firewall, so it can reach nothing. `internet` allows every public destination. `{ allow: [...] }` allows only those IPv4 ranges; Freestyle firewalls cannot match host names ([allowlists](/docs/guides/images-and-networking/#allow-only-some-destinations)). |
 | `image`                      | `freestyle/ubuntu` | A snapshot to boot: a `sh-…` id, your own snapshot slug, or a public `owner/slug` such as `freestyle/ubuntu-sm`. OCI images and image builds are unsupported.                                                                                                                                         |
 | `resources`                  | 4 vCPU, 8 GiB      | Minimum `{ vcpus, memoryMiB }`. Picks the smallest Ubuntu base: `freestyle/ubuntu-sm` (2 vCPU, 4 GiB), `freestyle/ubuntu` (4, 8 GiB), `-lg` (8, 16 GiB), `-xl` (16, 32 GiB) or `-2xl` (32, 64 GiB). Set `image` or `resources`, not both.                                                             |
 | `lifecycle.lifetimeSeconds`  | 900                | 60 seconds to 30 days. Freestyle deletes the VM that long after it was created, even while paused. `create({ lifecycle })` can override it per sandbox.                                                                                                                                               |

@@ -57,7 +57,7 @@ const notes: Partial<Record<keyof typeof features, string>> = {
   termination:
     "Terminate cancels the native exec call, which kills the command's process group. Deterministic coverage; live not-run.",
   network:
-    "Blocked (the setup default), internet and `{ allow }` allowlists through the native egress allowlist. A create from an OCI image applies it right after create, before hand-out; restores send it in the machine spec, in force from first boot. Peer/metadata isolation is enabled either way. An allowlist create, restore and fork were checked live by hand on November 10, 2026; the paired network workflow has not run.",
+    "Internet (the setup default), blocked and `{ allow }` allowlists through the native egress allowlist. A create from an OCI image applies it right after create, before hand-out; restores send it in the machine spec, in force from first boot. Peer/metadata isolation is enabled either way. An allowlist create, restore and fork were checked live by hand on November 10, 2026; the paired network workflow has not run.",
   oci: "OCI images boot directly; no Beachside image-build hook or retained image artifact.",
   directories:
     "Native complete bounded readDirectory, plus Python 3 complete list, lstat/stat/exists, recursive-opt-in mkdir/remove, copy and staged 1 MiB streams. Private Linux filesystem with hardlinks; no-clobber move requires renameat2 and cross-filesystem move rejects without copy/delete. Failed transfers retain correlated staging paths; no replay. Walk/text lines compose these hooks. Local Python workflow and protobuf transport coverage are separate; expanded file-directories live not-run.",

@@ -10,7 +10,7 @@ if (!apiKey || !org) throw new Error("Set BOXD_API_KEY and BOXD_ORG before runni
 const beachside = await Beachside.connect({
   adapter: boxdAdapter,
   credentials: { apiKey },
-  config: { org, network: "blocked" },
+  config: { org },
 });
 
 try {

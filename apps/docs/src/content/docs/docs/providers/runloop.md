@@ -1,6 +1,6 @@
 ---
 title: Runloop
-description: Use the Runloop adapter for Devboxes with blocked egress, disk snapshots, suspend/resume and previews.
+description: Use the Runloop adapter for Devboxes with egress controls, disk snapshots, suspend/resume and previews.
 ---
 
 The `@beachside/runloop` package implements the public Beachside adapter interface for [Runloop](https://runloop.ai) Devboxes. Install it with `npm install beachside @beachside/runloop`; it is experimental, and Runloop sign-ups are currently by invitation only. Use Node 20+ or Bun. It calls the Runloop REST API v1 (`https://api.runloop.ai`) directly, with no native SDK dependency.
@@ -12,7 +12,7 @@ import { runloopAdapter } from "@beachside/runloop";
 const client = await Beachside.connect({
   adapter: runloopAdapter,
   credentials: { apiKey: process.env.RUNLOOP_API_KEY! },
-  config: { network: "blocked" },
+  config: {},
 });
 try {
   const box = await client.sandboxes.create();
@@ -34,7 +34,7 @@ The package also exports `runloop()`, which takes credentials and config in one 
 
 | Setting                     | Default           | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `network`                   | `blocked`         | `blocked` attaches a deny-all account network policy named `beachside-blocked`, created on first use and re-checked before each create. `internet` attaches no policy. `{ allow: [...] }` attaches a policy named `beachside-allow-<digest>` holding only those hosts and IPv4 ranges, shared by connections with the same list and re-checked the same way ([allowlists](/docs/guides/images-and-networking/#allow-only-some-destinations)). Runloop allows 100 policies per account. |
+| `network`                   | `internet`        | `blocked` attaches a deny-all account network policy named `beachside-blocked`, created on first use and re-checked before each create. `internet` attaches no policy. `{ allow: [...] }` attaches a policy named `beachside-allow-<digest>` holding only those hosts and IPv4 ranges, shared by connections with the same list and re-checked the same way ([allowlists](/docs/guides/images-and-networking/#allow-only-some-destinations)). Runloop allows 100 policies per account. |
 | `image`                     | `runloop-default` | Runloop's default Devbox image. Any other value is a blueprint id (when one exists) or a blueprint name. OCI images and image builds are unsupported.                                                                                                                                                                                                                                                                                                                                  |
 | `resources`                 | Runloop default   | Minimum `{ vcpus, memoryMiB }`. Picks the smallest of `X_SMALL` (0.5 vCPU, 1 GiB), `SMALL` (1, 2 GiB), `MEDIUM` (2, 4 GiB), `LARGE` (2, 8 GiB), `X_LARGE` (4, 16 GiB), `XX_LARGE` (8, 32 GiB), or a custom 16 vCPU size with 32 or 64 GiB.                                                                                                                                                                                                                                             |
 | `lifecycle.lifetimeSeconds` | 900               | 60 seconds to 48 hours. Runloop shuts the Devbox down when the time is up. `create({ lifecycle })` can override it per sandbox unless `idleSeconds` is set.                                                                                                                                                                                                                                                                                                                            |

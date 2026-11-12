@@ -40,7 +40,7 @@ boxd (#82, #102), Daytona, E2B and Freestyle VMs (#174) are supported and live-t
 - **Egress allowlists:** `network: { allow: [...] }` on Daytona, E2B, Vercel, Modal, Runloop, Freestyle (IPv4 ranges) and Archil, plus `internet` on Modal (#194).
 - **Native fork:** `box.fork()` and `checkFork()` on boxd, Archil (#198) and E2B (#199); no snapshot-and-restore fallback.
 - **Previews:** E2B protected previews on SDK 2.63 (#193); Daytona public signed links, Modal tunnels and Boat host ports (#196).
-- **Provider catch-up:** Runloop labels through Devbox metadata (#195); boxd on SDK 0.3.0 with blocked egress (the default), labels and regions (#197), and egress allowlists (#201).
+- **Provider catch-up:** Runloop labels through Devbox metadata (#195); boxd on SDK 0.3.0 with blocked egress, labels and regions (#197), and egress allowlists (#201).
 - **boxd is supported:** out of experimental and the landing page's default provider.
 - **Files:** no SDK or CLI size limits; large transfers stream (#164). Missing parent folders are created and no temp files are left behind (#169). E2B writes into `/tmp` work (#167, #170).
 

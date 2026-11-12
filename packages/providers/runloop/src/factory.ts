@@ -6,7 +6,7 @@ import { runloopAdapter } from "./adapter";
 export type RunloopOptions = z.input<typeof runloopAdapter.credentials> &
   z.input<typeof runloopAdapter.config>;
 
-/** Experimental Runloop adapter; egress is blocked unless `network: "internet"`. Same as `Beachside.connect({ adapter: runloopAdapter, credentials, config })`. */
+/** Experimental Runloop adapter; egress is open unless you set `network: "blocked"` or an allowlist. Same as `Beachside.connect({ adapter: runloopAdapter, credentials, config })`. */
 export function runloop(options: RunloopOptions): BoundAdapter {
   const { apiKey, ...config } = options;
 

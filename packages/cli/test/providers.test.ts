@@ -32,10 +32,10 @@ test("environment-only boxd setup needs only an org and binds optional network a
 
   expect(missingEnv(descriptor("boxd")!, env)).toEqual([]);
 
-  const ready = { ...env, BOXD_NETWORK: "internet", BOXD_REGION: "nyc" };
+  const ready = { ...env, BOXD_NETWORK: "blocked", BOXD_REGION: "nyc" };
   const profile = resolveProfile({ provider: "boxd" }, await loadConfig(undefined, ready), ready);
 
-  expect(profile.config).toEqual({ org: "team", network: "internet", region: "nyc" });
+  expect(profile.config).toEqual({ org: "team", network: "blocked", region: "nyc" });
 
   const bound = await loadAdapter(
     profile,
@@ -47,15 +47,14 @@ test("environment-only boxd setup needs only an org and binds optional network a
   expect(bound.name).toBe("boxd");
 });
 
-test("environment-only Boat setup names and binds its required network choice", async () => {
-  const env = { HOME: home, BOAT_API_KEY: "key" };
+test("environment-only Boat setup needs only a key", async () => {
+  const ready = { HOME: home, BOAT_API_KEY: "key" };
 
-  expect(missingEnv(descriptor("boat")!, env)).toEqual(["BOAT_NETWORK"]);
+  expect(missingEnv(descriptor("boat")!, ready)).toEqual([]);
 
-  const ready = { ...env, BOAT_NETWORK: "internet" };
   const profile = resolveProfile({ provider: "boat" }, await loadConfig(undefined, ready), ready);
 
-  expect(profile.config).toEqual({ network: "internet" });
+  expect(profile.config).toEqual({});
 
   const bound = await loadAdapter(
     profile,
@@ -67,7 +66,7 @@ test("environment-only Boat setup names and binds its required network choice", 
   expect(bound.name).toBe("boat");
 });
 
-test("environment-only Runloop setup needs only a key and can opt into internet egress", async () => {
+test("environment-only Runloop setup needs only a key and can opt into blocked egress", async () => {
   const env = { HOME: home, RUNLOOP_API_KEY: "key" };
 
   expect(missingEnv(descriptor("runloop")!, env)).toEqual([]);
@@ -75,7 +74,7 @@ test("environment-only Runloop setup needs only a key and can opt into internet 
     resolveProfile({ provider: "runloop" }, await loadConfig(undefined, env), env).config,
   ).toEqual({});
 
-  const ready = { ...env, RUNLOOP_NETWORK: "internet" };
+  const ready = { ...env, RUNLOOP_NETWORK: "blocked" };
 
   const profile = resolveProfile(
     { provider: "runloop" },
@@ -83,7 +82,7 @@ test("environment-only Runloop setup needs only a key and can opt into internet 
     ready,
   );
 
-  expect(profile.config).toEqual({ network: "internet" });
+  expect(profile.config).toEqual({ network: "blocked" });
 
   const bound = await loadAdapter(
     profile,
@@ -95,7 +94,7 @@ test("environment-only Runloop setup needs only a key and can opt into internet 
   expect(bound.name).toBe("runloop");
 });
 
-test("environment-only Freestyle setup needs only a key and can opt into internet egress", async () => {
+test("environment-only Freestyle setup needs only a key and can opt into blocked egress", async () => {
   const env = { HOME: home, FREESTYLE_API_KEY: "key" };
 
   expect(missingEnv(descriptor("freestyle")!, env)).toEqual([]);
@@ -103,7 +102,7 @@ test("environment-only Freestyle setup needs only a key and can opt into interne
     resolveProfile({ provider: "freestyle" }, await loadConfig(undefined, env), env).config,
   ).toEqual({});
 
-  const ready = { ...env, FREESTYLE_NETWORK: "internet" };
+  const ready = { ...env, FREESTYLE_NETWORK: "blocked" };
 
   const profile = resolveProfile(
     { provider: "freestyle" },
@@ -111,7 +110,7 @@ test("environment-only Freestyle setup needs only a key and can opt into interne
     ready,
   );
 
-  expect(profile.config).toEqual({ network: "internet" });
+  expect(profile.config).toEqual({ network: "blocked" });
 
   const bound = await loadAdapter(
     profile,
@@ -123,16 +122,16 @@ test("environment-only Freestyle setup needs only a key and can opt into interne
   expect(bound.name).toBe("freestyle");
 });
 
-test("environment-only Archil setup names its region and can opt into internet egress", async () => {
+test("environment-only Archil setup names its region and can opt into blocked egress", async () => {
   const env = { HOME: home, ARCHIL_API_KEY: "key" };
 
   expect(missingEnv(descriptor("archil")!, env)).toEqual(["ARCHIL_REGION"]);
 
-  const ready = { ...env, ARCHIL_REGION: "aws-eu-west-1", ARCHIL_NETWORK: "internet" };
+  const ready = { ...env, ARCHIL_REGION: "aws-eu-west-1", ARCHIL_NETWORK: "blocked" };
 
   const profile = resolveProfile({ provider: "archil" }, await loadConfig(undefined, ready), ready);
 
-  expect(profile.config).toEqual({ region: "aws-eu-west-1", network: "internet" });
+  expect(profile.config).toEqual({ region: "aws-eu-west-1", network: "blocked" });
 
   const bound = await loadAdapter(
     profile,
@@ -144,10 +143,10 @@ test("environment-only Archil setup names its region and can opt into internet e
   expect(bound.name).toBe("archil");
 });
 
-test("environment-only exe.dev setup takes an API key and an explicit internet choice", async () => {
+test("environment-only exe.dev setup needs only an API key", async () => {
   const env = { HOME: home, EXE_API_KEY: "exe1.key" };
 
-  expect(missingEnv(descriptor("exe-dev")!, env)).toEqual(["EXE_NETWORK"]);
+  expect(missingEnv(descriptor("exe-dev")!, env)).toEqual([]);
 
   const ready = { ...env, EXE_NETWORK: "internet" };
 

@@ -75,39 +75,39 @@ const base = { appName: "existing", environment: "main" };
 
 const environment = Image.prepared("im-fixture");
 
-test("Modal creates blocked by default and opens internet on request", async () => {
+test("Modal creates with internet by default and blocks on request", async () => {
   const native = fixture();
   const client = await Beachside.connect({ adapter: native.adapter, config: base, credentials });
 
   try {
     expect((await client.capabilities()).network).toEqual(["blocked", "internet"]);
     await client.sandboxes.create({ environment });
-    await client.sandboxes.create({ environment, network: "internet" });
+    await client.sandboxes.create({ environment, network: "blocked" });
     expect(native.creates.map((input) => input.network)).toEqual([
-      { kind: "blocked" },
       { kind: "open" },
+      { kind: "blocked" },
     ]);
     expect(native.creates.map((input) => input.tags.beachside_network)).toEqual([
-      "blocked",
       "internet",
+      "blocked",
     ]);
   } finally {
     await client.close();
   }
 });
 
-test("network internet in setup makes internet the default", async () => {
+test("network blocked in setup makes blocked the default", async () => {
   const native = fixture();
 
   const client = await Beachside.connect({
     adapter: native.adapter,
-    config: { ...base, network: "internet" },
+    config: { ...base, network: "blocked" },
     credentials,
   });
 
   try {
     await client.sandboxes.create({ environment });
-    expect(native.creates[0]!.network).toEqual({ kind: "open" });
+    expect(native.creates[0]!.network).toEqual({ kind: "blocked" });
   } finally {
     await client.close();
   }
@@ -224,11 +224,10 @@ test("public Modal previews publish the configured ports as tunnels at create", 
 test("public Modal previews refuse a blocked network, which Modal forbids with open ports", async () => {
   const native = fixture();
 
-  // The default network is blocked, so public tunnels need an explicit network in setup.
   await expect(
     Beachside.connect({
       adapter: native.adapter,
-      config: { ...base, preview: { access: "public", ports: [3000] } },
+      config: { ...base, network: "blocked", preview: { access: "public", ports: [3000] } },
       credentials,
     }),
   ).rejects.toMatchObject({

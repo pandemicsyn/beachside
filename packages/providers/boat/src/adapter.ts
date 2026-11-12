@@ -77,7 +77,7 @@ const Image = z
 
 const Configuration = z
   .strictObject({
-    /** Required consent: Boat sandboxes always have outbound internet access. */
+    /** Boat sandboxes always have outbound internet access; `internet` is the only value. */
     network: z.literal("internet").optional(),
     /** Default prepared image: the stock machine, a named snapshot or a share code. */
     image: Image.default(BASE_IMAGE),
@@ -120,13 +120,6 @@ const Configuration = z
         code: "custom",
         path: ["resources"],
         message: "Supply resources or the deprecated machine, not both",
-      });
-
-    if (value.network === undefined)
-      ctx.addIssue({
-        code: "custom",
-        path: ["network"],
-        message: 'Configure network: "internet"; Boat does not offer blocked egress',
       });
   })
   .transform(({ network, ...value }) => ({ ...value, networkPolicy: network ?? "internet" }));

@@ -56,15 +56,24 @@ test("Boat conformance: one native attempt, distinct accounts, lost and late res
   expect(fixture.count("POST", /^\/sandboxes$/)).toBe(3);
 });
 
-test("setup requires explicit internet and rejects blocked egress before any effect", async () => {
-  const { fixture, adapter, connect } = setup();
+test("setup defaults to internet and rejects blocked egress before any effect", async () => {
+  const { fixture, adapter } = setup();
 
   await expect(
-    Beachside.connect({ adapter, config: {}, credentials: { apiKey: "fixture-main" } }),
+    Beachside.connect({
+      adapter,
+      // Untyped on purpose: JavaScript callers can pass any value.
+      config: JSON.parse('{"network":"blocked"}'),
+      credentials: { apiKey: "fixture-main" },
+    }),
   ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
   expect(fixture.calls).toHaveLength(0);
 
-  const client = await connect();
+  const client = await Beachside.connect({
+    adapter,
+    config: {},
+    credentials: { apiKey: "fixture-main" },
+  });
 
   try {
     expect((await client.capabilities()).network).toEqual(["internet"]);

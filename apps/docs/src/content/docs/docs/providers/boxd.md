@@ -12,7 +12,7 @@ import { boxdAdapter } from "@beachside/boxd";
 const client = await Beachside.connect({
   adapter: boxdAdapter,
   credentials: { apiKey: process.env.BOXD_API_KEY! },
-  config: { org: "my-org", network: "internet" },
+  config: { org: "my-org" },
 });
 try {
   const box = await client.sandboxes.create();
@@ -28,14 +28,14 @@ try {
 
 Use a member API key. `connect` checks that `org` is the key's authenticated default org (by ID or slug) and reads the cluster zone; everything is scoped to that org. Userless org keys and custom endpoints are not supported.
 
-The package also exports `boxd()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(boxd({ apiKey, org: "my-org", network: "internet" }))`. It is the same setup; use whichever reads better.
+The package also exports `boxd()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(boxd({ apiKey, org: "my-org" }))`. It is the same setup; use whichever reads better.
 
 ## Setup
 
 | Setting                         | Default                          | Notes                                                                                                                                                                                                                                                                            |
 | ------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `org`                           | required                         | The authenticated default org's ID (`org-…`) or slug; `boxd auth` shows your org context. The CLI reads it from `BOXD_ORG`.                                                                                                                                                      |
-| `network`                       | `blocked`                        | `blocked` lets machines reach nothing outside; `internet` leaves egress open; `{ allow: [...] }` reaches only the listed hosts and public IPv4 ranges (see [Egress](#egress)). Machines are always isolated from peers and metadata services. Deprecated alias: `networkPolicy`. |
+| `network`                       | `internet`                       | `blocked` lets machines reach nothing outside; `internet` leaves egress open; `{ allow: [...] }` reaches only the listed hosts and public IPv4 ranges (see [Egress](#egress)). Machines are always isolated from peers and metadata services. Deprecated alias: `networkPolicy`. |
 | `region`                        | the org's home region            | A boxd region such as `fra` (Frankfurt) or `nyc` (New York) that is enabled for your org. Machines, disks and snapshots stay in it. The CLI reads it from `BOXD_REGION`.                                                                                                         |
 | `image`                         | cluster default image            | An OCI image reference. boxd boots it directly.                                                                                                                                                                                                                                  |
 | `resources`                     | account default size             | Minimum `{ vcpus, memoryMiB }`. Picks the smallest of 1, 2, 4 or 8 vCPUs with 4, 8, 16 or 32 GiB RAM. Deprecated alias: `size` (a vCPU count). The private disk is fixed at 100 GB.                                                                                              |
@@ -71,7 +71,7 @@ Create-time `env` is rejected with `UnsupportedFeatureError` before allocation, 
 | Directories                  | List, stat, exists, mkdir, remove, copy and move. Most need Python 3.             | No          |
 | HTTP previews                | Public routes on configured ports. Protected previews are not supported.          | No          |
 | Images                       | Boots OCI images. Image builds and image get, list and delete are not supported.  | No          |
-| Network controls             | `blocked` (the default) and `internet`. Allowlists are not supported yet.         | No          |
+| Network controls             | `internet` (the default), `blocked` and `{ allow: [...] }` allowlists.            | No          |
 | Labels and regions           | Labels on create and restore, returned by listing. One region per connection.     | No          |
 | Snapshots                    | Memory and disk capture, restore into a new machine, inspect, list and delete.    | No          |
 | Fork                         | `box.fork()` copies a running machine's memory, disk and processes.               | No          |

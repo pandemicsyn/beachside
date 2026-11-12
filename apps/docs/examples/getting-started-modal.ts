@@ -21,7 +21,6 @@ const beachside = await Beachside.connect({
 try {
   const box = await beachside.sandboxes.create({
     environment: Image.prepared(imageId),
-    network: "blocked",
   });
 
   try {

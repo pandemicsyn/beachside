@@ -9,7 +9,7 @@ import { exeDevAdapter } from "@beachside/exe-dev";
 const client = await Beachside.connect({
   adapter: exeDevAdapter,
   credentials: { token: process.env.EXE_API_KEY! },
-  config: { network: "internet" },
+  config: {},
 });
 try {
   const box = await client.sandboxes.create();
@@ -23,7 +23,7 @@ try {
 }
 ```
 
-`exeDev({ token, network: "internet" })` binds the same definition in one object.
+`exeDev({ token })` binds the same definition in one object.
 
 ## Credentials
 
@@ -40,7 +40,7 @@ The scope is a one-way digest of the account email from `whoami`. A saved refere
 
 | Setting          | Behavior                                                                                                                                                                                  |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `network`        | Required, and must be `internet`. exe.dev VMs have internet egress; `blocked` and allowlists are refused until the SDK can set egress at create.                                         |
+| `network`        | Optional; only `internet`. exe.dev VMs have internet egress; `blocked` and allowlists are refused until the SDK can set egress at create.                                         |
 | `image`          | `exeuntu` (exe.dev's Ubuntu image with common tools and Python 3), or any OCI image reference.                                                                                           |
 | `resources`      | 2 vCPU by default. A minimum `{ vcpus, memoryMiB }` picks the smallest whole-vCPU size, with 2 GiB per vCPU and 1 to 32 vCPUs.                                                           |
 | `placement`      | `default` follows the account. `standalone` reserves capacity per VM. `{ pool: "name" }` places VMs in a team pool.                                                                       |

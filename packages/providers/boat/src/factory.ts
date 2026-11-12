@@ -6,7 +6,7 @@ import { boatAdapter } from "./adapter";
 export type BoatOptions = z.input<typeof boatAdapter.credentials> &
   z.input<typeof boatAdapter.config>;
 
-/** Experimental Boat adapter; set `network: "internet"` explicitly, since Boat has no egress controls. Same as `Beachside.connect({ adapter: boatAdapter, credentials, config })`. */
+/** Experimental Boat adapter; egress is always open, since Boat has no egress controls. Same as `Beachside.connect({ adapter: boatAdapter, credentials, config })`. */
 export function boat(options: BoatOptions): BoundAdapter {
   const { apiKey, ...config } = options;
 

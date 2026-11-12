@@ -5,7 +5,7 @@ export async function archilExample(apiKey: string) {
   const client = await Beachside.connect({
     adapter: archilAdapter,
     credentials: { apiKey },
-    config: { region: "aws-us-east-1", network: "blocked" },
+    config: { region: "aws-us-east-1" },
   });
 
   try {

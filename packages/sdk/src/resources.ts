@@ -214,7 +214,7 @@ export class AdapterSnapshot {
         networkPolicy: resolveNetworkPolicy(
           network,
           checked.networkPolicy,
-          this.client.session.defaultNetworkPolicy ?? "blocked",
+          this.client.session.defaultNetworkPolicy ?? "internet",
           this.client.session.networkPolicyAliases,
         ),
       },

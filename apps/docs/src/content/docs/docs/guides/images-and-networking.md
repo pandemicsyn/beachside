@@ -73,21 +73,21 @@ Image deletion has deterministic test coverage only; no live deletion has been r
 
 ## Select a network policy
 
-Configure `network` once in adapter setup. Every adapter uses the same names, so switching providers does not change application code:
+Configure `network` once in adapter setup. Every adapter uses the same names, so switching providers does not change application code. Sandboxes reach the internet unless you ask otherwise: every adapter defaults to `internet` except Daytona, whose `daytona-default` keeps the egress your Daytona tier allows. Set `blocked` or an allowlist to restrict it:
 
 | Provider       | `network`                   | Meaning                                                                                                     |
 | -------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| boxd           | `blocked` (default)         | Sets the native egress allowlist to `none` right after create, before the machine is handed out.            |
-| boxd           | `internet`                  | Unrestricted egress, with native peer/metadata isolation.                                                   |
-| Daytona        | `blocked`                   | Requests strict block-all. Creation requires verified organization eligibility, with no automatic fallback. |
-| Daytona        | `internet`                  | Unrestricted egress. Creation requires an organization without limited sandbox egress (Tier 3 and above).   |
+| boxd           | `internet` (default)        | Unrestricted egress, with native peer/metadata isolation.                                                   |
+| boxd           | `blocked`                   | Sets the native egress allowlist to `none` right after create, before the machine is handed out.            |
 | Daytona        | `daytona-default` (default) | Daytona-only setup value: keeps organization-managed restrictions, including essential-service access.      |
-| E2B            | `blocked` (default)         | Requests E2B's disabled-internet setting; measured strict outbound isolation has not passed.                |
-| E2B            | `internet`                  | Requests internet access.                                                                                   |
-| Vercel Sandbox | `blocked` (default)         | Requests native `deny-all`; network isolation has no recorded live acceptance.                              |
-| Vercel Sandbox | `internet`                  | Requests native `allow-all`.                                                                                |
-| Modal          | `blocked` (default)         | Requests Modal's `blockNetwork`.                                                                            |
-| Modal          | `internet`                  | Open egress.                                                                                                |
+| Daytona        | `internet`                  | Unrestricted egress. Creation requires an organization without limited sandbox egress (Tier 3 and above).   |
+| Daytona        | `blocked`                   | Requests strict block-all. Creation requires verified organization eligibility, with no automatic fallback. |
+| E2B            | `internet` (default)        | Requests internet access.                                                                                   |
+| E2B            | `blocked`                   | Requests E2B's disabled-internet setting; measured strict outbound isolation has not passed.                |
+| Vercel Sandbox | `internet` (default)        | Requests native `allow-all`.                                                                                |
+| Vercel Sandbox | `blocked`                   | Requests native `deny-all`; network isolation has no recorded live acceptance.                              |
+| Modal          | `internet` (default)        | Open egress.                                                                                                |
+| Modal          | `blocked`                   | Requests Modal's `blockNetwork`.                                                                            |
 | Most providers | `{ allow: [...] }`          | Only the listed hosts and IPv4 ranges; see [allow only some destinations](#allow-only-some-destinations).   |
 
 ```ts
@@ -95,7 +95,7 @@ Configure `network` once in adapter setup. Every adapter uses the same names, so
 const client = await Beachside.connect({
   adapter: e2bAdapter,
   credentials: { apiKey },
-  config: { network: "internet" },
+  config: { network: "blocked" },
 });
 const box = await client.sandboxes.create();
 ```

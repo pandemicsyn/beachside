@@ -5,7 +5,7 @@ export async function boxdExample(apiKey: string, org: string) {
   const client = await Beachside.connect({
     adapter: boxdAdapter,
     credentials: { apiKey },
-    config: { org, network: "internet" },
+    config: { org },
   });
 
   try {

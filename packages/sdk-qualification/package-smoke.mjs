@@ -715,7 +715,7 @@ const adapter = createVercelAdapter(() => ({
   return Response.json(value);
  }
 }));
-const client = await Beachside.connect({ adapter, config: { teamId: "team", projectId: "project" }, credentials: { token: "fixture" } });
+const client = await Beachside.connect({ adapter, config: { teamId: "team", projectId: "project", network: "blocked" }, credentials: { token: "fixture" } });
 const box = await client.sandboxes.create({ networkPolicy: "vercel-deny-all" });
 assert.equal(box.id, "session_1");
 await box.destroy();
@@ -1148,7 +1148,7 @@ try {
 import { Beachside } from "beachside";
 import { boxdAdapter } from "@beachside/boxd";
 if (boxdAdapter.name !== "boxd") throw Error("External adapter identity mismatch");
-if (boxdAdapter.config.parse({ org: "team" }).networkPolicy !== "blocked") throw Error("Egress must default to blocked");
+if (boxdAdapter.config.parse({ org: "team" }).networkPolicy !== "internet") throw Error("Egress must default to internet");
 try {
   await Beachside.connect({ adapter: boxdAdapter, config: { org: "team", network: "allowlist" }, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
@@ -1171,9 +1171,9 @@ console.log("Packed boxd imports and local validation passed without provider IO
 import { Beachside } from "beachside";
 import { boatAdapter } from "@beachside/boat";
 if (boatAdapter.name !== "boat") throw Error("External adapter identity mismatch");
-if (boatAdapter.config.safeParse({}).success) throw Error("Internet setup must be explicit");
+if (boatAdapter.config.parse({}).networkPolicy !== "internet") throw Error("Egress must default to internet");
 try {
-  await Beachside.connect({ adapter: boatAdapter, config: {}, credentials: { apiKey: "fixture" } });
+  await Beachside.connect({ adapter: boatAdapter, config: { network: "blocked" }, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
 } catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
 console.log("Packed Boat imports and local validation passed without provider IO");
@@ -1194,7 +1194,7 @@ console.log("Packed Boat imports and local validation passed without provider IO
 import { Beachside } from "beachside";
 import { runloopAdapter } from "@beachside/runloop";
 if (runloopAdapter.name !== "runloop") throw Error("External adapter identity mismatch");
-if (runloopAdapter.config.parse({}).network !== "blocked") throw Error("Egress must default to blocked");
+if (runloopAdapter.config.parse({}).network !== "internet") throw Error("Egress must default to internet");
 try {
   await Beachside.connect({ adapter: runloopAdapter, config: { lifecycle: { lifetimeSeconds: 600, idleSeconds: 300 } }, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
@@ -1217,7 +1217,7 @@ console.log("Packed Runloop imports and local validation passed without provider
 import { Beachside } from "beachside";
 import { freestyleAdapter } from "@beachside/freestyle";
 if (freestyleAdapter.name !== "freestyle") throw Error("External adapter identity mismatch");
-if (freestyleAdapter.config.parse({}).network !== "blocked") throw Error("Egress must default to blocked");
+if (freestyleAdapter.config.parse({}).network !== "internet") throw Error("Egress must default to internet");
 try {
   await Beachside.connect({ adapter: freestyleAdapter, config: { image: "my-snapshot", resources: { vcpus: 2 } }, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
@@ -1240,7 +1240,7 @@ console.log("Packed Freestyle imports and local validation passed without provid
 import { Beachside } from "beachside";
 import { archilAdapter } from "@beachside/archil";
 if (archilAdapter.name !== "archil") throw Error("External adapter identity mismatch");
-if (archilAdapter.config.parse({ region: "aws-us-east-1" }).network !== "blocked") throw Error("Egress must default to blocked");
+if (archilAdapter.config.parse({ region: "aws-us-east-1" }).network !== "internet") throw Error("Egress must default to internet");
 try {
   await Beachside.connect({ adapter: archilAdapter, config: {}, credentials: { apiKey: "fixture" } });
   throw Error("Invalid configuration accepted");
@@ -1263,9 +1263,9 @@ console.log("Packed Archil imports and local validation passed without provider 
 import { Beachside } from "beachside";
 import { exeDevAdapter } from "@beachside/exe-dev";
 if (exeDevAdapter.name !== "exe-dev") throw Error("External adapter identity mismatch");
-if (exeDevAdapter.config.parse({ network: "internet" }).placement !== "default") throw Error("Placement must default to the account's");
+if (exeDevAdapter.config.parse({}).placement !== "default") throw Error("Placement must default to the account's");
 try {
-  await Beachside.connect({ adapter: exeDevAdapter, config: {}, credentials: { token: "exe1.fixture" } });
+  await Beachside.connect({ adapter: exeDevAdapter, config: { network: "blocked" }, credentials: { token: "exe1.fixture" } });
   throw Error("Invalid configuration accepted");
 } catch (error) { if (error.code !== "INVALID_ARGUMENT") throw error; }
 console.log("Packed exe.dev imports and local validation passed without provider IO");

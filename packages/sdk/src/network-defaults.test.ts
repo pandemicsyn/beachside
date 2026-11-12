@@ -88,7 +88,7 @@ async function fixture(
   return { client, creates, restores, snapshot: new AdapterSnapshot(client, reference) };
 }
 
-test.each([undefined, "internet"])(
+test.each([undefined, "blocked"])(
   "create/check/submit and restore resolve network default %s",
   async (policy) => {
     const f = await fixture(policy);
@@ -99,23 +99,23 @@ test.each([undefined, "internet"])(
       await f.client.sandboxes.create();
       const operation = await f.client.sandboxes.submitCreate();
       await operation.wait();
-      expect(operation.reference.networkPolicy).toBe(policy ?? "blocked");
-      await f.client.sandboxes.create({ networkPolicy: "blocked" });
-      expect(f.creates).toEqual([policy ?? "blocked", policy ?? "blocked", "blocked"]);
+      expect(operation.reference.networkPolicy).toBe(policy ?? "internet");
+      await f.client.sandboxes.create({ networkPolicy: "internet" });
+      expect(f.creates).toEqual([policy ?? "internet", policy ?? "internet", "internet"]);
       await f.snapshot.restore();
       const restored = await f.snapshot.submitRestore();
-      expect(restored.reference.networkPolicy).toBe(policy ?? "blocked");
+      expect(restored.reference.networkPolicy).toBe(policy ?? "internet");
       await restored.wait();
-      await f.snapshot.restore({ networkPolicy: "blocked" });
+      await f.snapshot.restore({ networkPolicy: "internet" });
       expect(f.restores.map((input) => input.request.networkPolicy)).toEqual([
-        policy ?? "blocked",
-        policy ?? "blocked",
-        "blocked",
+        policy ?? "internet",
+        policy ?? "internet",
+        "internet",
       ]);
 
       if (policy)
         expect(() =>
-          Object.assign(f.client.session, { defaultNetworkPolicy: "blocked" }),
+          Object.assign(f.client.session, { defaultNetworkPolicy: "internet" }),
         ).toThrow();
     } finally {
       await f.client.close();

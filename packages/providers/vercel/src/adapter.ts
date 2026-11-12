@@ -406,7 +406,7 @@ export function createVercelAdapter(
         : portablePolicy(
             (namedPolicy.success ? namedPolicy.data : undefined) ??
               config.networkPolicy ??
-              "blocked",
+              "internet",
           );
 
       // Unmet minimums reject before any provider IO; the native default is 2 vCPUs.

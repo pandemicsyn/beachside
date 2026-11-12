@@ -8,7 +8,7 @@ if (!token) throw new Error("Set EXE_API_KEY before running this example");
 const beachside = await Beachside.connect({
   adapter: exeDevAdapter,
   credentials: { token },
-  config: { network: "internet" },
+  config: {},
 });
 
 try {
