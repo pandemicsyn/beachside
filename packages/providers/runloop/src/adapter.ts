@@ -383,7 +383,8 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
           env: "RUNLOOP_NETWORK",
           required: false,
           choices: ["blocked", "internet"],
-          description: "Egress is blocked by default; internet opens it.",
+          description:
+            "blocked stops egress and internet allows it; the provider page gives the default.",
         },
       },
       docs: "https://beachside.run/docs/providers/runloop/",

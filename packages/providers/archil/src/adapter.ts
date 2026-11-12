@@ -528,7 +528,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
           required: false,
           choices: ["blocked", "internet", "archil-managed"],
           description:
-            "Egress is blocked by default; internet opens it, and Free plans use archil-managed.",
+            "blocked stops egress and internet allows it; Free plans use archil-managed. The provider page gives the default.",
         },
       },
       docs: "https://beachside.run/docs/providers/archil/",

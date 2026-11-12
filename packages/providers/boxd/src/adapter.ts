@@ -498,7 +498,8 @@ export function createBoxdAdapter(
           env: "BOXD_NETWORK",
           required: false,
           choices: ["blocked", "internet"],
-          description: "Egress is blocked by default; internet opens it.",
+          description:
+            "blocked stops egress and internet allows it; the provider page gives the default.",
         },
         region: {
           env: "BOXD_REGION",
