@@ -492,6 +492,7 @@ export function createBoxdAdapter(
           required: true,
           description:
             "The id (org-...) of the boxd org the key belongs to; `boxd auth --json` lists your orgs with their ids.",
+          url: "https://docs.boxd.sh/cli/authentication",
         },
         network: {
           env: "BOXD_NETWORK",

@@ -267,8 +267,13 @@ export function createModalAdapter(
         tokenId: {
           env: "MODAL_TOKEN_ID",
           description: "A Modal token id; `modal token new` creates one.",
+          url: "https://modal.com/docs/cli/latest/token",
         },
-        tokenSecret: { env: "MODAL_TOKEN_SECRET", description: "The secret for that Modal token." },
+        tokenSecret: {
+          env: "MODAL_TOKEN_SECRET",
+          description: "The secret for that Modal token.",
+          url: "https://modal.com/docs/cli/latest/token",
+        },
       },
       config: {
         appName: {

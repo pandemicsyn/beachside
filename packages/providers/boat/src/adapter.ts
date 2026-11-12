@@ -316,7 +316,13 @@ export function createBoatAdapter(options: BoatAdapterOptions = {}) {
     name: "boat",
     displayName: "Boat",
     setup: {
-      credentials: { apiKey: { env: "BOAT_API_KEY", description: "A Boat API key." } },
+      credentials: {
+        apiKey: {
+          env: "BOAT_API_KEY",
+          description: "A Boat API key; `boat api-key create <name> --preset ci` makes one.",
+          url: "https://docs.boat.dev/api-keys",
+        },
+      },
       config: {
         network: {
           env: "BOAT_NETWORK",

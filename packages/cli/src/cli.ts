@@ -913,7 +913,23 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     }
 
     if (name === "schema") {
-      const topic = head[nameIndex + 1];
+      // Flags such as --json or --help leave the schema as it is; a string flag takes its value.
+      const valued = new Set(
+        Object.entries(globalFlags).flatMap(([flag, spec]) =>
+          spec.type === "string" ? [flag] : [],
+        ),
+      );
+
+      const topics = head.slice(nameIndex + 1).filter((arg, index, args) => {
+        const previous = args[index - 1];
+
+        return (
+          !arg.startsWith("-") && !(previous?.startsWith("--") && valued.has(previous.slice(2)))
+        );
+      });
+
+      if (topics.length > 1) throw usage(`schema takes at most one topic, got ${topics.join(" ")}`);
+      const topic = topics[0];
 
       if (topic !== undefined && topic !== "config")
         throw usage(

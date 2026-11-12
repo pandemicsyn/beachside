@@ -2913,10 +2913,10 @@ export async function providersCommand(session: Session): Promise<number> {
 
       // A profile that sets a value itself doesn't need the environment variable.
       const needs = setup
-        ? missingSettings(setup, env, profileKeys(loaded, provider.id, env)).map((need) => ({
-            env: need.env,
-            description: need.description ?? null,
-            url: need.url ?? null,
+        ? missingSettings(setup, env, profileKeys(loaded, provider.id, env)).map((item) => ({
+            env: item.label,
+            description: item.description,
+            url: item.url,
           }))
         : null;
 
@@ -2925,9 +2925,10 @@ export async function providersCommand(session: Session): Promise<number> {
         module: provider.module,
         experimental: provider.experimental,
         installed,
-        /** Null until the adapter is installed, since the adapter declares its variables. */
-        missingEnv: needs?.map((need) => need.env) ?? null,
-        needs,
+        /** False when the adapter is not installed, fails to load or declares no setup. */
+        known: setup !== null,
+        missingEnv: needs?.map((item) => item.env) ?? [],
+        needs: needs ?? [],
         docs: setup?.docs ?? null,
         profiles: Object.entries(loaded.value.profiles ?? {})
           .filter(([, profile]) => profile.provider === provider.id)
@@ -2946,12 +2947,14 @@ export async function providersCommand(session: Session): Promise<number> {
           `${row.id.padEnd(width)}  `,
           !row.installed
             ? `not installed  run \`beachside adapter add ${row.id}\``
-            : row.needs?.length
-              ? `installed      needs ${row.needs.map((need) => need.env).join(", ")}`
-              : "installed      credentials set",
+            : !row.known
+              ? `installed      settings unknown: the adapter failed to load or declares no setup; reinstall with \`beachside adapter add ${row.id}\``
+              : row.needs.length
+                ? `installed      needs ${row.needs.map((need) => need.env).join(", ")}`
+                : "installed      credentials set",
           row.profiles.length ? `  profiles: ${row.profiles.join(", ")}` : "",
           row.experimental ? "  (experimental)" : "",
-          ...(row.needs ?? []).flatMap((need) =>
+          ...row.needs.flatMap((need) =>
             need.url ? [`\n${" ".repeat(width + 2)}${need.env}: ${need.url}`] : [],
           ),
         ].join(""),

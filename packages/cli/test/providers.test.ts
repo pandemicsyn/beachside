@@ -210,6 +210,28 @@ test("environment-only exe.dev setup takes an API key and an explicit internet c
   expect(bound.name).toBe("exe-dev");
 });
 
+test("exe.dev takes an SSH key in place of an API key", async () => {
+  const env = { HOME: home, EXE_NETWORK: "internet" };
+  const configPath = join(home, "beachside.json");
+  await Bun.write(
+    configPath,
+    JSON.stringify({ profiles: { ssh: { provider: "exe-dev", credentials: { sshKey: "key" } } } }),
+  );
+
+  const profile = await resolveProfile(
+    { profile: "ssh" },
+    await loadConfig(configPath, env),
+    env,
+    home,
+  );
+
+  expect(profile.credentials).toEqual({ sshKey: "key" });
+  expect(missingEnv(await setupOf("exe-dev"), { HOME: home })).toEqual([
+    "EXE_NETWORK",
+    "EXE_API_KEY or credentials.sshKey",
+  ]);
+});
+
 test("a third-party adapter's own setup fills its settings from the environment", async () => {
   const dir = join(home, "acme");
   await mkdir(dir, { recursive: true });

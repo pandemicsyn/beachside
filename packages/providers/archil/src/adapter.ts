@@ -510,7 +510,11 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
     displayName: "Archil",
     setup: {
       credentials: {
-        apiKey: { env: "ARCHIL_API_KEY", description: "An Archil API key." },
+        apiKey: {
+          env: "ARCHIL_API_KEY",
+          description: "An Archil API key from the Archil console.",
+          url: "https://console.archil.com",
+        },
       },
       config: {
         region: {

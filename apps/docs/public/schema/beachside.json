@@ -13,16 +13,11 @@
       "minLength": 1
     },
     "profiles": {
-      "description": "Named adapter setups: a provider or module, its config and credentials",
-      "type": "object",
-      "propertyNames": {
-        "type": "string"
-      },
       "additionalProperties": {
         "type": "object",
         "properties": {
           "provider": {
-            "description": "An official provider: boxd, freestyle, daytona, e2b, vercel, boat, runloop, archil, exe-dev, modal",
+            "description": "An official provider id, such as boxd or e2b; `beachside providers` lists them",
             "type": "string",
             "pattern": "^[a-z0-9-]{1,64}$"
           },
@@ -39,7 +34,7 @@
             "maxLength": 128
           },
           "config": {
-            "description": "The adapter's own settings",
+            "description": "The adapter's own settings; `beachside profile show` prints them, so keep secrets in credentials",
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -67,7 +62,24 @@
             }
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "required": [
+              "provider"
+            ]
+          },
+          {
+            "required": [
+              "module"
+            ]
+          }
+        ]
+      },
+      "description": "Named adapter setups: a provider or module, its config and credentials",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
       }
     },
     "state": {

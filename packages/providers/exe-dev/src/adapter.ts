@@ -368,7 +368,16 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
     name: "exe-dev",
     displayName: "exe.dev",
     setup: {
-      credentials: { token: { env: "EXE_API_KEY", description: "An exe.dev API token." } },
+      credentials: {
+        token: {
+          env: "EXE_API_KEY",
+          description:
+            "An exe.dev API token; `ssh exe.dev ssh-key generate-api-key` makes one. A profile can set credentials.sshKey instead.",
+          url: "https://exe.dev/docs/https-api",
+        },
+      },
+      // An SSH key signs short-lived tokens itself, so either one is enough.
+      alternatives: [["token"], ["sshKey"]],
       config: {
         network: {
           env: "EXE_NETWORK",

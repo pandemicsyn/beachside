@@ -14,9 +14,7 @@ export const ProfileConfig = z
       .string()
       .regex(/^[a-z0-9-]{1,64}$/)
       .optional()
-      .describe(
-        "An official provider: boxd, freestyle, daytona, e2b, vercel, boat, runloop, archil, exe-dev, modal",
-      ),
+      .describe("An official provider id, such as boxd or e2b; `beachside providers` lists them"),
     /** Any adapter module: a package name or a path relative to the config file. */
     module: z
       .string()
@@ -31,7 +29,12 @@ export const ProfileConfig = z
       .max(128)
       .optional()
       .describe("The module export that holds the adapter"),
-    config: z.record(z.string(), z.json()).optional().describe("The adapter's own settings"),
+    config: z
+      .record(z.string(), z.json())
+      .optional()
+      .describe(
+        "The adapter's own settings; `beachside profile show` prints them, so keep secrets in credentials",
+      ),
     credentials: z
       .record(z.string(), z.string())
       .optional()
@@ -90,10 +93,26 @@ export const CliConfig = z.strictObject({
 
 export type CliConfig = z.infer<typeof CliConfig>;
 
+/** The generated schema for `profiles`: a map whose values are profile schemas. */
+const ProfilesJsonSchema = z.looseObject({ additionalProperties: z.looseObject({}) });
+
 /** The JSON Schema for beachside.json, published at CONFIG_SCHEMA_URL. */
 export function configJsonSchema(): z.core.JSONSchema.JSONSchema {
+  const schema = z.toJSONSchema(CliConfig, { io: "input", unrepresentable: "any" });
+  const profiles = ProfilesJsonSchema.safeParse(schema.properties?.profiles);
+
+  // The provider-or-module refinement has no JSON Schema form of its own, so state it here.
+  if (schema.properties && profiles.success)
+    schema.properties.profiles = {
+      ...profiles.data,
+      additionalProperties: {
+        ...profiles.data.additionalProperties,
+        anyOf: [{ required: ["provider"] }, { required: ["module"] }],
+      },
+    };
+
   return {
-    ...z.toJSONSchema(CliConfig, { io: "input", unrepresentable: "any" }),
+    ...schema,
     $id: CONFIG_SCHEMA_URL,
     title: "beachside.json",
     description:

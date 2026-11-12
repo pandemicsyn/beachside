@@ -59,21 +59,66 @@ export function descriptor(id: string): OfficialProvider | undefined {
   return providers.find((provider) => provider.id === id);
 }
 
-/** One setting the environment can supply, with its key in the adapter's config or credentials. */
-export type SetupNeed = AdapterSetupValue & { key: string; kind: "credential" | "config" };
+/** A required setting that is not set: one key, or a group of alternative credentials. */
+export type SetupNeed = {
+  kind: "credential" | "config";
+  key: string;
+  /** The variable that supplies it, when the adapter names one. */
+  env: string | null;
+  /** How to supply it, such as `EXE_API_KEY` or `EXE_API_KEY or credentials.sshKey`. */
+  label: string;
+  description: string | null;
+  url: string | null;
+};
 
-/** The settings an adapter's setup says it cannot connect without. */
-export function requiredSettings(setup: AdapterSetup): SetupNeed[] {
-  return [
-    ...Object.entries(setup.credentials).map(([key, value]) => ({
-      ...value,
-      key,
-      kind: "credential" as const,
-    })),
+/** Whether a profile already has a setting, wherever it came from. */
+export type HasSetting = (kind: "credential" | "config", key: string) => boolean;
+
+function need(
+  kind: SetupNeed["kind"],
+  key: string,
+  value: AdapterSetupValue | undefined,
+  label?: string,
+): SetupNeed {
+  return {
+    kind,
+    key,
+    env: value?.env ?? null,
+    label: label ?? value?.env ?? `${kind === "credential" ? "credentials" : "config"}.${key}`,
+    description: value?.description ?? null,
+    url: value?.url ?? null,
+  };
+}
+
+/** The required settings an adapter's setup says are not set yet. */
+export function unmetSettings(setup: AdapterSetup, has: HasSetting): SetupNeed[] {
+  const groups = setup.alternatives ?? [];
+  const alternative = new Set(groups.flat());
+
+  const single = [
+    ...Object.entries(setup.credentials).flatMap(([key, value]) =>
+      alternative.has(key) || has("credential", key) ? [] : [need("credential", key, value)],
+    ),
     ...Object.entries(setup.config ?? {}).flatMap(([key, value]) =>
-      value.required ? [{ ...value, key, kind: "config" as const }] : [],
+      value.required && !has("config", key) ? [need("config", key, value)] : [],
     ),
   ];
+
+  // Alternatives are met when every key of one group is set.
+  const met =
+    !groups.length || groups.some((group) => group.every((key) => has("credential", key)));
+
+  if (met) return single;
+
+  const label = groups
+    .map((group) =>
+      group.map((key) => setup.credentials[key]?.env ?? `credentials.${key}`).join(" and "),
+    )
+    .join(" or ");
+
+  const first = groups[0]!.find((key) => setup.credentials[key]) ?? groups[0]![0]!;
+
+  return [...single, need("credential", first, setup.credentials[first], label)];
 }
 
 /** Required settings neither the environment nor `covered` (keys set elsewhere) supplies. */
@@ -82,16 +127,21 @@ export function missingSettings(
   env: Env,
   covered: ReadonlySet<string> = new Set(),
 ): SetupNeed[] {
-  return requiredSettings(setup).filter((need) => !covered.has(need.key) && !env[need.env]);
+  return unmetSettings(setup, (kind, key) => {
+    if (covered.has(key)) return true;
+    const variable = kind === "credential" ? setup.credentials[key]?.env : setup.config?.[key]?.env;
+
+    return Boolean(variable && env[variable]);
+  });
 }
 
-/** Environment variables an adapter still needs; `covered` names keys set elsewhere. */
+/** What an adapter still needs from the environment, as labels; `covered` names keys set elsewhere. */
 export function missingEnv(
   setup: AdapterSetup,
   env: Env,
   covered: ReadonlySet<string> = new Set(),
 ): string[] {
-  return missingSettings(setup, env, covered).map((need) => need.env);
+  return missingSettings(setup, env, covered).map((item) => item.label);
 }
 
 export type ResolvedProfile = {
@@ -153,7 +203,12 @@ export function officialLocation(
 }
 
 /** A profile chosen by name: configured in beachside.json, or an official provider from the environment. */
-export type ProfileSelection = { name: string; profile: ProfileConfig };
+export type ProfileSelection = {
+  name: string;
+  profile: ProfileConfig;
+  /** `env` when --provider or BEACHSIDE_PROVIDER picked an official provider with no profile. */
+  source: "config" | "env";
+};
 
 /**
  * Which profile is selected: --profile, BEACHSIDE_PROFILE, --provider, BEACHSIDE_PROVIDER, then
@@ -178,12 +233,12 @@ export function resolveProfileName(
           : 'add it under "profiles" in beachside.json',
       );
 
-    return { name: profileName, profile };
+    return { name: profileName, profile, source: "config" };
   }
 
   const providerId = flags.provider ?? env.BEACHSIDE_PROVIDER;
 
-  if (providerId) return { name: providerId, profile: { provider: providerId } };
+  if (providerId) return { name: providerId, profile: { provider: providerId }, source: "env" };
 
   const fallback = loaded.value.default;
 
@@ -192,7 +247,7 @@ export function resolveProfileName(
 
     if (!profile) throw usage(`Default profile ${fallback} is not defined in ${loaded.path}`);
 
-    return { name: fallback, profile };
+    return { name: fallback, profile, source: "config" };
   }
 
   return null;
@@ -280,16 +335,16 @@ async function fromProfile(
   ]);
 
   if (setup) {
-    const missing = requiredSettings(setup).filter((need) =>
-      need.kind === "credential" ? !credentials[need.key] : config[need.key] === undefined,
+    const missing = unmetSettings(setup, (kind, key) =>
+      kind === "credential" ? Boolean(credentials[key]) : config[key] !== undefined,
     );
 
     if (missing.length)
       throw usage(
-        `${where}${known ? ` (${known.id})` : ""} is missing ${missing.map((need) => need.env).join(", ")}`,
+        `${where}${known ? ` (${known.id})` : ""} is missing ${missing.map((item) => item.label).join(", ")}`,
         [
           "set the environment variables, or put the values in the profile in beachside.json",
-          ...missing.flatMap((need) => (need.url ? [`${need.env}: ${need.url}`] : [])),
+          ...missing.flatMap((item) => (item.url ? [`${item.label}: ${item.url}`] : [])),
         ].join("; "),
       );
   }

@@ -104,7 +104,7 @@ For an official adapter in the Beachside repository, also:
 
 - add the package to the `build:packages` and `check:built` chains in the root `package.json` and to `apps/docs` dev dependencies when docs examples import it;
 - add it to the fixed release group with a changeset (experimental packages keep their existing release status);
-- declare `setup` on the definition (every credential and config setting's environment variable, `required` for config the adapter can't connect without, a `description` and a `url` where a person gets the value, and `docs` for its provider page), and add its id, package and export to the official list in `packages/cli/src/providers.ts`;
+- declare `setup` on the definition (every credential and config setting's environment variable, `required` for config the adapter can't connect without, a `description`, a `url` where a person gets the value when one exists, `alternatives` groups when credentials stand in for each other (exe.dev's token or SSH key), and `docs` for its provider page; config values are printed by `profile show`, so secrets go in `credentials`), and add its id, package and export to the official list in `packages/cli/src/providers.ts`;
 - add a provider profile in `packages/sdk-qualification/provider-qualification/profile.ts` and reuse the ordinary `bun:test` suites in `packages/sdk-qualification/live`; follow the [qualification skill](https://github.com/pandemicsyn/beachside/blob/main/.agents/skills/qualify-provider/SKILL.md) for an authorized live run;
 - before the first release, a maintainer publishes a `0.0.0` placeholder and configures npm trusted publishing for the new name (`bun run release:bootstrap publish`, then `bun run release:bootstrap trust <package>`), or the release cannot publish it.
 

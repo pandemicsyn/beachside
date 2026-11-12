@@ -609,6 +609,12 @@ export type AdapterSetup = {
   readonly credentials: Readonly<Record<string, AdapterSetupValue>>;
   /** Config key -> its variable. */
   readonly config?: Readonly<Record<string, AdapterSetupConfigValue>>;
+  /**
+   * Credential keys that stand in for each other, such as an API token or an SSH key: the adapter
+   * needs every key of at least one group. Keys named here are not required on their own, and a
+   * key without a variable in `credentials` can only be set in a profile.
+   */
+  readonly alternatives?: readonly (readonly string[])[];
   /** A page explaining this provider's setup. */
   readonly docs?: string;
 };
@@ -636,6 +642,7 @@ const AdapterSetupSchema = z.strictObject({
       }),
     )
     .optional(),
+  alternatives: z.array(z.array(SetupKey).min(1).max(16)).min(2).max(16).optional(),
   docs: SetupUrl.optional(),
 });
 

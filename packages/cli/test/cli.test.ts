@@ -528,6 +528,17 @@ describe("beachside CLI against the fake provider", () => {
     expect(envelope(bad).error.code).toBe("UNAUTHENTICATED");
     expect(envelope(bad).error.message).toContain("rejected the credentials for profile bad");
     expect(envelope(bad).error.hint).toContain("beachside profile show");
+
+    await writeConfig({
+      default: "refused",
+      profiles: { refused: { module: fixture, export: "refusing" } },
+    });
+
+    const refused = await cli(["doctor", "--json"]);
+
+    expect(refused.code).toBe(5);
+    expect(envelope(refused).error.code).toBe("UNAUTHENTICATED");
+    expect(envelope(refused).error.message).toContain("profile refused");
   });
 
   test("profile ls, show, use and rm manage beachside.json without revealing credentials", async () => {
@@ -565,6 +576,15 @@ describe("beachside CLI against the fake provider", () => {
     expect(fromEnv.data.selected).toBe("e2b");
     expect(fromEnv.data.profiles.at(-1)).toMatchObject({ name: "e2b", source: "env" });
 
+    // --provider wins over a config profile of the same name, so the env row is the selected one.
+    const shadowed = envelope(await cli(["profile", "ls", "--provider", "guarded", "--json"])).data;
+    const rows = shadowed.profiles.filter((row: { name: string }) => row.name === "guarded");
+
+    expect(rows).toEqual([
+      expect.objectContaining({ source: "config", selected: false }),
+      expect.objectContaining({ source: "env", selected: true }),
+    ]);
+
     const guarded = envelope(await cli(["profile", "show", "guarded", "--json"])).data;
 
     expect(guarded.credentials.token).toEqual({
@@ -572,6 +592,13 @@ describe("beachside CLI against the fake provider", () => {
       env: "FAKE_KEY",
       set: false,
     });
+    expect(guarded.ready).toBe(false);
+
+    const literalData = envelope(await cli(["profile", "show", "literal", "--json"])).data;
+
+    // The guarded export declares no setup, so whether the profile is complete is unknown.
+    expect(literalData.ready).toBeNull();
+    expect(literalData.needs).toBeNull();
 
     const literal = await cli(["profile", "show", "literal"]);
 
@@ -615,6 +642,27 @@ describe("beachside CLI against the fake provider", () => {
     expect((await cli(["profile", "use", "e2b", "--json"])).code).toBe(3);
   });
 
+  test("profile rm is refused while a snapshot record uses the profile", async () => {
+    await writeConfig({
+      default: "snaps",
+      profiles: { snaps: { module: fixture, export: "snapshotting" } },
+    });
+    expect((await cli(["create", "--name", "web", "--prepared", "fake-starter"])).code).toBe(0);
+    expect((await cli(["snapshot", "create", "web", "--name", "snap"])).code).toBe(0);
+    expect((await cli(["rm", "web"])).code).toBe(0);
+
+    const refused = await cli(["profile", "rm", "snaps", "--json"]);
+
+    expect(refused.code).toBe(2);
+    expect(envelope(refused).error.message).toContain("snapshot snap");
+  });
+
+  test("profile ls rejects a default that names no profile", async () => {
+    await writeConfig({ default: "missing", profiles: {} });
+
+    expect((await cli(["profile", "ls", "--json"])).code).toBe(2);
+  });
+
   test("schema config prints the JSON Schema for beachside.json", async () => {
     const schema = JSON.parse((await cli(["schema", "config"])).stdout);
 
@@ -623,6 +671,12 @@ describe("beachside CLI against the fake provider", () => {
       expect.arrayContaining(["$schema", "default", "profiles", "setups", "limits"]),
     );
     expect((await cli(["schema", "nope"])).code).toBe(2);
+    expect((await cli(["schema", "config", "extra"])).code).toBe(2);
+    expect((await cli(["schema", "--help"])).code).toBe(0);
+    expect(schema.properties.profiles.additionalProperties.anyOf).toEqual([
+      { required: ["provider"] },
+      { required: ["module"] },
+    ]);
   });
 
   test("schema and help describe every command", async () => {
@@ -1353,6 +1407,25 @@ describe("beachside CLI against the fake provider", () => {
       expect(e2b.missingEnv).toEqual(["E2B_API_KEY"]);
       expect(e2b.needs[0].url).toBe("https://console.e2b.dev/?tab=keys");
       expect(e2b.docs).toBe("https://beachside.run/docs/providers/e2b/");
+    });
+
+    test("providers says settings are unknown for an adapter without a setup", async () => {
+      const scope = join(dir, ".config", "beachside", "adapters", "node_modules", "@beachside");
+      await mkdir(join(scope, "e2b"), { recursive: true });
+      await writeFile(
+        join(scope, "e2b", "package.json"),
+        JSON.stringify({ name: "@beachside/e2b", type: "module", exports: "./index.js" }),
+      );
+      await writeFile(
+        join(scope, "e2b", "index.js"),
+        `export * from ${JSON.stringify(fixture)};\n`,
+      );
+
+      const listed = await cli(["providers", "--json"]);
+      const e2b = envelope(listed).data.providers.find((row: { id: string }) => row.id === "e2b");
+
+      expect(e2b).toMatchObject({ installed: true, known: false, missingEnv: [], needs: [] });
+      expect((await cli(["providers"])).stdout).toMatch(/e2b\s+installed\s+settings unknown/);
     });
 
     test("an interrupted run destroys its sandbox and says so", async () => {

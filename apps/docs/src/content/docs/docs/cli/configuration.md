@@ -22,11 +22,11 @@ Set `BEACHSIDE_PROVIDER` (or pass `--provider`) and the provider's own variables
 | `vercel`    | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                                                                      |
 | `modal`     | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `MODAL_APP_NAME`, `MODAL_ENVIRONMENT`                                              |
 
-`beachside providers` shows which of these are missing, with a link to where you get each one once the adapter is installed. Each adapter declares its own variables, so a third-party adapter that declares them works env-only too. `BOXD_ORG` is the ID (`org-…`) of the boxd org your API key belongs to; `boxd auth --json` lists your orgs with their IDs (the active one has `"active": true`). Daytona has no default image, so each Daytona `create` or `run` needs `--prepared <snapshot>` (such as `daytona-small`) or `--image`. boxd egress is blocked unless you set `BOXD_NETWORK=internet`, and `BOXD_REGION` (such as `nyc`) picks a boxd region other than your org's home one. Boat always allows internet egress, so its adapter asks you to choose that explicitly with `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
+`beachside providers` shows which of these are missing once the adapter is installed, with a link to where you get each one when the adapter gives one. It reads them from the installed adapter, so it loads that package. Each adapter declares its own variables, so a third-party adapter that declares them works env-only too. `BOXD_ORG` is the ID (`org-…`) of the boxd org your API key belongs to; `boxd auth --json` lists your orgs with their IDs (the active one has `"active": true`). Daytona has no default image, so each Daytona `create` or `run` needs `--prepared <snapshot>` (such as `daytona-small`) or `--image`. boxd egress is blocked unless you set `BOXD_NETWORK=internet`, and `BOXD_REGION` (such as `nyc`) picks a boxd region other than your org's home one. Boat always allows internet egress, so its adapter asks you to choose that explicitly with `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
 
 ## Profiles
 
-A profile is one adapter's setup under a name. You can keep as many as you like, one per provider or account, and pick one per command with `--profile`. Its `config` and `credentials` are that adapter's own settings, as described on each [provider page](/docs/providers/support/):
+A profile is one adapter's setup under a name. You can keep as many as you like, one per provider or account, and pick one per command with `--profile`. Its `config` and `credentials` are that adapter's own settings, as described on each [provider page](/docs/providers/support/). `beachside profile show` prints `config` values as written, so keep keys and tokens in `credentials`:
 
 ```json
 {
@@ -70,7 +70,7 @@ beachside profile use daytona-us  # make it the default
 beachside profile rm old-e2b      # remove one
 ```
 
-`profile show` reads nothing from a password manager and doesn't contact the provider. It says whether each value is written in the file (credentials show as hidden), read from an environment variable, or a password-manager reference, and which required values are missing. Without a name it shows the profile a command would use now; an official provider id shows its environment-only setup.
+`profile show` reads nothing from a password manager and doesn't contact the provider, though it loads the adapter package to learn what the adapter needs. It says whether each value is written in the file (credentials show as hidden), read from an environment variable, or a password-manager reference, and which required values are missing. Without a name it shows the profile a command would use now; an official provider id shows its environment-only setup.
 
 `profile use` and `profile rm` rewrite `beachside.json` with two-space indentation and keep the file's permissions. `profile rm` refuses while stored sandboxes, snapshots or images were made with the profile, since the CLI could no longer reach them; `--force` removes it anyway. Removing the default profile leaves no default until you pick one.
 
