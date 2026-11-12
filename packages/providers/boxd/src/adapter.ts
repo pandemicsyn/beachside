@@ -68,7 +68,7 @@ const Configuration = z
   .strictObject({
     org: z.string().min(1).max(128),
     /**
-     * Egress for new machines: `blocked` (the default) reaches nothing, `internet` is unrestricted,
+     * Egress for new machines: `internet` (the default) is unrestricted, `blocked` reaches nothing,
      * and `{ allow: [...] }` reaches only the listed host names, `*.` wildcards and public IPv4
      * addresses or ranges.
      */
@@ -143,7 +143,7 @@ const Configuration = z
   })
   .transform(({ network, lifetimeSeconds, ...value }) => ({
     ...value,
-    networkPolicy: networkPolicyName(network ?? value.networkPolicy ?? "blocked"),
+    networkPolicy: networkPolicyName(network ?? value.networkPolicy ?? "internet"),
     ...boxdAllowlist(network),
     lifetimeSeconds: machineLifetime(
       value.lifecycle?.lifetimeSeconds ?? lifetimeSeconds ?? DEFAULT_LIFETIME_SECONDS,

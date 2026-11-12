@@ -147,7 +147,7 @@ test("restores keep the snapshot's network policy", async () => {
     const captured = await (await client.sandboxes.create()).snapshot();
 
     await expect(
-      captured.snapshot.restore({ network: "internet", requireIndependentLifecycle: false }),
+      captured.snapshot.restore({ network: "blocked", requireIndependentLifecycle: false }),
     ).rejects.toMatchObject({
       code: "UNSUPPORTED",
     });

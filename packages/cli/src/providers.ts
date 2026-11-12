@@ -61,7 +61,7 @@ export const providers: readonly ProviderDescriptor[] = [
     credentials: { apiKey: "BOXD_API_KEY" },
     config: {
       org: { env: "BOXD_ORG", required: true },
-      // Egress defaults to blocked; BOXD_NETWORK=internet opts out.
+      // Egress is open by default; BOXD_NETWORK=blocked restricts it.
       network: { env: "BOXD_NETWORK", required: false },
       // Optional; machines go to the org's home region without it.
       region: { env: "BOXD_REGION", required: false },
@@ -74,8 +74,8 @@ export const providers: readonly ProviderDescriptor[] = [
     experimental: true,
     credentials: { apiKey: "BOAT_API_KEY" },
     config: {
-      // Boat sandboxes always have outbound internet, so the adapter requires choosing it.
-      network: { env: "BOAT_NETWORK", required: true },
+      // Boat sandboxes always have outbound internet; internet is the only value.
+      network: { env: "BOAT_NETWORK", required: false },
     },
   },
   {
@@ -84,7 +84,7 @@ export const providers: readonly ProviderDescriptor[] = [
     export: "runloopAdapter",
     experimental: true,
     credentials: { apiKey: "RUNLOOP_API_KEY" },
-    // Egress defaults to blocked; RUNLOOP_NETWORK=internet opts out.
+    // Egress is open by default; RUNLOOP_NETWORK=blocked restricts it.
     config: { network: { env: "RUNLOOP_NETWORK", required: false } },
   },
   {
@@ -93,7 +93,7 @@ export const providers: readonly ProviderDescriptor[] = [
     export: "freestyleAdapter",
     experimental: true,
     credentials: { apiKey: "FREESTYLE_API_KEY" },
-    // Egress defaults to blocked; FREESTYLE_NETWORK=internet opts out.
+    // Egress is open by default; FREESTYLE_NETWORK=blocked restricts it.
     config: { network: { env: "FREESTYLE_NETWORK", required: false } },
   },
   {
@@ -105,8 +105,8 @@ export const providers: readonly ProviderDescriptor[] = [
     config: {
       // Each Archil region has its own control plane, so the region is always explicit.
       region: { env: "ARCHIL_REGION", required: true },
-      // Egress defaults to blocked; ARCHIL_NETWORK=internet opts out, and Free plans need
-      // ARCHIL_NETWORK=archil-managed (Archil's managed allowlist).
+      // Egress is open by default (a paid-plan policy); ARCHIL_NETWORK=blocked restricts it,
+      // and Free plans need ARCHIL_NETWORK=archil-managed (Archil's managed allowlist).
       network: { env: "ARCHIL_NETWORK", required: false },
     },
   },
@@ -117,8 +117,8 @@ export const providers: readonly ProviderDescriptor[] = [
     experimental: true,
     // Env-only setup takes an API token; an SSH key (for protected previews) goes in a profile.
     credentials: { token: "EXE_API_KEY" },
-    // exe.dev VMs always have internet egress, so the choice is explicit: EXE_NETWORK=internet.
-    config: { network: { env: "EXE_NETWORK", required: true } },
+    // exe.dev VMs always have internet egress; internet is the only value.
+    config: { network: { env: "EXE_NETWORK", required: false } },
   },
   {
     id: "vercel",

@@ -12,7 +12,7 @@ export function e2b(options: {
   apiKey: string;
   teamId?: string;
   templateId?: string;
-  /** Outbound network: `blocked` (default), `internet`, or an allowlist `{ allow: [...] }`. */
+  /** Outbound network: `internet` (default), `blocked`, or an allowlist `{ allow: [...] }`. */
   network?: "blocked" | "internet" | AllowNetworkSetting;
   /** @deprecated Use `network`. */
   networkPolicy?: "blocked" | "internet";

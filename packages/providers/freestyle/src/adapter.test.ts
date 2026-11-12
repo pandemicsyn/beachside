@@ -211,7 +211,7 @@ test("Freestyle allowlists refuse host names at connect", async () => {
 
 test("create boots the default base with a blocked firewall, a slug, the lifetime and labels", async () => {
   const { fixture, connect } = setup();
-  const client = await connect();
+  const client = await connect({ network: "blocked" });
 
   try {
     expect((await client.capabilities()).network).toEqual(["blocked", "internet"]);

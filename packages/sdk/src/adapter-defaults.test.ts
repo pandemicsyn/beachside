@@ -3,7 +3,10 @@ import { defineAdapter } from "@beachside/adapter";
 import { z } from "zod";
 import { Beachside } from "./index";
 
-function definition(defaultNetworkPolicy?: string) {
+function definition(
+  defaultNetworkPolicy?: string,
+  network: readonly string[] = ["internet", "blocked"],
+) {
   const observed: string[] = [];
   let releases = 0;
 
@@ -20,7 +23,7 @@ function definition(defaultNetworkPolicy?: string) {
         scope: { authority: { kind: "account", id: "fixture" }, partition: {} },
         defaultNetworkPolicy,
         defaultImage: { kind: "oci", value: "ubuntu:24.04" },
-        supports: { images: ["oci"], network: ["internet", "blocked"] },
+        supports: { images: ["oci"], network },
         async create(input) {
           observed.push(input.networkPolicy);
 
@@ -36,8 +39,8 @@ function definition(defaultNetworkPolicy?: string) {
   return { adapter, observed, releases: () => releases };
 }
 
-test("explicit adapter policy applies to omitted create input; caller overrides and existing blocked defaults survive", async () => {
-  for (const policy of [undefined, "internet"]) {
+test("explicit adapter policy applies to omitted create input; caller overrides survive and the fallback is internet", async () => {
+  for (const policy of [undefined, "blocked"]) {
     const fixture = definition(policy);
 
     const client = await Beachside.connect({
@@ -49,11 +52,23 @@ test("explicit adapter policy applies to omitted create input; caller overrides 
     try {
       expect((await client.checkCreate()).status).toBe("supported");
       await client.sandboxes.create();
-      await client.sandboxes.create({ networkPolicy: "blocked" });
-      expect(fixture.observed).toEqual([policy ?? "blocked", "blocked"]);
+      await client.sandboxes.create({ networkPolicy: "internet" });
+      expect(fixture.observed).toEqual([policy ?? "internet", "internet"]);
     } finally {
       await client.close();
     }
+  }
+});
+
+test("an adapter with one policy and no declared default creates with that policy", async () => {
+  const fixture = definition(undefined, ["blocked"]);
+  const client = await Beachside.connect({ adapter: fixture.adapter, config: {}, credentials: {} });
+
+  try {
+    await client.sandboxes.create();
+    expect(fixture.observed).toEqual(["blocked"]);
+  } finally {
+    await client.close();
   }
 });
 

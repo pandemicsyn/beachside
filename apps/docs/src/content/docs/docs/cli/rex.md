@@ -76,9 +76,9 @@ beachside create --name rex --network internet --ttl 2h
 beachside exec rex -- sh -c 'curl -fsSL https://pkgs.superlogical.com/rex/install.sh | sh'
 ```
 
-boxd needs nothing more: its sandboxes have a private IPv4 address and passwordless sudo, so Rex installs and logs in as is. Set `BOXD_ORG` and `BOXD_NETWORK=internet` along with `BOXD_API_KEY` (see [configuration](/docs/cli/configuration/)).
+boxd needs nothing more: its sandboxes have a private IPv4 address and passwordless sudo, so Rex installs and logs in as is. Set `BOXD_ORG` along with `BOXD_API_KEY` (see [configuration](/docs/cli/configuration/)).
 
-Freestyle needs nothing more either. Its VMs block outbound traffic by default, so set `FREESTYLE_NETWORK=internet` along with `FREESTYLE_API_KEY`, or pass `--network internet` as above.
+Freestyle needs nothing more either: set `FREESTYLE_API_KEY`.
 
 On E2B, give the sandbox a routable address first. E2B sandboxes only have a link-local IPv4 address, so Tailscale thinks the machine is offline and never logs in ([e2b-dev/runtime#3780](https://github.com/e2b-dev/runtime/issues/3780)):
 

@@ -15,7 +15,7 @@ if (!token || !teamId || !projectId)
 const beachside = await Beachside.connect({
   adapter: vercelAdapter,
   credentials: { token },
-  config: { teamId, projectId, network: "blocked" },
+  config: { teamId, projectId },
 });
 
 try {

@@ -65,7 +65,7 @@ const Configuration = z
      */
     resources: ResourceMinimums.optional(),
     /**
-     * Outbound access: `"blocked"` (the default), `"internet"`, or `{ allow: [...] }` for HTTPS to
+     * Outbound access: `"internet"` (the default), `"blocked"`, or `{ allow: [...] }` for HTTPS to
      * the listed host names (`*.` wildcards allowed, matched by TLS SNI) plus any IPv4 ranges.
      */
     network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).optional(),
@@ -111,9 +111,9 @@ const Configuration = z
     ...allowlistConfig("Modal", network),
     networkPolicy: AllowNetworkSetting.safeParse(network).success
       ? ALLOW_NETWORK_POLICY
-      : network === "internet"
-        ? "internet"
-        : "blocked",
+      : network === "blocked"
+        ? "blocked"
+        : "internet",
     lifetimeSeconds:
       value.lifecycle?.lifetimeSeconds ?? timeoutSeconds ?? defaultLifetime(MAX_LIFETIME_SECONDS),
   }));

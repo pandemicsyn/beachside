@@ -115,7 +115,7 @@ BOXD_API_KEY="<your-boxd-api-key>"
 BOXD_ORG="<your-org-id-or-slug>"
 ```
 
-`BOXD_ORG` is the ID (`org-…`) or slug of the org your key belongs to; `boxd auth` shows it. The example uses boxd's default image with all outside network access blocked.
+`BOXD_ORG` is the ID (`org-…`) or slug of the org your key belongs to; `boxd auth` shows it. The example uses boxd's default image with internet access; set `network: "blocked"` or an allowlist to restrict it.
 
   </TabItem>
   <TabItem label="Freestyle">
@@ -124,7 +124,7 @@ BOXD_ORG="<your-org-id-or-slug>"
 FREESTYLE_API_KEY="<your-freestyle-api-key>"
 ```
 
-The example uses Freestyle's default VM image with all outside network access blocked.
+The example uses Freestyle's default VM image with internet access.
 
   </TabItem>
   <TabItem label="Daytona">
@@ -160,7 +160,7 @@ Create an API key in the Boat dashboard. The example starts a full Ubuntu VM wit
 RUNLOOP_API_KEY="<your-runloop-api-key>"
 ```
 
-Create an API key in the Runloop dashboard; sign-ups are by invitation. The example uses the default Devbox image with all outside network access blocked.
+Create an API key in the Runloop dashboard; sign-ups are by invitation. The example uses the default Devbox image with internet access.
 
   </TabItem>
   <TabItem label="Archil (experimental)">
@@ -169,7 +169,7 @@ Create an API key in the Runloop dashboard; sign-ups are by invitation. The exam
 ARCHIL_API_KEY="<your-archil-api-key>"
 ```
 
-Create an API key in the [Archil console](https://console.archil.com). The example runs in `aws-us-east-1` with all outside network access blocked, which needs a paid Archil plan. On the Free plan, change `network` to `"archil-managed"`.
+Create an API key in the [Archil console](https://console.archil.com). The example runs in `aws-us-east-1` with internet access, which needs a paid Archil plan. On the Free plan, add `network: "archil-managed"` to `config`.
 
   </TabItem>
   <TabItem label="exe.dev (experimental)">
@@ -178,7 +178,7 @@ Create an API key in the [Archil console](https://console.archil.com). The examp
 EXE_API_KEY="<your-exe-dev-token>"
 ```
 
-Create a token with `ssh exe.dev token` (see [API tokens](https://exe.dev/docs/https-api)). exe.dev VMs have internet egress, so the example asks for `network: "internet"`.
+Create a token with `ssh exe.dev token` (see [API tokens](https://exe.dev/docs/https-api)). exe.dev VMs have internet egress.
 
   </TabItem>
   <TabItem label="Vercel (experimental)">
@@ -189,7 +189,7 @@ VERCEL_TEAM_ID="<your-team-id>"
 VERCEL_PROJECT_ID="<your-project-id>"
 ```
 
-Use an existing Vercel team and project. The example uses Vercel's default Node image with all outside network access blocked.
+Use an existing Vercel team and project. The example uses Vercel's default Node image with internet access.
 
   </TabItem>
   <TabItem label="Modal (experimental)">

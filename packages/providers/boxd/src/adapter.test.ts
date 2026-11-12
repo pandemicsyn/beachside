@@ -1060,12 +1060,32 @@ test("boxd declares create env unsupported and rejects it before any native call
   }
 });
 
-test("boxd labels and blocked egress reach the machine before it is handed out", async () => {
+test("boxd leaves a machine's egress unrestricted by default, without an allowlist call", async () => {
   const { fixture, adapter } = await setup();
 
   const client = await Beachside.connect({
     adapter,
     config: { org: "main" },
+    credentials: { apiKey: "fixture-main" },
+  });
+
+  try {
+    expect((await client.capabilities()).network).toEqual(["blocked", "internet"]);
+    const box = await client.sandboxes.create();
+
+    expect(fixture.machines.get(box.id)!.egressAllow).toEqual([]);
+    expect(fixture.calls.some((call) => call.method === "SetVmEgressAllow")).toBe(false);
+  } finally {
+    await client.close();
+  }
+});
+
+test("boxd labels and blocked egress reach the machine before it is handed out", async () => {
+  const { fixture, adapter } = await setup();
+
+  const client = await Beachside.connect({
+    adapter,
+    config: { org: "main", network: "blocked" },
     credentials: { apiKey: "fixture-main" },
   });
 
@@ -1138,7 +1158,7 @@ test("blocked egress is still installed when an older boxd's expiry fallback fai
 
   const client = await Beachside.connect({
     adapter,
-    config: { org: "main" },
+    config: { org: "main", network: "blocked" },
     credentials: { apiKey: "fixture-main" },
   });
 
@@ -1162,7 +1182,7 @@ test("restore applies blocked egress and merges labels over the captured ones", 
 
   const client = await Beachside.connect({
     adapter,
-    config: { org: "main" },
+    config: { org: "main", network: "blocked" },
     credentials: { apiKey: "fixture-main" },
   });
 

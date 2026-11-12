@@ -78,7 +78,7 @@ test("setup verifies an enabled account and rejects unsupported inputs before an
     }),
   ).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
 
-  const client = await connect({});
+  const client = await connect({ network: "blocked" });
 
   try {
     expect((await client.capabilities()).network).toEqual(["blocked", "internet"]);
@@ -98,7 +98,7 @@ test("blocked egress finds or creates one deny-all policy and attaches it", asyn
   const { fixture, connect } = setup();
   // A policy with the right name but open egress is never used for blocked.
   const open = fixture.addPolicy("beachside-blocked", true);
-  const client = await connect({});
+  const client = await connect({ network: "blocked" });
 
   try {
     const first = await client.sandboxes.create();
@@ -229,7 +229,7 @@ test("invalid Runloop allowlists fail at connect with their reason", async () =>
 
 test("a refused policy create rejects the sandbox create without creating a devbox", async () => {
   const { fixture, connect } = setup();
-  const client = await connect({});
+  const client = await connect({ network: "blocked" });
 
   try {
     fixture.failNext(/^POST \/v1\/network-policies$/, fixture.error(403, "policies disabled"));
@@ -369,7 +369,7 @@ test("create refusals reject; 5xx and lost responses stay unknown and are found 
 
 test("recovery checks the requested network policy, with or without the create token", async () => {
   const { fixture, connect } = setup();
-  const client = await connect({});
+  const client = await connect({ network: "blocked" });
 
   try {
     // Token saved: the devbox came up without its deny-all policy, so recovery never accepts it.

@@ -12,7 +12,7 @@ import { boatAdapter } from "@beachside/boat";
 const client = await Beachside.connect({
   adapter: boatAdapter,
   credentials: { apiKey: process.env.BOAT_API_KEY! },
-  config: { network: "internet" },
+  config: {},
 });
 try {
   const box = await client.sandboxes.create();
@@ -28,13 +28,13 @@ try {
 
 Create an API key in the Boat dashboard. `connect` verifies it with `GET /me` and scopes everything to that account id. Sandboxes made by other members of a Boat organization are outside the scope: inspect, reopen and inventory reject or skip them.
 
-The package also exports `boat()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(boat({ apiKey, network: "internet" }))`. It is the same setup; use whichever reads better.
+The package also exports `boat()`, which takes credentials and config in one object and returns an adapter you pass straight to `Beachside.connect`: `Beachside.connect(boat({ apiKey }))`. It is the same setup; use whichever reads better.
 
 ## Setup
 
 | Setting                     | Default        | Notes                                                                                                                                                                                                                         |
 | --------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `network`                   | required       | Must be `"internet"`. Boat has no provider-level egress controls, so blocked or allowlisted creates fail before anything is allocated.                                                                                        |
+| `network`                   | `internet`     | The only value. Boat has no provider-level egress controls, so blocked or allowlisted creates fail before anything is allocated.                                                                                              |
 | `image`                     | `ubuntu-24.04` | Boat's stock Ubuntu 24.04 machine. Any other value is a Boat named snapshot (`my-base`) or a `bsh_` share code, sent as `from`. OCI images are unsupported.                                                                   |
 | `resources`                 | `default` type | Minimum `{ vcpus, memoryMiB }`. Picks the smallest of `small` (2 vCPU, 4 GiB), `default` (4, 8 GiB), `large` (8, 16 GiB) or `xlarge` (16, 32 GiB; plan-dependent). Deprecated alias: `machine`.                               |
 | `environment`               | none           | Name of a Boat environment to attach. **Omitted, sandboxes start with `noEnv`: none of your account's variables, secret files or logins.** Name an environment only for code you trust with them.                             |

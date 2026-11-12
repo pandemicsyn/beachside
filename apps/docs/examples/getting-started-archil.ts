@@ -8,7 +8,7 @@ if (!apiKey) throw new Error("Set ARCHIL_API_KEY before running this example");
 const beachside = await Beachside.connect({
   adapter: archilAdapter,
   credentials: { apiKey },
-  config: { region: "aws-us-east-1", network: "blocked" },
+  config: { region: "aws-us-east-1" },
 });
 
 try {
