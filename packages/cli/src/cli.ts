@@ -30,9 +30,10 @@ import { imageCommand } from "./images";
 import { snapshotCommand } from "./snapshots";
 import { skillCommand } from "./skill";
 import { adapterCommand } from "./adapters";
+import { profileCommand } from "./profiles";
 import { gcCommand } from "./gc";
 import { complete, completionCommand, formatCompletion } from "./completion";
-import type { Env } from "./config";
+import { configJsonSchema, type Env } from "./config";
 import { programStatus } from "./program-status";
 
 type FlagSpec = {
@@ -583,7 +584,8 @@ export const commands: readonly CommandSpec[] = [
   },
   {
     name: "doctor",
-    summary: "Check config, credentials and the provider connection without creating anything",
+    summary:
+      "Check config, the provider connection and that the provider accepts the credentials, without creating anything",
     usage: "beachside doctor",
     flags: {},
     passthrough: false,
@@ -606,6 +608,28 @@ export const commands: readonly CommandSpec[] = [
       "beachside adapter rm e2b",
     ],
     run: adapterCommand,
+  },
+  {
+    name: "profile",
+    summary:
+      "List profiles, show where a profile's settings come from, pick the default or remove one",
+    usage: "beachside profile ls | show [<name>] | use <name> | rm <name> [--force]",
+    flags: {
+      force: {
+        type: "boolean",
+        description:
+          "rm: remove the profile even though stored sandboxes, snapshots or images use it",
+      },
+    },
+    passthrough: false,
+    remoteExit: false,
+    examples: [
+      "beachside profile ls",
+      "beachside profile show e2b --json",
+      "beachside profile use boxd",
+      "beachside profile rm old-daytona",
+    ],
+    run: profileCommand,
   },
   {
     name: "providers",
@@ -730,7 +754,7 @@ function topHelp(): string {
     "",
     "Commands:",
     ...commands.map((command) => `  ${command.name.padEnd(10)} ${command.summary}`),
-    "  schema     Print a machine-readable description of every command",
+    "  schema     Print a machine-readable description of every command (`schema config`: beachside.json)",
     "",
     "Global flags:",
     ...flagLines(globalFlags),
@@ -889,7 +913,17 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     }
 
     if (name === "schema") {
-      out.streams.stdout(`${JSON.stringify(schema(), null, 2)}\n`);
+      const topic = head[nameIndex + 1];
+
+      if (topic !== undefined && topic !== "config")
+        throw usage(
+          `Unknown schema ${topic}`,
+          "`beachside schema` describes the commands; `beachside schema config` describes beachside.json",
+        );
+
+      out.streams.stdout(
+        `${JSON.stringify(topic === "config" ? configJsonSchema() : schema(), null, 2)}\n`,
+      );
 
       return 0;
     }

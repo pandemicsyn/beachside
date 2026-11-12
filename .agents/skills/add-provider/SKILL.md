@@ -98,13 +98,13 @@ When snapshot capture is in scope, follow [provider state portability](https://g
 ## Package and release
 
 - Ship ESM with TypeScript declarations. Depend on `@beachside/adapter`, the schema library and the pinned native SDK; `beachside` only for tests and examples. No SQL dependency, no private workspace imports in the installed artifact.
-- The `beachside` CLI loads any adapter through a profile's `module` and `export` in `beachside.json`, so third-party packages need nothing extra.
+- The `beachside` CLI loads any adapter through a profile's `module` and `export` in `beachside.json`, so third-party packages need nothing extra. Declaring `setup` on the definition also gives them environment-only settings and setup help in `beachside providers` and `beachside profile show`.
 
 For an official adapter in the Beachside repository, also:
 
 - add the package to the `build:packages` and `check:built` chains in the root `package.json` and to `apps/docs` dev dependencies when docs examples import it;
 - add it to the fixed release group with a changeset (experimental packages keep their existing release status);
-- add a CLI descriptor in `packages/cli/src/providers.ts` mapping its credentials and required config to environment variables;
+- declare `setup` on the definition (every credential and config setting's environment variable, `required` for config the adapter can't connect without, a `description` and a `url` where a person gets the value, and `docs` for its provider page), and add its id, package and export to the official list in `packages/cli/src/providers.ts`;
 - add a provider profile in `packages/sdk-qualification/provider-qualification/profile.ts` and reuse the ordinary `bun:test` suites in `packages/sdk-qualification/live`; follow the [qualification skill](https://github.com/pandemicsyn/beachside/blob/main/.agents/skills/qualify-provider/SKILL.md) for an authorized live run;
 - before the first release, a maintainer publishes a `0.0.0` placeholder and configures npm trusted publishing for the new name (`bun run release:bootstrap publish`, then `bun run release:bootstrap trust <package>`), or the release cannot publish it.
 

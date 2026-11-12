@@ -3,6 +3,7 @@ import { usage } from "./output";
 import { imageActions } from "./images";
 import { snapshotActions } from "./snapshots";
 import { adapterActions } from "./adapters";
+import { profileActions } from "./profiles";
 import { providers } from "./providers";
 import type { Session } from "./session";
 import { listAll } from "./store";
@@ -213,6 +214,21 @@ export async function complete(
         candidates: providers.map((provider) => ({
           value: provider.id,
           description: provider.module,
+        })),
+        directive: 0,
+      };
+
+    return none;
+  }
+
+  if (command.name === "profile") {
+    if (positionals.length === 0)
+      return { candidates: profileActions.map((action) => ({ value: action })), directive: 0 };
+
+    if (positionals.length === 1 && ["show", "use", "rm"].includes(positionals[0]!))
+      return {
+        candidates: Object.keys((await session.config()).value.profiles ?? {}).map((name) => ({
+          value: name,
         })),
         directive: 0,
       };

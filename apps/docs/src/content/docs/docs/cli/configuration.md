@@ -22,14 +22,15 @@ Set `BEACHSIDE_PROVIDER` (or pass `--provider`) and the provider's own variables
 | `vercel`    | `VERCEL_TOKEN`, `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`                                                                      |
 | `modal`     | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `MODAL_APP_NAME`, `MODAL_ENVIRONMENT`                                              |
 
-`beachside providers` shows which of these are missing. `BOXD_ORG` is the ID (`org-…`) or slug of the boxd org your API key defaults to; `boxd auth` shows your current org context. Daytona has no default image, so each Daytona `create` or `run` needs `--prepared <snapshot>` (such as `daytona-small`) or `--image`. boxd egress is blocked unless you set `BOXD_NETWORK=internet`, and `BOXD_REGION` (such as `nyc`) picks a boxd region other than your org's home one. Boat always allows internet egress, so its adapter asks you to choose that explicitly with `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
+`beachside providers` shows which of these are missing, with a link to where you get each one once the adapter is installed. Each adapter declares its own variables, so a third-party adapter that declares them works env-only too. `BOXD_ORG` is the ID (`org-…`) or slug of the boxd org your API key defaults to; `boxd auth` shows your current org context. Daytona has no default image, so each Daytona `create` or `run` needs `--prepared <snapshot>` (such as `daytona-small`) or `--image`. boxd egress is blocked unless you set `BOXD_NETWORK=internet`, and `BOXD_REGION` (such as `nyc`) picks a boxd region other than your org's home one. Boat always allows internet egress, so its adapter asks you to choose that explicitly with `BOAT_NETWORK=internet` (or `"network": "internet"` in a profile's config).
 
 ## Profiles
 
-A profile is one adapter's setup under a name. Its `config` and `credentials` are that adapter's own settings, as described on each [provider page](/docs/providers/support/):
+A profile is one adapter's setup under a name. You can keep as many as you like, one per provider or account, and pick one per command with `--profile`. Its `config` and `credentials` are that adapter's own settings, as described on each [provider page](/docs/providers/support/):
 
 ```json
 {
+  "$schema": "https://beachside.run/schema/beachside.json",
   "default": "e2b",
   "profiles": {
     "e2b": {
@@ -57,6 +58,21 @@ The CLI picks a profile from `--profile`, then `BEACHSIDE_PROFILE`, then `--prov
 `provider` names an official adapter (`@beachside/<provider>`). `module` and `export` load any other adapter, either an adapter definition or an already configured adapter; a relative path is relative to `beachside.json`.
 
 Each sandbox remembers the profile that created it, so later commands on it use the same profile whatever is selected now.
+
+The `$schema` line is optional. With it, editors such as VS Code complete and check the file against [the published schema](https://beachside.run/schema/beachside.json). `beachside schema config` prints the same schema for the CLI you have installed.
+
+### Manage profiles
+
+```sh
+beachside profile ls              # every profile; * marks the one a command would use now
+beachside profile show daytona-us # where each setting comes from; credentials are never shown
+beachside profile use daytona-us  # make it the default
+beachside profile rm old-e2b      # remove one
+```
+
+`profile show` reads nothing from a password manager and doesn't contact the provider. It says whether each value is written in the file (credentials show as hidden), read from an environment variable, or a password-manager reference, and which required values are missing. Without a name it shows the profile a command would use now; an official provider id shows its environment-only setup.
+
+`profile use` and `profile rm` rewrite `beachside.json` with two-space indentation and keep the file's permissions. `profile rm` refuses while stored sandboxes, snapshots or images were made with the profile, since the CLI could no longer reach them; `--force` removes it anyway. Removing the default profile leaves no default until you pick one.
 
 To let a profile's sandboxes reach only some destinations, give its `config` an [egress allowlist](/docs/guides/images-and-networking/#allow-only-some-destinations), for example `"config": { "network": { "allow": ["registry.npmjs.org", "*.github.com"] } }`. Every sandbox from that profile uses the list, and `--network internet` or `--network blocked` rejects, so use another profile for those.
 

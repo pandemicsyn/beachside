@@ -61,6 +61,17 @@ const Credentials = z.strictObject({ token: z.string().min(1) });
 export const acmeAdapter = defineAdapter({
   name: "example.acme",
   displayName: "Acme fixture",
+  // Lets hosts such as the CLI fill settings from the environment and say where to get them.
+  setup: {
+    credentials: {
+      token: {
+        env: "ACME_TOKEN",
+        description: "An Acme API token",
+        url: "https://acme.example/keys",
+      },
+    },
+    config: { region: { env: "ACME_REGION", required: true, description: "The Acme region" } },
+  },
   config: Config,
   credentials: Credentials,
   async connect({ config, credentials, host }) {
@@ -238,10 +249,10 @@ Publish the adapter as its own package. Official integrations are named `@beachs
 - Ship ESM with TypeScript declarations. Depend on `@beachside/adapter`, your schema library and the native SDK at a pinned version. The adapter does not depend on `beachside` at run time, and its declarations must not reference private workspace packages.
 - Qualify the packed artifact in a clean consumer: strict NodeNext declarations, Node and Bun execution, and npm, pnpm and Bun installs. The repository's `bun run package:smoke` does this for official packages.
 
-The [command line](/docs/cli/configuration/) loads any adapter through a profile's `module` and `export`, so a third-party package works there without changes. For an official adapter maintained in this repository, also:
+The [command line](/docs/cli/configuration/) loads any adapter through a profile's `module` and `export`, so a third-party package works there without changes. Declare `setup` on the definition, as above, to name the environment variable for each credential and config setting and where a person gets it. The CLI then fills the profile from those variables, lists what is missing with its link in `beachside providers` and missing-setting errors, and `beachside profile show` explains each setting. Every listed credential is required; mark config settings `required` when the adapter cannot connect without them. For an official adapter maintained in this repository, also:
 
 - add the package to the `build:packages` and `check:built` chains in the root `package.json`, and to the fixed release group with a changeset;
-- add a CLI descriptor to `packages/cli/src/providers.ts` naming the environment variables for its credentials and required configuration;
+- declare its `setup` and add its id, package and export to the official list in `packages/cli/src/providers.ts`;
 - add a provider profile for [live qualification](https://github.com/pandemicsyn/beachside/blob/main/packages/sdk-qualification/provider-qualification/README.md) and a row to `providerStatus` in `packages/sdk-qualification/provider-qualification/support.ts`, which feeds [Provider support](/docs/providers/support/);
 - have a maintainer publish a `0.0.0` placeholder and configure npm trusted publishing for the new package name before the first release, or the release cannot publish it.
 

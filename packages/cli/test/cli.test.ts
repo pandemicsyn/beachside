@@ -512,6 +512,119 @@ describe("beachside CLI against the fake provider", () => {
     expect(await fakeResources()).toHaveLength(0);
   });
 
+  test("doctor checks the credentials with a read and reports it", async () => {
+    const result = envelope(await cli(["doctor", "--json"]));
+
+    expect(result.data.credentials).toEqual({ status: "ok" });
+
+    await writeConfig({
+      default: "bad",
+      profiles: { bad: { module: fixture, export: "rejected" } },
+    });
+
+    const bad = await cli(["doctor", "--json"]);
+
+    expect(bad.code).toBe(5);
+    expect(envelope(bad).error.code).toBe("UNAUTHENTICATED");
+    expect(envelope(bad).error.message).toContain("rejected the credentials for profile bad");
+    expect(envelope(bad).error.hint).toContain("beachside profile show");
+  });
+
+  test("profile ls, show, use and rm manage beachside.json without revealing credentials", async () => {
+    const configPath = join(dir, "beachside.json");
+    await writeConfig({
+      $schema: "https://beachside.run/schema/beachside.json",
+      default: "fake",
+      profiles: {
+        fake: { module: fixture, export: "fake", setup: ["node"] },
+        guarded: {
+          module: fixture,
+          export: "guarded",
+          credentials: { token: "env:FAKE_KEY" },
+          config: {},
+        },
+        literal: { module: fixture, export: "guarded", credentials: { token: "s3cret-value" } },
+      },
+      setups: { node: { setup: ["true"] } },
+    });
+    await chmod(configPath, 0o640);
+
+    const listed = envelope(await cli(["profile", "ls", "--json"])).data;
+
+    expect(listed.default).toBe("fake");
+    expect(listed.selected).toBe("fake");
+    expect(listed.profiles.map((row: { name: string }) => row.name)).toEqual([
+      "fake",
+      "guarded",
+      "literal",
+    ]);
+    expect(listed.profiles[0]).toMatchObject({ default: true, selected: true, setup: ["node"] });
+
+    const fromEnv = envelope(await cli(["profile", "ls", "--json"], { BEACHSIDE_PROVIDER: "e2b" }));
+
+    expect(fromEnv.data.selected).toBe("e2b");
+    expect(fromEnv.data.profiles.at(-1)).toMatchObject({ name: "e2b", source: "env" });
+
+    const guarded = envelope(await cli(["profile", "show", "guarded", "--json"])).data;
+
+    expect(guarded.credentials.token).toEqual({
+      from: "env-reference",
+      env: "FAKE_KEY",
+      set: false,
+    });
+
+    const literal = await cli(["profile", "show", "literal"]);
+
+    expect(literal.code).toBe(0);
+    expect(literal.stdout).toContain("credentials.token");
+    expect(literal.stdout).toContain("hidden");
+    expect(literal.stdout + literal.stderr).not.toContain("s3cret-value");
+    expect(
+      (await cli(["profile", "show", "literal", "--json"])).stdout.includes("s3cret-value"),
+    ).toBe(false);
+
+    expect((await cli(["profile", "show", "nope", "--json"])).code).toBe(3);
+
+    const used = envelope(await cli(["profile", "use", "guarded", "--json"])).data;
+
+    expect(used).toMatchObject({ default: "guarded", previous: "fake", changed: true });
+
+    const rewritten = JSON.parse(await readFile(configPath, "utf8"));
+
+    expect(rewritten.default).toBe("guarded");
+    expect(rewritten.$schema).toBe("https://beachside.run/schema/beachside.json");
+    expect(rewritten.setups).toEqual({ node: { setup: ["true"] } });
+    expect((await stat(configPath)).mode & 0o777).toBe(0o640);
+
+    await cli(["profile", "use", "fake"]);
+    await cli(["create", "--name", "web", "--prepared", "fake-starter"]);
+
+    const refused = await cli(["profile", "rm", "fake", "--json"]);
+
+    expect(refused.code).toBe(2);
+    expect(envelope(refused).error.message).toContain("sandbox web");
+
+    const removed = envelope(await cli(["profile", "rm", "fake", "--force", "--json"])).data;
+
+    expect(removed).toMatchObject({ removed: "fake", wasDefault: true, orphaned: ["sandbox web"] });
+
+    const after = JSON.parse(await readFile(configPath, "utf8"));
+
+    expect(after.default).toBeUndefined();
+    expect(Object.keys(after.profiles)).toEqual(["guarded", "literal"]);
+    expect((await cli(["profile", "use", "e2b", "--json"])).code).toBe(3);
+  });
+
+  test("schema config prints the JSON Schema for beachside.json", async () => {
+    const schema = JSON.parse((await cli(["schema", "config"])).stdout);
+
+    expect(schema.$id).toBe("https://beachside.run/schema/beachside.json");
+    expect(Object.keys(schema.properties)).toEqual(
+      expect.arrayContaining(["$schema", "default", "profiles", "setups", "limits"]),
+    );
+    expect((await cli(["schema", "nope"])).code).toBe(2);
+  });
+
   test("schema and help describe every command", async () => {
     const schema = JSON.parse((await cli(["schema"])).stdout);
     const names = schema.commands.map((command: { name: string }) => command.name);
@@ -1147,15 +1260,15 @@ describe("beachside CLI against the fake provider", () => {
       expect((await values("")).values).toContain("exec");
       expect((await values("exec", "web", "--ti")).values).toContain("--timeout");
       expect((await values("--provider", "")).values).toEqual([
+        "boxd",
+        "freestyle",
         "daytona",
         "e2b",
-        "boxd",
+        "vercel",
         "boat",
         "runloop",
-        "freestyle",
         "archil",
         "exe-dev",
-        "vercel",
         "modal",
       ]);
       expect((await values("--config", "")).directive).toBe(":2");
@@ -1227,6 +1340,7 @@ describe("beachside CLI against the fake provider", () => {
       );
 
       expect(daytona.missingEnv).toEqual([]);
+      expect(daytona.profiles).toEqual(["us"]);
 
       await writeConfig({
         profiles: { e2b: { provider: "e2b", credentials: { apiKey: "env:E2B_API_KEY" } } },
@@ -1237,6 +1351,8 @@ describe("beachside CLI against the fake provider", () => {
       );
 
       expect(e2b.missingEnv).toEqual(["E2B_API_KEY"]);
+      expect(e2b.needs[0].url).toBe("https://console.e2b.dev/?tab=keys");
+      expect(e2b.docs).toBe("https://beachside.run/docs/providers/e2b/");
     });
 
     test("an interrupted run destroys its sandbox and says so", async () => {

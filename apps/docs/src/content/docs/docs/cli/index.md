@@ -16,7 +16,7 @@ beachside adapter add e2b
 
 The CLI runs on Node.js or Bun; `beachside adapter` uses npm to install. `beachside adapter add` takes one or more provider ids (`boxd`, `freestyle`, `daytona`, `e2b`, `vercel`, `modal`, `runloop`, `archil`, `exe-dev`, `boat`) and installs each official adapter at the same version as the CLI, so the two always match. It then imports the package to check that the adapter is there. Running it again with nothing to change skips npm, so it is safe in CI setup steps. `beachside adapter ls` shows what is installed and flags an official adapter whose version differs from the CLI's; `beachside adapter rm e2b` removes one.
 
-`beachside providers` lists the official adapters, whether each is installed and which credentials are missing.
+`beachside providers` lists the official adapters, whether each is installed, which credentials are missing and where to get them, and the profiles that use each one.
 
 ## Quick start
 
@@ -24,7 +24,7 @@ Pick a provider with environment variables, check the setup, then work:
 
 ```sh
 export BEACHSIDE_PROVIDER=e2b E2B_API_KEY=...
-beachside doctor                                  # checks config and credentials; creates nothing
+beachside doctor                                  # checks the config and that the provider accepts the key; creates nothing
 
 beachside create --name web
 beachside cp ./app.py web:/home/user/app.py

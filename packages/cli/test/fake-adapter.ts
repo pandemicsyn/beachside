@@ -591,3 +591,6 @@ export const localShell = bindAdapter(
   {},
   {},
 );
+
+/** The fake adapter with a token the fake provider refuses, like a revoked API key. */
+export const rejected = bindAdapter(createFakeAdapter({ url, token: `${token}-revoked` }), {}, {});

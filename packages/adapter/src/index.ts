@@ -581,9 +581,69 @@ export type AdapterSession<
   ) => Promise<import("./state").SandboxListPage>;
 };
 
+/** One setting a host can read from an environment variable when setting an adapter up. */
+export type AdapterSetupValue = {
+  /** The environment variable that supplies the value, such as `E2B_API_KEY`. */
+  readonly env: string;
+  /** What the value is and where to find it, in a sentence. */
+  readonly description?: string;
+  /** Where a person gets or looks up the value, such as the provider's API key page. */
+  readonly url?: string;
+};
+
+/** A config setting a host can read from an environment variable. */
+export type AdapterSetupConfigValue = AdapterSetupValue & {
+  /** Whether the adapter cannot connect without it. */
+  readonly required?: boolean;
+  /** Known values, for hosts that offer a choice; any value the config accepts still works. */
+  readonly choices?: readonly string[];
+};
+
+/**
+ * How a host such as the CLI sets this adapter up from environment variables, and what it can
+ * tell a person who has none of them yet. Hosts read it; the adapter's own schemas still decide
+ * what is valid.
+ */
+export type AdapterSetup = {
+  /** Credential key -> its variable. Every listed credential is required. */
+  readonly credentials: Readonly<Record<string, AdapterSetupValue>>;
+  /** Config key -> its variable. */
+  readonly config?: Readonly<Record<string, AdapterSetupConfigValue>>;
+  /** A page explaining this provider's setup. */
+  readonly docs?: string;
+};
+
+const SetupEnvName = z.string().regex(/^[A-Z][A-Z0-9_]{0,127}$/);
+
+const SetupUrl = z.url({ protocol: /^https$/ }).max(2048);
+
+const SetupValue = z.strictObject({
+  env: SetupEnvName,
+  description: z.string().min(1).max(500).optional(),
+  url: SetupUrl.optional(),
+});
+
+const SetupKey = z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/);
+
+const AdapterSetupSchema = z.strictObject({
+  credentials: z.record(SetupKey, SetupValue),
+  config: z
+    .record(
+      SetupKey,
+      SetupValue.extend({
+        required: z.boolean().optional(),
+        choices: z.array(z.string().min(1).max(128)).max(64).optional(),
+      }),
+    )
+    .optional(),
+  docs: SetupUrl.optional(),
+});
+
 export type AdapterDefinition<C extends z.ZodType, K extends z.ZodType, S = AdapterSession> = {
   readonly name: string;
   readonly displayName?: string;
+  /** Environment variables and help for setting the adapter up without code. */
+  readonly setup?: AdapterSetup;
   readonly config: C;
   readonly credentials: K;
   readonly connect: (input: {
@@ -648,6 +708,8 @@ export function defineAdapter(
   },
 ) {
   ProviderName.parse(definition.name);
+
+  if (definition.setup) AdapterSetupSchema.parse(definition.setup);
 
   if (!definition.policy) return Object.freeze(definition);
 

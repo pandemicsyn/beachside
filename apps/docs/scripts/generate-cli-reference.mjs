@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const main = fileURLToPath(new URL("../../../packages/cli/src/main.ts", import.meta.url));
@@ -86,11 +87,32 @@ ${markdownTable(
 ${sections.join("\n\n")}
 `;
 
-if (process.argv.includes("--check")) {
-  const current = await readFile(target, "utf8").catch(() => "");
+// The published JSON Schema for beachside.json, which editors load from its "$schema" key.
+const configSchemaTarget = fileURLToPath(
+  new URL("../public/schema/beachside.json", import.meta.url),
+);
 
-  if (current !== output) {
-    console.error(`${target} is stale; run bun run --cwd apps/docs cli:generate`);
-    process.exit(1);
+const configSchema = `${execFileSync(process.execPath, [main, "schema", "config"], {
+  encoding: "utf8",
+  env: { PATH: process.env.PATH },
+})}`;
+
+const generated = [
+  [target, output],
+  [configSchemaTarget, configSchema],
+];
+
+if (process.argv.includes("--check")) {
+  for (const [path, text] of generated) {
+    const current = await readFile(path, "utf8").catch(() => "");
+
+    if (current !== text) {
+      console.error(`${path} is stale; run bun run --cwd apps/docs cli:generate`);
+      process.exit(1);
+    }
   }
-} else await writeFile(target, output);
+} else {
+  await mkdir(dirname(configSchemaTarget), { recursive: true });
+
+  for (const [path, text] of generated) await writeFile(path, text);
+}

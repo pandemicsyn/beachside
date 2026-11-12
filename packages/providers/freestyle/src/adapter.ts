@@ -405,6 +405,25 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
   return defineAdapter({
     name: "freestyle",
     displayName: "Freestyle",
+    setup: {
+      credentials: {
+        apiKey: {
+          env: "FREESTYLE_API_KEY",
+          description:
+            "A Freestyle API key; create one with `npx freestyle@latest tokens create beachside`.",
+          url: "https://www.freestyle.sh/docs/quickstart",
+        },
+      },
+      config: {
+        network: {
+          env: "FREESTYLE_NETWORK",
+          required: false,
+          choices: ["blocked", "internet"],
+          description: "Egress is blocked by default; internet opens it.",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/freestyle/",
+    },
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {

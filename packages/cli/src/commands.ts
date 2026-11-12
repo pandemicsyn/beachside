@@ -23,7 +23,7 @@ import {
   type SetupStepOptions,
 } from "beachside";
 import { z } from "zod";
-import { searchProjectAdapters, valueAvailable, type Env, type LoadedConfig } from "./config";
+import { valueAvailable, type Env, type LoadedConfig } from "./config";
 import {
   CliError,
   describeError,
@@ -73,7 +73,15 @@ import {
   type AddonRecord,
 } from "./addons";
 import { imageEnvironment } from "./images";
-import { missingEnv, providers, resolveAdapterModule, type ResolvedProfile } from "./providers";
+import {
+  adapterSetup,
+  credentialsRejected,
+  missingSettings,
+  officialLocation,
+  providers,
+  resolveAdapterModule,
+  type ResolvedProfile,
+} from "./providers";
 import type { Session } from "./session";
 import { restoreSnapshot, snapshotSource } from "./snapshots";
 import {
@@ -2779,10 +2787,48 @@ export async function catCommand(session: Session, flags: Flags): Promise<number
   return 0;
 }
 
+/** What `doctor` learned by asking the provider for one page of its sandbox listing. */
+type CredentialCheck =
+  | { status: "ok" }
+  | { status: "rejected"; code: string; reason: string }
+  | { status: "unchecked"; reason: string }
+  | { status: "error"; code: string; reason: string };
+
+/** A cheap read that proves the provider accepts the credentials, without creating anything. */
+async function checkCredentials(client: BeachsideClient<true>): Promise<CredentialCheck> {
+  try {
+    await client.sandboxes.list({ limit: 1 });
+
+    return { status: "ok" };
+  } catch (cause) {
+    const report = describeError(cause);
+
+    if (report.code === "UNAUTHENTICATED" || report.code === "FORBIDDEN")
+      return { status: "rejected", code: report.code, reason: report.message };
+
+    if (report.code === "UNSUPPORTED")
+      return { status: "unchecked", reason: "this provider has no sandbox listing to check with" };
+
+    return { status: "error", code: report.code, reason: report.message };
+  }
+}
+
 export async function doctorCommand(session: Session): Promise<number> {
+  const { env, cwd } = session.ctx;
   const loaded = await session.config();
   const profile: ResolvedProfile = await session.profile();
+  const setup = await adapterSetup(profile, cwd, env);
   const client = await session.connect(profile);
+  const credentials = await checkCredentials(client);
+
+  if (credentials.status === "rejected")
+    throw credentialsRejected(
+      profile,
+      setup,
+      credentials.code === "FORBIDDEN" ? "FORBIDDEN" : "UNAUTHENTICATED",
+      credentials.reason,
+    );
+
   const capabilities = await client.capabilities();
   let plan: Awaited<ReturnType<typeof client.sandboxes.checkCreate>>;
 
@@ -2795,6 +2841,7 @@ export async function doctorCommand(session: Session): Promise<number> {
 
   const store = await session.store();
   const count = (await listAll(store, "sandbox")).length;
+  const docs = setup?.docs ?? null;
 
   session.ctx.out.success(
     {
@@ -2802,16 +2849,20 @@ export async function doctorCommand(session: Session): Promise<number> {
       profile: profile.name,
       provider: profile.provider,
       connected: true,
+      credentials,
       create: plan,
       sandboxesInStore: count,
       capabilities,
+      docs,
     },
     [
-      `config    ${loaded.path}${loaded.exists ? "" : " (not found, using defaults)"}`,
-      `profile   ${profile.name} (${profile.provider})`,
-      "connect   ok",
-      `create    ${plan.status}${plan.status === "supported" ? "" : `: ${plan.reason}`}`,
-      `store     ${count} sandbox record(s)`,
+      `config       ${loaded.path}${loaded.exists ? "" : " (not found, using defaults)"}`,
+      `profile      ${profile.name} (${profile.provider})`,
+      "connect      ok",
+      `credentials  ${credentials.status === "ok" ? "accepted" : `${credentials.status}: ${credentials.reason}`}`,
+      `create       ${plan.status}${plan.status === "supported" ? "" : `: ${plan.reason}`}`,
+      `store        ${count} sandbox record(s)`,
+      ...(docs && plan.status !== "supported" ? [`docs         ${docs}`] : []),
     ].join("\n"),
   );
 
@@ -2839,17 +2890,10 @@ export async function providersCommand(session: Session): Promise<number> {
 
   const rows = await Promise.all(
     providers.map(async (provider) => {
+      const location = officialLocation(provider, loaded, env);
+
       const resolved = await resolveAdapterModule(
-        {
-          name: provider.id,
-          provider: provider.id,
-          module: provider.module,
-          export: provider.export,
-          baseDir: cwd,
-          searchProject: searchProjectAdapters(loaded, env),
-          config: {},
-          credentials: {},
-        },
+        { ...location, provider: provider.id, config: {}, credentials: {} },
         cwd,
         env,
       );
@@ -2864,25 +2908,53 @@ export async function providersCommand(session: Session): Promise<number> {
           installed = false;
         }
 
+      // The adapter declares its variables, so they are known once it is installed.
+      const setup = installed ? await adapterSetup(location, cwd, env) : null;
+
+      // A profile that sets a value itself doesn't need the environment variable.
+      const needs = setup
+        ? missingSettings(setup, env, profileKeys(loaded, provider.id, env)).map((need) => ({
+            env: need.env,
+            description: need.description ?? null,
+            url: need.url ?? null,
+          }))
+        : null;
+
       return {
         id: provider.id,
         module: provider.module,
         experimental: provider.experimental,
         installed,
-        // A profile that sets a value itself doesn't need the environment variable.
-        missingEnv: missingEnv(provider, env, profileKeys(loaded, provider.id, env)),
+        /** Null until the adapter is installed, since the adapter declares its variables. */
+        missingEnv: needs?.map((need) => need.env) ?? null,
+        needs,
+        docs: setup?.docs ?? null,
+        profiles: Object.entries(loaded.value.profiles ?? {})
+          .filter(([, profile]) => profile.provider === provider.id)
+          .map(([name]) => name),
       };
     }),
   );
 
+  const width = Math.max(...rows.map((row) => row.id.length));
+
   session.ctx.out.success(
     { providers: rows },
     rows
-      .map(
-        (row) =>
-          `${row.id.padEnd(8)} ${row.installed ? "installed" : "not installed"}  ${
-            row.missingEnv.length ? `needs ${row.missingEnv.join(", ")}` : "credentials set"
-          }${row.experimental ? "  (experimental)" : ""}`,
+      .map((row) =>
+        [
+          `${row.id.padEnd(width)}  `,
+          !row.installed
+            ? `not installed  run \`beachside adapter add ${row.id}\``
+            : row.needs?.length
+              ? `installed      needs ${row.needs.map((need) => need.env).join(", ")}`
+              : "installed      credentials set",
+          row.profiles.length ? `  profiles: ${row.profiles.join(", ")}` : "",
+          row.experimental ? "  (experimental)" : "",
+          ...(row.needs ?? []).flatMap((need) =>
+            need.url ? [`\n${" ".repeat(width + 2)}${need.env}: ${need.url}`] : [],
+          ),
+        ].join(""),
       )
       .join("\n"),
   );

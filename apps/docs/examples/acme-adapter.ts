@@ -29,6 +29,17 @@ const Credentials = z.strictObject({ token: z.string().min(1) });
 export const acmeAdapter = defineAdapter({
   name: "example.acme",
   displayName: "Acme fixture",
+  // Lets hosts such as the CLI fill settings from the environment and say where to get them.
+  setup: {
+    credentials: {
+      token: {
+        env: "ACME_TOKEN",
+        description: "An Acme API token",
+        url: "https://acme.example/keys",
+      },
+    },
+    config: { region: { env: "ACME_REGION", required: true, description: "The Acme region" } },
+  },
   config: Config,
   credentials: Credentials,
   async connect({ config, credentials, host }) {

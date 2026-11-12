@@ -367,6 +367,18 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
   return defineAdapter({
     name: "exe-dev",
     displayName: "exe.dev",
+    setup: {
+      credentials: { token: { env: "EXE_API_KEY", description: "An exe.dev API token." } },
+      config: {
+        network: {
+          env: "EXE_NETWORK",
+          required: true,
+          choices: ["internet"],
+          description: "exe.dev VMs always reach the internet, so set internet to confirm it.",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/exe-dev/",
+    },
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {

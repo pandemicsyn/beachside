@@ -508,6 +508,27 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
   return defineAdapter({
     name: "archil",
     displayName: "Archil",
+    setup: {
+      credentials: {
+        apiKey: { env: "ARCHIL_API_KEY", description: "An Archil API key." },
+      },
+      config: {
+        region: {
+          env: "ARCHIL_REGION",
+          required: true,
+          description:
+            "The Archil region, such as aws-us-east-1. Each region has its own control plane.",
+        },
+        network: {
+          env: "ARCHIL_NETWORK",
+          required: false,
+          choices: ["blocked", "internet", "archil-managed"],
+          description:
+            "Egress is blocked by default; internet opens it, and Free plans use archil-managed.",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/archil/",
+    },
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {
