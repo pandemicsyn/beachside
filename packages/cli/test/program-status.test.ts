@@ -149,6 +149,7 @@ describe("program status from CLI commands", () => {
 
     const code = await main(args, {
       env: {
+        BEACHSIDE_TELEMETRY: "0",
         HOME: root,
         BEACHSIDE_CONFIG: join(root, "beachside.json"),
         BEACHSIDE_STATE_DIR: join(root, "state"),

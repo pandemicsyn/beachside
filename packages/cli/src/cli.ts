@@ -34,6 +34,7 @@ import { gcCommand } from "./gc";
 import { complete, completionCommand, formatCompletion } from "./completion";
 import type { Env } from "./config";
 import { programStatus } from "./program-status";
+import { eventProperties, record, telemetryCommand, type Delivery } from "./telemetry";
 
 type FlagSpec = {
   type: "string" | "boolean";
@@ -257,6 +258,16 @@ const pushFlags = {
 } satisfies Record<string, FlagSpec>;
 
 export const commands: readonly CommandSpec[] = [
+  {
+    name: "telemetry",
+    summary: "Show or change basic CLI usage telemetry (on by default; SDK sends none)",
+    usage: "beachside telemetry [status | enable | disable]",
+    flags: {},
+    passthrough: false,
+    remoteExit: false,
+    examples: ["beachside telemetry status", "beachside telemetry disable"],
+    run: telemetryCommand,
+  },
   {
     name: "create",
     summary: "Create a sandbox and print its name",
@@ -788,6 +799,8 @@ function commandIndex(head: readonly string[]): number {
 }
 
 export type Io = {
+  /** Optional delivery seam for offline CLI tests. */
+  telemetryDelivery?: Delivery;
   env: Env;
   cwd: string;
   streams: Streams;
@@ -971,18 +984,68 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
         status.notify(state === "done" ? "beachside: done" : "beachside: failed", message);
     };
 
+    let telemetryCode = 1;
+    let telemetryError: string | undefined;
+
     try {
       if (title) status.report("working", title);
       const code = await command.run(session, flags);
+      telemetryCode = code;
 
       finish(code === 0 ? "done" : "error", `${title}: ${exitMessage(code)}`);
 
       return code;
     } catch (cause) {
+      telemetryError = describeError(cause).code;
       finish("error", `${title}: ${describeError(cause).message}`);
       throw cause;
     } finally {
       await session.close();
+
+      try {
+        const actions = {
+          image: ["build", "ls", "inspect", "rm", "forget"],
+          snapshot: ["create", "ls", "inspect", "rm", "forget"],
+          adapter: ["add", "ls", "rm"],
+          skill: ["show", "setup", "status", "remove"],
+        } satisfies Record<string, readonly string[]>;
+
+        const first = flags.positionals[0];
+        const allowedActions = Object.entries(actions).find(([name]) => name === command.name)?.[1];
+
+        const action =
+          first && allowedActions?.includes(first)
+            ? first
+            : command.name === "setup" &&
+                first === "cache" &&
+                ["ls", "rm", "prune"].includes(flags.positionals[1] ?? "")
+              ? `cache ${flags.positionals[1]}`
+              : undefined;
+
+        const event = eventProperties({
+          command: command.name,
+          action,
+          providers: [...session.usedProviders],
+          code: telemetryCode,
+          error: telemetryError,
+          remote: command.remoteExit,
+          interrupted: io.signal.aborted,
+          duration: Date.now() - started,
+          env: io.env,
+          terminal: io.stderrTerminal === true,
+        });
+
+        if (event)
+          await record(
+            io.env,
+            io.stderrTerminal === true,
+            io.streams.stderr,
+            event,
+            io.telemetryDelivery,
+          );
+      } catch {
+        /* Analytics cannot affect the command result. */
+      }
     }
   } catch (cause) {
     const report = describeError(cause);

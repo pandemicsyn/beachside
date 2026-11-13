@@ -25,6 +25,7 @@ export type Context = {
 
 /** Lazily loaded configuration, store and provider connections for one invocation. */
 export class Session {
+  readonly usedProviders = new Set<string>();
   private loaded?: LoadedConfig;
   private opened: BeachsideClient<true>[] = [];
   private readonly secrets: SecretReader;
@@ -76,6 +77,8 @@ export class Session {
   }
 
   async connect(profile: ResolvedProfile): Promise<BeachsideClient<true>> {
+    const official = descriptor(profile.provider);
+    this.usedProviders.add(official?.module === profile.module ? official.id : "custom");
     const client = await connect(profile, this.ctx.cwd, this.ctx.env, this.secrets);
     this.opened.push(client);
 

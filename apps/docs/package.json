@@ -12,11 +12,13 @@
     "typescript:generate": "bun scripts/generate-typescript-reference.mjs",
     "typescript:check": "bun scripts/generate-typescript-reference.mjs --check",
     "cli:generate": "bun scripts/generate-cli-reference.mjs",
-    "cli:check": "bun scripts/generate-cli-reference.mjs --check"
+    "cli:check": "bun scripts/generate-cli-reference.mjs --check",
+    "analytics:test": "playwright test"
   },
   "dependencies": {
     "@astrojs/starlight": "0.42.4",
-    "astro": "7.3.5"
+    "astro": "7.3.5",
+    "posthog-js": "^1.448.0"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.6",
@@ -36,6 +38,7 @@
     "@beachside/freestyle": "workspace:*",
     "@beachside/archil": "workspace:*",
     "@beachside/exe-dev": "workspace:*",
-    "@beachside/vercel": "workspace:*"
+    "@beachside/vercel": "workspace:*",
+    "@playwright/test": "1.65.0"
   }
 }

@@ -77,6 +77,7 @@ async function cli(args: string[], extraEnv: Record<string, string> = {}): Promi
     cwd: dir,
     env: {
       PATH: process.env.PATH ?? "",
+      BEACHSIDE_TELEMETRY: "0",
       HOME: dir,
       BEACHSIDE_CONFIG: join(dir, "beachside.json"),
       BEACHSIDE_STATE_DIR: join(dir, "state"),

@@ -114,6 +114,7 @@ async function cli(
     cwd,
     env: {
       PATH: process.env.PATH ?? "",
+      BEACHSIDE_TELEMETRY: "0",
       HOME: dir,
       BEACHSIDE_CONFIG: join(dir, "beachside.json"),
       BEACHSIDE_STATE_DIR: join(dir, "state"),
@@ -1265,6 +1266,7 @@ describe("beachside CLI against the fake provider", () => {
           cwd: dir,
           env: {
             PATH: process.env.PATH ?? "",
+            BEACHSIDE_TELEMETRY: "0",
             HOME: dir,
             BEACHSIDE_CONFIG: join(dir, "beachside.json"),
             BEACHSIDE_STATE_DIR: join(dir, "state"),
@@ -2132,6 +2134,7 @@ describe("streaming exec output", () => {
       cwd: dir,
       env: {
         PATH: process.env.PATH ?? "",
+        BEACHSIDE_TELEMETRY: "0",
         HOME: dir,
         BEACHSIDE_CONFIG: join(dir, "beachside.json"),
         BEACHSIDE_STATE_DIR: join(dir, "state"),

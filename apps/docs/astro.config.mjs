@@ -44,6 +44,7 @@ export default defineConfig({
       ],
       customCss: ["./src/styles/tokens.css", "./src/styles/docs.css"],
       components: {
+        Footer: "./src/components/DocsFooter.astro",
         SiteTitle: "./src/components/SiteTitle.astro",
         ThemeSelect: "./src/components/ThemeToggle.astro",
       },
@@ -145,6 +146,7 @@ export default defineConfig({
             { slug: "docs/reference/generated-typescript" },
           ],
         },
+        { slug: "docs/privacy", label: "Privacy" },
       ],
     }),
   ],

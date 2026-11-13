@@ -1,0 +1,108 @@
+<div class="analytics-preferences">
+  <button type="button" data-analytics-settings aria-controls="docs-analytics-consent" aria-expanded="false" hidden>Analytics preferences</button>
+</div>
+
+<section id="docs-analytics-consent" class="consent-bar" aria-label="Analytics preference" hidden>
+  <p>Allow analytics cookies? <a href="/docs/privacy/">Privacy</a></p>
+  <div class="consent-actions">
+    <button type="button" data-analytics-choice="rejected">Reject</button>
+    <button type="button" data-analytics-choice="accepted">Accept</button>
+  </div>
+</section>
+
+<script>
+  import { analyticsConfigured, consentKey, readConsent, saveConsent, startAnalytics, stopAnalytics } from "../lib/analytics";
+
+  const bar = document.querySelector<HTMLElement>("#docs-analytics-consent");
+  const settings = document.querySelector<HTMLButtonElement>("[data-analytics-settings]");
+
+  if (analyticsConfigured && bar && settings) {
+    settings.hidden = false;
+    const showBar = (show: boolean) => {
+      bar.hidden = !show;
+      settings.setAttribute("aria-expanded", String(show));
+    };
+    const applyChoice = (choice: ReturnType<typeof readConsent>) => {
+      showBar(choice === "pending");
+      if (choice === "accepted") void startAnalytics();
+      else if (stopAnalytics()) location.reload();
+    };
+
+    settings.addEventListener("click", () => {
+      showBar(true);
+      bar.querySelector<HTMLButtonElement>("button")?.focus();
+    });
+    bar.querySelectorAll<HTMLButtonElement>("[data-analytics-choice]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const choice = button.dataset.analyticsChoice;
+        if (choice !== "accepted" && choice !== "rejected") return;
+        saveConsent(choice);
+        applyChoice(choice);
+        settings.focus();
+      });
+    });
+    window.addEventListener("storage", (event) => {
+      if (event.key === consentKey || event.key === null) applyChoice(readConsent());
+    });
+    window.addEventListener("pageshow", (event) => {
+      if (event.persisted) applyChoice(readConsent());
+    });
+    applyChoice(readConsent());
+  }
+</script>
+
+<style>
+  [hidden] { display: none !important; }
+  .analytics-preferences { margin-block: 1rem; }
+  .analytics-preferences button {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--sb-muted);
+    font: inherit;
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    cursor: pointer;
+  }
+  .consent-bar {
+    position: fixed;
+    inset-inline: 1rem;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 38rem;
+    margin-inline: auto;
+    padding: 0.75rem;
+    border: 1px solid var(--sb-line);
+    border-radius: 12px;
+    background: var(--sb-surface);
+    color: var(--sb-ink);
+    box-shadow: 0 6px 24px rgb(0 0 0 / 0.12);
+    font-family: var(--sb-font-sans);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+  .consent-bar p { margin: 0; }
+  .consent-bar a { color: var(--sb-pink-ink); text-underline-offset: 0.2em; }
+  .consent-actions { display: flex; flex-shrink: 0; gap: 0.5rem; }
+  .consent-actions button {
+    min-height: 36px;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--sb-line);
+    border-radius: 8px;
+    background: var(--sb-bg);
+    color: var(--sb-ink);
+    font: inherit;
+    cursor: pointer;
+  }
+  .consent-actions button:hover { border-color: var(--sb-pink-ink); }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--sb-pink-ink); outline-offset: 3px; }
+  @media (max-width: 40rem) {
+    .consent-bar { flex-direction: column; align-items: stretch; padding: 0.75rem; }
+    .consent-actions button { flex: 1; }
+  }
+  @media print { .consent-bar, .analytics-preferences { display: none; } }
+</style>

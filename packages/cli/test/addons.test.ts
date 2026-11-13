@@ -274,6 +274,7 @@ describe("create --with", () => {
       cwd: root,
       env: {
         PATH: process.env.PATH ?? "",
+        BEACHSIDE_TELEMETRY: "0",
         HOME: root,
         BEACHSIDE_CONFIG: join(root, "beachside.json"),
         BEACHSIDE_STATE_DIR: join(root, "state"),
