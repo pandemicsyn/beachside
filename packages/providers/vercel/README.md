@@ -42,7 +42,7 @@ try {
 | `image` | Default `vercel/sandbox/universal:latest`, matching Vercel's native default; its Python-backed process/PTY support works out of the box. Also Node 22, Node 24 or Node 26. |
 | `resources` | Optional minimum `{ vcpus, memoryMiB }`; picks the smallest of 1 or an even 2–32 vCPUs, with native memory of 2 GiB per vCPU, and rejects at connect when none is big enough. Default 2 vCPUs. Plan limits apply. `inspect().resources` reports the session size. Deprecated alias: `vcpus` (2, 4 or 8). |
 | `lifecycle.lifetimeSeconds` | Initial session lifetime up to 86,400 seconds (under 60 becomes 60), default 900; `create({ lifecycle })` overrides it per sandbox except with `persistent: true`. Deprecated alias: `timeoutSeconds`. Vercel enforces lower plan limits itself (Hobby 45 minutes; Pro/Enterprise 24 hours). |
-| `network` | `blocked` (default, native deny-all), `internet` (native allow-all) or `{ allow: [...] }` (a native custom policy of those hosts and IPv4 ranges, checked back after create). Deprecated: `networkPolicy`, `vercel-deny-all`, `vercel-allow-all`. No measured isolation claim. |
+| `network` | `internet` (default, native allow-all), `blocked` (native deny-all) or `{ allow: [...] }` (a native custom policy of those hosts and IPv4 ranges, checked back after create). Deprecated: `networkPolicy`, `vercel-deny-all`, `vercel-allow-all`. No measured isolation claim. |
 | `ports` | Default empty; up to 15 distinct explicitly exposed public HTTP ports. |
 | `credentials.token` | Bearer token with team/project sandbox access. |
 

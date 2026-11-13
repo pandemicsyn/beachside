@@ -361,7 +361,10 @@ export type AdapterSession<
   CT extends Json = Json,
 > = {
   scope: Scope;
-  /** Default for omitted SDK create/restore policies; native requests remain resolved. */
+  /**
+   * Default for omitted SDK create/restore policies; native requests remain resolved. Omitted,
+   * the SDK uses `internet` (or the adapter's only policy, when `supports.network` has one).
+   */
   readonly defaultNetworkPolicy?: string;
   /** Deprecated policy names the SDK resolves to a portable name before checking support. */
   readonly networkPolicyAliases?: Readonly<Record<string, string>>;
@@ -1046,6 +1049,7 @@ export async function connectAdapter<
     const defaults = z
       .object({
         defaultNetworkPolicy: z.string().min(1).max(128).optional(),
+        supports: z.object({ network: z.array(z.string()).optional() }).optional(),
         networkPolicyAliases: z
           .record(z.string().min(1).max(128), z.string().min(1).max(128))
           .optional(),
@@ -1056,10 +1060,15 @@ export async function connectAdapter<
       throw new AdapterError("INVALID_ARGUMENT", "Invalid adapter default network policy");
 
     // A connection can still inspect/reopen/clean up when create eligibility is
-    // unavailable. Resolve the default here; check support at each operation.
-    if (defaults.data.defaultNetworkPolicy !== undefined) {
+    // unavailable. Resolve the default here; check support at each operation. An adapter
+    // that declares none defaults to `internet`, or to its only policy when it has one.
+    const offered = defaults.data.supports?.network ?? [];
+    const only = offered.length === 1 ? offered[0] : undefined;
+    const defaultNetworkPolicy = defaults.data.defaultNetworkPolicy ?? only;
+
+    if (defaultNetworkPolicy !== undefined) {
       Object.defineProperty(session, "defaultNetworkPolicy", {
-        value: defaults.data.defaultNetworkPolicy,
+        value: defaultNetworkPolicy,
         enumerable: true,
         writable: false,
         configurable: false,

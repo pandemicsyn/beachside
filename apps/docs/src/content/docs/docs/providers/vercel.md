@@ -15,7 +15,6 @@ const client = await Beachside.connect({
   config: {
     teamId: process.env.VERCEL_TEAM_ID!,
     projectId: process.env.VERCEL_PROJECT_ID!,
-    network: "blocked",
   },
 });
 try {
@@ -45,7 +44,7 @@ The package also exports `vercel()`, which takes credentials and config in one o
 | `image`                      | `vercel/sandbox/universal:latest` | Also `vercel/sandbox/node:22`, `node:24` or `node:26`. Only the universal image supports processes and terminals. Use `node:24` to keep working with sandboxes from the earlier default.                                                                          |
 | `resources`                  | 2 vCPUs                           | Minimum `{ vcpus, memoryMiB }`. Picks the smallest of 1 or an even count up to 32 vCPUs, with 2 GiB per vCPU. Your plan limit still applies. Deprecated alias: `vcpus` (2, 4 or 8).                                                                               |
 | `lifecycle.lifetimeSeconds`  | `900`                             | Initial session lifetime, up to 86,400 seconds; values under 60 become 60. `create({ lifecycle })` can override it per sandbox, except with `persistent: true`. Vercel enforces lower plan limits itself (Hobby: 45 minutes). Deprecated alias: `timeoutSeconds`. |
-| `network`                    | `blocked`                         | `blocked` (Vercel deny-all), `internet` (allow-all) or `{ allow: [...] }` (a custom policy of those hosts and IPv4 ranges). Deprecated: `networkPolicy`, `vercel-deny-all`, `vercel-allow-all`.                                                                   |
+| `network`                    | `internet`                        | `blocked` (Vercel deny-all), `internet` (allow-all) or `{ allow: [...] }` (a custom policy of those hosts and IPv4 ranges). Deprecated: `networkPolicy`, `vercel-deny-all`, `vercel-allow-all`.                                                                   |
 | `ports`                      | `[]`                              | Up to 15 distinct ports to expose as public HTTPS previews.                                                                                                                                                                                                       |
 | `persistent`                 | `false`                           | Keep files across suspend and resume. See [Persistent sandboxes](#persistent-sandboxes).                                                                                                                                                                          |
 | `snapshots.preserve`         | `filesystem`                      | Vercel snapshots keep files only; `Preserve.FILESYSTEM_AND_MEMORY` rejects `UNSUPPORTED` at connect.                                                                                                                                                              |

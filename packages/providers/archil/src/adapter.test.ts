@@ -42,7 +42,7 @@ test("Archil conformance: one native attempt, distinct keys, lost and late respo
 
 test("create sends an explicit image, exact size, session budget, blocked egress and a name", async () => {
   const { fixture, connect } = setup();
-  const client = await connect({ resources: { vcpus: 1.5, memoryMiB: 3000 } });
+  const client = await connect({ network: "blocked", resources: { vcpus: 1.5, memoryMiB: 3000 } });
 
   try {
     expect((await client.capabilities()).network).toEqual([
@@ -102,10 +102,10 @@ test("a Free-plan policy refusal is UNSUPPORTED, and a managed allowlist never p
   const client = await connect();
 
   try {
-    await expect(client.sandboxes.create()).rejects.toMatchObject({ code: "UNSUPPORTED" });
-    await expect(client.sandboxes.create({ network: "internet" })).rejects.toBeInstanceOf(
-      OutcomeUnknownError,
-    );
+    await expect(client.sandboxes.create({ network: "blocked" })).rejects.toMatchObject({
+      code: "UNSUPPORTED",
+    });
+    await expect(client.sandboxes.create()).rejects.toBeInstanceOf(OutcomeUnknownError);
     expect(fixture.effects.create).toBe(1);
   } finally {
     await client.close();

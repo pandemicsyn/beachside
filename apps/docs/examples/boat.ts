@@ -5,7 +5,7 @@ export async function boatExample(apiKey: string) {
   const client = await Beachside.connect({
     adapter: boatAdapter,
     credentials: { apiKey },
-    config: { network: "internet" },
+    config: {},
   });
 
   try {

@@ -114,7 +114,7 @@ OCI images boot directly; no Beachside image-build hook or retained image artifa
 
 ### Measured network controls
 
-Blocked (the setup default), internet and `{ allow }` allowlists through the native egress allowlist. A create from an OCI image applies it right after create, before hand-out; restores send it in the machine spec, in force from first boot. Peer/metadata isolation is enabled either way. An allowlist create, restore and fork were checked live by hand on November 10, 2026; the paired network workflow has not run.
+Internet (the setup default), blocked and `{ allow }` allowlists through the native egress allowlist. A create from an OCI image applies it right after create, before hand-out; restores send it in the machine spec, in force from first boot. Peer/metadata isolation is enabled either way. An allowlist create, restore and fork were checked live by hand on November 10, 2026; the paired network workflow has not run.
 
 <a id="boxd-storageComposition"></a>
 

@@ -141,7 +141,7 @@ const Configuration = z
      * `blocked` sends an empty firewall; `internet` allows every public destination;
      * `{ allow: [...] }` allows only those IPv4 ranges (Freestyle firewalls do not match host names).
      */
-    network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).default("blocked"),
+    network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).default("internet"),
     /** Default snapshot to boot; omitted, the base Ubuntu that fits `resources`. */
     image: Image.optional(),
     /** Minimum size; the smallest Freestyle Ubuntu base snapshot that meets it is used. */
@@ -419,8 +419,7 @@ export function createFreestyleAdapter(options: FreestyleAdapterOptions = {}) {
           env: "FREESTYLE_NETWORK",
           required: false,
           choices: ["blocked", "internet"],
-          description:
-            "blocked stops egress and internet allows it; the provider page gives the default.",
+          description: "Egress is open (internet) by default; blocked stops it.",
         },
       },
       docs: "https://beachside.run/docs/providers/freestyle/",

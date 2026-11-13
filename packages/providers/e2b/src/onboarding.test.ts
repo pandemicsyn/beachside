@@ -143,8 +143,8 @@ test("API-key-only defaults reopen the same scope and bind canonical base resour
     expect(f.calls.auth).toBeGreaterThan(0);
     expect(f.calls.team).toBe(0);
     expect(f.calls.create).toBe(1);
-    expect(recovered.reference.networkPolicy).toBe("blocked");
-    expect(f.internetAccess).toEqual([false]);
+    expect(recovered.reference.networkPolicy).toBe("internet");
+    expect(f.internetAccess).toEqual([true]);
   } finally {
     await reopened.close();
     await rotated.close();
@@ -479,15 +479,15 @@ test("lost default creation recovers confirmed identity without replacement or r
   const client = await Beachside.connect(options);
   const operation = await client.sandboxes.submitCreate();
   await client.close();
-  expect(operation.reference.networkPolicy).toBe("blocked");
-  const reopened = await Beachside.connect({ ...options, config: { networkPolicy: "internet" } });
+  expect(operation.reference.networkPolicy).toBe("internet");
+  const reopened = await Beachside.connect({ ...options, config: { networkPolicy: "blocked" } });
 
   try {
     const recovered = await reopened.recover(operation.reference);
     expect(await recovered.wait()).toMatchObject({ id: "sb_1" });
     expect(f.calls.create).toBe(1);
-    expect(recovered.reference.networkPolicy).toBe("blocked");
-    expect(f.internetAccess).toEqual([false]);
+    expect(recovered.reference.networkPolicy).toBe("internet");
+    expect(f.internetAccess).toEqual([true]);
   } finally {
     await reopened.close();
   }

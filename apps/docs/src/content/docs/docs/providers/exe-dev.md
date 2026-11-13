@@ -12,7 +12,7 @@ import { exeDevAdapter } from "@beachside/exe-dev";
 const client = await Beachside.connect({
   adapter: exeDevAdapter,
   credentials: { token: process.env.EXE_API_KEY! },
-  config: { network: "internet" },
+  config: {},
 });
 try {
   const box = await client.sandboxes.create();
@@ -26,7 +26,7 @@ try {
 }
 ```
 
-The package also exports `exeDev()`, which takes credentials and config in one object: `Beachside.connect(exeDev({ token, network: "internet" }))`.
+The package also exports `exeDev()`, which takes credentials and config in one object: `Beachside.connect(exeDev({ token }))`.
 
 ## Credentials
 
@@ -47,7 +47,7 @@ A token must be allowed to run `whoami`, `ls`, `new`, `rm`, `cp`, `ssh`, `stat`,
 
 | Setting          | Default     | Notes                                                                                                                                                                                                                                                                                                 |
 | ---------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `network`        | required    | Must be `internet`. exe.dev VMs have internet egress, and this adapter cannot yet set exe.dev's egress policy at create, so it asks you to choose this explicitly. `blocked` and allowlists are refused.                                                                                              |
+| `network`        | `internet`  | The only value. exe.dev VMs have internet egress, and this adapter cannot yet set exe.dev's egress policy at create. `blocked` and allowlists are refused.                                                                                                                                            |
 | `image`          | `exeuntu`   | Any OCI image reference. `exeuntu` is exe.dev's Ubuntu image with common tools and Python 3.                                                                                                                                                                                                          |
 | `resources`      | 2 vCPU      | Minimum `{ vcpus, memoryMiB }`; picks the smallest whole-vCPU size with 2 GiB per vCPU (1 to 32 vCPU) that meets it.                                                                                                                                                                                  |
 | `placement`      | `default`   | `default` follows your account (a Personal plan's shared capacity or a team's default pool). `standalone` reserves capacity for each VM, billed by the second. `{ pool: "name" }` places VMs in a team pool.                                                                                          |

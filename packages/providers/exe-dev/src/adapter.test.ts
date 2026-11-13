@@ -62,12 +62,9 @@ test("exe.dev conformance: one native attempt, distinct accounts, lost and late 
   expect(created(fixture)).toHaveLength(3);
 });
 
-test("network must be configured as internet, before any exe.dev call", async () => {
+test("network defaults to internet, and blocked rejects before any exe.dev call", async () => {
   const { fixture, adapter } = setup();
 
-  await expect(
-    Beachside.connect({ adapter, config: {}, credentials: { token: "exe1.fixture-main" } }),
-  ).rejects.toThrow(/network/);
   await expect(
     Beachside.connect({
       adapter,
@@ -77,6 +74,18 @@ test("network must be configured as internet, before any exe.dev call", async ()
     }),
   ).rejects.toThrow();
   expect(fixture.calls).toHaveLength(0);
+
+  const client = await Beachside.connect({
+    adapter,
+    config: {},
+    credentials: { token: "exe1.fixture-main" },
+  });
+
+  try {
+    expect((await client.capabilities()).network).toEqual(["internet"]);
+  } finally {
+    await client.close();
+  }
 });
 
 test("credentials need a token or an SSH key", async () => {

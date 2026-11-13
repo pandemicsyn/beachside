@@ -8,7 +8,7 @@ if (!apiKey) throw new Error("Set RUNLOOP_API_KEY before running this example");
 const beachside = await Beachside.connect({
   adapter: runloopAdapter,
   credentials: { apiKey },
-  config: { network: "blocked" },
+  config: {},
 });
 
 try {

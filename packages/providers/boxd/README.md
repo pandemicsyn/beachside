@@ -9,7 +9,7 @@ import { boxdAdapter } from "@beachside/boxd";
 const client = await Beachside.connect({
   adapter: boxdAdapter,
   credentials: { apiKey: process.env.BOXD_API_KEY! },
-  config: { org: "my-org", network: "internet" },
+  config: { org: "my-org" },
 });
 try {
   const box = await client.sandboxes.create();
@@ -26,7 +26,7 @@ The organization ID/slug must match authenticated default-org inventory. Scope i
 | Setting | Behavior |
 | --- | --- |
 | `org` | Required authenticated default organization ID or slug. |
-| `network` | `blocked` (default) or `internet`; omitted per-call policy uses it. Deprecated alias: `networkPolicy`. |
+| `network` | `internet` (default), `blocked` or `{ allow: [...] }`; omitted per-call policy uses it. Deprecated alias: `networkPolicy`. |
 | `region` | Optional boxd region id (`fra`, `nyc`, ...) enabled for the org. Machine, disk and snapshot calls go to that region's endpoint; account and org calls stay home. The region's endpoint and zone are part of the scope, so references stay bound to it. Omitted uses the home region and endpoint. |
 | `resources` | Optional minimum `{ vcpus, memoryMiB }`; picks the smallest 1, 2, 4 or 8 vCPU size class (RAM respectively 4, 8, 16 or 32 GiB) and rejects at connect when none is big enough. Omitted uses native account defaults. `inspect().resources` reports the machine's size. Deprecated alias: `size` (a vCPU count). Fixed native 100 GB private disk. |
 | `preview` | Defaults to `{ access: "public", ports: [3000] }`: create pins HTTPS routes and disables browser protection; at most 16 ports. Explicit `protected` keeps browser protection on with no routes (lookup unsupported). |
@@ -49,7 +49,7 @@ Create uses peer/metadata isolation. Egress is a separate native allowlist: `blo
 | Renew | Resets sandbox-wide wall-clock deletion window (at least 60 seconds, no maximum; `renewCapabilities` omits `maxSeconds`); acknowledgement and observed expiry are separate. |
 | Snapshots | Native memory-and-disk capture of a running machine without mounted disks, briefly paused; restore into a new machine that resumes the captured processes; inspect, provider-scope list and delete. Each capture gets its own name and the reference pins the captured version. |
 | Previews | Default public setup, existing pinned route and running scoped compute with browser protection disabled. Read-only lookup. Protected access unsupported. |
-| Network policy | `blocked` and `internet` on create and restore. Allowlists unsupported. |
+| Network policy | `internet` (default), `blocked` and `{ allow: [...] }` allowlists on create and restore. |
 | Builds | Unsupported. OCI images boot directly; there is no image-build artifact. |
 
 Native snapshots capture private disk plus RAM, briefly pause the source (which keeps running) and restore running memory into a new machine. A boxd snapshot name holds only its latest version, so each capture uses a fresh `beachside-snapshot-<hash>` name derived from the attempt, checkpointed before the native call so a lost response is found by name rather than captured again. The reference's `generation` is the captured version: inspect, restore and delete fail with `CONFLICT` without effects if the name was saved again outside Beachside. boxd restores by name or id and always boots the latest version, so a restore checks the version first and reports an unknown outcome, with the new machine's identity, if the machine it booted names another version. Restores replay the captured size, cannot attach disks and apply the connection's `blocked`, `internet` or allowlist policy (in the machine spec, so from first boot); the configured expiry, preview routes and browser-protection setting are applied as on create. Sources with mounted disks are rejected because boxd does not document what capture keeps of them. Connection fate during the pause and snapshot retention are undocumented and reported as unknown; there is no scheduled deletion. Memory exclusion and no-pause capture are not offered.
@@ -89,7 +89,7 @@ Paths are arguments, never interpolated programs. Recursive removal does not wal
 
 ```ts
 // Public exposure on port 3000 is the default; choose other ports when connecting:
-// config: { org: "my-org", network: "internet",
+// config: { org: "my-org",
 //   preview: { access: "public", ports: [3000, 8080] }, size: 1 }
 const preview = await box.preview(3000); // read-only; requires this configured pinned route
 ```

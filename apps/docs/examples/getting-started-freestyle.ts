@@ -8,7 +8,7 @@ if (!apiKey) throw new Error("Set FREESTYLE_API_KEY before running this example"
 const beachside = await Beachside.connect({
   adapter: freestyleAdapter,
   credentials: { apiKey },
-  config: { network: "blocked" },
+  config: {},
 });
 
 try {

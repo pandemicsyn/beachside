@@ -141,7 +141,7 @@ const Image = z
 
 const Configuration = z
   .strictObject({
-    /** exe.dev has no blocked egress this adapter can set at create; say `internet`. */
+    /** exe.dev has no blocked egress this adapter can set at create; `internet` is the only value. */
     network: z.literal("internet").optional(),
     /** Default OCI image; omitted, exe.dev's `exeuntu`. */
     image: Image.optional(),
@@ -173,15 +173,6 @@ const Configuration = z
         access: z.enum(["protected", "public"]).default("protected"),
       })
       .default({ access: "protected" }),
-  })
-  .superRefine((value, ctx) => {
-    if (value.network === undefined)
-      ctx.addIssue({
-        code: "custom",
-        path: ["network"],
-        message:
-          'Configure network: "internet"; this exe.dev adapter cannot block egress at create yet',
-      });
   })
   .transform(({ network, ...value }) => ({ ...value, networkPolicy: network ?? "internet" }));
 
@@ -381,9 +372,9 @@ export function createExeDevAdapter(options: ExeDevAdapterOptions = {}) {
       config: {
         network: {
           env: "EXE_NETWORK",
-          required: true,
+          required: false,
           choices: ["internet"],
-          description: "exe.dev VMs always reach the internet, so set internet to confirm it.",
+          description: "exe.dev VMs always reach the internet; internet is the only value.",
         },
       },
       docs: "https://beachside.run/docs/providers/exe-dev/",

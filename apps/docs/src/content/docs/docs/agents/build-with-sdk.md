@@ -34,12 +34,13 @@ use /home/user for E2B file examples. For Daytona, use an active Linux
 snapshot in the verified region and configure "daytona-default" at connection
 setup unless strict blocked networking is explicitly required and supported. Do not treat provider-default access as isolation.
 
-Vercel defaults to disposable Node 24 in iad1 with blocked networking. It supports
+Vercel defaults to disposable Node 24 in iad1 with internet networking. It supports
 bounded byte output and overwrite-only files, without stdin, process streams,
 snapshots or volumes; cleanup stops compute and retains named metadata.
-boxd defaults to blocked egress (set network "internet" to open it) and requires overwrite:true.
-Freestyle defaults to blocked egress on its freestyle/ubuntu base (set network
-"internet" to open it); commands and writes need a running VM.
+Sandboxes reach the internet by default (Daytona keeps its tier's
+"daytona-default"); set network "blocked" or an allowlist to restrict egress.
+boxd requires overwrite:true. Freestyle runs on its freestyle/ubuntu base;
+commands and writes need a running VM.
 Vercel, boxd and Freestyle do not inherit Daytona/E2B streaming or storage guarantees.
 
 Use argument arrays for commands. Use the explicit shell form only when

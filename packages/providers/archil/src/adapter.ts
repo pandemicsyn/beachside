@@ -163,7 +163,7 @@ const Configuration = z
      * `blocked`, `internet` or `{ allow: [...] }` host names and IPv4 ranges (paid plans), or
      * `archil-managed` (Free plan's allowlist).
      */
-    network: z.union([z.enum(NAMED_POLICIES), AllowNetworkSetting]).default("blocked"),
+    network: z.union([z.enum(NAMED_POLICIES), AllowNetworkSetting]).default("internet"),
     /** Default image: an OCI reference, or a 64-hex image id from `beachside image build`. */
     image: OciImage.optional(),
     /** Exact minimums mapped onto `vcpu_count` and `mem_size_mib`. */
@@ -528,7 +528,7 @@ export function createArchilAdapter(options: ArchilAdapterOptions = {}) {
           required: false,
           choices: ["blocked", "internet", "archil-managed"],
           description:
-            "blocked stops egress and internet allows it; Free plans use archil-managed. The provider page gives the default.",
+            "Egress is open (internet) by default on paid plans; blocked stops it, and Free plans need archil-managed.",
         },
       },
       docs: "https://beachside.run/docs/providers/archil/",

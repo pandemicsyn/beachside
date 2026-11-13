@@ -167,17 +167,17 @@ test("Modal filesystem snapshots capture, inspect, restore and delete with exact
     await expect(snapshot.restore({ networkPolicy: "allow" })).rejects.toMatchObject({
       code: "UNSUPPORTED",
     });
-    const online = await snapshot.restore({ networkPolicy: "internet" });
+    const offline = await snapshot.restore({ networkPolicy: "blocked" });
     expect(native.creates.at(-1)).toMatchObject({
       imageId: snapshot.id,
-      network: { kind: "open" },
+      network: { kind: "blocked" },
     });
-    await online.destroy();
+    await offline.destroy();
     const restored = await snapshot.restore();
     expect(restored.id).not.toBe(source.id);
     expect(native.creates.at(-1)).toMatchObject({
       imageId: snapshot.id,
-      network: { kind: "blocked" },
+      network: { kind: "open" },
     });
     expect(native.creates.at(-1)?.ociReference).toBeUndefined();
     expect((await restored.inspect()).state).toBe("running");

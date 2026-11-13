@@ -5,7 +5,7 @@ import { exeDevAdapter } from "./adapter";
 /** Either credential, or both: an API token and an SSH key that signs tokens locally. */
 export type ExeDevCredentials = z.input<typeof exeDevAdapter.credentials>;
 
-/** Credentials and setup in one object: `exeDev({ token, network: "internet", ... })`. */
+/** Credentials and setup in one object: `exeDev({ token, ... })`. */
 export type ExeDevOptions = z.input<typeof exeDevAdapter.credentials> &
   z.input<typeof exeDevAdapter.config>;
 

@@ -5,7 +5,7 @@ export async function exeDevExample(token: string) {
   const client = await Beachside.connect({
     adapter: exeDevAdapter,
     credentials: { token },
-    config: { network: "internet" },
+    config: {},
   });
 
   try {

@@ -531,7 +531,7 @@ const credentials = { token: "fixture-token" };
 
 const createInput = {
   image: { kind: "prepared" as const, value: "vercel/sandbox/node:24" },
-  networkPolicy: "blocked",
+  networkPolicy: "internet",
 };
 
 test("Vercel native HTTP boundary passes managed adapter suite", async () => {
@@ -1043,7 +1043,7 @@ test("portable network names configure Vercel and deprecated names still resolve
     [{ network: "internet" }, "allow-all"],
     [{ network: "blocked" }, "deny-all"],
     [{ networkPolicy: "vercel-allow-all" }, "allow-all"],
-    [{}, "deny-all"],
+    [{}, "allow-all"],
   ] as const) {
     const native = fixture();
     const portable = mode === "deny-all" ? "blocked" : "internet";

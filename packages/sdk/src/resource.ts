@@ -497,7 +497,7 @@ export function resolveNetworkPolicy(
 export function validateCreate(
   input: CreateInput | undefined,
   defaultEnvironment?: ImageInput,
-  defaultNetworkPolicy = "blocked",
+  defaultNetworkPolicy = "internet",
   networkPolicyAliases?: Readonly<Record<string, string>>,
 ): Omit<CreateInput, "network"> & { environment: ImageInput; networkPolicy: string } {
   const parsed = z

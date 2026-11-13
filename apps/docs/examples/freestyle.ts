@@ -5,7 +5,7 @@ export async function freestyleExample(apiKey: string) {
   const client = await Beachside.connect({
     adapter: freestyleAdapter,
     credentials: { apiKey },
-    config: { network: "blocked" },
+    config: {},
   });
 
   try {

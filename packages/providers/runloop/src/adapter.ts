@@ -110,7 +110,7 @@ const Configuration = z
      * Default egress: `blocked` attaches a deny-all network policy; `internet` attaches none;
      * `{ allow: [...] }` attaches a policy allowing only those host names and IPv4 ranges.
      */
-    network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).default("blocked"),
+    network: z.union([z.enum(["blocked", "internet"]), AllowNetworkSetting]).default("internet"),
     /** Default prepared image: a blueprint name or id, or the default Devbox image. */
     image: z.string().min(1).max(256).default(BASE_IMAGE),
     /** Minimum size; the smallest Runloop resource size that meets it is used. */
@@ -383,8 +383,7 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
           env: "RUNLOOP_NETWORK",
           required: false,
           choices: ["blocked", "internet"],
-          description:
-            "blocked stops egress and internet allows it; the provider page gives the default.",
+          description: "Egress is open (internet) by default; blocked stops it.",
         },
       },
       docs: "https://beachside.run/docs/providers/runloop/",

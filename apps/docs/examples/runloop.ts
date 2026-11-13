@@ -5,7 +5,7 @@ export async function runloopExample(apiKey: string) {
   const client = await Beachside.connect({
     adapter: runloopAdapter,
     credentials: { apiKey },
-    config: { network: "blocked" },
+    config: {},
   });
 
   try {
