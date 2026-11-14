@@ -16,9 +16,10 @@ export default defineConfig({
     command: "bun run build && bun run preview --host 127.0.0.1 --port 48973 --ignore-lock",
     url: "http://127.0.0.1:48973/docs/",
     reuseExistingServer: false,
+    // Exercise the production defaults without deployment-provided settings.
     env: {
-      PUBLIC_POSTHOG_KEY: "phc_browser_test",
-      PUBLIC_POSTHOG_HOST: "https://posthog.test",
+      PUBLIC_POSTHOG_KEY: "",
+      PUBLIC_POSTHOG_HOST: "",
     },
   },
 });
