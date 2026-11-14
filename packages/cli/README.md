@@ -20,6 +20,8 @@ beachside run -- python3 -c 'print(2 + 2)'   # create, run, always destroy
 
 Install the adapter for each provider with `beachside adapter add e2b` (or `daytona`, `vercel`, ...). It runs npm in `~/.config/beachside/adapters`, pins the official adapter to the CLI's own version, and checks that the package exports the adapter. Third-party adapters are added by scoped package name (`beachside adapter add @acme/beachside-adapter`) or with an explicit `npm:` prefix; a bare unknown name is refused so a typo can't install someone else's package. The CLI also finds adapters installed next to itself. Adapters receive your credentials, so the current project's `node_modules` is searched only when you opt in with `"adapters": { "searchProject": true }` or `BEACHSIDE_PROJECT_ADAPTERS=1`. `beachside providers` shows what is installed and which credentials are set.
 
+Directory copies (`cp -r` and `push`) transfer file contents, permission bits and symbolic links. Host-specific extended metadata, including macOS resource forks and extended attributes, is not preserved.
+
 ## Commands
 
 | Command | What it does |

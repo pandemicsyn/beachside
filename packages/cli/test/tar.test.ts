@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { archivePath, Extractor, readTar, tarStream, type TarEntry } from "../src/tar";
-import { Excludes, localTree } from "../src/transfer";
+import { Excludes, localTree, scripts } from "../src/transfer";
 
 let root: string;
 
@@ -113,7 +113,7 @@ describe("tar", () => {
     await writeFile(join(source, "tree", "a.txt"), "a\n", { mode: 0o600 });
     await run(["ln", join(source, "tree", "a.txt"), join(source, "tree", "b.txt")], source);
     await symlink("a.txt", join(source, "tree", "c"));
-    await run(["tar", "-c", "-f", "t.tar", "tree"], source);
+    await run(["env", "COPYFILE_DISABLE=1", "tar", "-c", "-f", "t.tar", "tree"], source);
 
     const dest = join(source, "copy");
     const summary = await extract(new Uint8Array(await readFile(join(source, "t.tar"))), dest);
@@ -123,6 +123,30 @@ describe("tar", () => {
     expect(await readFile(join(dest, "tree", "b.txt"), "utf8")).toBe("a\n");
     expect((await stat(join(dest, "tree", "a.txt"))).mode & 0o777).toBe(0o600);
     expect(await readlink(join(dest, "tree", "c"))).toBe("a.txt");
+  });
+
+  test("sandbox packing omits host metadata and preserves ordinary dot-underscore files", async () => {
+    const source = await mkdtemp(join(root, "pack-"));
+    await mkdir(join(source, "tree"));
+    await writeFile(join(source, "tree", "a"), "contents");
+    await writeFile(join(source, "tree", "._ordinary"), "user file");
+
+    const [staging, part] = (
+      await run(["sh", "-c", scripts.pack(join(source, "tree"), false)], source)
+    )
+      .trim()
+      .split("\n");
+
+    try {
+      const dest = join(source, "copy");
+      const summary = await extract(new Uint8Array(await readFile(join(staging!, part!))), dest);
+
+      expect(summary).toMatchObject({ files: 2, directories: 1, bytes: 17, skipped: [] });
+      expect(await readFile(join(dest, "tree", "._ordinary"), "utf8")).toBe("user file");
+      expect(await readFile(join(dest, "tree", "a"), "utf8")).toBe("contents");
+    } finally {
+      await rm(staging!, { recursive: true, force: true });
+    }
   });
 
   test("refuses paths that leave the destination", async () => {

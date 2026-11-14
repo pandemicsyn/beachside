@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   readdir,
   readlink,
   rm,
@@ -31,7 +32,8 @@ let server: Awaited<ReturnType<typeof startFakeProviderServer>>;
 let dir: string;
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "beachside-cli-"));
+  // Child processes resolve macOS /var (and other temporary-directory aliases).
+  root = await realpath(await mkdtemp(join(tmpdir(), "beachside-cli-")));
   server = await startFakeProviderServer({
     hostname: "127.0.0.1",
     port: 0,
@@ -114,6 +116,7 @@ async function cli(
     cwd,
     env: {
       PATH: process.env.PATH ?? "",
+      BEACHSIDE_TELEMETRY: "0",
       HOME: dir,
       BEACHSIDE_CONFIG: join(dir, "beachside.json"),
       BEACHSIDE_STATE_DIR: join(dir, "state"),
@@ -1265,6 +1268,7 @@ describe("beachside CLI against the fake provider", () => {
           cwd: dir,
           env: {
             PATH: process.env.PATH ?? "",
+            BEACHSIDE_TELEMETRY: "0",
             HOME: dir,
             BEACHSIDE_CONFIG: join(dir, "beachside.json"),
             BEACHSIDE_STATE_DIR: join(dir, "state"),
@@ -2132,6 +2136,7 @@ describe("streaming exec output", () => {
       cwd: dir,
       env: {
         PATH: process.env.PATH ?? "",
+        BEACHSIDE_TELEMETRY: "0",
         HOME: dir,
         BEACHSIDE_CONFIG: join(dir, "beachside.json"),
         BEACHSIDE_STATE_DIR: join(dir, "state"),
@@ -2440,7 +2445,11 @@ describe("directory transfer", () => {
     await writeFile(join(source, "out", "run.sh"), "echo ok\n", { mode: 0o755 });
     await writeFile(join(source, "out", "sub", "junit.xml"), "<testsuite/>\n");
     await symlink("sub/junit.xml", join(source, "out", "latest"));
-    const tar = Bun.spawn(["tar", "-c", "-f", join(dir, "out.tar"), "out"], { cwd: source });
+
+    const tar = Bun.spawn(["tar", "-c", "-f", join(dir, "out.tar"), "out"], {
+      cwd: source,
+      env: { ...process.env, COPYFILE_DISABLE: "1" },
+    });
 
     expect(await tar.exited).toBe(0);
     expect((await cli(["cp", join(dir, "out.tar"), `box:${staging}/part.aaaaaa`])).code).toBe(0);
@@ -2450,6 +2459,7 @@ describe("directory transfer", () => {
 
     const result = await cli(["cp", "-r", "box:/work/out/", "results", "--json"]);
 
+    expect(result.code).toBe(0);
     expect(envelope(result).data).toEqual({
       sandbox: "box",
       path: join(dir, "results", "out"),
