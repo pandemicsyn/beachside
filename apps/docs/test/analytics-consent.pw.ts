@@ -52,7 +52,7 @@ async function observe(page: Page) {
     const request = route.request();
     const url = new URL(request.url());
 
-    if (url.origin === project.host || url.hostname === "us-assets.i.posthog.com") {
+    if (url.origin === project.host) {
       requests.push(request);
       captured.push(...events(request));
 
