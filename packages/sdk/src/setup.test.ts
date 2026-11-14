@@ -1,6 +1,14 @@
 import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -20,7 +28,8 @@ import {
 } from "./setup";
 import { execOutput } from "./resource";
 
-const root = mkdtempSync(join(tmpdir(), "beachside-setup-"));
+// Shell subprocesses report the physical cwd, including macOS temporary-directory aliases.
+const root = realpathSync(mkdtempSync(join(tmpdir(), "beachside-setup-")));
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 

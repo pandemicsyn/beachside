@@ -179,3 +179,7 @@ To run a Rex server inside a sandbox and open it from your Mac, see [Remote work
 Sandboxes cost money while they run. `run` and `rm` are the tools for keeping that bounded; `beachside ls` shows anything left behind.
 
 As a backstop for a job that is killed before it can clean up, `create --ttl <duration>` and `run --ttl <duration>` (like `30m` or `2h`) set how long the provider keeps that sandbox before removing it. Without `--ttl`, the profile's `lifecycle.lifetimeSeconds` applies, 15 minutes by default. Keep it longer than `--timeout` for long commands. A provider that cannot apply the value rejects it before creating anything.
+
+## Privacy
+
+**The Beachside SDK does not track your usage.** Only the CLI sends basic usage telemetry, enabled by default outside CI. You can turn it off with `beachside telemetry disable` or `BEACHSIDE_TELEMETRY=0`. See [Privacy](/docs/privacy/) for what is collected and the available controls.
