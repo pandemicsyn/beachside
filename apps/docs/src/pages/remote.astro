@@ -3,7 +3,7 @@ import Logo from "../components/Logo.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 import "../styles/tokens.css";
 
-// One landing page for Rex and Herdr users. `?for=rex` or `?for=herdr` picks the view, so each
+// One landing page for Rex and Herdr users. `?for=`, `utm_campaign=` or `#rex` / `#herdr` picks the view, so each
 // ad can land on its own copy; the toggle switches in place and keeps the rest of the query.
 const title = "Beachside | Rex and Herdr in a cloud sandbox";
 
@@ -120,9 +120,14 @@ function lineClass(line: Line) {
 
         document.documentElement.dataset.theme = theme;
 
-        const wanted = new URLSearchParams(location.search).get("for");
+        // Ads tag their links with ?for=, utm_campaign= or #rex / #herdr; any of them picks the view.
+        const query = new URLSearchParams(location.search);
 
-        document.documentElement.dataset.for = wanted === "herdr" ? "herdr" : "rex";
+        const wanted = [query.get("for"), query.get("utm_campaign"), location.hash.slice(1)].find(
+          (value) => value === "rex" || value === "herdr",
+        );
+
+        document.documentElement.dataset.for = wanted ?? "rex";
       })();
     </script>
   </head>
