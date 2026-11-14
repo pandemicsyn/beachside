@@ -92,7 +92,9 @@ export const scripts = {
       `if [ ! -e ${shellQuote(path)} ] && [ ! -L ${shellQuote(path)} ]; then echo "No such file or directory" >&2; exit ${NoSource}; fi`,
       makeTemp,
       'cd "$tmp"',
-      `tar -c -f archive.tar -C ${shellQuote(parent)} ${shellQuote(base)} || { rm -rf "$tmp"; exit 1; }`,
+      // macOS tar otherwise adds AppleDouble siblings outside the requested source root.
+      // Transfer file contents, modes and links, without host-specific extended metadata.
+      `COPYFILE_DISABLE=1 tar -c -f archive.tar -C ${shellQuote(parent)} ${shellQuote(base)} || { rm -rf "$tmp"; exit 1; }`,
       split
         ? `split -b ${PartBytes} -a 6 archive.tar part. && rm archive.tar`
         : "mv archive.tar part.000000",
