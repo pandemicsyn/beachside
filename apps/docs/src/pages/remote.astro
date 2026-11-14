@@ -1,0 +1,1348 @@
+---
+import Logo from "../components/Logo.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+import "../styles/tokens.css";
+
+// One landing page for Rex and Herdr users. `?for=`, `utm_campaign=` or `#rex` / `#herdr` picks the view, so each
+// ad can land on its own copy; the toggle switches in place and keeps the rest of the query.
+const title = "Beachside | Rex and Herdr in a cloud sandbox";
+
+const description =
+  "Run a Rex server or Herdr agents in a cloud sandbox on boxd, Freestyle or E2B with one beachside CLI command. Private to your tailnet, no public port.";
+
+const fonts =
+  "https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap";
+
+const github = "https://github.com/pandemicsyn/beachside";
+
+const cliInstall = "npm install -g @beachside/cli";
+
+const tailnet = "tail1234.ts.net";
+
+// Providers verified end to end with `--with rex` and `--with herdr`, in the site's provider order.
+const providers = [
+  { id: "boxd", label: "boxd", env: "BOXD_API_KEY=... BOXD_ORG=...", user: "root" },
+  { id: "freestyle", label: "Freestyle", env: "FREESTYLE_API_KEY=...", user: "ubuntu" },
+  { id: "e2b", label: "E2B", env: "E2B_API_KEY=...", user: "user" },
+];
+
+type Line = { cmd: string } | { out: string } | { note: string };
+
+// Output matches `beachside create --with`: progress notes on stderr, then the name and connect line.
+function session(server: "rex" | "herdr", provider: (typeof providers)[number]): Line[] {
+  const setup: Line[] = [
+    { cmd: `beachside adapter add ${provider.id}` },
+    { cmd: `export BEACHSIDE_PROVIDER=${provider.id} ${provider.env}` },
+    { cmd: "export TAILSCALE_AUTH_KEY=tskey-auth-..." },
+  ];
+
+  if (server === "rex")
+    return [
+      ...setup,
+      { cmd: "beachside create --name rex --ttl 2h --with rex" },
+      { note: "rex: installing in beachside-rex" },
+      { note: "rex: waiting for its https certificate (up to a minute)" },
+      { out: "rex" },
+      { out: `rex       https://beachside-rex.${tailnet}  (in Rex: Add Remote Host…)` },
+    ];
+
+  const remote = `herdr --remote ssh://${provider.user}@beachside-dev.${tailnet}`;
+
+  return [
+    ...setup,
+    { cmd: "beachside create --name dev --ttl 2h --with herdr" },
+    { note: "herdr: putting beachside-dev on your tailnet with Tailscale SSH" },
+    { out: "dev" },
+    { out: `herdr     ${remote}` },
+    { cmd: remote },
+  ];
+}
+
+const sessions = Object.fromEntries(
+  (["rex", "herdr"] as const).map((server) => [
+    server,
+    Object.fromEntries(providers.map((provider) => [provider.id, session(server, provider)])),
+  ]),
+);
+
+const sshRule = `"ssh": [{
+  "action": "accept",
+  "src": ["autogroup:member"],
+  "dst": ["tag:beachside"],
+  "users": ["autogroup:nonroot", "root"]
+}]`;
+
+const sunBands = [
+  [5, "var(--sb-coral)"],
+  [3, "#FF6A7F"],
+  [2, "var(--sb-pink)"],
+  [1.4, "#C85BD0"],
+  [1, "var(--sb-lav)"],
+];
+
+function lineClass(line: Line) {
+  return "cmd" in line ? "cli-line" : "note" in line ? "cli-line cli-note" : "cli-line cli-out";
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href="https://beachside.run/remote/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href={fonts} />
+    <meta property="og:title" content="Rex and Herdr in a cloud sandbox" />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content="https://beachside.run/remote/" />
+    <meta property="og:type" content="website" />
+    <title>{title}</title>
+    <script is:inline>
+      // Theme as on the landing page, and the Rex or Herdr view from ?for=, both before paint.
+      (() => {
+        let stored = null;
+
+        try {
+          stored = localStorage.getItem("starlight-theme");
+        } catch {}
+
+        const theme =
+          stored === "light" || stored === "dark"
+            ? stored
+            : matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+
+        document.documentElement.dataset.theme = theme;
+
+        // Ads tag their links with ?for=, utm_campaign= or #rex / #herdr; any of them picks the view.
+        const query = new URLSearchParams(location.search);
+
+        const wanted = [query.get("for"), query.get("utm_campaign"), location.hash.slice(1)].find(
+          (value) => value === "rex" || value === "herdr",
+        );
+
+        document.documentElement.dataset.for = wanted ?? "rex";
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-row">
+        <a class="home" href="/" aria-label="Beachside home"><Logo /></a>
+        <nav class="nav" aria-label="Main">
+          <a class="nav-link wide-only" href="/docs/cli/">CLI docs</a>
+          <a class="nav-link wide-only" href={github}>GitHub</a>
+          <a class="nav-cta" href="#steps">Set it up</a>
+          <ThemeToggle />
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-grid wrap">
+          <div class="hero-copy">
+            <div class="switch" role="group" aria-label="I use">
+              <span class="switch-label">I use</span>
+              <button type="button" data-for-choice="rex" aria-pressed="true">Rex</button>
+              <button type="button" data-for-choice="herdr" aria-pressed="false">Herdr</button>
+            </div>
+
+            <h1>
+              <span class="only-rex">Your Rex workspace,</span>
+              <span class="only-herdr">Your Herdr agents,</span>
+              <br /><span class="accent-word">in a sandbox.</span>
+            </h1>
+
+            <p class="lede only-rex">
+              One <code>beachside</code> command starts a Rex server in a cloud sandbox and puts it on your tailnet.
+              Open it from Rex with <em>Add Remote Host</em>. Your sessions keep running when your Mac sleeps, and
+              nothing listens on a public port.
+            </p>
+            <p class="lede only-herdr">
+              One <code>beachside</code> command starts a cloud sandbox and puts it on your tailnet with Tailscale SSH.
+              Attach with <code>herdr --remote</code>, and your agents keep working when your laptop sleeps, with
+              no public port.
+            </p>
+
+            <div class="cta-stack">
+              <button class="npm" type="button" data-copy={cliInstall} aria-label={`Copy ${cliInstall}`}>
+                <span class="prompt">$</span><span>{cliInstall}</span>
+                <span class="npm-state" data-copy-label>copy</span>
+              </button>
+              <div class="ctas">
+                <a class="btn btn-primary" href="#steps">Set it up in 3 steps ↓</a>
+                <a class="btn btn-secondary only-rex" href="/docs/cli/rex/">Rex guide →</a>
+                <a class="btn btn-secondary only-herdr" href="/docs/cli/#servers-in-a-sandbox">Herdr guide →</a>
+              </div>
+              <div class="needs" aria-label="What you need">
+                <span class="needs-label">You need</span>
+                <span class="need">a boxd, Freestyle or E2B key</span>
+                <span class="need">a Tailscale auth key</span>
+                <span class="need only-rex">Rex beta on your Mac</span>
+                <span class="need only-herdr">Herdr on your machine</span>
+              </div>
+              <span class="release-note">Free and open source (Apache-2.0). Your provider bills the sandbox while it runs.</span>
+            </div>
+          </div>
+
+          <div class="hero-art">
+            <div class="sun-frame" aria-hidden="true">
+              <div class="sun" data-motion>
+                {sunBands.map(([flex, color]) => <div style={`flex:${flex};background:${color}`} />)}
+              </div>
+              <svg class="palm" viewBox="0 0 200 300">
+                <path d="M92 300 C96 230 104 150 114 72 L122 74 C114 150 108 230 106 300 Z"></path>
+                <path d="M118 70 C150 50 190 60 200 100 C180 78 150 72 118 74 Z"></path>
+                <path d="M118 70 C85 48 40 55 20 95 C45 72 85 70 118 76 Z"></path>
+                <path d="M118 70 C135 35 165 20 190 30 C160 35 138 50 120 74 Z"></path>
+                <path d="M118 70 C100 30 70 15 42 22 C72 30 98 48 116 74 Z"></path>
+                <path d="M118 72 C145 80 170 110 175 145 C160 115 140 95 116 78 Z"></path>
+                <path d="M118 72 C90 82 65 110 58 142 C75 112 95 95 120 78 Z"></path>
+                <circle cx="113" cy="82" r="5"></circle>
+                <circle cx="123" cy="84" r="5"></circle>
+              </svg>
+            </div>
+
+            <div class="code-card term" data-sessions={JSON.stringify(sessions)}>
+              <div class="code-bar">
+                <span class="dot" style="background:var(--sb-pink)"></span>
+                <span class="dot" style="background:var(--sb-coral)"></span>
+                <span class="dot" style="background:var(--sb-aqua)"></span>
+                <span class="file">zsh — beachside</span>
+                <div class="provider-tabs" role="group" aria-label="Provider">
+                  {
+                    providers.map(({ id, label }, index) => (
+                      <button type="button" data-provider={id} aria-pressed={index === 0 ? "true" : "false"}>
+                        {label}
+                      </button>
+                    ))
+                  }
+                </div>
+              </div>
+              <pre class="code screen" aria-label="Example: install an adapter and create a sandbox with Rex or Herdr on your tailnet"><code data-screen>{
+                (["rex", "herdr"] as const).map((server) => (
+                  <span class={`only-${server}`}>{
+                    sessions[server]!.boxd!.map((line) => (
+                      <span class={lineClass(line)}>{"cmd" in line ? <span class="prompt">$ </span> : null}{"cmd" in line ? line.cmd : "note" in line ? line.note : line.out}{"\n"}</span>
+                    ))
+                  }</span>
+                ))
+              }</code></pre>
+              <div class="code-status" aria-live="polite">
+                <span class="status-dot" data-status-dot style="background:var(--sb-aqua)"></span>
+                <span class="status-text" data-status>ready · on your tailnet</span>
+                <span class="status-time" data-status-via>via boxd</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="why wrap" aria-labelledby="why-title">
+        <h2 id="why-title">
+          <span class="only-rex">Rex on your Mac.</span><span class="only-herdr">Herdr on your laptop.</span>{" "}
+          <span class="dim">The work in the cloud.</span>
+        </h2>
+        <div class="why-grid">
+          <article class="card">
+            <span class="rule" style="background:var(--sb-pink)"></span>
+            <h3>Keeps going when you close the lid</h3>
+            <p class="only-rex">Sessions, tabs and blocks live in the sandbox, so long builds and agents keep running while your Mac sleeps.</p>
+            <p class="only-herdr">Agents run in the sandbox, so they keep working while your laptop sleeps or changes networks.</p>
+          </article>
+          <article class="card">
+            <span class="rule" style="background:var(--sb-coral)"></span>
+            <h3>Private to your tailnet</h3>
+            <p>Nothing listens on a public port. The sandbox joins your tailnet as a tagged device that only your members can reach.</p>
+          </article>
+          <article class="card">
+            <span class="rule" style="background:var(--sb-aqua)"></span>
+            <h3>Pick your provider</h3>
+            <p>boxd, Freestyle or E2B. Switching is one environment variable, and the command stays the same.</p>
+          </article>
+          <article class="card">
+            <span class="rule" style="background:var(--sb-lav)"></span>
+            <h3>Cleans up after itself</h3>
+            <p><code>beachside rm</code> logs the device out of your tailnet, then removes the sandbox. <code>--ttl</code> is the backstop.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="steps-band" id="steps" aria-labelledby="steps-title">
+        <div class="wrap">
+          <h2 id="steps-title">Three steps. <span class="dim">Then it's one command.</span></h2>
+          <ol class="steps">
+            <li class="step">
+              <span class="step-n">1</span>
+              <h3>Install the CLI and an adapter</h3>
+              <p>The CLI runs on Node.js or Bun. Add the adapter for your provider and export its key.</p>
+              <pre class="step-code"><code><span class="prompt">$ </span>{cliInstall}
+<span class="prompt">$ </span>beachside adapter add <span data-provider-id>boxd</span>
+<span class="prompt">$ </span>export BEACHSIDE_PROVIDER=<span data-provider-id>boxd</span> <span data-provider-env>BOXD_API_KEY=... BOXD_ORG=...</span></code></pre>
+            </li>
+            <li class="step">
+              <span class="step-n">2</span>
+              <h3>Set up Tailscale once</h3>
+              <p>
+                In your tailnet policy, add a <code>tag:beachside</code> that members can reach on port 443. Then make a reusable,
+                ephemeral, pre-approved auth key with that tag.
+              </p>
+              <p class="only-herdr">Herdr attaches over Tailscale SSH, so add an <code>ssh</code> rule too:</p>
+              <pre class="step-code only-herdr"><code>{sshRule}</code></pre>
+              <pre class="step-code"><code><span class="prompt">$ </span>export TAILSCALE_AUTH_KEY=tskey-auth-...</code></pre>
+              <a class="step-link" href="/docs/cli/rex/#set-up-tailscale-once">Tailscale setup, step by step →</a>
+            </li>
+            <li class="step">
+              <span class="step-n">3</span>
+              <h3 class="only-rex">Create it and open it in Rex</h3>
+              <h3 class="only-herdr">Create it and attach Herdr</h3>
+              <p class="only-rex">
+                Rex is installed and on your tailnet in about a minute. In Rex, choose <em>Add Remote Host…</em> and paste the
+                address it prints.
+              </p>
+              <p class="only-herdr">
+                The sandbox joins your tailnet with Tailscale SSH. Run the command it prints. On the first connect, Herdr asks you to
+                accept the host key and installs its server.
+              </p>
+              <pre class="step-code only-rex"><code><span class="prompt">$ </span>beachside create --name rex --ttl 2h --with rex
+<span class="out">https://beachside-rex.{tailnet}</span></code></pre>
+              <pre class="step-code only-herdr"><code><span class="prompt">$ </span>beachside create --name dev --ttl 2h --with herdr
+<span class="prompt">$ </span>herdr --remote ssh://<span data-provider-user>root</span>@beachside-dev.{tailnet}</code></pre>
+              <a class="step-link only-rex" href="/docs/cli/rex/">What <code>--with rex</code> does →</a>
+              <a class="step-link only-herdr" href="/docs/cli/#servers-in-a-sandbox">What <code>--with herdr</code> does →</a>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="more wrap" aria-labelledby="more-title">
+        <div class="more-copy">
+          <span class="chip-label">Make it yours</span>
+          <h2 id="more-title">An ordinary sandbox, <span class="dim">with your tools in it.</span></h2>
+          <p>
+            Install what you need when it starts, bring your project, or start from your own image. Everything in the{" "}
+            <a href="/docs/cli/">beachside CLI</a> works on it, and your coding agent can drive it too: every command has
+            a <code>--json</code> form and never prompts.
+          </p>
+          <ul class="more-list">
+            <li><code>--setup-cmd</code> or <code>--setup</code> runs install steps once the sandbox starts.</li>
+            <li><code>beachside push</code> copies your checkout in.</li>
+            <li><code>--image</code> starts from your own image. If it already has Rex, setup skips the install.</li>
+            <li><code>beachside ls</code> shows what's running, and <code>rm --all</code> clears it.</li>
+          </ul>
+        </div>
+        <div class="code-card">
+          <div class="code-bar"><span class="file file-only">zsh — make it yours</span></div>
+          <pre class="code"><code><span class="only-rex"><span class="prompt">$ </span>beachside create --name rex --ttl 4h --with rex \
+    --setup-cmd 'sudo apt-get install -y ripgrep'
+<span class="prompt">$ </span>beachside push rex
+<span class="cli-out">/home/user/work</span>
+<span class="prompt">$ </span>beachside rm rex</span><span class="only-herdr"><span class="prompt">$ </span>beachside create --name dev --ttl 4h --with herdr \
+    --setup-cmd 'sudo apt-get install -y ripgrep'
+<span class="prompt">$ </span>beachside push dev
+<span class="cli-out">/home/user/work</span>
+<span class="prompt">$ </span>beachside rm dev</span></code></pre>
+        </div>
+      </section>
+
+      <section class="providers wrap" aria-labelledby="providers-title">
+        <h2 id="providers-title">Where it runs</h2>
+        <ul class="provider-list">
+          <li><span class="ok">●</span><strong>boxd</strong><span>Works as is. Set <code>BOXD_API_KEY</code> and <code>BOXD_ORG</code>.</span></li>
+          <li><span class="ok">●</span><strong>Freestyle</strong><span>Works as is. Set <code>FREESTYLE_API_KEY</code>.</span></li>
+          <li><span class="ok">●</span><strong>E2B</strong><span>Works. The CLI gives the sandbox the routable address Tailscale needs.</span></li>
+          <li><span class="warn">●</span><strong>Daytona</strong><span>Lower tiers only reach an allowlist of hosts, which blocks the download.</span></li>
+        </ul>
+        <p class="providers-note">
+          <span class="only-rex">Rex is in beta, so this is too. You need Rex beta on your Mac.</span>{" "}
+          <span class="only-herdr">You need Herdr on your machine and a Tailscale tailnet.</span>{" "}
+          Sandboxes are billed by your provider while they run.
+        </p>
+      </section>
+
+      <section class="final">
+        <div class="wrap final-inner">
+          <h2>
+            <span class="only-rex">Move your Rex sessions off your Mac.</span>
+            <span class="only-herdr">Give your Herdr agents a machine of their own.</span>
+          </h2>
+          <button class="npm npm-dark" type="button" data-copy={cliInstall} aria-label={`Copy ${cliInstall}`}>
+            <span class="prompt">$</span><span>{cliInstall}</span>
+            <span class="npm-state" data-copy-label>copy</span>
+          </button>
+          <div class="final-links">
+            <a class="band-link only-rex" href="/docs/cli/rex/">Read the Rex guide →</a>
+            <a class="band-link only-herdr" href="/docs/cli/#servers-in-a-sandbox">Read the Herdr setup →</a>
+            <a class="band-link" href="/">What is Beachside? →</a>
+            <a class="band-link" href={github}>Star on GitHub →</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="wrap footer">
+      <span>Apache-2.0 · beachside.run</span>
+      <span>Rex and Herdr are their makers' products. <a href="/docs/privacy/">Privacy</a></span>
+    </footer>
+
+    <script>
+      const motionOn = () => !matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      // Copy buttons.
+      document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
+        const label = button.querySelector("[data-copy-label]");
+        let reset: ReturnType<typeof setTimeout> | undefined;
+
+        button.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(button.dataset.copy ?? "");
+          } catch {
+            return;
+          }
+
+          if (label) label.textContent = "copied";
+          clearTimeout(reset);
+          reset = setTimeout(() => label && (label.textContent = "copy"), 1400);
+        });
+      });
+
+      type Server = "rex" | "herdr";
+
+      type Line = { cmd: string } | { out: string } | { note: string };
+
+      const root = document.documentElement;
+
+      const term = document.querySelector<HTMLElement>("[data-sessions]");
+
+      const screen = document.querySelector<HTMLElement>("[data-screen]");
+
+      const status = document.querySelector<HTMLElement>("[data-status]");
+
+      const statusDot = document.querySelector<HTMLElement>("[data-status-dot]");
+
+      const statusVia = document.querySelector<HTMLElement>("[data-status-via]");
+
+      const providerTabs = document.querySelectorAll<HTMLButtonElement>("[data-provider]");
+
+      const serverChoices = document.querySelectorAll<HTMLButtonElement>("[data-for-choice]");
+
+      // SAFETY: the server renders data-sessions from the sessions object in this file.
+      const sessions = JSON.parse(term?.dataset.sessions ?? "{}") as Record<Server, Record<string, Line[]>>;
+
+      const providerFacts = {
+        boxd: { env: "BOXD_API_KEY=... BOXD_ORG=...", user: "root", label: "boxd" },
+        freestyle: { env: "FREESTYLE_API_KEY=...", user: "ubuntu", label: "Freestyle" },
+        e2b: { env: "E2B_API_KEY=...", user: "user", label: "E2B" },
+      } satisfies Record<string, { env: string; user: string; label: string }>;
+
+      type ProviderId = keyof typeof providerFacts;
+
+      const isProvider = (value: string | undefined): value is ProviderId =>
+        value !== undefined && Object.hasOwn(providerFacts, value);
+
+      let server: Server = root.dataset.for === "herdr" ? "herdr" : "rex";
+
+      let provider: ProviderId = "boxd";
+
+      let timers: ReturnType<typeof setTimeout>[] = [];
+
+      let played = false;
+
+      function setStatus(text: string, color: string) {
+        if (status) status.textContent = text;
+
+        if (statusDot) statusDot.style.background = color;
+
+        if (statusVia) statusVia.textContent = `via ${providerFacts[provider].label}`;
+      }
+
+      function lineNode(line: Line) {
+        const node = document.createElement("span");
+        node.className = "cli-line";
+
+        if ("cmd" in line) {
+          const prompt = document.createElement("span");
+          prompt.className = "prompt";
+          prompt.textContent = "$ ";
+          node.append(prompt, document.createTextNode(""), "\n");
+        } else {
+          node.classList.add("note" in line ? "cli-note" : "cli-out");
+          node.append(`${"note" in line ? line.note : line.out}\n`);
+        }
+
+        return node;
+      }
+
+      // Scoped styles only match elements carrying this page's Astro scope class.
+      const scope = [...(screen?.classList ?? [])].find((name) => name.startsWith("astro-"));
+
+      function scoped(node: HTMLElement) {
+        if (scope) {
+          node.classList.add(scope);
+          node.querySelectorAll("*").forEach((child) => child.classList.add(scope));
+        }
+
+        return node;
+      }
+
+      function play() {
+        timers.forEach(clearTimeout);
+        timers = [];
+
+        const lines = sessions[server]?.[provider] ?? [];
+
+        if (!screen) return;
+
+        // Hold the tallest session's height so the page doesn't shift while lines appear.
+        if (!screen.style.minHeight) screen.style.minHeight = `${screen.offsetHeight}px`;
+
+        if (!motionOn()) {
+          screen.replaceChildren(
+            ...lines.map((line) => {
+              const node = scoped(lineNode(line));
+
+              if ("cmd" in line) node.childNodes[1]!.textContent = line.cmd;
+
+              return node;
+            }),
+          );
+          setStatus("ready · on your tailnet", "var(--sb-aqua)");
+
+          return;
+        }
+
+        screen.replaceChildren();
+        setStatus("working…", "var(--sb-coral)");
+
+        let t = 150;
+
+        for (const line of lines) {
+          const node = scoped(lineNode(line));
+
+          if ("cmd" in line) {
+            timers.push(setTimeout(() => screen.append(node), t));
+
+            for (let i = 1; i <= line.cmd.length; i++) {
+              t += 12;
+              timers.push(setTimeout(() => (node.childNodes[1]!.textContent = line.cmd.slice(0, i)), t));
+            }
+
+            t += 260;
+          } else {
+            t += "note" in line ? 650 : 420;
+            timers.push(setTimeout(() => screen.append(node), t));
+          }
+        }
+
+        timers.push(setTimeout(() => setStatus("ready · on your tailnet", "var(--sb-aqua)"), t + 200));
+      }
+
+      function fillProvider() {
+        const facts = providerFacts[provider];
+
+        document.querySelectorAll("[data-provider-id]").forEach((node) => (node.textContent = provider));
+        document.querySelectorAll("[data-provider-env]").forEach((node) => (node.textContent = facts.env));
+        document.querySelectorAll("[data-provider-user]").forEach((node) => (node.textContent = facts.user));
+        providerTabs.forEach((tab) => tab.setAttribute("aria-pressed", String(tab.dataset.provider === provider)));
+      }
+
+      function chooseServer(next: Server, updateUrl: boolean) {
+        server = next;
+        root.dataset.for = next;
+        serverChoices.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.forChoice === next)));
+
+        if (updateUrl) {
+          const url = new URL(location.href);
+          url.searchParams.set("for", next);
+          history.replaceState(null, "", url);
+        }
+
+        if (played) play();
+      }
+
+      serverChoices.forEach((button) =>
+        button.addEventListener("click", () => {
+          const next = button.dataset.forChoice === "herdr" ? "herdr" : "rex";
+
+          if (next !== server) chooseServer(next, true);
+        }),
+      );
+
+      providerTabs.forEach((tab) =>
+        tab.addEventListener("click", () => {
+          const next = tab.dataset.provider;
+
+          if (!isProvider(next) || next === provider) return;
+          provider = next;
+          fillProvider();
+          play();
+        }),
+      );
+
+      chooseServer(server, false);
+
+      // Play once the terminal is on screen; the static render covers no-JS readers.
+      if (term && "IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            played = true;
+            setTimeout(play, motionOn() ? 500 : 0);
+          },
+          { threshold: 0.3 },
+        );
+
+        observer.observe(term);
+      }
+    </script>
+
+    <style is:global>
+      html,
+      body {
+        margin: 0;
+        background: var(--sb-bg);
+        color: var(--sb-ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        min-width: 320px;
+        font-family: var(--sb-font-sans);
+        font-size: 16px;
+        line-height: 1.7;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      a {
+        color: var(--sb-pink-ink);
+        text-decoration-color: var(--sb-pink);
+        text-underline-offset: 3px;
+      }
+      a:hover {
+        color: var(--sb-aqua-ink);
+        text-decoration-color: var(--sb-aqua);
+      }
+      :focus-visible {
+        outline: 3px solid var(--sb-pink);
+        outline-offset: 3px;
+      }
+      ::selection {
+        background: rgba(239, 79, 145, 0.28);
+      }
+      button {
+        font: inherit;
+      }
+      html[data-for="rex"] .only-herdr,
+      html:not([data-for="rex"]):not([data-for="herdr"]) .only-herdr,
+      html[data-for="herdr"] .only-rex {
+        display: none !important;
+      }
+    </style>
+
+    <style>
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding-inline: 24px;
+      }
+      @media (max-width: 479px) {
+        .wrap {
+          padding-inline: 16px;
+        }
+      }
+      code {
+        font-family: var(--sb-font-mono);
+        font-size: 0.88em;
+      }
+      .dim {
+        color: var(--sb-muted);
+      }
+      h2 {
+        margin: 0;
+        font-weight: 700;
+        font-size: clamp(1.8rem, 3.6vw, 2.8rem);
+        line-height: 1.1;
+        letter-spacing: -0.025em;
+        text-wrap: balance;
+      }
+
+      /* Header */
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: var(--sb-bg);
+        border-bottom: 1px solid var(--sb-line);
+      }
+      .header-row {
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 0 24px;
+      }
+      .home {
+        flex: none;
+        text-decoration: none;
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .nav-link {
+        padding: 6px 12px;
+        border-radius: 999px;
+        color: var(--sb-muted);
+        text-decoration: none;
+      }
+      .nav-link:hover {
+        color: var(--sb-pink-ink);
+      }
+      .nav-cta {
+        margin-inline: 6px;
+        padding: 6px 16px;
+        border-radius: 999px;
+        background: var(--sb-pink);
+        color: #fff;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .nav-cta:hover {
+        color: #fff;
+        background: var(--sb-pink-ink);
+      }
+      @media (max-width: 819px) {
+        .wide-only {
+          display: none;
+        }
+        .header-row {
+          padding: 0 16px;
+        }
+      }
+
+      /* Hero */
+      .hero {
+        position: relative;
+        overflow: hidden;
+        border-bottom: 1px solid var(--sb-line);
+      }
+      .hero-grid {
+        padding-block: clamp(36px, 5vw, 72px);
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
+        gap: 48px;
+        align-items: center;
+      }
+      .hero-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        min-width: 0;
+      }
+      .switch {
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--sb-line);
+        border-radius: 999px;
+        background: var(--sb-surface);
+      }
+      .switch-label {
+        padding: 0 10px 0 12px;
+        font-family: var(--sb-font-mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--sb-aqua-ink);
+      }
+      .switch button {
+        padding: 6px 18px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--sb-muted);
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      .switch button:hover {
+        color: var(--sb-ink);
+      }
+      .switch button[aria-pressed="true"] {
+        background: var(--sb-ink);
+        color: var(--sb-bg);
+      }
+      h1 {
+        margin: 0;
+        font-weight: 700;
+        font-size: clamp(2.4rem, 4.6vw, 3.9rem);
+        line-height: 1.04;
+        letter-spacing: -0.035em;
+        text-wrap: balance;
+      }
+      .accent-word {
+        display: inline-block;
+        font-family: var(--sb-font-display);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: var(--sb-pink);
+        transform: skewX(-8deg);
+      }
+      .lede {
+        margin: 0;
+        max-width: 32em;
+        color: var(--sb-muted);
+        font-size: 18px;
+        line-height: 1.6;
+        text-wrap: pretty;
+      }
+      .lede code {
+        color: var(--sb-ink);
+      }
+      .cta-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        max-width: 100%;
+        align-self: flex-start;
+      }
+      .ctas {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .btn {
+        height: 48px;
+        padding: 0 24px;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 15px;
+        text-decoration: none;
+        transition:
+          transform 0.08s ease,
+          box-shadow 0.08s ease;
+      }
+      .btn:hover {
+        transform: translateY(2px);
+      }
+      .btn-primary {
+        background: var(--sb-pink);
+        color: #fff;
+        box-shadow: 0 6px 0 var(--sb-pink-ink);
+      }
+      .btn-primary:hover {
+        color: #fff;
+        box-shadow: 0 4px 0 var(--sb-pink-ink);
+      }
+      .btn-secondary {
+        border: 1.5px solid var(--sb-ink);
+        background: var(--sb-surface);
+        color: var(--sb-ink);
+        box-shadow: 0 6px 0 var(--sb-ink);
+      }
+      .btn-secondary:hover {
+        color: var(--sb-ink);
+        box-shadow: 0 4px 0 var(--sb-ink);
+      }
+      .needs {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+      }
+      .needs-label {
+        margin-right: 2px;
+        font-family: var(--sb-font-mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--sb-aqua-ink);
+      }
+      .need {
+        padding: 3px 12px;
+        border-radius: 999px;
+        background: var(--sb-aqua-wash);
+        color: var(--sb-ink);
+        font-weight: 500;
+      }
+      .release-note {
+        color: var(--sb-muted);
+        font-size: 13px;
+      }
+      .npm {
+        height: 48px;
+        max-width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 8px 0 22px;
+        border: 1.5px dashed var(--sb-line);
+        border-radius: 999px;
+        background: var(--sb-surface);
+        color: var(--sb-ink);
+        font-family: var(--sb-font-mono);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        text-align: left;
+      }
+      .npm:hover {
+        border-color: var(--sb-pink);
+      }
+      .prompt {
+        color: var(--sb-pink-ink);
+      }
+      .npm-state {
+        margin-left: auto;
+        font-size: 12px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: var(--sb-sunk);
+        color: var(--sb-muted);
+      }
+
+      /* Sun and palm */
+      .hero-art {
+        position: relative;
+        min-width: 0;
+        padding-top: 20px;
+      }
+      .sun-frame {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        width: min(440px, 90%);
+        aspect-ratio: 2 / 1;
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+      .sun {
+        width: 100%;
+        height: 100%;
+        border-radius: 500px 500px 0 0;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        animation: sb-rise 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      }
+      .palm {
+        position: absolute;
+        left: 62%;
+        top: -26%;
+        width: 50%;
+        aspect-ratio: 2 / 3;
+        transform: scaleX(-1);
+        fill: var(--sb-palm);
+      }
+      @keyframes sb-rise {
+        from {
+          transform: translateY(18px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .sun {
+          animation: none;
+        }
+      }
+
+      /* Code cards */
+      .code-card {
+        position: relative;
+        min-width: 0;
+        background: var(--sb-code-bg);
+        border-radius: 14px;
+        overflow: hidden;
+        color: var(--sb-code-ink);
+      }
+      .term {
+        margin-top: clamp(100px, 13vw, 150px);
+        box-shadow: 0 30px 60px -20px rgba(23, 32, 61, 0.45);
+      }
+      .code-bar {
+        min-height: 42px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        background: var(--sb-code-bar);
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+      .file {
+        margin-left: 8px;
+        font-family: var(--sb-font-mono);
+        font-size: 12px;
+        color: var(--sb-code-dim);
+      }
+      .file-only {
+        margin-left: 2px;
+      }
+      .provider-tabs {
+        margin-left: auto;
+        display: flex;
+        gap: 4px;
+        padding: 3px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .provider-tabs button {
+        padding: 2px 10px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--sb-code-dim);
+        font-family: var(--sb-font-mono);
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .provider-tabs button:hover {
+        color: var(--sb-code-ink);
+      }
+      .provider-tabs button[aria-pressed="true"] {
+        background: var(--sb-code-string);
+        color: var(--sb-code-bg);
+      }
+      .code {
+        margin: 0;
+        padding: 20px 22px;
+        font-family: var(--sb-font-mono);
+        font-size: 12.5px;
+        line-height: 1.8;
+        overflow-x: auto;
+      }
+      .code .prompt,
+      .step-code .prompt,
+      .screen .prompt {
+        color: var(--sb-code-keyword);
+      }
+      .cli-out,
+      .out {
+        color: var(--sb-code-string);
+      }
+      .cli-note {
+        color: var(--sb-code-dim);
+      }
+      @media (max-width: 639px) {
+        .screen {
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+      }
+      .code-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 22px;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        font-family: var(--sb-font-mono);
+        font-size: 12px;
+        color: var(--sb-code-dim);
+      }
+      .status-dot {
+        flex: none;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        transition: background 0.3s;
+      }
+      .status-text {
+        color: var(--sb-code-ink);
+        white-space: nowrap;
+      }
+      .status-time {
+        margin-left: auto;
+        white-space: nowrap;
+      }
+
+      /* Why */
+      .why {
+        padding-block: clamp(56px, 8vw, 96px);
+      }
+      .why h2 {
+        margin-bottom: 40px;
+        max-width: 18em;
+      }
+      .why-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+        gap: 16px;
+      }
+      .card {
+        padding: 26px 24px;
+        border-radius: 14px;
+        background: var(--sb-surface);
+        border: 1px solid var(--sb-line);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .rule {
+        width: 34px;
+        height: 4px;
+        border-radius: 2px;
+      }
+      .card h3 {
+        margin: 6px 0 0;
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .card p {
+        margin: 0;
+        color: var(--sb-muted);
+        font-size: 15px;
+        text-wrap: pretty;
+      }
+      .card code {
+        color: var(--sb-ink);
+      }
+
+      /* Steps */
+      .steps-band {
+        scroll-margin-top: 64px;
+        padding-block: clamp(56px, 8vw, 96px);
+        background: var(--sb-band);
+        color: var(--sb-band-ink);
+        border-block: 1px solid var(--sb-band-line);
+      }
+      .steps-band .dim {
+        color: #a3a8c3;
+      }
+      .steps {
+        list-style: none;
+        margin: 40px 0 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+        gap: 20px;
+        align-items: start;
+      }
+      .step {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 26px 24px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .step-n {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--sb-pink);
+        color: #fff;
+        font-family: var(--sb-font-display);
+        font-weight: 700;
+      }
+      .step:nth-child(2) .step-n {
+        background: var(--sb-coral);
+      }
+      .step:nth-child(3) .step-n {
+        background: var(--sb-aqua);
+        color: #1b1f3b;
+      }
+      .step h3 {
+        margin: 4px 0 0;
+        font-size: 19px;
+        font-weight: 700;
+      }
+      .step p {
+        margin: 0;
+        color: #c9cce0;
+        font-size: 15px;
+        text-wrap: pretty;
+      }
+      .step-code {
+        margin: 0;
+        padding: 14px 16px;
+        border-radius: 10px;
+        background: var(--sb-code-bg);
+        color: var(--sb-code-ink);
+        font-family: var(--sb-font-mono);
+        font-size: 12px;
+        line-height: 1.75;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      .step-link,
+      .band-link {
+        align-self: flex-start;
+        font-weight: 600;
+        color: #ff86b7;
+        text-decoration: none;
+        border-bottom: 2px solid #ff86b7;
+      }
+      .step-link:hover,
+      .band-link:hover {
+        color: #6fe6d6;
+        border-color: #6fe6d6;
+      }
+
+      /* Make it yours */
+      .more {
+        padding-block: clamp(56px, 8vw, 96px);
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+        gap: 40px 48px;
+        align-items: center;
+      }
+      .more-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-width: 0;
+      }
+      .chip-label {
+        align-self: flex-start;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: var(--sb-aqua);
+        color: #1b1f3b;
+        font-family: var(--sb-font-mono);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .more-copy p {
+        margin: 0;
+        max-width: 32em;
+        color: var(--sb-muted);
+        font-size: 17px;
+        text-wrap: pretty;
+      }
+      .more-copy code,
+      .provider-list code {
+        color: var(--sb-ink);
+      }
+      .more-list {
+        margin: 0;
+        padding-left: 1.2em;
+        color: var(--sb-muted);
+        font-size: 15px;
+      }
+      .more .code-card {
+        box-shadow: 0 30px 60px -20px rgba(23, 32, 61, 0.35);
+      }
+
+      /* Providers */
+      .providers {
+        padding-bottom: clamp(56px, 8vw, 96px);
+      }
+      .provider-list {
+        list-style: none;
+        margin: 28px 0 0;
+        padding: 0;
+        border-top: 1px solid var(--sb-line);
+      }
+      .provider-list li {
+        display: grid;
+        grid-template-columns: 20px 110px 1fr;
+        gap: 6px 12px;
+        align-items: baseline;
+        padding: 14px 4px;
+        border-bottom: 1px solid var(--sb-line);
+        color: var(--sb-muted);
+        font-size: 15px;
+      }
+      .provider-list strong {
+        color: var(--sb-ink);
+      }
+      .ok {
+        color: var(--sb-aqua);
+      }
+      .warn {
+        color: var(--sb-coral);
+      }
+      @media (max-width: 539px) {
+        .provider-list li {
+          grid-template-columns: 20px 1fr;
+        }
+        .provider-list li > span:last-child {
+          grid-column: 2;
+        }
+      }
+      .providers-note {
+        margin: 18px 0 0;
+        color: var(--sb-muted);
+        font-size: 14px;
+      }
+
+      /* Final call */
+      .final {
+        background: var(--sb-band);
+        color: var(--sb-band-ink);
+      }
+      .final-inner {
+        padding-block: clamp(56px, 8vw, 96px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 26px;
+        text-align: center;
+      }
+      .final h2 {
+        max-width: 18em;
+      }
+      .npm-dark {
+        background: var(--sb-code-bg);
+        border-color: rgba(255, 255, 255, 0.18);
+        color: var(--sb-code-ink);
+      }
+      .npm-dark .prompt {
+        color: var(--sb-code-keyword);
+      }
+      .npm-dark .npm-state {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--sb-code-dim);
+      }
+      .final-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px 28px;
+      }
+
+      /* Footer */
+      .footer {
+        padding-block: 28px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        justify-content: space-between;
+        font-size: 13px;
+        color: var(--sb-muted);
+      }
+    </style>
+  </body>
+</html>
