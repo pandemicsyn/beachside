@@ -56,6 +56,11 @@ function backendFor(value: string): SecretBackend | undefined {
   return backends.find((backend) => backend.pattern.test(value));
 }
 
+/** The password manager a reference reads from, such as 1Password; null for any other value. */
+export function secretManager(value: string): string | null {
+  return backendFor(value)?.name ?? null;
+}
+
 type RunResult = { code: number | string; stdout: string; stderr: string };
 
 function run(command: string, args: string[], env: Env, signal: AbortSignal): Promise<RunResult> {

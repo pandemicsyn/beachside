@@ -262,6 +262,33 @@ export function createModalAdapter(
   return defineAdapter({
     name: "modal",
     displayName: "Modal",
+    setup: {
+      credentials: {
+        tokenId: {
+          env: "MODAL_TOKEN_ID",
+          description: "A Modal token id; `modal token new` creates one.",
+          url: "https://modal.com/docs/cli/latest/token",
+        },
+        tokenSecret: {
+          env: "MODAL_TOKEN_SECRET",
+          description: "The secret for that Modal token.",
+          url: "https://modal.com/docs/cli/latest/token",
+        },
+      },
+      config: {
+        appName: {
+          env: "MODAL_APP_NAME",
+          required: true,
+          description: "The Modal app sandboxes belong to.",
+        },
+        environment: {
+          env: "MODAL_ENVIRONMENT",
+          required: true,
+          description: "The Modal environment, such as main.",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/support/",
+    },
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {

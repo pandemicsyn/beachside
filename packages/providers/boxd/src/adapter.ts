@@ -478,6 +478,36 @@ export function createBoxdAdapter(
   return defineAdapter({
     name: "boxd",
     displayName: "boxd",
+    setup: {
+      credentials: {
+        apiKey: {
+          env: "BOXD_API_KEY",
+          description: "A boxd API key; create one with `boxd auth keys create beachside`.",
+          url: "https://docs.boxd.sh/cli/authentication",
+        },
+      },
+      config: {
+        org: {
+          env: "BOXD_ORG",
+          required: true,
+          description:
+            "The id (org-...) of the boxd org the key belongs to; `boxd auth --json` lists your orgs with their ids.",
+          url: "https://docs.boxd.sh/cli/authentication",
+        },
+        network: {
+          env: "BOXD_NETWORK",
+          required: false,
+          choices: ["blocked", "internet"],
+          description: "Egress is open (internet) by default; blocked stops it.",
+        },
+        region: {
+          env: "BOXD_REGION",
+          description:
+            "A boxd region such as nyc; machines go to the org's home region without it.",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/boxd/",
+    },
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {

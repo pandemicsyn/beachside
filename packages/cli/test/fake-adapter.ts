@@ -591,3 +591,17 @@ export const localShell = bindAdapter(
   {},
   {},
 );
+
+/** The fake adapter with a token the fake provider refuses, like a revoked API key. */
+export const rejected = bindAdapter(createFakeAdapter({ url, token: `${token}-revoked` }), {}, {});
+
+/** The fake adapter whose connect refuses the key outright, like a provider checking it up front. */
+export const refusing = defineAdapter({
+  name: "fake",
+  displayName: "Fake test provider that refuses its key at connect",
+  config: z.strictObject({}),
+  credentials: z.strictObject({}),
+  async connect() {
+    throw new AdapterError("UNAUTHENTICATED", "The fake provider refused the key");
+  },
+});

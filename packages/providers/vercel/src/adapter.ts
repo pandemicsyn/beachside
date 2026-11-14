@@ -350,6 +350,30 @@ export function createVercelAdapter(
   return defineAdapter({
     name: "vercel",
     displayName: "Vercel Sandbox",
+    setup: {
+      credentials: {
+        token: {
+          env: "VERCEL_TOKEN",
+          description: "A Vercel access token with access to the team.",
+          url: "https://vercel.com/docs/rest-api#creating-an-access-token",
+        },
+      },
+      config: {
+        teamId: {
+          env: "VERCEL_TEAM_ID",
+          required: true,
+          description: "The Vercel team id (team_...).",
+          url: "https://vercel.com/docs/accounts#find-your-team-id",
+        },
+        projectId: {
+          env: "VERCEL_PROJECT_ID",
+          required: true,
+          description: "The Vercel project id (prj_...) sandboxes are billed to.",
+          url: "https://vercel.com/docs/project-configuration/general-settings#project-id",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/vercel/",
+    },
     config: vercelConfig,
     credentials: z.strictObject({ token: z.string().min(1) }),
     async connect({ config, credentials, host }) {

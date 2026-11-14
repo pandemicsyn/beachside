@@ -370,6 +370,24 @@ export function createRunloopAdapter(options: RunloopAdapterOptions = {}) {
   return defineAdapter({
     name: "runloop",
     displayName: "Runloop",
+    setup: {
+      credentials: {
+        apiKey: {
+          env: "RUNLOOP_API_KEY",
+          description: "A Runloop API key from the dashboard settings.",
+          url: "https://platform.runloop.ai/settings#api-keys",
+        },
+      },
+      config: {
+        network: {
+          env: "RUNLOOP_NETWORK",
+          required: false,
+          choices: ["blocked", "internet"],
+          description: "Egress is open (internet) by default; blocked stops it.",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/runloop/",
+    },
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {

@@ -12,13 +12,15 @@ description: Create, use and clean up cloud sandboxes from the shell with the `b
 ## Check the setup first
 
 ```sh
-beachside doctor --json      # config, credentials, provider connection; creates nothing
-beachside providers --json   # which adapters are installed and which credentials are missing
+beachside doctor --json      # config, connection, whether the provider accepts the key; creates nothing
+beachside providers --json   # which adapters are installed, which credentials are missing and where to get them
+beachside profile ls --json  # the configured profiles, the default, and which one a command would use
 ```
 
 - If `beachside` is not on PATH, stop and tell the user; do not install anything yourself.
 - The provider comes from `--profile`, `BEACHSIDE_PROFILE`, `--provider`, `BEACHSIDE_PROVIDER`, then `default` in `~/.config/beachside/beachside.json`. Do not edit that file or credentials unless the user asks.
-- A missing adapter (exit 4, `ADAPTER_NOT_INSTALLED`; the user installs it with `beachside adapter add <provider>`), an installed adapter that fails to load (exit 4, `ADAPTER_LOAD_FAILED`) or a missing credential (exit 2) is the user's to fix. Report the `hint` from the error.
+- A missing adapter (exit 4, `ADAPTER_NOT_INSTALLED`; the user installs it with `beachside adapter add <provider>`), an installed adapter that fails to load (exit 4, `ADAPTER_LOAD_FAILED`), a missing credential (exit 2) or a key the provider rejects (exit 5, `UNAUTHENTICATED` or `FORBIDDEN`) is the user's to fix. Report the `hint` from the error; it links to where to get the value when the adapter gives one. `beachside profile show <name> --json` says where each setting comes from without revealing credentials.
+- Several providers can be set up side by side as profiles. Pass `--profile <name>` to use one other than the default; do not change the default (`profile use`) or remove profiles (`profile rm`) unless the user asks.
 
 **Sandboxes cost money.** Create only what the task needs and destroy it when done.
 

@@ -14,7 +14,7 @@ import {
   isAdapter,
   PackageName,
   providers,
-  type ProviderDescriptor,
+  type OfficialProvider,
 } from "./providers";
 import type { Session } from "./session";
 
@@ -24,7 +24,7 @@ export const adapterActions = ["add", "ls", "rm"] as const;
 type Target = {
   input: string;
   package: string;
-  official: ProviderDescriptor | null;
+  official: OfficialProvider | null;
   /** What npm installs: an exact version, a range or a dist-tag; null lets npm pick the latest. */
   version: string | null;
 };

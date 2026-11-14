@@ -222,6 +222,9 @@ Import from `@beachside/adapter`.
 | `AdapterErrorCode`             | type      |
 | `AdapterFilesystemError`       | re-export |
 | `AdapterSession`               | type      |
+| `AdapterSetup`                 | type      |
+| `AdapterSetupConfigValue`      | type      |
+| `AdapterSetupValue`            | type      |
 | `AttemptContext`               | type      |
 | `bindAdapter`                  | re-export |
 | `BoundAdapter`                 | type      |

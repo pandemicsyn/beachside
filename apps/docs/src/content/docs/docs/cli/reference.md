@@ -453,7 +453,7 @@ beachside cat web:/etc/os-release
 
 ## doctor
 
-Check config, credentials and the provider connection without creating anything.
+Check config, the provider connection and that the provider accepts the credentials, without creating anything.
 
 ```sh
 beachside doctor
@@ -481,6 +481,27 @@ beachside adapter add daytona vercel --json
 beachside adapter add @acme/beachside-adapter@1.2.0
 beachside adapter ls
 beachside adapter rm e2b
+```
+
+## profile
+
+List profiles, show where a profile's settings come from, pick the default or remove one.
+
+```sh
+beachside profile ls | show [<name>] | use <name> | rm <name> [--force]
+```
+
+| Flag      | Description                                                                     |
+| --------- | ------------------------------------------------------------------------------- |
+| `--force` | rm: remove the profile even though stored sandboxes, snapshots or images use it |
+
+Examples:
+
+```sh
+beachside profile ls
+beachside profile show e2b --json
+beachside profile use boxd
+beachside profile rm old-daytona
 ```
 
 ## providers

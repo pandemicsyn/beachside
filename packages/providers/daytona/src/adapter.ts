@@ -505,6 +505,23 @@ export function createDaytonaAdapter(
   return defineAdapter({
     name: "daytona",
     displayName: "Daytona",
+    setup: {
+      credentials: {
+        apiKey: {
+          env: "DAYTONA_API_KEY",
+          description: "A Daytona API key from the dashboard.",
+          url: "https://app.daytona.io/dashboard/keys",
+        },
+      },
+      config: {
+        target: {
+          env: "DAYTONA_TARGET",
+          required: true,
+          description: "The Daytona region (target) sandboxes run in, such as us.",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/daytona/",
+    },
     config: configSchema,
     credentials: Credentials,
     async connect({ config, credentials }) {

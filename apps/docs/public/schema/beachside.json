@@ -1,0 +1,601 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "JSON Schema for editors; the CLI ignores it",
+      "type": "string",
+      "maxLength": 2048
+    },
+    "default": {
+      "description": "The profile used when nothing else picks one",
+      "type": "string",
+      "minLength": 1
+    },
+    "profiles": {
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "description": "An official provider id, such as boxd or e2b; `beachside providers` lists them",
+            "type": "string",
+            "pattern": "^[a-z0-9-]{1,64}$"
+          },
+          "module": {
+            "description": "Any other adapter: a package name or a path",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "export": {
+            "description": "The module export that holds the adapter",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "config": {
+            "description": "The adapter's own settings; `beachside profile show` prints them, so keep secrets in credentials",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/$defs/__schema0"
+            }
+          },
+          "credentials": {
+            "description": "Credentials: a value, env:NAME, or op://, bws:// or pass:// references",
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "setup": {
+            "description": "Named setups every create with this profile runs first",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "required": [
+              "provider"
+            ]
+          },
+          {
+            "required": [
+              "module"
+            ]
+          }
+        ]
+      },
+      "description": "Named adapter setups: a provider or module, its config and credentials",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      }
+    },
+    "state": {
+      "description": "Where sandbox, snapshot and image records are kept",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "fs"
+        },
+        "dir": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "limits": {
+      "description": "maxSandboxes: how many sandboxes the CLI keeps at once",
+      "type": "object",
+      "properties": {
+        "maxSandboxes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "images": {
+      "description": "autoBuild: build a missing --image on demand on E2B and Daytona",
+      "type": "object",
+      "properties": {
+        "autoBuild": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "adapters": {
+      "description": "searchProject: also load adapters from the project's node_modules",
+      "type": "object",
+      "properties": {
+        "searchProject": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "setups": {
+      "description": "Named setup steps for --setup <name>",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "extends": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$"
+            }
+          },
+          "setup": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          ]
+                        },
+                        "script": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "file": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "cwd": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "env": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "timeout": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "user": {
+                          "type": "string",
+                          "const": "root"
+                        },
+                        "cache": {
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "parallel": {
+                      "minItems": 2,
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          {
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "run": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  {
+                                    "minItems": 1,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
+                              },
+                              "script": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "file": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "cwd": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "env": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "timeout": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "user": {
+                                "type": "string",
+                                "const": "root"
+                              },
+                              "cache": {
+                                "type": "boolean"
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "cache": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "parallel"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "startup": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "run": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          ]
+                        },
+                        "script": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "file": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "cwd": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "env": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "timeout": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "user": {
+                          "type": "string",
+                          "const": "root"
+                        },
+                        "cache": {
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "parallel": {
+                      "minItems": 2,
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          {
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "run": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  {
+                                    "minItems": 1,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
+                              },
+                              "script": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "file": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "cwd": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "env": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "timeout": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "user": {
+                                "type": "string",
+                                "const": "root"
+                              },
+                              "cache": {
+                                "type": "boolean"
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "cache": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "parallel"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "network": {
+            "type": "string",
+            "minLength": 1
+          },
+          "env": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "cache": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "maxAge": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "secrets": {
+                    "type": "string",
+                    "const": "allow"
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "projectSetups": {
+      "description": "Also read setups from a checkout's .beachside/setup.json",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      ]
+    }
+  },
+  "$id": "https://beachside.run/schema/beachside.json",
+  "title": "beachside.json",
+  "description": "Configuration for the beachside CLI: https://beachside.run/docs/cli/configuration/"
+}

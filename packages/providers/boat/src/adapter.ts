@@ -308,6 +308,24 @@ export function createBoatAdapter(options: BoatAdapterOptions = {}) {
   return defineAdapter({
     name: "boat",
     displayName: "Boat",
+    setup: {
+      credentials: {
+        apiKey: {
+          env: "BOAT_API_KEY",
+          description: "A Boat API key; `boat api-key create <name> --preset ci` makes one.",
+          url: "https://docs.boat.dev/api-keys",
+        },
+      },
+      config: {
+        network: {
+          env: "BOAT_NETWORK",
+          required: false,
+          choices: ["internet"],
+          description: "Boat sandboxes always reach the internet; internet is the only value.",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/boat/",
+    },
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {

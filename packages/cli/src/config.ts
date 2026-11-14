@@ -13,15 +13,37 @@ export const ProfileConfig = z
     provider: z
       .string()
       .regex(/^[a-z0-9-]{1,64}$/)
-      .optional(),
+      .optional()
+      .describe("An official provider id, such as boxd or e2b; `beachside providers` lists them"),
     /** Any adapter module: a package name or a path relative to the config file. */
-    module: z.string().min(1).max(1024).optional(),
+    module: z
+      .string()
+      .min(1)
+      .max(1024)
+      .optional()
+      .describe("Any other adapter: a package name or a path"),
     /** The module export holding the adapter definition or bound adapter. */
-    export: z.string().min(1).max(128).optional(),
-    config: z.record(z.string(), z.json()).optional(),
-    credentials: z.record(z.string(), z.string()).optional(),
+    export: z
+      .string()
+      .min(1)
+      .max(128)
+      .optional()
+      .describe("The module export that holds the adapter"),
+    config: z
+      .record(z.string(), z.json())
+      .optional()
+      .describe(
+        "The adapter's own settings; `beachside profile show` prints them, so keep secrets in credentials",
+      ),
+    credentials: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe("Credentials: a value, env:NAME, or op://, bws:// or pass:// references"),
     /** Named setups every create with this profile runs first (skip with --no-default-setup). */
-    setup: z.array(SetupName).optional(),
+    setup: z
+      .array(SetupName)
+      .optional()
+      .describe("Named setups every create with this profile runs first"),
   })
   .refine((profile) => profile.provider || profile.module, {
     message: "A profile needs a provider or a module",
@@ -29,23 +51,74 @@ export const ProfileConfig = z
 
 export type ProfileConfig = z.infer<typeof ProfileConfig>;
 
+/** Where the published JSON Schema for beachside.json lives; editors read it from `$schema`. */
+export const CONFIG_SCHEMA_URL = "https://beachside.run/schema/beachside.json";
+
 export const CliConfig = z.strictObject({
-  default: z.string().min(1).optional(),
-  profiles: z.record(z.string(), ProfileConfig).optional(),
-  state: z.strictObject({ kind: z.literal("fs"), dir: z.string().min(1).optional() }).optional(),
+  /** The JSON Schema an editor checks the file against; the CLI ignores it. */
+  $schema: z.string().max(2048).optional().describe("JSON Schema for editors; the CLI ignores it"),
+  default: z.string().min(1).optional().describe("The profile used when nothing else picks one"),
+  profiles: z
+    .record(z.string(), ProfileConfig)
+    .optional()
+    .describe("Named adapter setups: a provider or module, its config and credentials"),
+  state: z
+    .strictObject({ kind: z.literal("fs"), dir: z.string().min(1).optional() })
+    .optional()
+    .describe("Where sandbox, snapshot and image records are kept"),
   limits: z
     .strictObject({ maxSandboxes: z.number().int().positive().nullable().optional() })
-    .optional(),
-  images: z.strictObject({ autoBuild: z.boolean().optional() }).optional(),
+    .optional()
+    .describe("maxSandboxes: how many sandboxes the CLI keeps at once"),
+  images: z
+    .strictObject({ autoBuild: z.boolean().optional() })
+    .optional()
+    .describe("autoBuild: build a missing --image on demand on E2B and Daytona"),
   /** Also load adapters from the working directory's node_modules (off: a checkout could plant one). */
-  adapters: z.strictObject({ searchProject: z.boolean().optional() }).optional(),
+  adapters: z
+    .strictObject({ searchProject: z.boolean().optional() })
+    .optional()
+    .describe("searchProject: also load adapters from the project's node_modules"),
   /** Named, provider-neutral setups for `--setup <name>`. */
-  setups: z.record(SetupName, SetupConfig).optional(),
+  setups: z
+    .record(SetupName, SetupConfig)
+    .optional()
+    .describe("Named setup steps for --setup <name>"),
   /** Also read setups from a checkout's `.beachside/setup.json` (off: a checkout could plant one). */
-  projectSetups: z.boolean().optional(),
+  projectSetups: z
+    .boolean()
+    .optional()
+    .describe("Also read setups from a checkout's .beachside/setup.json"),
 });
 
 export type CliConfig = z.infer<typeof CliConfig>;
+
+/** The generated schema for `profiles`: a map whose values are profile schemas. */
+const ProfilesJsonSchema = z.looseObject({ additionalProperties: z.looseObject({}) });
+
+/** The JSON Schema for beachside.json, published at CONFIG_SCHEMA_URL. */
+export function configJsonSchema(): z.core.JSONSchema.JSONSchema {
+  const schema = z.toJSONSchema(CliConfig, { io: "input", unrepresentable: "any" });
+  const profiles = ProfilesJsonSchema.safeParse(schema.properties?.profiles);
+
+  // The provider-or-module refinement has no JSON Schema form of its own, so state it here.
+  if (schema.properties && profiles.success)
+    schema.properties.profiles = {
+      ...profiles.data,
+      additionalProperties: {
+        ...profiles.data.additionalProperties,
+        anyOf: [{ required: ["provider"] }, { required: ["module"] }],
+      },
+    };
+
+  return {
+    ...schema,
+    $id: CONFIG_SCHEMA_URL,
+    title: "beachside.json",
+    description:
+      "Configuration for the beachside CLI: https://beachside.run/docs/cli/configuration/",
+  };
+}
 
 export type LoadedConfig = {
   path: string;

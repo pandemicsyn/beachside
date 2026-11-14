@@ -354,6 +354,16 @@ export function createE2BAdapter(transportFactory?: (options: { apiKey: string }
   return defineAdapter({
     name: "e2b",
     displayName: "E2B",
+    setup: {
+      credentials: {
+        apiKey: {
+          env: "E2B_API_KEY",
+          description: "An E2B API key from the dashboard.",
+          url: "https://console.e2b.dev/?tab=keys",
+        },
+      },
+      docs: "https://beachside.run/docs/providers/e2b/",
+    },
     config: Configuration,
     credentials: Credentials,
     async connect({ config, credentials, host }) {

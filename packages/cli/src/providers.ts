@@ -4,6 +4,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   bindAdapter,
   type AdapterDefinition,
+  type AdapterSetup,
+  type AdapterSetupValue,
   type BoundAdapter,
   type Json,
   type RuntimeSession,
@@ -22,146 +24,124 @@ import { CliError, usage } from "./output";
 import type { SecretReader } from "./secrets";
 
 /**
- * How the CLI builds an official adapter from environment variables alone.
- * Temporary home: adapters should export this themselves (design gap G6).
+ * An official adapter: its id, package and export. What it needs from the environment comes from
+ * the adapter's own `setup` once it is installed.
  */
-export type ProviderDescriptor = {
+export type OfficialProvider = {
   id: string;
   module: string;
   export: string;
   experimental: boolean;
-  /** Credential key -> environment variable. All are required. */
-  credentials: Readonly<Record<string, string>>;
-  /** Config key -> environment variable, and whether the adapter requires it. */
-  config: Readonly<Record<string, { env: string; required: boolean }>>;
 };
 
-export const providers: readonly ProviderDescriptor[] = [
-  {
-    id: "daytona",
-    module: "@beachside/daytona",
-    export: "daytonaAdapter",
-    experimental: false,
-    credentials: { apiKey: "DAYTONA_API_KEY" },
-    config: { target: { env: "DAYTONA_TARGET", required: true } },
-  },
-  {
-    id: "e2b",
-    module: "@beachside/e2b",
-    export: "e2bAdapter",
-    experimental: false,
-    credentials: { apiKey: "E2B_API_KEY" },
-    config: {},
-  },
-  {
-    id: "boxd",
-    module: "@beachside/boxd",
-    export: "boxdAdapter",
-    experimental: true,
-    credentials: { apiKey: "BOXD_API_KEY" },
-    config: {
-      org: { env: "BOXD_ORG", required: true },
-      // Egress is open by default; BOXD_NETWORK=blocked restricts it.
-      network: { env: "BOXD_NETWORK", required: false },
-      // Optional; machines go to the org's home region without it.
-      region: { env: "BOXD_REGION", required: false },
-    },
-  },
-  {
-    id: "boat",
-    module: "@beachside/boat",
-    export: "boatAdapter",
-    experimental: true,
-    credentials: { apiKey: "BOAT_API_KEY" },
-    config: {
-      // Boat sandboxes always have outbound internet; internet is the only value.
-      network: { env: "BOAT_NETWORK", required: false },
-    },
-  },
-  {
-    id: "runloop",
-    module: "@beachside/runloop",
-    export: "runloopAdapter",
-    experimental: true,
-    credentials: { apiKey: "RUNLOOP_API_KEY" },
-    // Egress is open by default; RUNLOOP_NETWORK=blocked restricts it.
-    config: { network: { env: "RUNLOOP_NETWORK", required: false } },
-  },
-  {
-    id: "freestyle",
-    module: "@beachside/freestyle",
-    export: "freestyleAdapter",
-    experimental: true,
-    credentials: { apiKey: "FREESTYLE_API_KEY" },
-    // Egress is open by default; FREESTYLE_NETWORK=blocked restricts it.
-    config: { network: { env: "FREESTYLE_NETWORK", required: false } },
-  },
-  {
-    id: "archil",
-    module: "@beachside/archil",
-    export: "archilAdapter",
-    experimental: true,
-    credentials: { apiKey: "ARCHIL_API_KEY" },
-    config: {
-      // Each Archil region has its own control plane, so the region is always explicit.
-      region: { env: "ARCHIL_REGION", required: true },
-      // Egress is open by default (a paid-plan policy); ARCHIL_NETWORK=blocked restricts it,
-      // and Free plans need ARCHIL_NETWORK=archil-managed (Archil's managed allowlist).
-      network: { env: "ARCHIL_NETWORK", required: false },
-    },
-  },
-  {
-    id: "exe-dev",
-    module: "@beachside/exe-dev",
-    export: "exeDevAdapter",
-    experimental: true,
-    // Env-only setup takes an API token; an SSH key (for protected previews) goes in a profile.
-    credentials: { token: "EXE_API_KEY" },
-    // exe.dev VMs always have internet egress; internet is the only value.
-    config: { network: { env: "EXE_NETWORK", required: false } },
-  },
-  {
-    id: "vercel",
-    module: "@beachside/vercel",
-    export: "vercelAdapter",
-    experimental: false,
-    credentials: { token: "VERCEL_TOKEN" },
-    config: {
-      teamId: { env: "VERCEL_TEAM_ID", required: true },
-      projectId: { env: "VERCEL_PROJECT_ID", required: true },
-    },
-  },
-  {
-    id: "modal",
-    module: "@beachside/modal",
-    export: "modalAdapter",
-    experimental: true,
-    credentials: { tokenId: "MODAL_TOKEN_ID", tokenSecret: "MODAL_TOKEN_SECRET" },
-    config: {
-      appName: { env: "MODAL_APP_NAME", required: true },
-      environment: { env: "MODAL_ENVIRONMENT", required: true },
-    },
-  },
+const official = (id: string, exported: string, experimental: boolean): OfficialProvider => ({
+  id,
+  module: `@beachside/${id}`,
+  export: exported,
+  experimental,
+});
+
+/** Official providers, in the order the docs list them. */
+export const providers: readonly OfficialProvider[] = [
+  official("boxd", "boxdAdapter", false),
+  official("freestyle", "freestyleAdapter", false),
+  official("daytona", "daytonaAdapter", false),
+  official("e2b", "e2bAdapter", false),
+  official("vercel", "vercelAdapter", false),
+  official("boat", "boatAdapter", true),
+  official("runloop", "runloopAdapter", true),
+  official("archil", "archilAdapter", true),
+  official("exe-dev", "exeDevAdapter", true),
+  official("modal", "modalAdapter", true),
 ];
 
-export function descriptor(id: string): ProviderDescriptor | undefined {
+export function descriptor(id: string): OfficialProvider | undefined {
   return providers.find((provider) => provider.id === id);
 }
 
-/** Environment variables an official provider still needs; `covered` names keys set elsewhere. */
-export function missingEnv(
-  provider: ProviderDescriptor,
-  env: Env,
-  covered: ReadonlySet<string> = new Set(),
-): string[] {
-  const needed = [
-    ...Object.entries(provider.credentials),
-    ...Object.entries(provider.config).flatMap(([key, entry]) =>
-      entry.required ? [[key, entry.env] as const] : [],
+/** A required setting that is not set: one key, or a group of alternative credentials. */
+export type SetupNeed = {
+  kind: "credential" | "config";
+  key: string;
+  /** The variable that supplies it, when the adapter names one. */
+  env: string | null;
+  /** How to supply it, such as `EXE_API_KEY` or `EXE_API_KEY or credentials.sshKey`. */
+  label: string;
+  description: string | null;
+  url: string | null;
+};
+
+/** Whether a profile already has a setting, wherever it came from. */
+export type HasSetting = (kind: "credential" | "config", key: string) => boolean;
+
+function need(
+  kind: SetupNeed["kind"],
+  key: string,
+  value: AdapterSetupValue | undefined,
+  label?: string,
+): SetupNeed {
+  return {
+    kind,
+    key,
+    env: value?.env ?? null,
+    label: label ?? value?.env ?? `${kind === "credential" ? "credentials" : "config"}.${key}`,
+    description: value?.description ?? null,
+    url: value?.url ?? null,
+  };
+}
+
+/** The required settings an adapter's setup says are not set yet. */
+export function unmetSettings(setup: AdapterSetup, has: HasSetting): SetupNeed[] {
+  const groups = setup.alternatives ?? [];
+  const alternative = new Set(groups.flat());
+
+  const single = [
+    ...Object.entries(setup.credentials).flatMap(([key, value]) =>
+      alternative.has(key) || has("credential", key) ? [] : [need("credential", key, value)],
+    ),
+    ...Object.entries(setup.config ?? {}).flatMap(([key, value]) =>
+      value.required && !has("config", key) ? [need("config", key, value)] : [],
     ),
   ];
 
-  return needed.flatMap(([key, name]) => (covered.has(key) || env[name] ? [] : [name]));
+  // Alternatives are met when every key of one group is set.
+  const met =
+    !groups.length || groups.some((group) => group.every((key) => has("credential", key)));
+
+  if (met) return single;
+
+  const label = groups
+    .map((group) =>
+      group.map((key) => setup.credentials[key]?.env ?? `credentials.${key}`).join(" and "),
+    )
+    .join(" or ");
+
+  const first = groups[0]!.find((key) => setup.credentials[key]) ?? groups[0]![0]!;
+
+  return [...single, need("credential", first, setup.credentials[first], label)];
+}
+
+/** Required settings neither the environment nor `covered` (keys set elsewhere) supplies. */
+export function missingSettings(
+  setup: AdapterSetup,
+  env: Env,
+  covered: ReadonlySet<string> = new Set(),
+): SetupNeed[] {
+  return unmetSettings(setup, (kind, key) => {
+    if (covered.has(key)) return true;
+    const variable = kind === "credential" ? setup.credentials[key]?.env : setup.config?.[key]?.env;
+
+    return Boolean(variable && env[variable]);
+  });
+}
+
+/** What an adapter still needs from the environment, as labels; `covered` names keys set elsewhere. */
+export function missingEnv(
+  setup: AdapterSetup,
+  env: Env,
+  covered: ReadonlySet<string> = new Set(),
+): string[] {
+  return missingSettings(setup, env, covered).map((item) => item.label);
 }
 
 export type ResolvedProfile = {
@@ -177,12 +157,68 @@ export type ResolvedProfile = {
   credentials: Record<string, string>;
 };
 
-/** Pick the profile: --profile, BEACHSIDE_PROFILE, --provider, BEACHSIDE_PROVIDER, then the config default. */
-export function resolveProfile(
+/** Where an adapter module is looked up, for reading its setup before a profile is complete. */
+export type AdapterLocation = Pick<
+  ResolvedProfile,
+  "name" | "module" | "export" | "baseDir" | "searchProject"
+>;
+
+/**
+ * The adapter's `setup`, read by importing it. Null when the adapter is not installed, fails to
+ * load or declares none; connecting reports those properly later.
+ */
+export async function adapterSetup(
+  location: AdapterLocation,
+  cwd: string,
+  env: Env,
+): Promise<AdapterSetup | null> {
+  try {
+    const target = await resolveAdapterModule(
+      { ...location, provider: location.name, config: {}, credentials: {} },
+      cwd,
+      env,
+    );
+
+    const exported = z.record(z.string(), z.unknown()).parse(await import(target))[location.export];
+
+    return isAdapter(exported) && !("bound" in exported) ? (exported.setup ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The official adapter's location, for reading its setup with default lookup rules. */
+export function officialLocation(
+  provider: OfficialProvider,
+  loaded: LoadedConfig,
+  env: Env,
+): AdapterLocation {
+  return {
+    name: provider.id,
+    module: provider.module,
+    export: provider.export,
+    baseDir: loaded.dir,
+    searchProject: searchProjectAdapters(loaded, env),
+  };
+}
+
+/** A profile chosen by name: configured in beachside.json, or an official provider from the environment. */
+export type ProfileSelection = {
+  name: string;
+  profile: ProfileConfig;
+  /** `env` when --provider or BEACHSIDE_PROVIDER picked an official provider with no profile. */
+  source: "config" | "env";
+};
+
+/**
+ * Which profile is selected: --profile, BEACHSIDE_PROFILE, --provider, BEACHSIDE_PROVIDER, then
+ * the config default. Null when nothing selects one.
+ */
+export function resolveProfileName(
   flags: { profile?: string; provider?: string },
   loaded: LoadedConfig,
   env: Env,
-): ResolvedProfile {
+): ProfileSelection | null {
   const profiles = loaded.value.profiles ?? {};
   const profileName = flags.profile ?? (flags.provider ? undefined : env.BEACHSIDE_PROFILE);
 
@@ -197,12 +233,12 @@ export function resolveProfile(
           : 'add it under "profiles" in beachside.json',
       );
 
-    return fromProfile(profileName, profile, loaded, env);
+    return { name: profileName, profile, source: "config" };
   }
 
   const providerId = flags.provider ?? env.BEACHSIDE_PROVIDER;
 
-  if (providerId) return fromProfile(providerId, { provider: providerId }, loaded, env);
+  if (providerId) return { name: providerId, profile: { provider: providerId }, source: "env" };
 
   const fallback = loaded.value.default;
 
@@ -211,28 +247,49 @@ export function resolveProfile(
 
     if (!profile) throw usage(`Default profile ${fallback} is not defined in ${loaded.path}`);
 
-    return fromProfile(fallback, profile, loaded, env);
+    return { name: fallback, profile, source: "config" };
   }
 
-  const ready = providers.filter((provider) => !missingEnv(provider, env).length);
+  return null;
+}
+
+/** Pick the profile: --profile, BEACHSIDE_PROFILE, --provider, BEACHSIDE_PROVIDER, then the config default. */
+export async function resolveProfile(
+  flags: { profile?: string; provider?: string },
+  loaded: LoadedConfig,
+  env: Env,
+  cwd: string,
+): Promise<ResolvedProfile> {
+  const selected = resolveProfileName(flags, loaded, env);
+
+  if (selected) return fromProfile(selected.name, selected.profile, loaded, env, cwd);
+
+  const ready: string[] = [];
+
+  for (const provider of providers) {
+    const setup = await adapterSetup(officialLocation(provider, loaded, env), cwd, env);
+
+    if (setup && !missingEnv(setup, env).length) ready.push(provider.id);
+  }
 
   throw usage(
     "No provider selected",
     ready.length
-      ? `credentials found for: ${ready.map((provider) => provider.id).join(", ")}; set BEACHSIDE_PROVIDER or pass --provider`
+      ? `credentials found for: ${ready.join(", ")}; set BEACHSIDE_PROVIDER or pass --provider`
       : "set BEACHSIDE_PROVIDER and the provider's credentials (see `beachside providers`), or add a profile to beachside.json",
   );
 }
 
-function fromProfile(
+async function fromProfile(
   name: string,
   profile: ProfileConfig,
   loaded: LoadedConfig,
   env: Env,
-): ResolvedProfile {
-  const official = profile.provider ? descriptor(profile.provider) : undefined;
+  cwd: string,
+): Promise<ResolvedProfile> {
+  const known = profile.provider ? descriptor(profile.provider) : undefined;
 
-  if (profile.provider && !official && !profile.module)
+  if (profile.provider && !known && !profile.module)
     throw usage(
       `Unknown provider ${profile.provider}`,
       `official providers: ${providers.map((provider) => provider.id).join(", ")}; use "module" for other adapters`,
@@ -240,10 +297,20 @@ function fromProfile(
 
   const where = `profile ${name}`;
 
-  // Environment variables fill official adapter settings; profile values override them.
+  const location: AdapterLocation = {
+    name,
+    module: profile.module ?? known?.module ?? "",
+    export: profile.export ?? known?.export ?? "default",
+    baseDir: loaded.dir,
+    searchProject: searchProjectAdapters(loaded, env),
+  };
+
+  // The adapter says which environment variables fill its settings; profile values override them.
+  const setup = location.module ? await adapterSetup(location, cwd, env) : null;
+
   const credentials = Object.fromEntries([
-    ...Object.entries(official?.credentials ?? {}).flatMap(([key, variable]) => {
-      const value = env[variable];
+    ...Object.entries(setup?.credentials ?? {}).flatMap(([key, entry]) => {
+      const value = env[entry.env];
 
       return value ? [[key, value] as const] : [];
     }),
@@ -257,7 +324,7 @@ function fromProfile(
   ]);
 
   const config = Object.fromEntries([
-    ...Object.entries(official?.config ?? {}).flatMap(([key, entry]) => {
+    ...Object.entries(setup?.config ?? {}).flatMap(([key, entry]) => {
       const value = env[entry.env];
 
       return value ? [[key, value] as const] : [];
@@ -267,30 +334,28 @@ function fromProfile(
     ),
   ]);
 
-  if (official) {
-    const missing = [
-      ...Object.entries(official.credentials)
-        .filter(([key]) => !credentials[key])
-        .map(([, variable]) => variable),
-      ...Object.entries(official.config)
-        .filter(([key, entry]) => entry.required && config[key] === undefined)
-        .map(([, entry]) => entry.env),
-    ];
+  if (setup) {
+    const missing = unmetSettings(setup, (kind, key) =>
+      kind === "credential" ? Boolean(credentials[key]) : config[key] !== undefined,
+    );
 
     if (missing.length)
       throw usage(
-        `${where} (${official.id}) is missing ${missing.join(", ")}`,
-        "set the environment variables, or put the values in the profile in beachside.json",
+        `${where}${known ? ` (${known.id})` : ""} is missing ${missing.map((item) => item.label).join(", ")}`,
+        [
+          "set the environment variables, or put the values in the profile in beachside.json",
+          ...missing.flatMap((item) => (item.url ? [`${item.label}: ${item.url}`] : [])),
+        ].join("; "),
       );
   }
 
   return {
     name,
-    provider: official?.id ?? profile.provider ?? name,
-    module: profile.module ?? official?.module ?? "",
-    export: profile.export ?? official?.export ?? "default",
-    baseDir: loaded.dir,
-    searchProject: searchProjectAdapters(loaded, env),
+    provider: known?.id ?? profile.provider ?? name,
+    module: location.module,
+    export: location.export,
+    baseDir: location.baseDir,
+    searchProject: location.searchProject,
     config,
     credentials,
   };
@@ -497,11 +562,51 @@ export async function loadAdapter(
   return bindAdapter(exported, config, credentials);
 }
 
+/** The provider refused the profile's credentials: say which profile and where to fix it. */
+export function credentialsRejected(
+  profile: ResolvedProfile,
+  setup: AdapterSetup | null,
+  code: "UNAUTHENTICATED" | "FORBIDDEN",
+  reason: string,
+): CliError {
+  return new CliError(
+    code,
+    `${profile.provider} rejected the credentials for profile ${profile.name}: ${reason}`,
+    [
+      "check the key and the account it belongs to; `beachside profile show` says where each value comes from",
+      ...Object.values(setup?.credentials ?? {}).flatMap((value) =>
+        value.url ? [`${value.env}: ${value.url}`] : [],
+      ),
+    ].join("; "),
+  );
+}
+
+const AuthFailure = z.object({
+  code: z.enum(["UNAUTHENTICATED", "FORBIDDEN"]),
+  message: z.string(),
+});
+
 export async function connect(
   profile: ResolvedProfile,
   cwd: string,
   env: Env,
   secrets: SecretReader,
 ): Promise<BeachsideClient<true>> {
-  return Beachside.connect(await loadAdapter(profile, cwd, env, secrets));
+  const adapter = await loadAdapter(profile, cwd, env, secrets);
+
+  try {
+    return await Beachside.connect(adapter);
+  } catch (cause) {
+    // Connecting changes nothing, so a refused key is a plain rejection with a fix, not "unknown".
+    const auth = cause instanceof CliError ? null : AuthFailure.safeParse(cause);
+
+    if (auth?.success)
+      throw credentialsRejected(
+        profile,
+        await adapterSetup(profile, cwd, env),
+        auth.data.code,
+        auth.data.message,
+      );
+    throw cause;
+  }
 }
