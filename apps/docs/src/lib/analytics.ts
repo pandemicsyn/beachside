@@ -55,6 +55,7 @@ export async function startAnalytics(): Promise<void> {
 
       const config: Partial<PostHogConfig> = {
         api_host: host,
+        ui_host: project.uiHost,
         // No cookieless fallback: pending and rejected visitors send nothing.
         persistence_name: persistenceName,
         cross_subdomain_cookie: false,

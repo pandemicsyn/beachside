@@ -18,6 +18,8 @@
   const settings = document.querySelector<HTMLButtonElement>("[data-analytics-settings]");
 
   if (analyticsConfigured && bar && settings) {
+    // Keep the fixed notice above the docs layout's sidebar stacking contexts.
+    document.body.append(bar);
     settings.hidden = false;
 
     const showBar = (show: boolean) => {
@@ -72,17 +74,18 @@
   }
   .consent-bar {
     position: fixed;
-    inset-inline: 1rem;
+    right: max(1rem, env(safe-area-inset-right));
     bottom: max(1rem, env(safe-area-inset-bottom));
     z-index: 60;
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    max-width: 38rem;
-    margin-inline: auto;
+    width: fit-content;
+    max-width: calc(100vw - 2rem);
+    box-sizing: border-box;
     padding: 0.75rem;
     border: 1px solid var(--sb-line);
-    border-radius: 12px;
+    border-radius: 10px;
     background: var(--sb-surface);
     color: var(--sb-ink);
     box-shadow: 0 6px 24px rgb(0 0 0 / 0.12);
@@ -90,7 +93,7 @@
     font-size: 0.8125rem;
     line-height: 1.5;
   }
-  .consent-bar p { margin: 0; }
+  .consent-bar p { margin: 0; font: inherit; }
   .consent-bar a { color: var(--sb-pink-ink); text-underline-offset: 0.2em; }
   .consent-actions { display: flex; flex-shrink: 0; gap: 0.5rem; }
   .consent-actions button {
@@ -105,9 +108,9 @@
   }
   .consent-actions button:hover { border-color: var(--sb-pink-ink); }
   button:focus-visible, a:focus-visible { outline: 2px solid var(--sb-pink-ink); outline-offset: 3px; }
-  @media (max-width: 40rem) {
-    .consent-bar { flex-direction: column; align-items: stretch; padding: 0.75rem; }
-    .consent-actions button { flex: 1; }
+  @media (max-width: 30rem) {
+    .consent-bar { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+    .consent-actions { align-self: flex-end; }
   }
   @media print { .consent-bar, .analytics-preferences { display: none; } }
 </style>
