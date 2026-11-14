@@ -14,16 +14,20 @@
   import { analyticsConfigured, consentKey, readConsent, saveConsent, startAnalytics, stopAnalytics } from "../lib/analytics";
 
   const bar = document.querySelector<HTMLElement>("#docs-analytics-consent");
+
   const settings = document.querySelector<HTMLButtonElement>("[data-analytics-settings]");
 
   if (analyticsConfigured && bar && settings) {
     settings.hidden = false;
+
     const showBar = (show: boolean) => {
       bar.hidden = !show;
       settings.setAttribute("aria-expanded", String(show));
     };
+
     const applyChoice = (choice: ReturnType<typeof readConsent>) => {
       showBar(choice === "pending");
+
       if (choice === "accepted") void startAnalytics();
       else if (stopAnalytics()) location.reload();
     };
@@ -35,6 +39,7 @@
     bar.querySelectorAll<HTMLButtonElement>("[data-analytics-choice]").forEach((button) => {
       button.addEventListener("click", () => {
         const choice = button.dataset.analyticsChoice;
+
         if (choice !== "accepted" && choice !== "rejected") return;
         saveConsent(choice);
         applyChoice(choice);
