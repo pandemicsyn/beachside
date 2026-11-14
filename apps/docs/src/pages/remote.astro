@@ -181,7 +181,14 @@ function lineClass(line: Line) {
                 <a class="btn btn-secondary only-rex" href="/docs/cli/rex/">Rex guide →</a>
                 <a class="btn btn-secondary only-herdr" href="/docs/cli/#servers-in-a-sandbox">Herdr guide →</a>
               </div>
-              <span class="release-note">On boxd, Freestyle or E2B · free and open source (Apache-2.0)</span>
+              <div class="needs" aria-label="What you need">
+                <span class="needs-label">You need</span>
+                <span class="need">a boxd, Freestyle or E2B key</span>
+                <span class="need">a Tailscale auth key</span>
+                <span class="need only-rex">Rex beta on your Mac</span>
+                <span class="need only-herdr">Herdr on your machine</span>
+              </div>
+              <span class="release-note">Free and open source (Apache-2.0). Your provider bills the sandbox while it runs.</span>
             </div>
           </div>
 
@@ -854,6 +861,28 @@ function lineClass(line: Line) {
       .btn-secondary:hover {
         color: var(--sb-ink);
         box-shadow: 0 4px 0 var(--sb-ink);
+      }
+      .needs {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+      }
+      .needs-label {
+        margin-right: 2px;
+        font-family: var(--sb-font-mono);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--sb-aqua-ink);
+      }
+      .need {
+        padding: 3px 12px;
+        border-radius: 999px;
+        background: var(--sb-aqua-wash);
+        color: var(--sb-ink);
+        font-weight: 500;
       }
       .release-note {
         color: var(--sb-muted);
