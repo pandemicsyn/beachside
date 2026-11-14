@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Json } from "@beachside/adapter";
@@ -18,7 +18,8 @@ let server: Awaited<ReturnType<typeof startFakeProviderServer>>;
 let dir: string;
 
 beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "beachside-cli-setup-"));
+  // Match the canonical cwd reported by child processes.
+  root = await realpath(await mkdtemp(join(tmpdir(), "beachside-cli-setup-")));
   server = await startFakeProviderServer({
     hostname: "127.0.0.1",
     port: 0,
