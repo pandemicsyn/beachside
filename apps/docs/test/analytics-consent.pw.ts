@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
 import { gunzipSync } from "node:zlib";
 import { z } from "zod";
+import project from "../src/lib/analytics-project.json" with { type: "json" };
 
 const consentKey = "beachside-docs-analytics-consent-v1";
 
@@ -51,7 +52,7 @@ async function observe(page: Page) {
     const request = route.request();
     const url = new URL(request.url());
 
-    if (url.hostname === "posthog.test") {
+    if (url.origin === project.host || url.hostname === "us-assets.i.posthog.com") {
       requests.push(request);
       captured.push(...events(request));
 
@@ -66,7 +67,7 @@ async function observe(page: Page) {
       if (url.pathname.endsWith("/config.js")) {
         await route.fulfill({
           contentType: "application/javascript",
-          body: `window._POSTHOG_REMOTE_CONFIG = { phc_browser_test: { config: ${JSON.stringify(config)} } };`,
+          body: `window._POSTHOG_REMOTE_CONFIG = ${JSON.stringify({ [project.key]: { config } })};`,
         });
       } else await route.fulfill({ json: config, headers: { "Access-Control-Allow-Origin": "*" } });
     } else if (url.hostname === "127.0.0.1") {

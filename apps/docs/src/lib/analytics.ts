@@ -1,12 +1,14 @@
 import type { PostHog, PostHogConfig } from "posthog-js";
+import project from "./analytics-project.json";
 
 export const consentKey = "beachside-docs-analytics-consent-v1";
 
 export type Consent = "accepted" | "rejected" | "pending";
 
-const key = import.meta.env.PUBLIC_POSTHOG_KEY;
+// Public ingestion settings belong in the build; overrides support isolated tests.
+const key = import.meta.env.PUBLIC_POSTHOG_KEY || project.key;
 
-const host = import.meta.env.PUBLIC_POSTHOG_HOST;
+const host = import.meta.env.PUBLIC_POSTHOG_HOST || project.host;
 
 const persistenceName = "beachside_docs";
 
