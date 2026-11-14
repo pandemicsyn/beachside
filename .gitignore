@@ -13,3 +13,7 @@ coverage/
 
 # Local Claude launch configuration
 /.claude/launch.json
+
+# Browser test artifacts
+**/test-results/
+**/playwright-report/

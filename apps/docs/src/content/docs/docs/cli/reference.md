@@ -41,6 +41,21 @@ With `--json`, stdout holds exactly one document: `{ok:true,data}` or `{ok:false
 | 125  | exec/run: the CLI or provider failed; details in the error                                                                              |
 | 130  | interrupted by SIGINT (129 for SIGHUP, 143 for SIGTERM); an interrupted run still destroys its sandbox                                  |
 
+## telemetry
+
+Show or change basic CLI usage telemetry (on by default; SDK sends none).
+
+```sh
+beachside telemetry [status | enable | disable]
+```
+
+Examples:
+
+```sh
+beachside telemetry status
+beachside telemetry disable
+```
+
 ## create
 
 Create a sandbox and print its name.
