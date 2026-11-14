@@ -190,6 +190,23 @@ test("consent bar is compact on mobile and supports keyboard choice", async ({
   await expect(bar(page)).toBeHidden();
 });
 
+test("desktop consent notice fits its content in the bottom-right corner", async ({
+  page,
+}, testInfo) => {
+  await observe(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/docs/");
+  await expect(bar(page)).toBeVisible();
+  const bounds = await bar(page).boundingBox();
+  expect(bounds!.width).toBeLessThan(440);
+  expect(bounds!.height).toBeLessThan(80);
+  expect(1440 - bounds!.x - bounds!.width).toBeCloseTo(16, 0);
+  expect(900 - bounds!.y - bounds!.height).toBeCloseTo(16, 0);
+  await page.screenshot({ path: testInfo.outputPath("consent-desktop.png") });
+  await page.getByRole("button", { name: "Switch to dark theme" }).click();
+  await page.screenshot({ path: testInfo.outputPath("consent-desktop-dark.png") });
+});
+
 test("blocked storage fails closed across page loads", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, "localStorage", {
